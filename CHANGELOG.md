@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-## 0.12.0 - 2026-10-28
+## 0.12.0 - 2026-10-29
+
+This release carries every change listed under `0.11.0` below as well: `0.11.0` was never published, so users
+upgrade from `0.10.0` straight to `0.12.0`.
 
 ### Fixed
 
@@ -22,17 +25,21 @@
 - Fixed a freshly pulled deck showing `local-changed` at `/localOnly/content` before any edit, and a deck staying
   `local-changed` after its edits were reverted. The local content fingerprint depended on the order the rows were
   listed in, and the order at pull time differed from the order the store returns. The fingerprint now sorts by row ID.
-  A deck whose baseline an earlier version recorded is also compared in the old order, and is judged by its rows alone
-  when that does not match, so it is not stuck. An edit to a field no row shows (category color, entry order) on such
-  a deck cannot be seen, because the earlier baseline did not record those fields; see the next entry.
+  A baseline made by `0.10.0` (schema 1) recorded its fingerprint in one of two orders: the store's order after a
+  push, and the Archidekt response order after a pull. Both are tried, so a deck you have not edited since `0.10.0`
+  reads as unchanged. If neither matches, the rows decide: an edit they show is an ordinary local change, and a
+  difference no row shows gets the `local-changed-unverified` row described in the next entry (an edit to a field no
+  row shows, such as a category color or entry order, cannot be seen on such a deck, because the `0.10.0` baseline
+  did not record those fields).
 - Fixed a pull overwriting an edit the server could not see. When a deck's baseline was made by an earlier version
   (schema 1) and its local content differs from the baseline with no row to show why, the diff now has a
   `/localOnly/content` row with the new state `local-changed-unverified`. A pull preview reports it, and a pull apply
   is refused (`pull-conflict`) unless `discardLocalChanges` is set. The message says the earlier version did not record
   category colors or ordering, so the server cannot tell whether they changed, and names the two ways out: push to
-  keep the local content, or pull with `discardLocalChanges` to take the Archidekt state. A push is not blocked by the
+  keep the local content, or pull with `discardLocalChanges` to take the Archidekt state (which drops the local
+  edits; if Archidekt also changed, the push is refused too, so this is the way out). A push is not blocked by the
   row and plans nothing from it. Any successful push or pull writes a current (schema 2) baseline, which clears the
-  row. A deck whose old fingerprint cannot be reproduced also gets the row once.
+  row. A deck whose old fingerprint cannot be reproduced in either order also gets the row once.
 - Fixed identical edits on both sides being reported as a conflict. When the local deck and Archidekt changed the same
   field to the same value, the difference was `concurrent-changed`, which blocked the push and the pull. It is now
   `converged`: no conflict and no operation, and applying either direction advances the baseline. A converged row never
@@ -57,32 +64,47 @@
   'local_deck_apply_changes'". Every tool now accepts a whole number in any spelling (`328.0`, `3.28e2`) for its
   integer fields; a number with a fractional part or outside the field's range returns the bounded `invalid-arguments`
   failure with the JSON path of the value (for example `changes[0].entryDraft.sortOrder`).
+- Fixed `local_deck_apply_changes` failing with `invalid-input` when an `assign-category` change with `isPrimary: true`
+  targeted an entry that already had another primary category. The new category now becomes the entry's primary
+  category and the previous primary stays assigned as a non-primary category, in the same transaction. One batch that
+  makes two different categories primary for the same entry is still refused ("An entry may have only one primary
+  category."), and so is a create request with two primaries.
 
-### Migration notes (0.11.0 to 0.12.0)
+### Migration notes (0.10.0 to 0.12.0)
 
-- Breaking: the local deck database moves to schema 2 the first time 0.12.0 opens it for writing, and this cannot be
-  undone. 0.11.0 cannot open the upgraded database or restore a backup made by 0.12.0. A copy made just before the
-  upgrade is kept as `backups/decks/pre-migration-*.db` in the data folder; restoring it into 0.11.0 means copying it
-  over `decks.db` with the server stopped and deleting `decks.db-wal` and `decks.db-shm` beside it.
+- Breaking: the local deck database moves from schema 1 (what `0.10.0` wrote) to schema 2 the first time 0.12.0
+  opens it for writing, and this cannot be undone. `0.10.0` cannot open the upgraded database or restore a backup
+  made by 0.12.0. A copy made just before the upgrade is kept as `backups/decks/pre-migration-*.db` in the data
+  folder; restoring it into `0.10.0` means copying it over `decks.db` with the server stopped and deleting
+  `decks.db-wal` and `decks.db-shm` beside it.
+- Archidekt synchronization baselines made by `0.10.0` (schema 1) keep working. A deck you have not edited since
+  `0.10.0` pulled or pushed it reads as unchanged. A deck that differs from its baseline with no row to show why gets
+  the new `local-changed-unverified` row (see below), and any successful push or pull writes a schema 2 baseline.
 - A new difference state, `converged`, can appear in `archidekt_diff`, `archidekt_pull_preview`, and
   `archidekt_push_preview`. Clients that switch on the state strings must treat it as "both sides made the same change".
 - A new difference state, `local-changed-unverified`, can appear in `archidekt_diff` and `archidekt_pull_preview` (and in
-  the differences of `archidekt_push_preview`) for a deck whose baseline an earlier version made. Clients that
+  the differences of `archidekt_push_preview`) for a deck whose baseline `0.10.0` made. Clients that
   switch on the state strings must treat it as a local change that cannot be verified.
 - New failure reasons: `entry-zone-contradicts-category` (from `archidekt_push_preview` and `archidekt_push_apply`) and
   `discard-needs-local-deck` (from `archidekt_pull_preview` and `archidekt_pull_apply`).
 - `archidekt_pull_preview` has a new optional `discardLocalChanges` argument, and the `archidekt_pull_apply` request has
   the same optional field; both default to false and leave the old behavior unchanged.
 - Local entry and category IDs of decks pulled from now on are derived from the local deck, so they differ from the IDs
-  0.11.0 derived for the same Archidekt deck. Existing decks keep their IDs and links.
+  `0.10.0` derived for the same Archidekt deck. Existing decks keep their IDs and links.
+- Category names are now case-sensitive in the local database (as on Archidekt); the upgrade rebuilds the category
+  index and keeps a copy first.
+- Tool names, the `stats_simulate` replacement for `local_deck_on_curve_estimate`, and the other tool surface
+  changes are listed under "Tool names", "Seeded simulation", and the `0.11.0` section below.
 
 ### Tool names (breaking)
 
-- Breaking: renamed from their 0.11.0 names, because the saved snapshots hold every kind of Scryfall request (search,
-  card lookups, sets, catalogs), not only searches: `scryfall_search_snapshots_get` is now
-  `scryfall_request_snapshots_get`, and `scryfall_search_snapshot_delete` is now `scryfall_request_snapshot_delete`.
-  Inputs, results, annotations, and operation modes are unchanged, and no alias keeps the old names. Tool counts are
-  unchanged.
+- Breaking: the saved Scryfall request tools are named `scryfall_request_snapshots_get` and
+  `scryfall_request_snapshot_delete`, because the saved snapshots hold every kind of Scryfall request (search, card
+  lookups, sets, catalogs), not only searches. They were renamed from the interim names
+  `scryfall_search_snapshots_get` and `scryfall_search_snapshot_delete` of the unpublished `0.11.0`; neither name
+  shipped. Coming from `0.10.0`, the old tools are `scryfall_snapshot_list`, `scryfall_snapshot_get`, and
+  `scryfall_snapshot_delete` (see the table under `0.11.0`). Inputs, results, annotations, and operation modes are
+  unchanged, and no alias keeps any old name. Tool counts are unchanged.
 
 ### Seeded simulation (breaking)
 
@@ -147,7 +169,10 @@
   `0.11.0`). Its tasks are `task coverage:simulation` and `task benchmark:simulation`; the `oncurve` task names are
   gone and no alias keeps them. The `on-curve` preset keeps its name.
 
-## 0.11.0 - 2026-10-28
+## 0.11.0 - not published (ships in 0.12.0)
+
+> This version was never tagged or published. Its changes are part of `0.12.0`; users upgrade from `0.10.0` straight
+> to `0.12.0`. The section is kept because it lists every old name beside its replacement.
 
 ### Tool surface changes (breaking)
 
@@ -255,7 +280,7 @@ aliases: calling one returns an unknown-tool error.
   `printsCursor` and `rulingsCursor`.
   `scryfall_reference_get` takes `kind` (`sets`, `catalog`, or `bulk`), uses
   `catalogName` in place of `catalog`, and returns a result with the same
-  `kind`. `scryfall_search_snapshots_get` (titled "Get Saved Scryfall Requests"; its
+  `kind`. `scryfall_request_snapshots_get` (titled "Get Saved Scryfall Requests"; its
   description starts "Saved Scryfall requests:") and `archidekt_snapshots_get` take
   `kind` (`list` or `get`) and return a result with the same `kind`.
   `archidekt_folders_get` takes `kind` (`list` or `get`) and returns a result
@@ -332,7 +357,7 @@ Old-to-new tool names:
 | `scryfall_corpus_delete` | `scryfall_card_data_delete` |
 | `scryfall_tag_search` | `scryfall_tags_search` |
 | `scryfall_cards_by_tag` | `scryfall_installed_cards_by_tag` |
-| `scryfall_snapshot_delete` | `scryfall_search_snapshot_delete` |
+| `scryfall_snapshot_delete` | `scryfall_request_snapshot_delete` (an interim name, `scryfall_search_snapshot_delete`, never shipped) |
 | `scryfall_card_get` | merged into `scryfall_cards_get` |
 | `scryfall_card_collection` | merged into `scryfall_cards_get` |
 | `scryfall_card_prints` | merged into `scryfall_card_details` (`include: ["prints"]`) |
@@ -340,8 +365,8 @@ Old-to-new tool names:
 | `scryfall_sets` | merged into `scryfall_reference_get` (`kind: "sets"`) |
 | `scryfall_catalog` | merged into `scryfall_reference_get` (`kind: "catalog"`) |
 | `scryfall_bulk_metadata` | merged into `scryfall_reference_get` (`kind: "bulk"`) |
-| `scryfall_snapshot_list` | merged into `scryfall_search_snapshots_get` (`kind: "list"`) |
-| `scryfall_snapshot_get` | merged into `scryfall_search_snapshots_get` (`kind: "get"`) |
+| `scryfall_snapshot_list` | merged into `scryfall_request_snapshots_get` (`kind: "list"`) |
+| `scryfall_snapshot_get` | merged into `scryfall_request_snapshots_get` (`kind: "get"`) |
 | `archidekt_folder_list` | merged into `archidekt_folders_get` (`kind: "list"`) |
 | `archidekt_folder_get` | merged into `archidekt_folders_get` (`kind: "get"`) |
 | `archidekt_snapshot_list` | merged into `archidekt_snapshots_get` (`kind: "list"`) |
