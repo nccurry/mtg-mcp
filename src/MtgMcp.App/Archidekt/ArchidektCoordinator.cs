@@ -21,8 +21,8 @@ internal sealed class ArchidektSynchronizationContext
     private const string UnverifiedPullConflictMessage =
         "The local deck may have changed since its synchronization baseline. The earlier version that made the " +
         "baseline did not record category colors or ordering, so the server cannot tell whether they changed. " +
-        "Push the deck to keep the local content, or preview and apply the pull with discardLocalChanges to take " +
-        "the Archidekt state instead.";
+        "Push the deck to keep the local content (the push is refused too if Archidekt also changed), or preview " +
+        "and apply the pull with discardLocalChanges to take the Archidekt state, which drops the local edits.";
 
     /// <summary>
     /// Provides revisioned local state and transactional baseline updates.
@@ -278,7 +278,7 @@ discardLocalChanges
                 HasUnverifiedLocalChange(preview.Data.Differences)
                     ? UnverifiedPullConflictMessage
                     : "The local deck changed since its synchronization baseline. Preview the pull with " +
-                    "discardLocalChanges to take the Archidekt state instead.",
+                    "discardLocalChanges to take the Archidekt state instead, which drops the local edits.",
                 new ConflictState(preview.Data.LocalRevision, preview.Data.RemoteFingerprint));
         }
 

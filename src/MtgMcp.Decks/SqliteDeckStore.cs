@@ -505,8 +505,10 @@ public sealed class SqliteDeckStore : IDisposable
                     return OperationFailure.Forward<long, DeckDocument>(revision);
                 }
 
+                Dictionary<Guid, Guid> primaryAssigned = [];
                 foreach (DeckChange change in changes)
                 {
+                    RejectSecondPrimaryInBatch(change, primaryAssigned);
                     await ApplyChangeAsync(
                         connection,
                         transaction,
@@ -574,6 +576,20 @@ public sealed class SqliteDeckStore : IDisposable
     public void Dispose()
     {
         mutationGate.Dispose();
+    }
+
+    /// <summary>
+    /// Refuses a batch that makes two different categories primary for one entry. A single primary assignment demotes
+    /// the entry's earlier primary category, so only a conflict inside one request is an error.
+    /// </summary>
+    private static void RejectSecondPrimaryInBatch(DeckChange change, Dictionary<Guid, Guid> primaryAssigned)
+    {
+        if (change is AssignDeckCategoryChange { IsPrimary: true } assignment &&
+            !primaryAssigned.TryAdd(assignment.EntryId, assignment.CategoryId) &&
+            primaryAssigned[assignment.EntryId] != assignment.CategoryId)
+        {
+            throw new DeckInputException("An entry may have only one primary category.");
+        }
     }
 
     /// <summary>

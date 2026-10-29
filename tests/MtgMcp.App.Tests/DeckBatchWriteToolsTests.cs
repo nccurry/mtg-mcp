@@ -138,6 +138,46 @@ public sealed class DeckBatchWriteToolsTests
     }
 
     /// <summary>
+    /// Verifies assigning a new primary category to an entry that already has one makes the new category primary and
+    /// keeps the old one assigned as non-primary, in the same batch as an entry update (PRE-005).
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_AssignNewPrimaryCategory_DemotesThePreviousPrimary()
+    {
+        using BatchFixture fixture = await BatchFixture.CreateAsync(withAssignment: true, assignmentIsPrimary: true);
+        Guid drawId = Guid.CreateVersion7();
+        DeckEntry updated = Assert.Single(fixture.Deck.Entries) with { Quantity = 3 };
+
+        DeckDocument deck = await fixture.ApplyAsync(
+            new AddDeckCategoryInput(new DeckCategoryDraft("Draw", CategoryId: drawId)),
+            new UpdateDeckEntryInput(updated),
+            new AssignDeckCategoryInput(fixture.EntryId, drawId, true));
+
+        Assert.Equal(3, Assert.Single(deck.Entries).Quantity);
+        Assert.Equal(2, deck.CategoryAssignments.Count);
+        Assert.True(deck.CategoryAssignments.Single(value => value.CategoryId == drawId).IsPrimary);
+        Assert.False(deck.CategoryAssignments.Single(value => value.CategoryId == fixture.CategoryId).IsPrimary);
+    }
+
+    /// <summary>
+    /// Verifies a batch that makes two different categories primary for one entry is still refused (PRE-005).
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_TwoPrimaryAssignmentsInOneBatch_AreRefused()
+    {
+        using BatchFixture fixture = await BatchFixture.CreateAsync();
+        Guid drawId = Guid.CreateVersion7();
+
+        OperationResult<DeckDocument> result = await fixture.TryApplyAsync(
+            new AddDeckCategoryInput(new DeckCategoryDraft("Draw", CategoryId: drawId)),
+            new AssignDeckCategoryInput(fixture.EntryId, fixture.CategoryId, true),
+            new AssignDeckCategoryInput(fixture.EntryId, drawId, true));
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(result.Value);
+        Assert.Contains("only one primary category", invalid.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies a single unassign-category change removes the assignment but keeps entry and category (SURF-005).
     /// </summary>
     [Fact]
@@ -266,9 +306,13 @@ public sealed class DeckBatchWriteToolsTests
         internal Guid CategoryId { get; }
 
         /// <summary>
-        /// Creates a deck with one entry, optionally with one category and an assignment of the entry to it.
+        /// Creates a deck with one entry, optionally with one category and an assignment of the entry to it, which is
+        /// the entry's primary category when asked.
         /// </summary>
-        internal static async Task<BatchFixture> CreateAsync(bool withCategory = true, bool withAssignment = false)
+        internal static async Task<BatchFixture> CreateAsync(
+            bool withCategory = true,
+            bool withAssignment = false,
+            bool assignmentIsPrimary = false)
         {
             TemporaryDirectory directory = new();
             SqliteDeckStore store = new(directory.Path, "0.9.0-preview.1");
@@ -280,7 +324,7 @@ public sealed class DeckBatchWriteToolsTests
                 Entries: [new DeckEntryDraft(1, "Card", EntryId: entryId)],
                 Categories: withCategory ? [new DeckCategoryDraft("Ramp", CategoryId: categoryId)] : null,
                 CategoryAssignments: withCategory && withAssignment
-                    ? [new DeckCategoryAssignment(entryId, categoryId, false)]
+                    ? [new DeckCategoryAssignment(entryId, categoryId, assignmentIsPrimary)]
                     : null);
             DeckDocument deck = RequireSuccess(
                 await store.CreateAsync(request, TestContext.Current.CancellationToken));
@@ -293,6 +337,18 @@ public sealed class DeckBatchWriteToolsTests
         internal Task<DeckDocument> ApplyAsync(params DeckChangeInput[] changes)
         {
             return DeckBatchWriteToolsTests.ApplyAsync(tools, Deck, changes);
+        }
+
+        /// <summary>
+        /// Applies one batch and returns the outcome without requiring success.
+        /// </summary>
+        internal async Task<OperationResult<DeckDocument>> TryApplyAsync(params DeckChangeInput[] changes)
+        {
+            return await tools.ApplyChangesAsync(
+                Deck.DeckId,
+                Deck.Revision,
+                changes,
+                TestContext.Current.CancellationToken);
         }
 
         /// <inheritdoc/>

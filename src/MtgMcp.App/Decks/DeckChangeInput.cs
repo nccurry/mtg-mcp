@@ -82,7 +82,9 @@ internal sealed record RemoveDeckCategoryInput(
 internal sealed record AssignDeckCategoryInput(
     [property: Description("The stable identifier of the entry receiving the category.")] Guid EntryId,
     [property: Description("The stable identifier of the category to assign.")] Guid CategoryId,
-    [property: Description("Whether this assignment becomes the entry's primary category.")] bool IsPrimary)
+    [property: Description(
+        "Whether this assignment becomes the entry's primary category; a previous primary category stays assigned " +
+        "as non-primary.")] bool IsPrimary)
     : DeckChangeInput;
 
 /// <summary>
