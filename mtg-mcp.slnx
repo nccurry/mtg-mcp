@@ -4,9 +4,9 @@
     <Project Path="src/MtgMcp.Archidekt/MtgMcp.Archidekt.csproj" />
     <Project Path="src/MtgMcp.Core/MtgMcp.Core.csproj" />
     <Project Path="src/MtgMcp.Decks/MtgMcp.Decks.csproj" />
-    <Project Path="src/MtgMcp.Simulation/MtgMcp.Simulation.csproj" />
     <Project Path="src/MtgMcp.Playgroup/MtgMcp.Playgroup.csproj" />
     <Project Path="src/MtgMcp.Scryfall/MtgMcp.Scryfall.csproj" />
+    <Project Path="src/MtgMcp.Simulation/MtgMcp.Simulation.csproj" />
     <Project Path="src/MtgMcp.Spellbook/MtgMcp.Spellbook.csproj" />
     <Project Path="src/MtgMcp.Statistics/MtgMcp.Statistics.csproj" />
   </Folder>
@@ -17,9 +17,9 @@
     <Project Path="tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj" />
     <Project Path="tests/MtgMcp.Decks.Tests/MtgMcp.Decks.Tests.csproj" />
     <Project Path="tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj" />
-    <Project Path="tests/MtgMcp.Simulation.Tests/MtgMcp.Simulation.Tests.csproj" />
     <Project Path="tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj" />
     <Project Path="tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj" />
+    <Project Path="tests/MtgMcp.Simulation.Tests/MtgMcp.Simulation.Tests.csproj" />
     <Project Path="tests/MtgMcp.Spellbook.Tests/MtgMcp.Spellbook.Tests.csproj" />
     <Project Path="tests/MtgMcp.Statistics.Tests/MtgMcp.Statistics.Tests.csproj" />
   </Folder>

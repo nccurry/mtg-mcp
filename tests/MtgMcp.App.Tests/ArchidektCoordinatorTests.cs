@@ -903,8 +903,9 @@ public sealed class ArchidektCoordinatorTests
         try
         {
             QueueHandler handler = new();
-            (ArchidektCoordinator coordinator, SqliteDeckStore store, DeckDocument created) =
+            (ArchidektCoordinator coordinator, SqliteDeckStore store, ArchidektService service, DeckDocument created) =
                 await CreateEarlierVersionDeckAsync(handler, root);
+            using (service)
             using (store)
             {
                 ArchidektSyncDiff diff = Success(await coordinator.DiffAsync(
@@ -951,8 +952,9 @@ public sealed class ArchidektCoordinatorTests
         try
         {
             QueueHandler handler = new();
-            (ArchidektCoordinator coordinator, SqliteDeckStore store, DeckDocument created) =
+            (ArchidektCoordinator coordinator, SqliteDeckStore store, ArchidektService service, DeckDocument created) =
                 await CreateEarlierVersionDeckAsync(handler, root);
+            using (service)
             using (store)
             {
                 ArchidektSyncPreview plain = Success(await coordinator.PreviewPullAsync(
@@ -1003,8 +1005,8 @@ public sealed class ArchidektCoordinatorTests
 
     /// <summary>
     /// Verifies a push is not blocked by the unverified row and plans nothing from it: a push with no edit has no
-    /// operation, a push with a real edit (which the rows then explain) plans only that edit, and either one leaves a schema 2 baseline, so the
-    /// row is gone and a pull then sees no change.
+    /// operation, a push with a real edit (which the rows then explain) plans only that edit, and either one leaves a
+    /// schema 2 baseline, so the row is gone and a pull then sees no change.
     /// </summary>
     [Theory]
     [InlineData(false)]
@@ -1019,8 +1021,9 @@ public sealed class ArchidektCoordinatorTests
         try
         {
             QueueHandler handler = new();
-            (ArchidektCoordinator coordinator, SqliteDeckStore store, DeckDocument created) =
+            (ArchidektCoordinator coordinator, SqliteDeckStore store, ArchidektService service, DeckDocument created) =
                 await CreateEarlierVersionDeckAsync(handler, root);
+            using (service)
             using (store)
             {
                 if (withEdit)
@@ -1074,13 +1077,39 @@ public sealed class ArchidektCoordinatorTests
     /// Builds a local deck the way the earlier version did: provider-only IDs and a schema 1 baseline whose local
     /// fingerprint matches no current ordering and that has no hidden-field fingerprint.
     /// </summary>
-    private static async Task<(ArchidektCoordinator Coordinator, SqliteDeckStore Store, DeckDocument Deck)>
+    private static async Task<(
+        ArchidektCoordinator Coordinator,
+        SqliteDeckStore Store,
+        ArchidektService Service,
+        DeckDocument Deck)>
         CreateEarlierVersionDeckAsync(QueueHandler handler, string root)
     {
         handler.SetStanding("api/decks/42/", RichRemoteDeck);
         handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
         ArchidektService service = CreateService(handler);
         SqliteDeckStore store = new(root, "test");
+        try
+        {
+            return await BuildEarlierVersionDeckAsync(service, store).ConfigureAwait(false);
+        }
+        catch
+        {
+            store.Dispose();
+            service.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Inserts the earlier-version deck into the store; the caller owns the service and store.
+    /// </summary>
+    private static async Task<(
+        ArchidektCoordinator Coordinator,
+        SqliteDeckStore Store,
+        ArchidektService Service,
+        DeckDocument Deck)>
+        BuildEarlierVersionDeckAsync(ArchidektService service, SqliteDeckStore store)
+    {
         RemoteDeckSnapshot remote = ParseRemote(RichRemoteDeck);
         Guid bindingId = Guid.CreateVersion7();
         DeckProviderBinding binding = new(
@@ -1129,7 +1158,7 @@ public sealed class ArchidektCoordinatorTests
             legacy,
             new DeckSyncBaseline(bindingId, baseline.ToJsonString()),
             TestContext.Current.CancellationToken));
-        return (new ArchidektCoordinator(service, store), store, created);
+        return (new ArchidektCoordinator(service, store), store, service, created);
     }
 
     /// <summary>

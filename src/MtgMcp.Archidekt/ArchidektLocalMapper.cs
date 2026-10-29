@@ -454,7 +454,8 @@ public static class ArchidektLocalMapper
             }
         }
 
-        assignments.AddRange(local.CategoryAssignments.Where(value => !placed.Contains((value.EntryId, value.CategoryId))));
+        assignments.AddRange(local.CategoryAssignments.Where(
+            value => !placed.Contains((value.EntryId, value.CategoryId))));
         return FingerprintLocalContent(local, entries, categories, assignments);
     }
 

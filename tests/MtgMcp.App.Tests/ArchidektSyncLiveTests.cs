@@ -1,4 +1,5 @@
 using MtgMcp.App.Archidekt;
+using MtgMcp.App.Hosting;
 using MtgMcp.Archidekt;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
@@ -40,14 +41,17 @@ public sealed class ArchidektSyncLiveTests
         string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-live-{suffix}");
         using ArchidektService service = new(
             ArchidektOptions.CreateDefault(credentialsFile: credentialsFile),
-            "0.9.0-preview.1");
+            FoundationServerIdentity.PackageVersion);
+        string deckName = $"mtg-mcp sync disposable {suffix}";
         RemoteDeckSnapshot? deck = null;
+        bool bodyFailed = false;
+        string? cleanupFailure;
         try
         {
             ScryfallCard card = await ReadCardAsync(root).ConfigureAwait(false);
             deck = Success(await service.CreateDeckAsync(
                 new ArchidektDeckCreateRequest(
-                    $"mtg-mcp sync disposable {suffix}",
+                    deckName,
                     "commander",
                     "Disposable sync acceptance; safe to delete."),
                 TestContext.Current.CancellationToken));
@@ -117,17 +121,23 @@ public sealed class ArchidektSyncLiveTests
             Assert.False(afterPull.HasConflicts);
             Assert.Empty(afterPull.Differences);
         }
+        catch
+        {
+            bodyFailed = true;
+            throw;
+        }
         finally
         {
-            if (deck is not null)
+            cleanupFailure = await CleanUpAsync(service, deckName, deck, root).ConfigureAwait(false);
+            if (cleanupFailure is not null && bodyFailed)
             {
-                await DeleteDeckAsync(service, deck).ConfigureAwait(false);
+                TestContext.Current.SendDiagnosticMessage(cleanupFailure);
             }
+        }
 
-            if (Directory.Exists(root))
-            {
-                Directory.Delete(root, recursive: true);
-            }
+        if (cleanupFailure is not null)
+        {
+            throw new Xunit.Sdk.XunitException(cleanupFailure);
         }
     }
 
@@ -139,7 +149,7 @@ public sealed class ArchidektSyncLiveTests
         using ScryfallService scryfall = new(
             Path.Combine(root, "scryfall"),
             allowLocalWrites: true,
-            "0.9.0-preview.1",
+            FoundationServerIdentity.PackageVersion,
             ScryfallTestFixture.ResultOptions);
         ScryfallCardResponse response = Success(await scryfall.GetCardAsync(
             new ScryfallCardLookup("exact-name", "Sol Ring"),
@@ -151,13 +161,86 @@ public sealed class ArchidektSyncLiveTests
     }
 
     /// <summary>
+    /// Removes the disposable remote deck and the temporary directory with a fresh timeout, so a cancelled or timed out
+    /// test still cleans up. A deck the test never received (creation failed after the request reached Archidekt) is
+    /// found by its unique name. Returns a description of what could not be cleaned, or null; one failure never
+    /// stops the other step.
+    /// </summary>
+    private static async Task<string?> CleanUpAsync(
+        ArchidektService service,
+        string deckName,
+        RemoteDeckSnapshot? deck,
+        string root)
+    {
+        List<string> problems = [];
+        using CancellationTokenSource timeout = new(TimeSpan.FromMinutes(2));
+        try
+        {
+            string? remoteId = deck?.RemoteId ?? await FindDeckIdByNameAsync(service, deckName, timeout.Token)
+                .ConfigureAwait(false);
+            if (remoteId is not null)
+            {
+                await DeleteDeckAsync(service, remoteId, timeout.Token).ConfigureAwait(false);
+            }
+        }
+        catch (Exception exception)
+        {
+            problems.Add($"The disposable Archidekt deck \"{deckName}\" may still exist and needs deleting by hand: " +
+                exception.Message);
+        }
+
+        try
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            problems.Add($"The temporary directory could not be deleted: {exception.Message}");
+        }
+
+        return problems.Count == 0 ? null : string.Join(" ", problems);
+    }
+
+    /// <summary>
+    /// Looks through the owned decks for one with the exact disposable name.
+    /// </summary>
+    private static async Task<string?> FindDeckIdByNameAsync(
+        ArchidektService service,
+        string deckName,
+        CancellationToken cancellationToken)
+    {
+        string? cursor = null;
+        do
+        {
+            RemoteDeckPage page = Success(await service.ListDecksAsync(cursor, 100, cancellationToken)
+                .ConfigureAwait(false));
+            RemoteDeckSummary? match = page.Items.FirstOrDefault(value =>
+                string.Equals(value.Name, deckName, StringComparison.Ordinal));
+            if (match is not null)
+            {
+                return match.RemoteId;
+            }
+
+            cursor = page.NextCursor;
+        }
+        while (cursor is not null);
+
+        return null;
+    }
+
+    /// <summary>
     /// Deletes the disposable deck, if it still exists, using fresh remote fingerprint evidence.
     /// </summary>
-    private static async Task DeleteDeckAsync(ArchidektService service, RemoteDeckSnapshot deck)
+    private static async Task DeleteDeckAsync(
+        ArchidektService service,
+        string remoteId,
+        CancellationToken cancellationToken)
     {
-        OperationResult<RemoteDeckSnapshot> current = await service.GetDeckAsync(
-            deck.RemoteId,
-            TestContext.Current.CancellationToken).ConfigureAwait(false);
+        OperationResult<RemoteDeckSnapshot> current = await service.GetDeckAsync(remoteId, cancellationToken)
+            .ConfigureAwait(false);
         if (current is OperationNotFound)
         {
             return;
@@ -166,10 +249,10 @@ public sealed class ArchidektSyncLiveTests
         RemoteDeckSnapshot exact = Success(current);
         ArchidektApplyResult deleted = Success(await service.DeleteDeckAsync(
             new ArchidektDeckDeleteRequest(
-                deck.RemoteId,
+                remoteId,
                 exact.RemoteFingerprint,
-                $"delete {deck.RemoteId}"),
-            TestContext.Current.CancellationToken).ConfigureAwait(false));
+                $"delete {remoteId}"),
+            cancellationToken).ConfigureAwait(false));
         Assert.Equal("applied", deleted.Outcome);
     }
 

@@ -45,7 +45,7 @@ internal sealed record ScryfallBulkReference(
     [property: JsonPropertyName("bulk")] ScryfallBulkMetadataResult Bulk) : ScryfallReferenceResult;
 
 /// <summary>
-/// Returns one search snapshot result whose <c>kind</c> matches the requested <c>kind</c>: list or get.
+/// Returns one saved Scryfall request result whose <c>kind</c> matches the requested <c>kind</c>: list or get.
 /// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(ScryfallSnapshotListReference), "list")]
