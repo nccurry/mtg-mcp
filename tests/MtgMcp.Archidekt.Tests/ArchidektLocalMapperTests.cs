@@ -576,6 +576,11 @@ public sealed class ArchidektLocalMapperTests
     }
 
     /// <summary>
+    /// A fixed local deck ID, so the row IDs derived from it, and their sorted order, are the same on every run.
+    /// </summary>
+    private static readonly Guid PullFixtureDeckId = Guid.Parse("0f0e0d0c-0b0a-4908-8706-050403020100");
+
+    /// <summary>
     /// Builds a local deck and baseline exactly as a pull of the shared fixture would.
     /// </summary>
     private static (RemoteDeckSnapshot Remote, DeckDocument Local, ArchidektSyncBaseline Baseline) PullFixture()
@@ -590,9 +595,9 @@ public sealed class ArchidektLocalMapperTests
             remote.RemoteFingerprint,
             DateTimeOffset.UtcNow,
             null);
-        DeckCreateRequest request = ArchidektLocalMapper.ToCreateRequest(remote, binding);
+        DeckCreateRequest request = ArchidektLocalMapper.ToCreateRequest(remote, binding, PullFixtureDeckId);
         DeckDocument local = new(
-            Guid.NewGuid(),
+            PullFixtureDeckId,
             remote.Name,
             remote.Description,
             remote.Format,
@@ -1000,6 +1005,13 @@ public sealed class ArchidektLocalMapperTests
             CategoryAssignments = [.. local.CategoryAssignments.Reverse()],
         };
 
+        // The fixed deck ID must make the ID-sorted order differ from the drafted order, or this test proves nothing.
+        Assert.NotEqual(
+            local.Entries.Select(value => value.EntryId),
+            local.Entries.Select(value => value.EntryId).Order());
+        Assert.NotEqual(
+            local.Categories.Select(value => value.CategoryId),
+            local.Categories.Select(value => value.CategoryId).Order());
         Assert.NotEqual(baseline.LocalFingerprint, ArchidektLocalMapper.LocalFingerprint(stored));
         Assert.NotEqual(baseline.LocalFingerprint, ArchidektLocalMapper.LegacyLocalFingerprint(stored));
         ArchidektSyncDiff unedited = ArchidektSyncPlanner.Diff(stored, remote, remote, baseline);
