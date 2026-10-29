@@ -579,16 +579,52 @@ public sealed class SqliteDeckStore : IDisposable
     }
 
     /// <summary>
-    /// Refuses a batch that makes two different categories primary for one entry. A single primary assignment demotes
-    /// the entry's earlier primary category, so only a conflict inside one request is an error.
+    /// Refuses a batch that makes two different categories primary for one entry at the same time. A single primary
+    /// assignment demotes the entry's earlier primary category, so only a conflict inside one request is an error.
+    /// The entry forgets its remembered primary when the batch unassigns that category, assigns it as non-primary,
+    /// removes the category, or removes the entry.
     /// </summary>
     private static void RejectSecondPrimaryInBatch(DeckChange change, Dictionary<Guid, Guid> primaryAssigned)
     {
-        if (change is AssignDeckCategoryChange { IsPrimary: true } assignment &&
-            !primaryAssigned.TryAdd(assignment.EntryId, assignment.CategoryId) &&
-            primaryAssigned[assignment.EntryId] != assignment.CategoryId)
+        switch (change)
         {
-            throw new DeckInputException("An entry may have only one primary category.");
+            case AssignDeckCategoryChange { IsPrimary: true } assignment:
+                if (primaryAssigned.TryGetValue(assignment.EntryId, out Guid current) &&
+                    current != assignment.CategoryId)
+                {
+                    throw new DeckInputException("An entry may have only one primary category.");
+                }
+
+                primaryAssigned[assignment.EntryId] = assignment.CategoryId;
+                break;
+            case AssignDeckCategoryChange assignment:
+                ForgetPrimary(primaryAssigned, assignment.EntryId, assignment.CategoryId);
+                break;
+            case UnassignDeckCategoryChange unassignment:
+                ForgetPrimary(primaryAssigned, unassignment.EntryId, unassignment.CategoryId);
+                break;
+            case RemoveDeckCategoryChange removal:
+                foreach (Guid entryId in primaryAssigned.Where(value => value.Value == removal.CategoryId)
+                    .Select(value => value.Key).ToArray())
+                {
+                    primaryAssigned.Remove(entryId);
+                }
+
+                break;
+            case RemoveDeckEntryChange removal:
+                primaryAssigned.Remove(removal.EntryId);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Drops the remembered primary category of an entry when it is the given category.
+    /// </summary>
+    private static void ForgetPrimary(Dictionary<Guid, Guid> primaryAssigned, Guid entryId, Guid categoryId)
+    {
+        if (primaryAssigned.TryGetValue(entryId, out Guid current) && current == categoryId)
+        {
+            primaryAssigned.Remove(entryId);
         }
     }
 

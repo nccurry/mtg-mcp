@@ -103,8 +103,8 @@ upgrade from `0.10.0` straight to `0.12.0`.
   lookups, sets, catalogs), not only searches. They were renamed from the interim names
   `scryfall_search_snapshots_get` and `scryfall_search_snapshot_delete` of the unpublished `0.11.0`; neither name
   shipped. Coming from `0.10.0`, the old tools are `scryfall_snapshot_list`, `scryfall_snapshot_get`, and
-  `scryfall_snapshot_delete` (see the table under `0.11.0`). Inputs, results, annotations, and operation modes match the interim tools and are
-  unchanged, and no alias keeps any old name.
+  `scryfall_snapshot_delete` (see the table under `0.11.0`). Inputs, results, annotations, and operation modes match
+  the interim tools, and no alias keeps any old name.
 
 ### Seeded simulation (breaking)
 

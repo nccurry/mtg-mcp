@@ -175,6 +175,31 @@ public sealed class DeckBatchWriteToolsTests
 
         OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(result.Value);
         Assert.Contains("only one primary category", invalid.Message, StringComparison.Ordinal);
+        DeckDocument after = await fixture.ReadAsync();
+        Assert.Equal(fixture.Deck.Revision, after.Revision);
+        Assert.DoesNotContain(after.Categories, value => value.CategoryId == drawId);
+        Assert.Equal(fixture.Deck.CategoryAssignments, after.CategoryAssignments);
+    }
+
+    /// <summary>
+    /// Verifies a batch that assigns a primary, unassigns it, and then assigns another primary is accepted, because the
+    /// entry never has two primary categories at once (PRE-005).
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_PrimaryAssignedUnassignedAndReplaced_Succeeds()
+    {
+        using BatchFixture fixture = await BatchFixture.CreateAsync();
+        Guid drawId = Guid.CreateVersion7();
+
+        DeckDocument deck = await fixture.ApplyAsync(
+            new AddDeckCategoryInput(new DeckCategoryDraft("Draw", CategoryId: drawId)),
+            new AssignDeckCategoryInput(fixture.EntryId, fixture.CategoryId, true),
+            new UnassignDeckCategoryInput(fixture.EntryId, fixture.CategoryId),
+            new AssignDeckCategoryInput(fixture.EntryId, drawId, true));
+
+        Assert.Equal(
+            new DeckCategoryAssignment(fixture.EntryId, drawId, true),
+            Assert.Single(deck.CategoryAssignments));
     }
 
     /// <summary>
@@ -349,6 +374,14 @@ public sealed class DeckBatchWriteToolsTests
                 Deck.Revision,
                 changes,
                 TestContext.Current.CancellationToken);
+        }
+
+        /// <summary>
+        /// Reads the deck as it is stored now.
+        /// </summary>
+        internal async Task<DeckDocument> ReadAsync()
+        {
+            return RequireSuccess(await store.GetAsync(Deck.DeckId, TestContext.Current.CancellationToken));
         }
 
         /// <inheritdoc/>
