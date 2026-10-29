@@ -941,6 +941,59 @@ public sealed class ArchidektCoordinatorTests
     }
 
     /// <summary>
+    /// Verifies that on a deck 0.10.0 pulled, an edit to a value the store normalizes (set code, language, finish,
+    /// collector number) still reads as a local change, so the drafted values put back for the 0.10.0 hash never hide
+    /// a real edit.
+    /// </summary>
+    [Theory]
+    [InlineData("set-code")]
+    [InlineData("language")]
+    [InlineData("finish")]
+    [InlineData("collector-number")]
+    public async Task Preview_OfADeckPulledByVersion0100_ShowsAnEditToANormalizedField(string field)
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        string mixedCase = RichRemoteDeck
+            .Replace("\"id\": 501,", "\"id\": 501, \"setCode\": \"DMU\",", StringComparison.Ordinal)
+            .Replace("\"deckRelationId\": 102,", "\"deckRelationId\": 102, \"language\": \"EN\",", StringComparison.Ordinal);
+        try
+        {
+            QueueHandler handler = new();
+            (ArchidektCoordinator coordinator, SqliteDeckStore store, ArchidektService service, DeckDocument created) =
+                await CreateEarlierVersionDeckAsync(handler, root, mixedCase, faithfulPullFingerprint: true);
+            using (service)
+            using (store)
+            {
+                DeckEntry bolt = created.Entries.First(value => value.CardName == "Bolt");
+                DeckEntry anger = created.Entries.First(value => value.CardName == "Anger");
+                DeckEntry edited = field switch
+                {
+                    "set-code" => bolt with { SetCode = "one" },
+                    "language" => anger with { Language = "ja" },
+                    "finish" => bolt with { Finish = bolt.Finish == "foil" ? "nonfoil" : "foil" },
+                    _ => bolt with { CollectorNumber = "999" },
+                };
+                _ = Success(await store.ApplyChangesAsync(
+                    created.DeckId,
+                    created.Revision,
+                    [new UpdateDeckEntryChange(edited)],
+                    TestContext.Current.CancellationToken));
+                ArchidektSyncPreview preview = Success(await coordinator.PreviewPullAsync(
+                    "42",
+                    created.DeckId,
+                    TestContext.Current.CancellationToken));
+
+                Assert.True(preview.HasConflicts);
+                Assert.Contains(preview.Differences, value => value.State.StartsWith("local-", StringComparison.Ordinal));
+            }
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    /// <summary>
     /// Verifies a deck made by an earlier version (provider-only IDs, a schema 1 baseline that never matched the stored
     /// row order and recorded no category colors or ordering) reads as an unverified local change, and a pull is
     /// refused with a message that says why and names both exits.

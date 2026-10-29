@@ -203,6 +203,31 @@ public sealed class DeckBatchWriteToolsTests
     }
 
     /// <summary>
+    /// Verifies a batch that assigns a primary, then assigns the same category as non-primary or removes it, and then
+    /// assigns another primary is accepted, because the entry never has two primary categories at once (PRE-005).
+    /// </summary>
+    [Theory]
+    [InlineData("non-primary")]
+    [InlineData("remove-category")]
+    public async Task ApplyChanges_PrimaryReleasedThenReplaced_Succeeds(string release)
+    {
+        using BatchFixture fixture = await BatchFixture.CreateAsync();
+        Guid drawId = Guid.CreateVersion7();
+        DeckChangeInput released = release == "non-primary"
+            ? new AssignDeckCategoryInput(fixture.EntryId, fixture.CategoryId, false)
+            : new RemoveDeckCategoryInput(fixture.CategoryId);
+
+        DeckDocument deck = await fixture.ApplyAsync(
+            new AddDeckCategoryInput(new DeckCategoryDraft("Draw", CategoryId: drawId)),
+            new AssignDeckCategoryInput(fixture.EntryId, fixture.CategoryId, true),
+            released,
+            new AssignDeckCategoryInput(fixture.EntryId, drawId, true));
+
+        Assert.True(deck.CategoryAssignments.Single(value => value.CategoryId == drawId).IsPrimary);
+        Assert.DoesNotContain(deck.CategoryAssignments, value => value.CategoryId != drawId && value.IsPrimary);
+    }
+
+    /// <summary>
     /// Verifies a single unassign-category change removes the assignment but keeps entry and category (SURF-005).
     /// </summary>
     [Fact]

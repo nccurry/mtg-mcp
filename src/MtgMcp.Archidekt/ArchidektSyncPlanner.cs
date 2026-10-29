@@ -23,6 +23,7 @@ public static class ArchidektSyncPlanner
         ArchidektSyncBaseline baseline)
     {
         ArgumentNullException.ThrowIfNull(local);
+        ArgumentNullException.ThrowIfNull(baseline);
         return Diff(
             local.DeckId,
             local.Revision,
