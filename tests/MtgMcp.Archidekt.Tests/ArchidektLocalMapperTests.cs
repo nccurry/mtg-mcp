@@ -624,6 +624,58 @@ public sealed class ArchidektLocalMapperTests
     }
 
     /// <summary>
+    /// Builds a local deck and a baseline the way version 0.10.0 pulled it: the baseline's local fingerprint is the hash
+    /// of the creation draft with rows in the order of the Archidekt response, schema 1, and no hidden-field value.
+    /// </summary>
+    private static (RemoteDeckSnapshot Remote, DeckDocument Local, ArchidektSyncBaseline Baseline)
+        Version0100PullFixture()
+    {
+        (RemoteDeckSnapshot remote, DeckDocument local, ArchidektSyncBaseline current) = PullFixture();
+        // Port of FingerprintLocalContent(DeckCreateRequest) in 0.10.0: no sorting, rows in drafted order. The fixture
+        // deck holds the rows exactly as the draft listed them.
+        string fingerprint = ArchidektContract.Fingerprint(new
+        {
+            local.Name,
+            local.Description,
+            local.Format,
+            entries = local.Entries.Select(value => new
+            {
+                value.EntryId,
+                value.Quantity,
+                value.CardName,
+                value.OracleId,
+                value.PrintingId,
+                value.SetCode,
+                value.CollectorNumber,
+                value.Language,
+                value.Finish,
+                value.Zone,
+                value.SortOrder,
+            }),
+            categories = local.Categories.Select(value => new
+            {
+                value.CategoryId,
+                value.Name,
+                value.Color,
+                value.SortOrder,
+            }),
+            assignments = local.CategoryAssignments.Select(value => new
+            {
+                value.EntryId,
+                value.CategoryId,
+                value.IsPrimary,
+            }),
+        });
+        ArchidektSyncBaseline baseline = current with
+        {
+            SchemaVersion = 1,
+            LocalFingerprint = fingerprint,
+            LocalInvisibleFingerprint = null,
+        };
+        return (remote, local, baseline);
+    }
+
+    /// <summary>
     /// Creates one local entry identified only by name, as a user's local addition would be.
     /// </summary>
     private static DeckEntry NewEntry(string cardName, string zone, int sortOrder)
@@ -930,6 +982,42 @@ public sealed class ArchidektLocalMapperTests
         Assert.Empty(sameOrder.Differences);
         Assert.Contains(visibleEdit.Differences, value => value.State == "local-changed");
         Assert.DoesNotContain(visibleEdit.Differences, value => value.State == "local-changed-unverified");
+    }
+
+    /// <summary>
+    /// Verifies a deck pulled by 0.10.0 reads as unchanged when the store lists its rows in a different order than the
+    /// Archidekt response, and that an edit to it still shows. The baseline is made by a port of the 0.10.0 pull.
+    /// </summary>
+    [Fact]
+    public void Diff_ADeckPulledByVersion0100InAnotherStoreOrder_IsUnchangedUntilEdited()
+    {
+        (RemoteDeckSnapshot remote, DeckDocument local, ArchidektSyncBaseline baseline) = Version0100PullFixture();
+        Assert.True(local.Entries.Count > 1 && local.Categories.Count > 1 && local.CategoryAssignments.Count > 1);
+        DeckDocument stored = local with
+        {
+            Entries = [.. local.Entries.Reverse()],
+            Categories = [.. local.Categories.Reverse()],
+            CategoryAssignments = [.. local.CategoryAssignments.Reverse()],
+        };
+
+        Assert.NotEqual(baseline.LocalFingerprint, ArchidektLocalMapper.LocalFingerprint(stored));
+        Assert.NotEqual(baseline.LocalFingerprint, ArchidektLocalMapper.LegacyLocalFingerprint(stored));
+        ArchidektSyncDiff unedited = ArchidektSyncPlanner.Diff(stored, remote, remote, baseline);
+        DeckDocument edited = stored with
+        {
+            Entries = [stored.Entries[0] with { Quantity = stored.Entries[0].Quantity + 1 }, .. stored.Entries.Skip(1)],
+        };
+        ArchidektSyncDiff afterEdit = ArchidektSyncPlanner.Diff(edited, remote, remote, baseline);
+        DeckDocument recolored = stored with
+        {
+            Categories = [stored.Categories[0] with { Color = "#ff0000" }, .. stored.Categories.Skip(1)],
+        };
+        ArchidektSyncDiff afterRecolor = ArchidektSyncPlanner.Diff(recolored, remote, remote, baseline);
+
+        Assert.Empty(unedited.Differences);
+        Assert.NotEmpty(afterEdit.Differences);
+        Assert.Contains(afterEdit.Differences, value => value.State.StartsWith("local-", StringComparison.Ordinal));
+        Assert.Equal("local-changed-unverified", Assert.Single(afterRecolor.Differences).State);
     }
 
     /// <summary>
