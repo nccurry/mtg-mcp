@@ -1,26 +1,26 @@
 # Focused Agent Tool Surface PLC Packet
 
-> [!IMPORTANT]
-> The owner authorized implementation on 2026-10-27. Work proceeds phase by
-> phase as listed in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+> [!NOTE]
+> Completed 2026-10-29. All seven phases shipped in `0.12.0`; `0.11.0` was
+> never published. EVAL-002 was not run and is listed under Deferred Work.
 
 ## Lifecycle
 
-- Status: In progress
-- Folder: `docs/llms/plcs/in-progress/focused-agent-tool-surface/`
+- Status: Completed 2026-10-29
+- Folder: `docs/llms/plcs/completed/focused-agent-tool-surface/`
 - Owner: mtg-mcp
 - Created: 2026-10-25
 - Last updated: 2026-10-29
-- Current phase: All seven phases delivered (phases 1 and 2 on 2026-10-27, phases 3 to 6 on 2026-10-28, phase 7 on 2026-10-29). 0.11.0 is not published (owner, 2026-10-29): its changes ship in 0.12.0, which carries phases 1 to 7.
+- Current phase: Complete. All seven phases delivered (phases 1 and 2 on 2026-10-27, phases 3 to 6 on 2026-10-28, phase 7 on 2026-10-29) and released as `0.12.0` on 2026-10-29 (tag `0.12.0` at 201e7a1; NuGet, GitHub Release, and MCP Registry). `0.11.0` was not published (owner, 2026-10-29).
 - Implementation authorized: Yes (owner, 2026-10-27)
 - Phase 1 status: Delivered 2026-10-27 (strict audit passed except EVAL-002).
 - Phase 2 status: Delivered 2026-10-27 (strict audit passed).
 - Phase 3 status: Delivered 2026-10-28 (strict audit passed after three passes).
 - Phase 4 status: Delivered 2026-10-28 (strict audit passed after two passes; agent task rerun deferred with EVAL-002).
-- Phase 5 status: Delivered 2026-10-28 except publishing (strict audit passed after two passes; 0.11.0 packed and smoke-tested, not tagged or published).
-- Phase 6 status: Delivered 2026-10-28 except publishing (strict audit passed after three passes, including the seven added defect fixes FIX-001 to FIX-007; 0.12.0 packed and smoke-tested, not tagged or published; T-row rerun deferred with EVAL-002; Linux CI passed on the merge, run 40744364208 at 0f69ffa).
+- Phase 5 status: Delivered 2026-10-28; released in 0.12.0 (strict audit passed after two passes; 0.11.0 packed and smoke-tested, not tagged or published).
+- Phase 6 status: Delivered 2026-10-28; released in 0.12.0 (strict audit passed after three passes, including the seven added defect fixes FIX-001 to FIX-007; 0.12.0 packed and smoke-tested, not tagged or published; T-row rerun deferred with EVAL-002; Linux CI passed on the merge, run 40744364208 at 0f69ffa).
 - Phase 7 status: Delivered 2026-10-29 (strict audit in three passes; pass 3 failed only on a missing regression test, which the parent added and proved against deliberately broken code; live acceptance passed).
-- EVAL-002 baseline: Deferred to the owner. This session has no agent-eval harness, so the `0.10.0` baseline rows below stay "Not run".
+- EVAL-002 baseline: Not run. The owner closed the packet on 2026-10-29 without it; it and the T-row reruns are listed under Deferred Work, and the `0.10.0` baseline rows below stay "Not run".
 
 ## Summary
 
@@ -363,6 +363,7 @@ design review on the same day; see Validation Evidence.
 | 2026-10-29 | Phase 7 audit pass 1 repair on `fats/phase7` (on top of c5ff7e0) | Repair done; checks passed; pass 2 audit pending; release not published | Pass 1 had three reviewers: plan, release, and docs FAILED on one medium finding (0.11.0 still framed as a release to publish, against the owner decision that 0.11.0 is not published and 0.12.0 carries phases 1 to 7); correctness and tests PASSED; code structure PASSED; all lows listed. **Fixed:** CHANGELOG retitled `0.11.0 - not published (ships in 0.12.0)`, 0.12.0 dated 2026-10-29, migration notes now cover 0.10.0 to 0.12.0 (0.10.0 wrote schema 1 and cannot open schema 2), versioning, README Owner Decisions item 12, IMPLEMENTATION_PLAN release plan. **PRE-003 repair:** 0.10.0 recorded a pulled deck's fingerprint over the creation draft in Archidekt response order, so every unedited 0.10.0 pull got the unverified row; `LegacyPullOrderLocalFingerprint` is a second schema 1 fallback, tested with a port of the 0.10.0 draft fingerprint (unedited reads unchanged; an edit or a recolor still shows). **PRE-005 (user report):** a new primary category demotes the previous primary in the same transaction; two primaries in one batch are still refused; store and `local_deck_apply_changes` tests. **Lows:** planner comment, merged CHANGELOG entry, pull refusal message and README (push refused too if Archidekt changed; `discardLocalChanges` drops local edits), live test cleanup, test service disposal, runsettings dot, Simulation sort order, wording. **Checks (PowerShell):** `task ci` passed (77 MCP smoke tests); `task test:integration` passed (24, 56, 151, 35, 121, 62); `task test:e2e` 101 passed, 0 skipped, 0 failed; `task coverage:simulation` passed (1,586 non-live tests; Simulation 98.71% line, 97.35% branch); `task pack VERSION=0.12.0` and `task release:tool-smoke VERSION=0.12.0` passed (77/77). Live acceptance: not run (parent). |
 | 2026-10-29 | Phase 7 audit pass 2 repair on `fats/phase7` (on top of 4ae7e32) | Repair done; checks passed; release not published | Pass 2 had two reviewers: release and docs FAILED on a flaky test (medium) plus lows; correctness PASSED with lows. **M1:** `Diff_ADeckPulledByVersion0100InAnotherStoreOrder_IsUnchangedUntilEdited` failed in about 2 of 5 runs because the pull fixture's row IDs came from a random deck ID, so the reversed order sometimes equalled the ID-sorted order. The fixture now uses a fixed deck ID and the test asserts the order precondition; the Archidekt test project passed 10 runs in a row. **Lows fixed:** the CHANGELOG row for `deck_on_curve_estimate` says removed and names `stats_simulate` with `preset.kind` `on-curve`; 0.12.0 no longer says `MtgMcp.OnCurve` was in 0.11.0 or that counts or inputs are unchanged against it; the "gets the row once" sentence is gone (CHANGELOG and SADD) and the row's end (next successful push or pull) and the `discardLocalChanges` exit are stated; the two-primaries test also checks rollback; a batch can now assign a primary, unassign it, and assign another (the store forgets an entry's primary on unassign, non-primary assign, category removal, and entry removal); the planner computes the legacy fingerprints only for schema 1 baselines. **Round-trip test (item 6):** a deck created through `SqliteDeckStore` from a 0.10.0-style draft with mixed-case set code and language and a baseline holding the ported 0.10.0 draft hash did NOT read clean, because the store lowercases drafted values that 0.10.0 hashed as drafted. `LegacyPullOrderLocalFingerprint` now puts the drafted value back when the stored value is exactly its normalized form; the test passes (clean, then an edit reads as local). **Checks (PowerShell):** `task ci` passed (1,588 non-live tests, 77 MCP smoke tests); `task test:integration` passed (24, 56, 151, 35, 121, 62); `task test:e2e` 101 passed, 0 skipped, 0 failed; `task coverage:simulation` passed (Simulation 98.71% line, 97.35% branch); `task pack VERSION=0.12.0` and `task release:tool-smoke VERSION=0.12.0` passed (see the delivery report). Live acceptance: not run (parent). |
 | 2026-10-29 | Phase 7 audit pass 3 and parent close on `fats/phase7` (d616875) | Delivered | Pass 3 had two reviewers. Release and docs PASSED with five lows (README "pulled or pushed", a verbless CHANGELOG counts line, a hard SADD sentence, untested release paths, helper names). Correctness FAILED on one medium: no test reached the branch of `AsDrafted` that keeps an edited normalized value, so a regression could let a pull silently overwrite an edit to set code, language, finish, or collector number on a deck 0.10.0 pulled. Production code was correct. Being at the three-pass limit, the parent added `Preview_OfADeckPulledByVersion0100_ShowsAnEditToANormalizedField` (four fields) and `ApplyChanges_PrimaryReleasedThenReplaced_Succeeds` (non-primary assign and category removal), ran them against code with those branches removed (6 of 7 failed, as intended; the clean-read test passed), restored the code, added a null-baseline check, and fixed the wording lows. The entry-removal path of the primary rules stays untested because a removed entry cannot be reassigned. Parent checks at d616875 from PowerShell: `task ci` passed (1,594 tests and 77 smoke tests); `task test:integration` passed (24, 56, 151, 35, 121, 62); `task test:e2e` 101 passed. Live at b4991aa (code identical to d616875 except the added tests and null check): `task test:live` with `MTGMCP_RUN_ARCHIDEKT_LIVE=1` passed (Archidekt disposable lifecycle, the new disposable pull, edit, push, verify test, Scryfall bounded, Spellbook); the Archidekt owned-deck read and the Playgroup read passed with their opt-in variables. Not run: packaged method acceptance (it mutates an owner deck and needs a prepared folder) and the multi-gigabyte Scryfall corpus. |
+| 2026-10-29 | Release 0.12.0 and close | Released | Phase 7 merged into `main` at e5aaa14. Linux CI on that merge failed before building: `ubuntu-latest` moved to Ubuntu 26.04, where the `libxml2` runtime package is `libxml2-16`; `scripts/install-linux-native-deps.sh` now installs whichever name apt offers (201e7a1), and CI passed (run 40949517676). Tag `0.12.0` pushed; the release workflow (run 40950975222) pushed to NuGet but timed out waiting 5 minutes for NuGet indexing; the failed job was rerun (the push skips duplicates) and passed, creating the GitHub Release (8 assets) and publishing to the MCP Registry, where 0.12.0 is the latest version. Installed on the owner workstation with `dotnet tool update -g nccurry.mtgmcp --version 0.12.0` after stopping 21 running 0.10.0 servers (owner approved); a raw stdio `initialize` at 2025-06-18 returned server version 0.12.0, capabilities prompts, resources, and tools, and listed 73 tools in local mode with credentials. |
 
 ## Agent Task Results
 
@@ -409,6 +410,8 @@ page size or format should change in phase 2.
 
 ## Deferred Work
 
+- EVAL-002: the `0.10.0` baseline and the after-phase task-set runs (including the T-row reruns for phases 4 and 6), which need an agent-eval harness.
+- The release workflow waits only 5 minutes for NuGet indexing; 0.12.0 needed a rerun.
 - Full-game goldfish play, opponent models, and Phyrexian life payment in
   simulation.
 - Any change to the 16 existing Playgroup tools.

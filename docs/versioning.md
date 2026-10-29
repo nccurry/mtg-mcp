@@ -43,7 +43,7 @@ history-preserving Git integration. See [rewrite-guide.md](rewrite-guide.md).
 ### Approved `0.12.0` focused-agent-tool-surface exception
 
 The approved focused-agent-tool-surface program (see
-`docs/llms/plcs/in-progress/focused-agent-tool-surface/`) renames, merges, and
+`docs/llms/plcs/completed/focused-agent-tool-surface/`) renames, merges, and
 removes tools, and changes default selection, without deprecation aliases. It
 was planned as `0.11.0` (surface changes) and `0.12.0` (replacing
 `local_deck_on_curve_estimate` with `stats_simulate`). On 2026-10-29 the owner

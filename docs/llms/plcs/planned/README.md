@@ -23,8 +23,8 @@ is complete.
 
 ## Agent Surface
 
-[focused-agent-tool-surface](../in-progress/focused-agent-tool-surface/README.md)
-moved to `in-progress/` on 2026-10-27.
+[focused-agent-tool-surface](../completed/focused-agent-tool-surface/README.md)
+was completed and released as 0.12.0 on 2026-10-29.
 
 ## Retired Reference Packets
 
