@@ -1184,9 +1184,16 @@ Also fixed: the unedited 0.10.0 pull false positive. 0.10.0 recorded a pulled de
 draft in Archidekt response order, while the earlier fallback only knew the store order, so every unedited deck pulled
 by 0.10.0 got `local-changed-unverified` and its first pull was refused. `LegacyPullOrderLocalFingerprint` reorders the
 local rows by the baseline's remote snapshot (through the baseline links) and the planner accepts a match. The test
-ported the 0.10.0 draft fingerprint from `git show 0.10.0:src/MtgMcp.Archidekt/ArchidektLocalMapper.cs`. The only part
-not reproduced is the store's own normalization of draft values, which does not change the fingerprinted fields.
-PRE-005 was added from a user report (see PRE-005 above). The schema 2 one-way note now names 0.10.0.
+ported the 0.10.0 draft fingerprint from `git show 0.10.0:src/MtgMcp.Archidekt/ArchidektLocalMapper.cs`. Pass 2 found that the store
+trims and lowercases some draft values (set code, language, finish, zone, collector number, card name) before saving
+them, while 0.10.0 hashed the draft as drafted. A mixed-case Archidekt set code or language made an unedited 0.10.0
+deck read as changed. A round-trip test through `SqliteDeckStore` (mixed-case set code and language) proved it, and
+`LegacyPullOrderLocalFingerprint` now puts the drafted value back when the stored value is exactly the normalized
+form of it (a value edited to something else is kept). Names are already trimmed by the Archidekt parser. The planner
+computes both legacy fingerprints only for schema 1 baselines.
+PRE-005 was added from a user report (see PRE-005 above). Pass 2 also let one batch reassign a primary after it
+unassigns or removes the earlier one (the batch check forgets an entry's primary on unassign, non-primary assign,
+category removal, and entry removal), and made the earlier-version order test use a fixed deck ID. The schema 2 one-way note now names 0.10.0.
 
 ### On-Curve Migration
 
