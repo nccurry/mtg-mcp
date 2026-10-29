@@ -36,10 +36,10 @@ upgrade from `0.10.0` straight to `0.12.0`.
   `/localOnly/content` row with the new state `local-changed-unverified`. A pull preview reports it, and a pull apply
   is refused (`pull-conflict`) unless `discardLocalChanges` is set. The message says the earlier version did not record
   category colors or ordering, so the server cannot tell whether they changed, and names the two ways out: push to
-  keep the local content, or pull with `discardLocalChanges` to take the Archidekt state (which drops the local
-  edits; if Archidekt also changed, the push is refused too, so this is the way out). A push is not blocked by the
-  row and plans nothing from it. Any successful push or pull writes a current (schema 2) baseline, which clears the
-  row. A deck whose old fingerprint cannot be reproduced in either order also gets the row once.
+  keep the local content, or pull with `discardLocalChanges` to take the Archidekt state. Pulling with
+  `discardLocalChanges` drops the local edits. When Archidekt also changed, the push is refused, so this pull is the
+  only way out. A push is not blocked by the row and plans nothing from it. The row goes away after the next
+  successful push or pull, which writes a current (schema 2) baseline.
 - Fixed identical edits on both sides being reported as a conflict. When the local deck and Archidekt changed the same
   field to the same value, the difference was `concurrent-changed`, which blocked the push and the pull. It is now
   `converged`: no conflict and no operation, and applying either direction advances the baseline. A converged row never
@@ -103,8 +103,8 @@ upgrade from `0.10.0` straight to `0.12.0`.
   lookups, sets, catalogs), not only searches. They were renamed from the interim names
   `scryfall_search_snapshots_get` and `scryfall_search_snapshot_delete` of the unpublished `0.11.0`; neither name
   shipped. Coming from `0.10.0`, the old tools are `scryfall_snapshot_list`, `scryfall_snapshot_get`, and
-  `scryfall_snapshot_delete` (see the table under `0.11.0`). Inputs, results, annotations, and operation modes are
-  unchanged, and no alias keeps any old name. Tool counts are unchanged.
+  `scryfall_snapshot_delete` (see the table under `0.11.0`). Inputs, results, annotations, and operation modes match the interim tools and are
+  unchanged, and no alias keeps any old name.
 
 ### Seeded simulation (breaking)
 
@@ -158,7 +158,7 @@ upgrade from `0.10.0` straight to `0.12.0`.
 - Added the `stats_simulate` line to the server instructions, and the
   description label `Seeded sampling:`, which marks the result as an estimate
   and not exact math.
-- Counts: unchanged with every toolset on (35 / 48 / 48 with no provider
+- Counts with every toolset on (35 / 48 / 48 with no provider
   credentials, 44 / 58 / 69 with Archidekt only, and 59 / 73 / 86 with both,
   in `read-only`, `local`, and `remote`). By toolset, `decks` has 19 tools
   (10 read-only and 9 local writes) and `stats` has 10 read-only tools.
@@ -166,7 +166,7 @@ upgrade from `0.10.0` straight to `0.12.0`.
   object: `invalid-input` (reason `invalid-arguments`) with the message
   "Required field 'x' is missing at 'path'." and a `path` that names the field.
 - The sampling engine behind `stats_simulate` is the `MtgMcp.Simulation` project (it was `MtgMcp.OnCurve` in
-  `0.11.0`). Its tasks are `task coverage:simulation` and `task benchmark:simulation`; the `oncurve` task names are
+  `0.10.0`). Its tasks are `task coverage:simulation` and `task benchmark:simulation`; the `oncurve` task names are
   gone and no alias keeps them. The `on-curve` preset keeps its name.
 
 ## 0.11.0 - not published (ships in 0.12.0)
@@ -340,7 +340,7 @@ Old-to-new tool names:
 | `deck_create` | `local_deck_create` |
 | `deck_apply_changes` | `local_deck_apply_changes` |
 | `deck_delete` | `local_deck_delete` |
-| `deck_on_curve_estimate` | `local_deck_on_curve_estimate` |
+| `deck_on_curve_estimate` | removed in `0.12.0`; use `stats_simulate` with `preset.kind` set to `"on-curve"` |
 | `deck_update` | removed; use `local_deck_apply_changes` with `update-metadata` |
 | `deck_entry_add` | removed; use `local_deck_apply_changes` with `add-entry` |
 | `deck_entry_update` | removed; use `local_deck_apply_changes` with `update-entry` |
