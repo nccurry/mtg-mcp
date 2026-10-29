@@ -418,8 +418,18 @@ public static class ArchidektLocalMapper
             entryPositions.TryAdd(baseline.RemoteSnapshot.Entries[index].ProviderRelationId, index);
         }
 
-        List<DeckEntry> entries = [.. local.Entries.OrderBy(
-            value => PositionOf(value.EntryId, baseline.EntryRelations, entryPositions))];
+        Dictionary<string, RemoteDeckEntry> remoteByProvider = [];
+        foreach (RemoteDeckEntry remoteEntry in baseline.RemoteSnapshot.Entries)
+        {
+            remoteByProvider.TryAdd(remoteEntry.ProviderRelationId, remoteEntry);
+        }
+
+        List<DeckEntry> entries = [.. local.Entries
+            .OrderBy(value => PositionOf(value.EntryId, baseline.EntryRelations, entryPositions))
+            .Select(value => baseline.EntryRelations.TryGetValue(value.EntryId, out string? providerId) &&
+                remoteByProvider.TryGetValue(providerId, out RemoteDeckEntry? remoteEntry)
+                    ? AsDrafted(value, remoteEntry)
+                    : value)];
         List<DeckCategory> categories = [.. local.Categories.OrderBy(
             value => PositionOf(value.CategoryId, baseline.CategoryRelations, categoryPositions))];
         Dictionary<(Guid, Guid), DeckCategoryAssignment> stored = [];
@@ -457,6 +467,59 @@ public static class ArchidektLocalMapper
         assignments.AddRange(local.CategoryAssignments.Where(
             value => !placed.Contains((value.EntryId, value.CategoryId))));
         return FingerprintLocalContent(local, entries, categories, assignments);
+    }
+
+    /// <summary>
+    /// Puts back the values the store trimmed or lowercased when it saved the draft, so the hash matches the one 0.10.0
+    /// took of the draft before saving. A stored value that is not the normalized form of the drafted value was
+    /// edited and is kept.
+    /// </summary>
+    private static DeckEntry AsDrafted(DeckEntry stored, RemoteDeckEntry drafted)
+    {
+        return stored with
+        {
+            CardName = DraftedRequired(stored.CardName, drafted.CardName, static value => value.Trim()),
+            SetCode = Drafted(stored.SetCode, drafted.SetCode, NormalizedCode),
+            CollectorNumber = Drafted(stored.CollectorNumber, drafted.CollectorNumber, NormalizedText),
+            Language = DraftedRequired(stored.Language, drafted.Language, NormalizedCode),
+            Finish = DraftedRequired(stored.Finish, drafted.Finish, NormalizedCode),
+            Zone = DraftedRequired(stored.Zone, drafted.Zone, NormalizedCode),
+        };
+    }
+
+    /// <summary>
+    /// Returns the drafted value when the stored value is what the store makes of it, and the stored value otherwise.
+    /// </summary>
+    private static string? Drafted(string? stored, string? drafted, Func<string, string?> normalize)
+    {
+        return drafted is not null && string.Equals(stored, normalize(drafted), StringComparison.Ordinal)
+            ? drafted
+            : stored;
+    }
+
+    /// <summary>
+    /// Returns the drafted value when the stored required value is what the store makes of it, and the stored value
+    /// otherwise.
+    /// </summary>
+    private static string DraftedRequired(string stored, string drafted, Func<string, string?> normalize)
+    {
+        return string.Equals(stored, normalize(drafted), StringComparison.Ordinal) ? drafted : stored;
+    }
+
+    /// <summary>
+    /// Applies the store's rule for optional text: trimmed, and absent when blank.
+    /// </summary>
+    private static string? NormalizedText(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    /// <summary>
+    /// Applies the store's rule for codes and vocabulary words: trimmed and lowercase.
+    /// </summary>
+    private static string? NormalizedCode(string value)
+    {
+        return NormalizedText(value)?.ToLowerInvariant();
     }
 
     /// <summary>

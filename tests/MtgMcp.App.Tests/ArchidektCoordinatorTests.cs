@@ -892,6 +892,55 @@ public sealed class ArchidektCoordinatorTests
     }
 
     /// <summary>
+    /// Verifies a deck that 0.10.0 pulled, with a baseline made by the 0.10.0 pull hash, reads as unchanged through the
+    /// store even when the store normalized the drafted values (mixed-case set code and language), and that one local
+    /// edit then reads as a local change.
+    /// </summary>
+    [Fact]
+    public async Task Preview_OfADeckPulledByVersion0100_ReadsCleanThroughTheStoreUntilEdited()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
+        string mixedCase = RichRemoteDeck
+            .Replace("\"id\": 501,", "\"id\": 501, \"setCode\": \"DMU\",", StringComparison.Ordinal)
+            .Replace("\"deckRelationId\": 102,", "\"deckRelationId\": 102, \"language\": \"EN\",", StringComparison.Ordinal);
+        try
+        {
+            QueueHandler handler = new();
+            (ArchidektCoordinator coordinator, SqliteDeckStore store, ArchidektService service, DeckDocument created) =
+                await CreateEarlierVersionDeckAsync(handler, root, mixedCase, faithfulPullFingerprint: true);
+            using (service)
+            using (store)
+            {
+                ArchidektSyncPreview clean = Success(await coordinator.PreviewPullAsync(
+                    "42",
+                    created.DeckId,
+                    TestContext.Current.CancellationToken));
+                DeckEntry bolt = created.Entries.First(value => value.CardName == "Bolt");
+                _ = Success(await store.ApplyChangesAsync(
+                    created.DeckId,
+                    created.Revision,
+                    [new UpdateDeckEntryChange(bolt with { Quantity = 5 })],
+                    TestContext.Current.CancellationToken));
+                ArchidektSyncPreview edited = Success(await coordinator.PreviewPullAsync(
+                    "42",
+                    created.DeckId,
+                    TestContext.Current.CancellationToken));
+
+                Assert.Contains(created.Entries, value => value.SetCode == "dmu" && value.CardName == "Bolt");
+                Assert.Contains(created.Entries, value => value.Language == "en" && value.CardName == "Anger");
+                Assert.False(clean.HasConflicts);
+                Assert.Empty(clean.Differences);
+                Assert.True(edited.HasConflicts);
+                Assert.Contains(edited.Differences, value => value.State.StartsWith("local-", StringComparison.Ordinal));
+            }
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    /// <summary>
     /// Verifies a deck made by an earlier version (provider-only IDs, a schema 1 baseline that never matched the stored
     /// row order and recorded no category colors or ordering) reads as an unverified local change, and a pull is
     /// refused with a message that says why and names both exits.
@@ -1082,15 +1131,20 @@ public sealed class ArchidektCoordinatorTests
         SqliteDeckStore Store,
         ArchidektService Service,
         DeckDocument Deck)>
-        CreateEarlierVersionDeckAsync(QueueHandler handler, string root)
+        CreateEarlierVersionDeckAsync(
+            QueueHandler handler,
+            string root,
+            string remoteJson = RichRemoteDeck,
+            bool faithfulPullFingerprint = false)
     {
-        handler.SetStanding("api/decks/42/", RichRemoteDeck);
+        handler.SetStanding("api/decks/42/", remoteJson);
         handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
         ArchidektService service = CreateService(handler);
         SqliteDeckStore store = new(root, "test");
         try
         {
-            return await BuildEarlierVersionDeckAsync(service, store).ConfigureAwait(false);
+            return await BuildEarlierVersionDeckAsync(service, store, remoteJson, faithfulPullFingerprint)
+                .ConfigureAwait(false);
         }
         catch
         {
@@ -1108,9 +1162,13 @@ public sealed class ArchidektCoordinatorTests
         SqliteDeckStore Store,
         ArchidektService Service,
         DeckDocument Deck)>
-        BuildEarlierVersionDeckAsync(ArchidektService service, SqliteDeckStore store)
+        BuildEarlierVersionDeckAsync(
+            ArchidektService service,
+            SqliteDeckStore store,
+            string remoteJson,
+            bool faithfulPullFingerprint)
     {
-        RemoteDeckSnapshot remote = ParseRemote(RichRemoteDeck);
+        RemoteDeckSnapshot remote = ParseRemote(remoteJson);
         Guid bindingId = Guid.CreateVersion7();
         DeckProviderBinding binding = new(
             bindingId,
@@ -1150,7 +1208,9 @@ public sealed class ArchidektCoordinatorTests
         };
         JsonObject baseline = JsonNode.Parse(ArchidektLocalMapper.CreateBaseline(modern, remote))!.AsObject();
         baseline["schemaVersion"] = 1;
-        baseline["localFingerprint"] = "legacy-draft-order-fingerprint";
+        baseline["localFingerprint"] = faithfulPullFingerprint
+            ? Version0100PullFingerprint(legacy)
+            : "legacy-draft-order-fingerprint";
         baseline.Remove("localInvisibleFingerprint");
         baseline["entryRelations"] = RemapKeys(baseline["entryRelations"]!.AsObject(), ids);
         baseline["categoryRelations"] = RemapKeys(baseline["categoryRelations"]!.AsObject(), ids);
@@ -1159,6 +1219,47 @@ public sealed class ArchidektCoordinatorTests
             new DeckSyncBaseline(bindingId, baseline.ToJsonString()),
             TestContext.Current.CancellationToken));
         return (new ArchidektCoordinator(service, store), store, service, created);
+    }
+
+    /// <summary>
+    /// Port of the fingerprint 0.10.0 recorded when it pulled a deck: a hash of the creation draft with its rows in
+    /// drafted order and values as drafted, before the store trimmed or lowercased any of them.
+    /// </summary>
+    private static string Version0100PullFingerprint(DeckCreateRequest draft)
+    {
+        return ArchidektContract.Fingerprint(new
+        {
+            draft.Name,
+            draft.Description,
+            draft.Format,
+            entries = draft.Entries!.Select(value => new
+            {
+                value.EntryId,
+                value.Quantity,
+                value.CardName,
+                value.OracleId,
+                value.PrintingId,
+                value.SetCode,
+                value.CollectorNumber,
+                value.Language,
+                value.Finish,
+                value.Zone,
+                value.SortOrder,
+            }),
+            categories = draft.Categories!.Select(value => new
+            {
+                value.CategoryId,
+                value.Name,
+                value.Color,
+                value.SortOrder,
+            }),
+            assignments = draft.CategoryAssignments!.Select(value => new
+            {
+                value.EntryId,
+                value.CategoryId,
+                value.IsPrimary,
+            }),
+        });
     }
 
     /// <summary>

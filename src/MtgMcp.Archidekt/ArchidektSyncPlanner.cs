@@ -31,8 +31,8 @@ public static class ArchidektSyncPlanner
             remote,
             baseline,
             ArchidektLocalMapper.LocalInvisibleFingerprint(local),
-            ArchidektLocalMapper.LegacyLocalFingerprint(local),
-            ArchidektLocalMapper.LegacyPullOrderLocalFingerprint(local, baseline));
+            baseline.SchemaVersion < 2 ? ArchidektLocalMapper.LegacyLocalFingerprint(local) : null,
+            baseline.SchemaVersion < 2 ? ArchidektLocalMapper.LegacyPullOrderLocalFingerprint(local, baseline) : null);
     }
 
     /// <summary>
