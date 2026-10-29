@@ -633,8 +633,8 @@ such a deck differs from its baseline with no row to show why, the diff has a
 `/localOnly/content` row with state `local-changed-unverified`. A pull of it is
 refused until `discardLocalChanges` is set; push keeps the local content and is
 not blocked by the row (but is refused if Archidekt also changed). Either one
-writes a current baseline, and the row is gone. A deck 0.10.0 pulled and you have
-not edited is read as unchanged, so it gets no row.
+writes a current baseline, and the row is gone. A deck 0.10.0 pulled or pushed that you have
+not edited since is read as unchanged, so it gets no row.
 
 ## Read Playgroup evidence
 

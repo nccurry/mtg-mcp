@@ -158,9 +158,9 @@ upgrade from `0.10.0` straight to `0.12.0`.
 - Added the `stats_simulate` line to the server instructions, and the
   description label `Seeded sampling:`, which marks the result as an estimate
   and not exact math.
-- Counts with every toolset on (35 / 48 / 48 with no provider
+- Tool counts with every toolset on are 35 / 48 / 48 with no provider
   credentials, 44 / 58 / 69 with Archidekt only, and 59 / 73 / 86 with both,
-  in `read-only`, `local`, and `remote`). By toolset, `decks` has 19 tools
+  in `read-only`, `local`, and `remote`. By toolset, `decks` has 19 tools
   (10 read-only and 9 local writes) and `stats` has 10 read-only tools.
 - Added a clearer error for a missing required field inside a nested request
   object: `invalid-input` (reason `invalid-arguments`) with the message

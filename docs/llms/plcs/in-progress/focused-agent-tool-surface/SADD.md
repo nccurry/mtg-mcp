@@ -1132,8 +1132,8 @@ phase 6 evidence row of the README.
   the planner adds `/localOnly/content` with state `local-changed-unverified`.
   Pull treats it as a local change, so only `discardLocalChanges` overwrites
   it; push sends local state as usual. The next successful push or pull
-  writes a schema 2 baseline and the row goes away. Rows decide a deck
-  whose old fingerprint matches in neither order below: an edit they show is
+  writes a schema 2 baseline and the row goes away. A deck that matches
+  in neither order below is judged by its rows: an edit they show is
   an ordinary local change, and a difference no row shows gets the row.
   0.10.0 recorded the local fingerprint in two orders: after a push, over the
   stored deck in store order (zone, sort order, name); after a pull, over the
