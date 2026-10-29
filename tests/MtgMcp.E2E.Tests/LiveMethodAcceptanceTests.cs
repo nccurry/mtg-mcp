@@ -883,7 +883,7 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement snapshots = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_search_snapshots_get",
+                "scryfall_request_snapshots_get",
                 new Dictionary<string, object?> { ["kind"] = "list", ["operation"] = "search", ["pageSize"] = 25 },
                 token).ConfigureAwait(false);
             Assert.Contains(
@@ -892,7 +892,7 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement replay = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_search_snapshots_get",
+                "scryfall_request_snapshots_get",
                 new Dictionary<string, object?>
                 {
                     ["kind"] = "get",
@@ -908,7 +908,7 @@ public sealed class LiveMethodAcceptanceTests
             _ = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_search_snapshot_delete",
+                "scryfall_request_snapshot_delete",
                 new Dictionary<string, object?>
                 {
                     ["snapshotId"] = searchSnapshotId,
@@ -918,7 +918,7 @@ public sealed class LiveMethodAcceptanceTests
                 token).ConfigureAwait(false);
             JsonElement deleted = await CallResultAsync(
                 session,
-                "scryfall_search_snapshots_get",
+                "scryfall_request_snapshots_get",
                 new Dictionary<string, object?> { ["kind"] = "get", ["snapshotId"] = searchSnapshotId },
                 token).ConfigureAwait(false);
             Assert.Equal("not-found", deleted.GetProperty("kind").GetString());

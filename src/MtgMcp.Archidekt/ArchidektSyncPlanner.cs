@@ -8,8 +8,13 @@ namespace MtgMcp.Archidekt;
 public static class ArchidektSyncPlanner
 {
     /// <summary>
+    /// Names the difference state of a schema 1 baseline whose local content differs with no row to show why.
+    /// </summary>
+    public const string LocalChangedUnverifiedState = "local-changed-unverified";
+
+    /// <summary>
     /// Computes the three-way comparison for a stored local deck, using the local fingerprints of that deck: the full
-    /// one, the one for fields no row shows, and the one an earlier version recorded.
+    /// one, the one for fields no row shows, and the two orders an earlier version recorded.
     /// </summary>
     public static ArchidektSyncDiff Diff(
         DeckDocument local,
@@ -18,6 +23,7 @@ public static class ArchidektSyncPlanner
         ArchidektSyncBaseline baseline)
     {
         ArgumentNullException.ThrowIfNull(local);
+        ArgumentNullException.ThrowIfNull(baseline);
         return Diff(
             local.DeckId,
             local.Revision,
@@ -26,7 +32,8 @@ public static class ArchidektSyncPlanner
             remote,
             baseline,
             ArchidektLocalMapper.LocalInvisibleFingerprint(local),
-            ArchidektLocalMapper.LegacyLocalFingerprint(local));
+            baseline.SchemaVersion < 2 ? ArchidektLocalMapper.LegacyLocalFingerprint(local) : null,
+            baseline.SchemaVersion < 2 ? ArchidektLocalMapper.LegacyPullOrderLocalFingerprint(local, baseline) : null);
     }
 
     /// <summary>
@@ -40,20 +47,24 @@ public static class ArchidektSyncPlanner
         RemoteDeckSnapshot remote,
         ArchidektSyncBaseline baseline,
         string? localInvisibleFingerprint = null,
-        string? legacyLocalFingerprint = null)
+        string? legacyLocalFingerprint = null,
+        string? legacyPullOrderFingerprint = null)
     {
         ArgumentNullException.ThrowIfNull(localProjection);
         ArgumentNullException.ThrowIfNull(remote);
         ArgumentNullException.ThrowIfNull(baseline);
-        // A baseline made by an earlier version recorded the rows in the order of the moment, so it is also compared
-        // with that order, and a deck it cannot match is judged by its rows alone.
+        // A baseline made by an earlier version (schema 1) recorded its local fingerprint over rows in the order of the
+        // moment: the store's listing after a push, or the Archidekt response order after a pull. It is also compared
+        // with both orders. A deck that matches neither is still judged by its rows, and reported as unverified when
+        // none of them shows why it differs.
         bool legacyBaseline = baseline.SchemaVersion < 2;
         bool localChanged = !string.Equals(
             localFingerprint,
             baseline.LocalFingerprint,
             StringComparison.Ordinal);
         if (localChanged && legacyBaseline &&
-            string.Equals(legacyLocalFingerprint, baseline.LocalFingerprint, StringComparison.Ordinal))
+            (string.Equals(legacyLocalFingerprint, baseline.LocalFingerprint, StringComparison.Ordinal) ||
+                string.Equals(legacyPullOrderFingerprint, baseline.LocalFingerprint, StringComparison.Ordinal)))
         {
             localChanged = false;
         }
@@ -83,11 +94,13 @@ public static class ArchidektSyncPlanner
             baseline.LocalInvisibleFingerprint is not null &&
             localInvisibleFingerprint is not null &&
             !string.Equals(baseline.LocalInvisibleFingerprint, localInvisibleFingerprint, StringComparison.Ordinal);
-        if (localChanged && ((!representedLocalChange && !legacyBaseline) || hiddenChange))
+        // A baseline from an earlier version did not record category colors or ordering, so a difference no row shows
+        // cannot be told from an edit to those fields: it is reported as unverified, never as unchanged.
+        if (localChanged && (!representedLocalChange || hiddenChange))
         {
             differences.Add(new ArchidektDifference(
                 "/localOnly/content",
-                "local-changed",
+                legacyBaseline ? LocalChangedUnverifiedState : "local-changed",
                 baseline.LocalFingerprint,
                 localFingerprint,
                 RemoteValue: null));

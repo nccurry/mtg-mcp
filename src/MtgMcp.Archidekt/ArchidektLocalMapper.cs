@@ -385,6 +385,157 @@ public static class ArchidektLocalMapper
     }
 
     /// <summary>
+    /// Computes the fingerprint version 0.10.0 recorded when it pulled a deck: it hashed the creation draft, whose
+    /// rows follow the order of the Archidekt response (entries, categories, then each entry's assignments in the
+    /// order of its category names), not the order the store lists them in. The rows are put back in the order the
+    /// baseline's remote snapshot has, using the baseline's links; rows with no link follow in store order.
+    /// </summary>
+    public static string LegacyPullOrderLocalFingerprint(DeckDocument local, ArchidektSyncBaseline baseline)
+    {
+        ArgumentNullException.ThrowIfNull(local);
+        ArgumentNullException.ThrowIfNull(baseline);
+        Dictionary<string, int> entryPositions = [];
+        Dictionary<string, int> categoryPositions = [];
+        Dictionary<string, Guid> categoryIdsByName = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, Guid> localCategoryByProvider = [];
+        foreach ((Guid localId, string providerId) in baseline.CategoryRelations)
+        {
+            localCategoryByProvider[providerId] = localId;
+        }
+
+        for (int index = 0; index < baseline.RemoteSnapshot.Categories.Count; index++)
+        {
+            RemoteDeckCategory category = baseline.RemoteSnapshot.Categories[index];
+            categoryPositions.TryAdd(category.ProviderCategoryId, index);
+            if (localCategoryByProvider.TryGetValue(category.ProviderCategoryId, out Guid localCategoryId))
+            {
+                categoryIdsByName[category.Name] = localCategoryId;
+            }
+        }
+
+        for (int index = 0; index < baseline.RemoteSnapshot.Entries.Count; index++)
+        {
+            entryPositions.TryAdd(baseline.RemoteSnapshot.Entries[index].ProviderRelationId, index);
+        }
+
+        Dictionary<string, RemoteDeckEntry> remoteByProvider = [];
+        foreach (RemoteDeckEntry remoteEntry in baseline.RemoteSnapshot.Entries)
+        {
+            remoteByProvider.TryAdd(remoteEntry.ProviderRelationId, remoteEntry);
+        }
+
+        List<DeckEntry> entries = [.. local.Entries
+            .OrderBy(value => PositionOf(value.EntryId, baseline.EntryRelations, entryPositions))
+            .Select(value => baseline.EntryRelations.TryGetValue(value.EntryId, out string? providerId) &&
+                remoteByProvider.TryGetValue(providerId, out RemoteDeckEntry? remoteEntry)
+                    ? AsDrafted(value, remoteEntry)
+                    : value)];
+        List<DeckCategory> categories = [.. local.Categories.OrderBy(
+            value => PositionOf(value.CategoryId, baseline.CategoryRelations, categoryPositions))];
+        Dictionary<(Guid, Guid), DeckCategoryAssignment> stored = [];
+        foreach (DeckCategoryAssignment assignment in local.CategoryAssignments)
+        {
+            stored[(assignment.EntryId, assignment.CategoryId)] = assignment;
+        }
+
+        List<DeckCategoryAssignment> assignments = [];
+        HashSet<(Guid, Guid)> placed = [];
+        Dictionary<string, Guid> localEntryByProvider = [];
+        foreach ((Guid localId, string providerId) in baseline.EntryRelations)
+        {
+            localEntryByProvider.TryAdd(providerId, localId);
+        }
+
+        foreach (RemoteDeckEntry remoteEntry in baseline.RemoteSnapshot.Entries)
+        {
+            if (!localEntryByProvider.TryGetValue(remoteEntry.ProviderRelationId, out Guid entryId))
+            {
+                continue;
+            }
+
+            foreach (string name in remoteEntry.CategoryNames)
+            {
+                if (categoryIdsByName.TryGetValue(name, out Guid categoryId) &&
+                    stored.TryGetValue((entryId, categoryId), out DeckCategoryAssignment? assignment) &&
+                    placed.Add((entryId, categoryId)))
+                {
+                    assignments.Add(assignment);
+                }
+            }
+        }
+
+        assignments.AddRange(local.CategoryAssignments.Where(
+            value => !placed.Contains((value.EntryId, value.CategoryId))));
+        return FingerprintLocalContent(local, entries, categories, assignments);
+    }
+
+    /// <summary>
+    /// Puts back the values the store trimmed or lowercased when it saved the draft, so the hash matches the one 0.10.0
+    /// took of the draft before saving. A stored value that is not the normalized form of the drafted value was
+    /// edited and is kept.
+    /// </summary>
+    private static DeckEntry AsDrafted(DeckEntry stored, RemoteDeckEntry drafted)
+    {
+        return stored with
+        {
+            CardName = DraftedRequired(stored.CardName, drafted.CardName, static value => value.Trim()),
+            SetCode = Drafted(stored.SetCode, drafted.SetCode, NormalizedCode),
+            CollectorNumber = Drafted(stored.CollectorNumber, drafted.CollectorNumber, NormalizedText),
+            Language = DraftedRequired(stored.Language, drafted.Language, NormalizedCode),
+            Finish = DraftedRequired(stored.Finish, drafted.Finish, NormalizedCode),
+            Zone = DraftedRequired(stored.Zone, drafted.Zone, NormalizedCode),
+        };
+    }
+
+    /// <summary>
+    /// Returns the drafted value when the stored value is what the store makes of it, and the stored value otherwise.
+    /// </summary>
+    private static string? Drafted(string? stored, string? drafted, Func<string, string?> normalize)
+    {
+        return drafted is not null && string.Equals(stored, normalize(drafted), StringComparison.Ordinal)
+            ? drafted
+            : stored;
+    }
+
+    /// <summary>
+    /// Returns the drafted value when the stored required value is what the store makes of it, and the stored value
+    /// otherwise.
+    /// </summary>
+    private static string DraftedRequired(string stored, string drafted, Func<string, string?> normalize)
+    {
+        return string.Equals(stored, normalize(drafted), StringComparison.Ordinal) ? drafted : stored;
+    }
+
+    /// <summary>
+    /// Applies the store's rule for optional text: trimmed, and absent when blank.
+    /// </summary>
+    private static string? NormalizedText(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    /// <summary>
+    /// Applies the store's rule for codes and vocabulary words: trimmed and lowercase.
+    /// </summary>
+    private static string? NormalizedCode(string value)
+    {
+        return NormalizedText(value)?.ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Finds where a linked local row sits in the baseline's remote rows, or the end when it has no link.
+    /// </summary>
+    private static int PositionOf(
+        Guid id,
+        IReadOnlyDictionary<Guid, string> links,
+        Dictionary<string, int> positions)
+    {
+        return links.TryGetValue(id, out string? providerId) && positions.TryGetValue(providerId, out int position)
+            ? position
+            : int.MaxValue;
+    }
+
+    /// <summary>
     /// Hashes the fields a remote row does not show, in a fixed order.
     /// </summary>
     private static string InvisibleFingerprint(
@@ -414,12 +565,30 @@ public static class ArchidektLocalMapper
     /// </summary>
     private static string FingerprintLocalContent(DeckDocument local, bool sorted = true)
     {
+        return FingerprintLocalContent(
+            local,
+            Ordered(local.Entries, sorted, value => value.EntryId),
+            Ordered(local.Categories, sorted, value => value.CategoryId),
+            sorted
+                ? local.CategoryAssignments.OrderBy(value => value.EntryId).ThenBy(value => value.CategoryId)
+                : local.CategoryAssignments);
+    }
+
+    /// <summary>
+    /// Computes the canonical local content projection over rows in the order the caller supplies.
+    /// </summary>
+    private static string FingerprintLocalContent(
+        DeckDocument local,
+        IEnumerable<DeckEntry> entries,
+        IEnumerable<DeckCategory> categories,
+        IEnumerable<DeckCategoryAssignment> assignments)
+    {
         return ArchidektContract.Fingerprint(new
         {
             local.Name,
             local.Description,
             local.Format,
-            entries = Ordered(local.Entries, sorted, value => value.EntryId).Select(value => new
+            entries = entries.Select(value => new
             {
                 value.EntryId,
                 value.Quantity,
@@ -433,22 +602,19 @@ public static class ArchidektLocalMapper
                 value.Zone,
                 value.SortOrder,
             }),
-            categories = Ordered(local.Categories, sorted, value => value.CategoryId).Select(value => new
+            categories = categories.Select(value => new
             {
                 value.CategoryId,
                 value.Name,
                 value.Color,
                 value.SortOrder,
             }),
-            assignments = (sorted
-                    ? local.CategoryAssignments.OrderBy(value => value.EntryId).ThenBy(value => value.CategoryId)
-                    : local.CategoryAssignments.AsEnumerable())
-                .Select(value => new
-                {
-                    value.EntryId,
-                    value.CategoryId,
-                    value.IsPrimary,
-                }),
+            assignments = assignments.Select(value => new
+            {
+                value.EntryId,
+                value.CategoryId,
+                value.IsPrimary,
+            }),
         });
     }
 

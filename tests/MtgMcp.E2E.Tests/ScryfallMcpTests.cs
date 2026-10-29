@@ -30,8 +30,8 @@ public sealed class ScryfallMcpTests
         "scryfall_cards_get",
         "scryfall_installed_cards_by_tag",
         "scryfall_reference_get",
+        "scryfall_request_snapshots_get",
         "scryfall_search",
-        "scryfall_search_snapshots_get",
         "scryfall_tags_search",
     ];
 
@@ -43,7 +43,7 @@ public sealed class ScryfallMcpTests
         "scryfall_card_data_delete",
         "scryfall_card_data_rollback",
         "scryfall_card_data_sync",
-        "scryfall_search_snapshot_delete",
+        "scryfall_request_snapshot_delete",
     ];
 
     /// <summary>
@@ -105,8 +105,8 @@ public sealed class ScryfallMcpTests
                 ],
             ["scryfall_reference_get"] =
                 ["catalogName", "codeOrId", "cursor", "freshnessPolicy", "includeRaw", "kind", "pageSize"],
-            ["scryfall_search_snapshot_delete"] = ["acknowledgeDataLoss", "expectedChecksum", "snapshotId"],
-            ["scryfall_search_snapshots_get"] =
+            ["scryfall_request_snapshot_delete"] = ["acknowledgeDataLoss", "expectedChecksum", "snapshotId"],
+            ["scryfall_request_snapshots_get"] =
                 [
                     "cursor", "includeRaw", "kind", "operation", "pageSize", "retrievedAfterUtc",
                     "retrievedBeforeUtc", "snapshotId",
@@ -118,7 +118,7 @@ public sealed class ScryfallMcpTests
         [
             "scryfall_card_data_delete",
             "scryfall_card_data_rollback",
-            "scryfall_search_snapshot_delete",
+            "scryfall_request_snapshot_delete",
         ];
         HashSet<string> openWorld =
         [
@@ -293,7 +293,7 @@ public sealed class ScryfallMcpTests
 
         JsonElement replay = await CallSuccessAsync(
             session,
-            "scryfall_search_snapshots_get",
+            "scryfall_request_snapshots_get",
             new Dictionary<string, object?>
             {
                 ["kind"] = "get",
@@ -309,7 +309,7 @@ public sealed class ScryfallMcpTests
 
         JsonElement compactReplay = await CallSuccessAsync(
             session,
-            "scryfall_search_snapshots_get",
+            "scryfall_request_snapshots_get",
             new Dictionary<string, object?> { ["kind"] = "get", ["snapshotId"] = snapshotId }).ConfigureAwait(false);
         compactReplay = compactReplay.GetProperty("snapshot");
         Assert.Equal(2, compactReplay.GetProperty("items").GetArrayLength());
@@ -318,7 +318,7 @@ public sealed class ScryfallMcpTests
 
         _ = await CallSuccessAsync(
             session,
-            "scryfall_search_snapshot_delete",
+            "scryfall_request_snapshot_delete",
             new Dictionary<string, object?>
             {
                 ["snapshotId"] = snapshotId,
@@ -327,7 +327,7 @@ public sealed class ScryfallMcpTests
             }).ConfigureAwait(false);
         JsonElement deleted = await CallAsync(
             session,
-            "scryfall_search_snapshots_get",
+            "scryfall_request_snapshots_get",
             new Dictionary<string, object?> { ["kind"] = "get", ["snapshotId"] = snapshotId }).ConfigureAwait(false);
         Assert.Equal("not-found", deleted.GetProperty("kind").GetString());
     }

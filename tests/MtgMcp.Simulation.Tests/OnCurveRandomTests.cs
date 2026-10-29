@@ -1,4 +1,4 @@
-namespace MtgMcp.OnCurve.Tests;
+namespace MtgMcp.Simulation.Tests;
 
 /// <summary>
 /// Verifies the versioned random sequence and replay seed boundary.

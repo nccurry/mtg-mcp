@@ -4,7 +4,7 @@
 > checks were removed with their product implementations in Foundation Phase 2.
 > Their benchmark tasks and reports are not present on this branch.
 
-The repository has one current measurement: `task benchmark:oncurve` runs a
+The repository has one current measurement: `task benchmark:simulation` runs a
 fixed 99-card Release benchmark of the `stats_simulate` engine, run as the `on-curve`
 preset rules (the input the removed `local_deck_on_curve_estimate` was measured with). It is a
 repeatable review baseline, not a hard CI gate.

@@ -1,6 +1,6 @@
 using MtgMcp.Core.Results;
 
-namespace MtgMcp.OnCurve.Tests;
+namespace MtgMcp.Simulation.Tests;
 
 /// <summary>
 /// Builds small, stable simulation requests and runs them with a fixed library order, so a test can state exactly

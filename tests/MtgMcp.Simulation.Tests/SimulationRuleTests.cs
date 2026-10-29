@@ -1,6 +1,6 @@
-using static MtgMcp.OnCurve.Tests.OnCurveTestData;
+using static MtgMcp.Simulation.Tests.OnCurveTestData;
 
-namespace MtgMcp.OnCurve.Tests;
+namespace MtgMcp.Simulation.Tests;
 
 /// <summary>
 /// Proves each fixed engine rule one at a time, with the library in deck order so the draws are known: the first

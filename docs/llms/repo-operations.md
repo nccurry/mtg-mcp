@@ -25,7 +25,7 @@ task test
 task test:unit
 task test:integration
 task test:e2e
-task benchmark:oncurve
+task benchmark:simulation
 task coverage
 task smoke:process
 task smoke:mcp
@@ -35,7 +35,7 @@ task install
 task clean
 ```
 
-`task test` runs non-live, non-benchmark tests. Use `task benchmark:oncurve`
+`task test` runs non-live, non-benchmark tests. Use `task benchmark:simulation`
 for the separate fixed Release measurement. Use `task test:live` only when live
 provider validation is explicitly requested and safe.
 

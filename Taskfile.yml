@@ -108,7 +108,7 @@ tasks:
       - '{{.DOTNET}} test --solution {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-build -- --filter-not-trait "Category=Live" "Category=Benchmark"'
 
   test:unit:
-    desc: Run application, Core, Statistics, and OnCurve unit tests
+    desc: Run application, Core, Statistics, and Simulation unit tests
     deps: [restore]
     cmds:
       - >
@@ -124,7 +124,7 @@ tasks:
         --configuration {{.CONFIGURATION}}
         -- --filter-not-trait "Category=Live" "Category=Benchmark"
       - >
-        {{.DOTNET}} test --project tests/MtgMcp.OnCurve.Tests/MtgMcp.OnCurve.Tests.csproj
+        {{.DOTNET}} test --project tests/MtgMcp.Simulation.Tests/MtgMcp.Simulation.Tests.csproj
         --configuration {{.CONFIGURATION}}
         -- --filter-not-trait "Category=Live" "Category=Benchmark"
 
@@ -172,6 +172,7 @@ tasks:
     deps: [restore]
     cmds:
       - '{{.DOTNET}} test --project tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
+      - '{{.DOTNET}} test --project tests/MtgMcp.App.Tests/MtgMcp.App.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
       - '{{.DOTNET}} test --project tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
       - '{{.DOTNET}} test --project tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
       - '{{.DOTNET}} test --project tests/MtgMcp.Spellbook.Tests/MtgMcp.Spellbook.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
@@ -183,12 +184,12 @@ tasks:
     cmds:
       - '{{.POWERSHELL}} -File scripts/release.ps1 LiveAcceptance -Version "{{.VERSION}}" -Project "{{.APP_PROJECT}}" -Configuration "{{.CONFIGURATION}}" -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PackageDir "{{.PACKAGE_DIR}}" -PackageId "{{.PACKAGE_ID}}"'
 
-  benchmark:oncurve:
-    desc: Run the repeatable on-curve Release benchmark
+  benchmark:simulation:
+    desc: Run the repeatable seeded-simulation Release benchmark
     deps: [build]
     cmds:
       - >
-        {{.DOTNET}} test --project tests/MtgMcp.OnCurve.Tests/MtgMcp.OnCurve.Tests.csproj
+        {{.DOTNET}} test --project tests/MtgMcp.Simulation.Tests/MtgMcp.Simulation.Tests.csproj
         --configuration {{.CONFIGURATION}}
         --no-build
         --no-restore
@@ -238,11 +239,11 @@ tasks:
     cmds:
       - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Decks'
 
-  coverage:oncurve:
-    desc: Enforce 90 percent line coverage for the on-curve calculation using the Codecov report
+  coverage:simulation:
+    desc: Enforce 90 percent line coverage for the simulation engine using the Codecov report
     deps: [coverage:report]
     cmds:
-      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.OnCurve'
+      - '{{.POWERSHELL}} -File scripts/coverage.ps1 VerifyGates -ReportPath "{{.COVERAGE_DIR}}/codecov.cobertura.xml" -Threshold 90 -PackageName MtgMcp.Simulation'
 
   coverage:scryfall:
     desc: Enforce 90 percent line coverage for the Scryfall adapter using the Codecov report

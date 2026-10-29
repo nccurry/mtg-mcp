@@ -1,7 +1,7 @@
 using System.Globalization;
 using MtgMcp.Core.Results;
 
-namespace MtgMcp.OnCurve;
+namespace MtgMcp.Simulation;
 
 /// <summary>
 /// Names a mana cost symbol color and a supported direct source color.

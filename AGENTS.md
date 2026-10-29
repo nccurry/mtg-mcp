@@ -79,7 +79,7 @@
 - Prefer the least code and abstraction needed. Add an abstraction only when it
   removes real duplication, clarifies ownership, or matches an established
   pattern.
-- `MtgMcp.OnCurve` is the seeded sampling engine behind `stats_simulate`. It takes
+- `MtgMcp.Simulation` is the seeded sampling engine behind `stats_simulate`. It takes
   plain counts and rule records and never reads the deck store or Scryfall. A
   choice the engine makes is either a fixed engine rule listed in the tool
   description or a required request field; add a rule kind as one record, one

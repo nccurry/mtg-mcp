@@ -1,4 +1,4 @@
-namespace MtgMcp.OnCurve;
+namespace MtgMcp.Simulation;
 
 /// <summary>
 /// Names the kind of a compiled per-turn rule.

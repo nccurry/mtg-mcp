@@ -99,7 +99,7 @@ public sealed class RedWhiteWeeniesLiveMcpTests
 
         JsonElement snapshots = await CallSuccessAsync(
             session,
-            "scryfall_search_snapshots_get",
+            "scryfall_request_snapshots_get",
             new Dictionary<string, object?> { ["kind"] = "list", ["operation"] = "card-collection" })
             .ConfigureAwait(false);
         Assert.Single(snapshots.GetProperty("snapshots").GetProperty("items").EnumerateArray());

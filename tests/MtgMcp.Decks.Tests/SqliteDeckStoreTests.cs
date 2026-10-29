@@ -536,6 +536,46 @@ public sealed class SqliteDeckStoreTests
     }
 
     /// <summary>
+    /// Verifies assigning a new primary category in a later batch demotes the earlier primary to a non-primary
+    /// assignment instead of failing (PRE-005).
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_NewPrimaryCategory_DemotesThePreviousPrimary()
+    {
+        using TemporaryDeckDirectory temporary = new();
+        using SqliteDeckStore store = CreateStore(temporary.Path);
+        DeckDocument deck = await CreateCommanderAsync(store);
+        Guid entryId = Assert.Single(deck.Entries).EntryId;
+        Guid firstCategoryId = Guid.CreateVersion7();
+        Guid secondCategoryId = Guid.CreateVersion7();
+        DeckDocument first = RequireSuccess(await store.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [
+                new AddDeckCategoryChange(new DeckCategoryDraft("First", CategoryId: firstCategoryId)),
+                new AddDeckCategoryChange(new DeckCategoryDraft("Second", CategoryId: secondCategoryId)),
+                new AssignDeckCategoryChange(entryId, firstCategoryId, true),
+            ],
+            TestContext.Current.CancellationToken));
+
+        DeckDocument second = RequireSuccess(await store.ApplyChangesAsync(
+            first.DeckId,
+            first.Revision,
+            [new AssignDeckCategoryChange(entryId, secondCategoryId, true)],
+            TestContext.Current.CancellationToken));
+        DeckDocument third = RequireSuccess(await store.ApplyChangesAsync(
+            second.DeckId,
+            second.Revision,
+            [new AssignDeckCategoryChange(entryId, secondCategoryId, true)],
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(2, third.CategoryAssignments.Count);
+        Assert.True(third.CategoryAssignments.Single(value => value.CategoryId == secondCategoryId).IsPrimary);
+        Assert.False(third.CategoryAssignments.Single(value => value.CategoryId == firstCategoryId).IsPrimary);
+        Assert.Empty(DeckValidator.Validate(third).Issues);
+    }
+
+    /// <summary>
     /// Verifies deck deletion is revision guarded and removes the complete relational graph.
     /// </summary>
     [Fact]

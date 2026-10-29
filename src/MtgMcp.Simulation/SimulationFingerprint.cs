@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace MtgMcp.OnCurve;
+namespace MtgMcp.Simulation;
 
 /// <summary>
 /// Creates one stable identifier for the deck, groups, rules, and conditions of a request. The seed, the sample

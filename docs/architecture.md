@@ -17,7 +17,7 @@ operations. The client LLM decides how to build the deck.
 | `MtgMcp.Playgroup` | Pinned official Public API contract |
 | `MtgMcp.Spellbook` | Bounded Commander Spellbook source evidence and cache |
 | `MtgMcp.Statistics` | BCL-only exact calculations |
-| `MtgMcp.OnCurve` | Pure, seeded sampling engine for `stats_simulate` |
+| `MtgMcp.Simulation` | Pure, seeded sampling engine for `stats_simulate` |
 | `MtgMcp.App` | MCP host, configuration, composition, modes, and schemas |
 
 Core references no adapter or host. Provider adapters do not reference one
@@ -75,7 +75,7 @@ unsupported, and empty results are not interchangeable.
 
 `stats_simulate` is the only sampled estimate. App reads the saved deck, resolves the
 caller's groups to main-zone entries, and passes plain counts and rule records to
-`MtgMcp.OnCurve`, which shuffles with a versioned SplitMix64 generator and applies only
+`MtgMcp.Simulation`, which shuffles with a versioned SplitMix64 generator and applies only
 the fixed engine rules and the rules in the request. Its `on-curve` preset reads installed
 Scryfall facts and expands to ordinary rules. The result returns its seed, applied rules,
 uncertainty ranges, and limits. It does not parse card text or make a deck choice.

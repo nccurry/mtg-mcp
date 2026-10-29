@@ -1,6 +1,6 @@
 using MtgMcp.Core.Results;
 
-namespace MtgMcp.OnCurve;
+namespace MtgMcp.Simulation;
 
 /// <summary>
 /// Runs seeded samples of the fixed engine rules and the rules a request states. Every choice is either a rule of the

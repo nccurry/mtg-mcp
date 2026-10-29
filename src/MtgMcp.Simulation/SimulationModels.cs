@@ -1,4 +1,4 @@
-namespace MtgMcp.OnCurve;
+namespace MtgMcp.Simulation;
 
 /// <summary>
 /// States how a rule chooses among the qualifying cards of its group that are in hand.

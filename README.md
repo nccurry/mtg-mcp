@@ -272,7 +272,7 @@ in the native companion file and are omitted from provider text.
 The `scryfall` toolset supports search, card lookup (`scryfall_cards_get`, one or
 many cards), printings and rulings (`scryfall_card_details`), sets, catalogs, and
 bulk metadata (`scryfall_reference_get`), autocomplete, tag evidence,
-immutable search snapshots (`scryfall_search_snapshots_get`), and explicit
+saved request snapshots (`scryfall_request_snapshots_get`), and explicit
 card-data download operations.
 
 The local card-data store contains All Cards, Rulings, Oracle Tags, and Art
@@ -624,6 +624,17 @@ To take the Archidekt state for a deck that is stuck as locally changed, call
 `localDeckId`, then `archidekt_pull_apply` with the same flag in the request.
 The preview lists what would be discarded. Without the flag nothing is
 discarded, and the flag needs an existing local deck (`discard-needs-local-deck`).
+If Archidekt changed too, a push is refused as well, so `discardLocalChanges`
+is the way out; it drops the local edits.
+
+A deck whose synchronization baseline an earlier version recorded did not store
+category colors or ordering, so the server cannot tell whether they changed. When
+such a deck differs from its baseline with no row to show why, the diff has a
+`/localOnly/content` row with state `local-changed-unverified`. A pull of it is
+refused until `discardLocalChanges` is set; push keeps the local content and is
+not blocked by the row (but is refused if Archidekt also changed). Either one
+writes a current baseline, and the row is gone. A deck 0.10.0 pulled or pushed that you have
+not edited since is read as unchanged, so it gets no row.
 
 ## Read Playgroup evidence
 
@@ -724,7 +735,7 @@ Use Task as the command menu:
 task --list
 task lint
 task test
-task benchmark:oncurve
+task benchmark:simulation
 task surface:report
 task coverage
 task pack
@@ -734,7 +745,7 @@ task release:tool-smoke
 ```
 
 Normal tests are deterministic and offline. Live tests require explicit opt-in.
-`task benchmark:oncurve` runs the separate fixed 99-card Release measurement.
+`task benchmark:simulation` runs the separate fixed 99-card Release measurement.
 Each production assembly must maintain at least 90 percent line coverage.
 
 ## Architecture
@@ -748,7 +759,7 @@ Each production assembly must maintain at least 90 percent line coverage.
 | `MtgMcp.Playgroup` | Pinned official API evidence |
 | `MtgMcp.Spellbook` | Bounded Commander Spellbook source evidence and cache |
 | `MtgMcp.Statistics` | BCL-only exact calculations |
-| `MtgMcp.OnCurve` | Pure seeded sampling engine behind `stats_simulate` and its on-curve preset |
+| `MtgMcp.Simulation` | Pure seeded sampling engine behind `stats_simulate` and its on-curve preset |
 | `MtgMcp.App` | MCP host, configuration, composition, and schemas |
 
 Read [North Star](docs/north-star.md), [Design Goals](docs/design-goals.md), and

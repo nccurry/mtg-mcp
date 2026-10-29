@@ -1049,8 +1049,8 @@ phase 6 evidence row of the README.
   validated). The upgrade runs when any connection is opened for writing
   (`DeckDatabase.OpenConnectionAsync`), so every write path, a pull apply, and a
   batch edit see schema 2, and a restore upgrades the restored file at once. A
-  read of a schema 1 file does not upgrade it. Schema 2 is one way: 0.11.0
-  cannot open it. Archidekt mapping from a provider payload looks a category up
+  read of a schema 1 file does not upgrade it. Schema 2 is one way: 0.10.0
+  (which wrote schema 1) cannot open it. Archidekt mapping from a provider payload looks a category up
   by exact name first and then by a unique case-insensitive match
   (`CategoryNames`). Planning a push compares category names exactly: a name
   with no exact match is a new category and the old one is deleted, never
@@ -1119,8 +1119,10 @@ phase 6 evidence row of the README.
 
 - **Snapshot tool names (PRE-001).** `scryfall_request_snapshots_get` and
   `scryfall_request_snapshot_delete` replace the `search` names, because the
-  snapshots hold every kind of saved Scryfall request. Nothing has been
-  published under the 0.11.0 names yet.
+  snapshots hold every kind of saved Scryfall request. The `search` names
+  were interim names of the unpublished 0.11.0 and never shipped; coming from
+  0.10.0 the old tools are `scryfall_snapshot_list`, `scryfall_snapshot_get`,
+  and `scryfall_snapshot_delete`.
 - **Project name (PRE-002).** `MtgMcp.Simulation` replaces `MtgMcp.OnCurve`;
   the `on-curve` preset keeps its name.
 - **Legacy baseline guard (PRE-003).** A schema 1 baseline has no
@@ -1130,9 +1132,68 @@ phase 6 evidence row of the README.
   the planner adds `/localOnly/content` with state `local-changed-unverified`.
   Pull treats it as a local change, so only `discardLocalChanges` overwrites
   it; push sends local state as usual. The next successful push or pull
-  writes a schema 2 baseline and the row goes away. A deck whose old
-  fingerprint cannot be reproduced also gets the row once, which is the
-  honest answer for a state the server cannot check.
+  writes a schema 2 baseline and the row goes away. A deck that matches
+  in neither order below is judged by its rows: an edit they show is
+  an ordinary local change, and a difference no row shows gets the row.
+  0.10.0 recorded the local fingerprint in two orders: after a push, over the
+  stored deck in store order (zone, sort order, name); after a pull, over the
+  creation draft in the order of the Archidekt response (entries, categories,
+  and each entry's assignments in the order of its category names). The
+  planner tries both, so an unedited 0.10.0 deck reads as unchanged.
+- **Primary category (PRE-005).** `AssignCategoryAsync` demotes the entry's
+  other primary assignment before writing a primary one, so the unique index
+  `deck_entry_one_primary_category` never fires for a single assignment. A
+  batch that makes two different categories primary for one entry is refused
+  by the store before it runs the second change; a create request with two
+  primaries is refused as before.
+
+**As built (phase 7).**
+
+- PRE-001: the C# method `GetSearchSnapshotsAsync` is now `GetRequestSnapshotsAsync` and its tests are named
+  `RequestSnapshots_*`. The delete method keeps its name (`DeleteSnapshotAsync`). The toolset manifest and the
+  architecture test list the two names in sorted order, which put them before `scryfall_search`. The naming test also
+  maps the two 0.11.0 names to the new ones.
+- PRE-002: type names that contain `OnCurve` (`OnCurveMana`, `OnCurveSeed`, `OnCurveRandom`,
+  `OnCurveActiveSource`, `OnCurveMatchScratch`, `OnCurvePaymentAnalysis`, the Wilson interval calculator, and
+  `SimulationOnCurvePresetInput`) and the test file names were left alone: renaming them changes no behavior and
+  touches many files for no gain, and `SimulationOnCurvePresetInput` names the `on-curve` preset, which keeps its
+  name. The `Castability` select records were not renamed. The lock files were refreshed with `task restore:lock`
+  because they name project references. The App project reference list is in sorted order again so the architecture
+  test still holds. `task test:live` now also runs the App test project, which holds the new live test.
+- PRE-003: the unverified row is added in `ArchidektSyncPlanner.Diff` when the baseline is schema 1, the local
+  fingerprint differs (after the old-order fallback), and no other local row, converged row, or concurrent row explains
+  it; a schema 1 deck whose rows show an edit gets that row and no unverified row. The pull refusal keeps the reason
+  `pull-conflict` and uses its own message. Push needed no change: it reads only remote changes, and the plan comes
+  from the local deck and the remote deck, so the row adds no operation. The state needed no change in schemas or
+  allowed-value lists, because none list difference states.
+- Audit pass 1 repair (2026-10-29): see the note after this list.
+- PRE-004: the live test is in `tests/MtgMcp.App.Tests/ArchidektSyncLiveTests.cs`, not in the Archidekt test project,
+  because the coordinator is internal to the App project. It reads one card (Sol Ring) from Scryfall for its printing
+  identity, then runs the workflow on a disposable deck.
+
+**As built (phase 7 audit pass 1 repair).** Pass 1 had three reviewers. The plan, release, and docs review FAILED on one
+medium finding: the packet and docs still called 0.11.0 a release to publish, when the owner decided on 2026-10-29
+that it is not published and that 0.12.0 (dated 2026-10-29) carries phases 1 to 7. Correctness and tests PASSED; code
+structure PASSED. The lows were fixed: a stale planner comment, the contradictory "not stuck" entry, the pull refusal
+message and README (which now say a push is also refused when Archidekt changed and that `discardLocalChanges`
+drops local edits), live test cleanup (fresh timeout token, remote delete failure reported without hiding the test
+failure, a deck whose creation failed is found by its unique name, temporary directory always deleted, version string
+from `FoundationServerIdentity`), disposal of the service in the coordinator test helper, the escaped dot in
+`CodeCoverage.runsettings`, alphabetical order of `MtgMcp.Simulation`, and "saved Scryfall request" wording.
+Also fixed: the unedited 0.10.0 pull false positive. 0.10.0 recorded a pulled deck's fingerprint over the creation
+draft in Archidekt response order, while the earlier fallback only knew the store order, so every unedited deck pulled
+by 0.10.0 got `local-changed-unverified` and its first pull was refused. `LegacyPullOrderLocalFingerprint` reorders the
+local rows by the baseline's remote snapshot (through the baseline links) and the planner accepts a match. The test
+ported the 0.10.0 draft fingerprint from `git show 0.10.0:src/MtgMcp.Archidekt/ArchidektLocalMapper.cs`. Pass 2 found that the store
+trims and lowercases some draft values (set code, language, finish, zone, collector number, card name) before saving
+them, while 0.10.0 hashed the draft as drafted. A mixed-case Archidekt set code or language made an unedited 0.10.0
+deck read as changed. A round-trip test through `SqliteDeckStore` (mixed-case set code and language) proved it, and
+`LegacyPullOrderLocalFingerprint` now puts the drafted value back when the stored value is exactly the normalized
+form of it (a value edited to something else is kept). Names are already trimmed by the Archidekt parser. The planner
+computes both legacy fingerprints only for schema 1 baselines.
+PRE-005 was added from a user report (see PRE-005 above). Pass 2 also let one batch reassign a primary after it
+unassigns or removes the earlier one (the batch check forgets an entry's primary on unassign, non-primary assign,
+category removal, and entry removal), and made the earlier-version order test use a fixed deck ID. The schema 2 one-way note now names 0.10.0.
 
 ### On-Curve Migration
 

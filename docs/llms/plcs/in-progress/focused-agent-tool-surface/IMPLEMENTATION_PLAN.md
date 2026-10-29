@@ -254,18 +254,26 @@ changes ship in `0.12.0`, which is not yet published.
 3. Add the legacy baseline guard (PRE-003) with its tests and a CHANGELOG
    0.12.0 Fixed entry.
 4. Add the disposable pull, edit, and push live test (PRE-004).
-5. Repack 0.12.0 and rerun the installed-tool smoke test.
+5. Make assigning a new primary category demote the entry's previous primary
+   (PRE-005), with store and `local_deck_apply_changes` tests.
+6. Repair the audit pass 1 findings: record that 0.11.0 is not published and
+   0.12.0 carries everything (README Owner Decisions, item 12), try the
+   Archidekt response row order for schema 1 pull baselines (PRE-003), and fix
+   the listed lows.
+7. Repack 0.12.0 and rerun the installed-tool smoke test.
 
 Checks: `task ci`, `task test:integration`, the full E2E from PowerShell,
 `task coverage:simulation`, `task benchmark:simulation`, `task pack
 VERSION=0.12.0`, `task release:tool-smoke VERSION=0.12.0`, and the live run
 in PRE-004 (parent).
 
-Exit: PRE-001 to PRE-004 pass, and the strict audit passes.
+Exit: PRE-001 to PRE-005 pass, and the strict audit passes.
 
 ## Release Plan
 
-- `0.11.0`: phases 1 to 5, including `card_lists_compare`,
+- `0.11.0`: not published (owner decision, 2026-10-29). Its changes, phases 1 to
+  5, ship in `0.12.0`; users upgrade from `0.10.0` straight to `0.12.0`. The
+  list below is what phases 1 to 5 changed, including `card_lists_compare`,
   `card_list_query`, card facts, Commander rule facts with pairing and
   companion, `stats_castability`, `spellbook_deck_bracket_facts_get`,
   `playgroup_games_stats_get`, `deck_duplicates_preview`, server
@@ -280,7 +288,8 @@ Exit: PRE-001 to PRE-004 pass, and the strict audit passes.
   provider toolsets turned off without credentials, `includeRaw`
   replaced by `responseFormat: "full"`, rejection of unknown request fields,
   and removal of the `common-v1` preset.
-- `0.12.0`: phases 6 and 7. Breaking changes: `deck_on_curve_estimate`
+- `0.12.0` (dated 2026-10-29): phases 1 to 7, so everything listed under
+  `0.11.0` above plus phases 6 and 7. Breaking changes of phases 6 and 7: `deck_on_curve_estimate`
   removed, and the Scryfall snapshot tools renamed to
   `scryfall_request_snapshots_get` and `scryfall_request_snapshot_delete`.
 

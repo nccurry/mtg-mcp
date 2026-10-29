@@ -178,26 +178,48 @@ public sealed class ArchidektLiveTests
                 TestContext.Current.CancellationToken));
             Assert.Equal("applied", Assert.Single(movedToRoot.Items).Status);
 
-            snapshot = await DeleteSnapshotAsync(service, deck.RemoteId, snapshot).ConfigureAwait(false);
-            deck = await DeleteDeckAsync(service, deck).ConfigureAwait(false);
-            folder = await DeleteFolderAsync(service, folder).ConfigureAwait(false);
+            snapshot = await DeleteSnapshotAsync(
+                service, deck.RemoteId, snapshot, TestContext.Current.CancellationToken).ConfigureAwait(false);
+            deck = await DeleteDeckAsync(service, deck, TestContext.Current.CancellationToken).ConfigureAwait(false);
+            folder = await DeleteFolderAsync(service, folder, TestContext.Current.CancellationToken)
+                .ConfigureAwait(false);
         }
         finally
         {
+            // A fresh timeout keeps cleanup running after a cancelled or timed out test, and each step reports its own
+            // failure as a diagnostic so it never hides the failure of the test body or stops the later steps.
+            using CancellationTokenSource cleanup = new(TimeSpan.FromMinutes(2));
             if (snapshot is not null && deck is not null)
             {
-                snapshot = await DeleteSnapshotAsync(service, deck.RemoteId, snapshot).ConfigureAwait(false);
+                await TryCleanUpAsync(
+                    "snapshot", () => DeleteSnapshotAsync(service, deck.RemoteId, snapshot, cleanup.Token));
             }
 
             if (deck is not null)
             {
-                deck = await DeleteDeckAsync(service, deck).ConfigureAwait(false);
+                await TryCleanUpAsync("deck", () => DeleteDeckAsync(service, deck, cleanup.Token));
             }
 
             if (folder is not null)
             {
-                _ = await DeleteFolderAsync(service, folder).ConfigureAwait(false);
+                await TryCleanUpAsync("folder", () => DeleteFolderAsync(service, folder, cleanup.Token));
             }
+        }
+    }
+
+    /// <summary>
+    /// Runs one cleanup step and reports a failure as a diagnostic naming the disposable object left behind.
+    /// </summary>
+    private static async Task TryCleanUpAsync<T>(string kind, Func<Task<T>> step)
+    {
+        try
+        {
+            _ = await step().ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            TestContext.Current.SendDiagnosticMessage(
+                $"The disposable Archidekt {kind} may still exist and needs deleting by hand: {exception.Message}");
         }
     }
 
@@ -207,12 +229,13 @@ public sealed class ArchidektLiveTests
     private static async Task<RemoteNamedSnapshotSummary?> DeleteSnapshotAsync(
         ArchidektService service,
         string deckId,
-        RemoteNamedSnapshotSummary snapshot)
+        RemoteNamedSnapshotSummary snapshot,
+        CancellationToken cancellationToken)
     {
         OperationResult<RemoteNamedSnapshot> current = await service.GetSnapshotAsync(
             deckId,
             snapshot.SnapshotId,
-            TestContext.Current.CancellationToken);
+            cancellationToken);
         if (current is OperationNotFound)
         {
             return null;
@@ -225,7 +248,7 @@ public sealed class ArchidektLiveTests
                 snapshot.SnapshotId,
                 exact.Summary.Checksum,
                 $"delete snapshot {snapshot.SnapshotId}"),
-            TestContext.Current.CancellationToken));
+            cancellationToken));
         Assert.Equal("applied", deleted.Outcome);
         return null;
     }
@@ -235,11 +258,12 @@ public sealed class ArchidektLiveTests
     /// </summary>
     private static async Task<RemoteDeckSnapshot?> DeleteDeckAsync(
         ArchidektService service,
-        RemoteDeckSnapshot deck)
+        RemoteDeckSnapshot deck,
+        CancellationToken cancellationToken)
     {
         OperationResult<RemoteDeckSnapshot> current = await service.GetDeckAsync(
             deck.RemoteId,
-            TestContext.Current.CancellationToken);
+            cancellationToken);
         if (current is OperationNotFound)
         {
             return null;
@@ -251,7 +275,7 @@ public sealed class ArchidektLiveTests
                 deck.RemoteId,
                 exact.RemoteFingerprint,
                 $"delete {deck.RemoteId}"),
-            TestContext.Current.CancellationToken));
+            cancellationToken));
         Assert.Equal("applied", deleted.Outcome);
         return null;
     }
@@ -261,10 +285,11 @@ public sealed class ArchidektLiveTests
     /// </summary>
     private static async Task<RemoteFolderRecord?> DeleteFolderAsync(
         ArchidektService service,
-        RemoteFolderRecord folder)
+        RemoteFolderRecord folder,
+        CancellationToken cancellationToken)
     {
         RemoteFolderTree tree = Success(await service.ListFoldersAsync(
-            TestContext.Current.CancellationToken));
+            cancellationToken));
         RemoteFolderRecord? current = tree.Items.FirstOrDefault(value => value.FolderId == folder.FolderId);
         if (current is null)
         {
@@ -277,7 +302,7 @@ public sealed class ArchidektLiveTests
                 current.Name,
                 tree.TreeFingerprint,
                 $"delete folder {current.FolderId}"),
-            TestContext.Current.CancellationToken));
+            cancellationToken));
         Assert.Equal("applied", deleted.Outcome);
         return null;
     }

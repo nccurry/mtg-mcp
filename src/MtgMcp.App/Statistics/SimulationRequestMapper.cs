@@ -2,7 +2,7 @@ using MtgMcp.App.CardLists;
 using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
-using MtgMcp.OnCurve;
+using MtgMcp.Simulation;
 
 namespace MtgMcp.App.Statistics;
 

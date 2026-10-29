@@ -1,7 +1,7 @@
 using System.Text.Json;
-using static MtgMcp.OnCurve.Tests.OnCurveTestData;
+using static MtgMcp.Simulation.Tests.OnCurveTestData;
 
-namespace MtgMcp.OnCurve.Tests;
+namespace MtgMcp.Simulation.Tests;
 
 /// <summary>
 /// Proves what a result states (SIM-003), that one request and seed always give the same result (SIM-002), and that

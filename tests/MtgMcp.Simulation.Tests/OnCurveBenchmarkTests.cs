@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using MtgMcp.Core.Results;
-using static MtgMcp.OnCurve.Tests.OnCurveTestData;
+using static MtgMcp.Simulation.Tests.OnCurveTestData;
 
-namespace MtgMcp.OnCurve.Tests;
+namespace MtgMcp.Simulation.Tests;
 
 /// <summary>
 /// Measures one fixed, representative sampling run outside normal test runs.

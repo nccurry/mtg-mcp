@@ -1,4 +1,4 @@
-namespace MtgMcp.OnCurve;
+namespace MtgMcp.Simulation;
 
 /// <summary>
 /// Calculates the two-sided Wilson interval used to show sampling uncertainty.
