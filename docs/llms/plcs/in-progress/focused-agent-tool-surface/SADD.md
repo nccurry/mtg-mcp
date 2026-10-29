@@ -1134,6 +1134,29 @@ phase 6 evidence row of the README.
   fingerprint cannot be reproduced also gets the row once, which is the
   honest answer for a state the server cannot check.
 
+**As built (phase 7).**
+
+- PRE-001: the C# method `GetSearchSnapshotsAsync` is now `GetRequestSnapshotsAsync` and its tests are named
+  `RequestSnapshots_*`. The delete method keeps its name (`DeleteSnapshotAsync`). The toolset manifest and the
+  architecture test list the two names in sorted order, which put them before `scryfall_search`. The naming test also
+  maps the two 0.11.0 names to the new ones.
+- PRE-002: type names that contain `OnCurve` (`OnCurveMana`, `OnCurveSeed`, `OnCurveRandom`,
+  `OnCurveActiveSource`, `OnCurveMatchScratch`, `OnCurvePaymentAnalysis`, the Wilson interval calculator, and
+  `SimulationOnCurvePresetInput`) and the test file names were left alone: renaming them changes no behavior and
+  touches many files for no gain, and `SimulationOnCurvePresetInput` names the `on-curve` preset, which keeps its
+  name. The `Castability` select records were not renamed. The lock files were refreshed with `task restore:lock`
+  because they name project references. The App project reference list is in sorted order again so the architecture
+  test still holds. `task test:live` now also runs the App test project, which holds the new live test.
+- PRE-003: the unverified row is added in `ArchidektSyncPlanner.Diff` when the baseline is schema 1, the local
+  fingerprint differs (after the old-order fallback), and no other local row, converged row, or concurrent row explains
+  it; a schema 1 deck whose rows show an edit gets that row and no unverified row. The pull refusal keeps the reason
+  `pull-conflict` and uses its own message. Push needed no change: it reads only remote changes, and the plan comes
+  from the local deck and the remote deck, so the row adds no operation. The state needed no change in schemas or
+  allowed-value lists, because none list difference states.
+- PRE-004: the live test is in `tests/MtgMcp.App.Tests/ArchidektSyncLiveTests.cs`, not in the Archidekt test project,
+  because the coordinator is internal to the App project. It reads one card (Sol Ring) from Scryfall for its printing
+  identity, then runs the workflow on a disposable deck.
+
 ### On-Curve Migration
 
 `deck_on_curve_estimate` becomes the preset `on-curve`. The preset turns
