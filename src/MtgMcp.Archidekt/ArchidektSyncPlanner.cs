@@ -8,11 +8,6 @@ namespace MtgMcp.Archidekt;
 public static class ArchidektSyncPlanner
 {
     /// <summary>
-    /// Names the difference state of a schema 1 baseline whose local content differs with no row to show why.
-    /// </summary>
-    public const string LocalChangedUnverifiedState = "local-changed-unverified";
-
-    /// <summary>
     /// Computes the three-way comparison for a stored local deck, using the local fingerprints of that deck: the full
     /// one, the one for fields no row shows, and the two orders an earlier version recorded.
     /// </summary>
@@ -86,8 +81,7 @@ public static class ArchidektSyncPlanner
             localChanged,
             remoteChanged);
         bool representedLocalChange = differences.Any(value =>
-            value.State.StartsWith("local-", StringComparison.Ordinal) ||
-            value.State is "concurrent-changed" or "converged");
+            ArchidektDifferenceStates.IsLocalChange(value) || value.State == ArchidektDifferenceStates.Converged);
         // Rows explain the change only when no field outside them changed: a field no row shows (category color,
         // entry order, category rank) must still keep the deck from reading as unchanged.
         bool hiddenChange = !legacyBaseline &&
@@ -100,15 +94,14 @@ public static class ArchidektSyncPlanner
         {
             differences.Add(new ArchidektDifference(
                 "/localOnly/content",
-                legacyBaseline ? LocalChangedUnverifiedState : "local-changed",
+                legacyBaseline ? ArchidektDifferenceStates.LocalChangedUnverified : "local-changed",
                 baseline.LocalFingerprint,
                 localFingerprint,
                 RemoteValue: null));
         }
 
         bool representedRemoteChange = differences.Any(value =>
-            value.State.StartsWith("remote-", StringComparison.Ordinal) ||
-            value.State is "concurrent-changed" or "converged");
+            ArchidektDifferenceStates.IsRemoteChange(value) || value.State == ArchidektDifferenceStates.Converged);
         if (remoteChanged && !representedRemoteChange)
         {
             differences.Add(new ArchidektDifference(
@@ -259,7 +252,9 @@ public static class ArchidektSyncPlanner
     {
         if (localChanged && remoteChanged)
         {
-            return string.Equals(local, remote, StringComparison.Ordinal) ? "converged" : "concurrent-changed";
+            return string.Equals(local, remote, StringComparison.Ordinal)
+                ? ArchidektDifferenceStates.Converged
+                : ArchidektDifferenceStates.ConcurrentChanged;
         }
 
         string side = localChanged ? "local" : "remote";

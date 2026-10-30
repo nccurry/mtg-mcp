@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using MtgMcp.App.Decks;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 
@@ -15,7 +17,7 @@ public sealed class ToolPagingTests
 {
     /// <summary>
     /// Verifies the chunks of every artifact of every format, joined in order, are the exact content: the length and the
-    /// SHA-256 of the whole content match, and a chunk never passes the size target.
+    /// SHA-256 of the whole content match, and a chunk never passes the chunk limit of the export tool.
     /// </summary>
     [Theory]
     [InlineData("mtg-mcp-json-v1")]
@@ -53,10 +55,15 @@ public sealed class ToolPagingTests
                         ["offset"] = offset,
                     },
                     token);
-                Assert.True(page.Characters <= 50_000, $"{name} chunk at {offset} is {page.Characters} characters");
                 JsonElement chunk = page.Data.GetProperty("chunk");
                 Assert.Equal(offset, chunk.GetProperty("offset").GetInt32());
-                joined.Append(chunk.GetProperty("content").GetString());
+                string text = chunk.GetProperty("content").GetString()!;
+                int chunkBytes = ResultSize.Measure(text) - 2;
+                Assert.True(
+                    chunkBytes <= DeckExportPaging.MaximumChunkBytes,
+                    $"{name} chunk at {offset} takes {chunkBytes} bytes, over {DeckExportPaging.MaximumChunkBytes}.");
+                Assert.True(page.Characters < 40_000, $"{name} chunk at {offset} is {page.Characters} characters");
+                joined.Append(text);
                 if (!chunk.TryGetProperty("nextOffset", out JsonElement next) || next.ValueKind != JsonValueKind.Number)
                 {
                     break;
@@ -118,12 +125,12 @@ public sealed class ToolPagingTests
             token);
 
         Assert.True(pages.Count > 1);
-        Assert.Equal(
-            150,
-            pages.SelectMany(page => page.Data.GetProperty("rows").EnumerateArray())
-                .Select(row => row.GetProperty("entryId").GetGuid())
-                .Distinct()
-                .Count());
+        List<Guid> rowIds =
+            [.. pages.SelectMany(page => page.Data.GetProperty("rows").EnumerateArray())
+                .Select(row => row.GetProperty("entryId").GetGuid())];
+        Assert.Equal(150, rowIds.Count);
+        Assert.Equal(150, rowIds.Distinct().Count());
+        Assert.Equal(deck.Entries.Take(150).Select(value => value.EntryId), rowIds);
         Assert.All(pages, page => Assert.Equal(150, page.Data.GetProperty("rowCount").GetInt32()));
         Assert.Single(pages.Select(page => page.Data.GetProperty("previewFingerprint").GetString()).Distinct());
         Assert.Single(pages.Select(page => page.Data.GetProperty("applyToken").GetString()).Distinct());
@@ -184,12 +191,14 @@ public sealed class ToolPagingTests
             token);
 
         Assert.True(pages.Count > 1);
+        List<Guid> decisionIds =
+            [.. pages.SelectMany(page => page.Data.GetProperty("decisions").EnumerateArray())
+                .Select(row => row.GetProperty("entryId").GetGuid())];
+        Assert.Equal(ToolBudgetWorld.DeckSize, decisionIds.Count);
+        Assert.Equal(ToolBudgetWorld.DeckSize, decisionIds.Distinct().Count());
         Assert.Equal(
-            ToolBudgetWorld.DeckSize,
-            pages.SelectMany(page => page.Data.GetProperty("decisions").EnumerateArray())
-                .Select(row => row.GetProperty("entryId").GetGuid())
-                .Distinct()
-                .Count());
+            deck.Entries.Select(value => value.EntryId).OrderBy(value => value.ToString(), StringComparer.Ordinal),
+            decisionIds);
         Assert.Single(pages.Select(page => page.Data.GetProperty("previewFingerprint").GetString()).Distinct());
 
         JsonElement guards = pages[^1].Data;
@@ -240,12 +249,13 @@ public sealed class ToolPagingTests
             token);
 
         Assert.True(pages.Count > 1);
+        JsonElement[] entries =
+            [.. pages.SelectMany(page => page.Data.GetProperty("proposal").GetProperty("entries").EnumerateArray())];
+        Assert.Equal(300, entries.Length);
+        Assert.Equal(300, entries.Select(entry => entry.GetProperty("entryId").GetGuid()).Distinct().Count());
         Assert.Equal(
-            300,
-            pages.SelectMany(page => page.Data.GetProperty("proposal").GetProperty("entries").EnumerateArray())
-                .Select(entry => entry.GetProperty("entryId").GetGuid())
-                .Distinct()
-                .Count());
+            world.Cards.Take(300).Select(card => card["name"]!.GetValue<string>()),
+            entries.Select(entry => entry.GetProperty("cardName").GetString()));
         Assert.All(pages, page => Assert.Equal(300, page.Data.GetProperty("entryCount").GetInt32()));
         Assert.Single(pages.Select(page => page.Data.GetProperty("fingerprint").GetString()).Distinct());
     }
@@ -285,6 +295,159 @@ public sealed class ToolPagingTests
     }
 
     /// <summary>
+    /// Verifies the three local previews follow the one offset rule: a negative offset or one past the last row is
+    /// refused with the argument name and the size of the list, and an offset equal to the number of rows returns an
+    /// empty last page.
+    /// </summary>
+    [Fact]
+    public async Task LocalPreviews_WithOffsetsOutsideTheRows_FollowTheOneOffsetRule()
+    {
+        CancellationToken token = TestContext.Current.CancellationToken;
+        await using ToolBudgetWorld world = await ToolBudgetWorld.CreateAsync(token, remoteDeckSize: 1);
+        DeckDocument unresolved = await world.CreateLocalDeckAsync("Unresolved", resolved: false, token);
+        DeckDocument resolved = await world.CreateLocalDeckAsync("Resolved", resolved: true, token);
+        (string Tool, JsonObject Arguments, int Count, string List)[] previews =
+        [
+            (
+                "local_deck_identity_reconcile_preview",
+                IdentityArguments(unresolved),
+                150,
+                "rows"),
+            (
+                "local_deck_category_rules_preview",
+                RulesArguments(resolved),
+                ToolBudgetWorld.DeckSize,
+                "decisions"),
+            (
+                "local_deck_import_preview",
+                ImportArguments(world),
+                300,
+                "entries"),
+        ];
+
+        foreach ((string tool, JsonObject arguments, int count, string list) in previews)
+        {
+            JsonObject past = (JsonObject)arguments.DeepClone();
+            past["offset"] = count + 1;
+            JsonObject negative = (JsonObject)arguments.DeepClone();
+            negative["offset"] = -1;
+            JsonObject atEnd = (JsonObject)arguments.DeepClone();
+            atEnd["offset"] = count;
+
+            ToolBudgetWorld.ToolOutcome refusedPast = await world.CallAsync(tool, past, token);
+            ToolBudgetWorld.ToolOutcome refusedNegative = await world.CallAsync(tool, negative, token);
+            ToolBudgetWorld.ToolOutcome empty = await world.CallAsync(tool, atEnd, token);
+
+            Assert.Equal("invalid-input", refusedPast.Kind);
+            Assert.Equal("offset", refusedPast.Structured.GetProperty("path").GetString());
+            string message = refusedPast.Structured.GetProperty("message").GetString()!;
+            Assert.Contains($"from 0 to {count}", message, StringComparison.Ordinal);
+            Assert.Contains($"{count} {list}", message, StringComparison.Ordinal);
+            Assert.Equal("invalid-input", refusedNegative.Kind);
+            Assert.False(empty.Data.TryGetProperty("nextOffset", out JsonElement next) &&
+                next.ValueKind == JsonValueKind.Number);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a later page of each local preview is refused when the caller passes the fingerprint of another
+    /// preview, and is served when it passes the fingerprint of the page it read first.
+    /// </summary>
+    [Fact]
+    public async Task LocalPreviews_LaterPageWithAnotherFingerprint_IsRefused()
+    {
+        CancellationToken token = TestContext.Current.CancellationToken;
+        await using ToolBudgetWorld world = await ToolBudgetWorld.CreateAsync(token, remoteDeckSize: 1);
+        DeckDocument unresolved = await world.CreateLocalDeckAsync("Unresolved", resolved: false, token);
+        DeckDocument resolved = await world.CreateLocalDeckAsync("Resolved", resolved: true, token);
+        (string Tool, JsonObject Arguments, string Fingerprint)[] previews =
+        [
+            ("local_deck_identity_reconcile_preview", IdentityArguments(unresolved), "previewFingerprint"),
+            ("local_deck_category_rules_preview", RulesArguments(resolved), "previewFingerprint"),
+            ("local_deck_import_preview", ImportArguments(world), "fingerprint"),
+        ];
+
+        foreach ((string tool, JsonObject arguments, string fingerprint) in previews)
+        {
+            ToolBudgetWorld.ToolOutcome first = await world.CallAsync(tool, arguments, token);
+            Assert.Contains(
+                "expectedPreviewFingerprint",
+                first.Data.GetProperty("narrow").GetString(),
+                StringComparison.Ordinal);
+            JsonObject later = (JsonObject)arguments.DeepClone();
+            later["offset"] = first.Data.GetProperty("nextOffset").GetInt32();
+            later["expectedPreviewFingerprint"] = first.Data.GetProperty(fingerprint).GetString();
+            JsonObject stale = (JsonObject)later.DeepClone();
+            stale["expectedPreviewFingerprint"] = "0" + first.Data.GetProperty(fingerprint).GetString();
+            JsonObject onFirstPage = (JsonObject)arguments.DeepClone();
+            onFirstPage["expectedPreviewFingerprint"] = "not-checked-on-the-first-page";
+
+            ToolBudgetWorld.ToolOutcome served = await world.CallAsync(tool, later, token);
+            ToolBudgetWorld.ToolOutcome refused = await world.CallAsync(tool, stale, token);
+            ToolBudgetWorld.ToolOutcome firstAgain = await world.CallAsync(tool, onFirstPage, token);
+
+            Assert.Equal(first.Data.GetProperty(fingerprint).GetString(), served.Data.GetProperty(fingerprint).GetString());
+            Assert.Equal("conflict", refused.Kind);
+            Assert.Equal("preview-changed", refused.Structured.GetProperty("reasonCode").GetString());
+            _ = firstAgain.Data;
+        }
+    }
+
+    /// <summary>
+    /// Builds the arguments of an identity preview over the first 150 entries of a deck.
+    /// </summary>
+    private static JsonObject IdentityArguments(DeckDocument deck)
+    {
+        return new JsonObject
+        {
+            ["deckId"] = deck.DeckId.ToString(),
+            ["expectedRevision"] = deck.Revision,
+            ["entryIds"] = new JsonArray([.. deck.Entries.Take(150).Select(value => (JsonNode?)value.EntryId.ToString())]),
+        };
+    }
+
+    /// <summary>
+    /// Builds the arguments of a category rules preview that files every tagged card into one category.
+    /// </summary>
+    private static JsonObject RulesArguments(DeckDocument deck)
+    {
+        return new JsonObject
+        {
+            ["deckId"] = deck.DeckId.ToString(),
+            ["expectedRevision"] = deck.Revision,
+            ["source"] = new JsonObject
+            {
+                ["kind"] = "inline",
+                ["ruleSet"] = new JsonObject
+                {
+                    ["assignmentMode"] = "add-only",
+                    ["rules"] = new JsonArray(new JsonObject
+                    {
+                        ["categoryId"] = deck.Categories.Single(value => value.Name == "Utility").CategoryId.ToString(),
+                        ["allOf"] = new JsonArray(
+                            new JsonObject { ["tagType"] = "oracle", ["exactSlug"] = ToolBudgetWorld.TagSlug }),
+                        ["anyOf"] = new JsonArray(),
+                        ["noneOf"] = new JsonArray(),
+                    }),
+                },
+            },
+            ["freshnessPolicy"] = "cache-only",
+        };
+    }
+
+    /// <summary>
+    /// Builds the arguments of an import preview of 300 plain text lines.
+    /// </summary>
+    private static JsonObject ImportArguments(ToolBudgetWorld world)
+    {
+        return new JsonObject
+        {
+            ["formatId"] = "generic-text-v1",
+            ["content"] = string.Join('\n', world.Cards.Take(300).Select(card => "1 " + card["name"]!.GetValue<string>())),
+        };
+    }
+
+    /// <summary>
     /// Reads every page of a tool that pages one list with <c>nextOffset</c>, and returns the pages.
     /// </summary>
     private static async Task<List<ToolBudgetWorld.ToolOutcome>> ReadPagesAsync(
@@ -299,7 +462,7 @@ public sealed class ToolPagingTests
         for (int page = 0; page < 60; page++)
         {
             ToolBudgetWorld.ToolOutcome outcome = await world.CallAsync(tool, arguments, token);
-            Assert.True(outcome.Characters <= 50_000, $"{tool} page {page} is {outcome.Characters} characters");
+            Assert.True(outcome.Characters < 40_000, $"{tool} page {page} is {outcome.Characters} characters");
             pages.Add(outcome);
             if (!outcome.Data.TryGetProperty("nextOffset", out JsonElement next) || next.ValueKind != JsonValueKind.Number)
             {

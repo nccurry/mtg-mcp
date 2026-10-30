@@ -132,39 +132,56 @@ public sealed class ArchidektWorkflowTests
         Assert.False(push.ApplyAvailable);
         Assert.Contains("archidekt_push_apply is not available", push.ApplyNotice, StringComparison.Ordinal);
         Assert.Contains("local mode", push.ApplyNotice, StringComparison.Ordinal);
-        Assert.Contains("--mode=remote", push.ApplyNotice, StringComparison.Ordinal);
-        Assert.Contains("--mode=local", push.ApplyNotice, StringComparison.Ordinal);
+        Assert.Contains("Ask the user to start the server in remote mode", push.ApplyNotice, StringComparison.Ordinal);
+        Assert.DoesNotContain("--mode", push.ApplyNotice, StringComparison.Ordinal);
         Assert.True(pull.ApplyAvailable);
         Assert.Null(pull.ApplyNotice);
         Assert.IsType<OperationUnsupported>(denied.Value);
     }
 
     /// <summary>
-    /// Verifies the apply notices for read-only mode and for missing credentials.
+    /// Verifies the push notice names the mode and the credentials, and the pull notice depends on the mode alone:
+    /// a pull reads a public deck without credentials.
     /// </summary>
     [Fact]
-    public void ApplyNotices_NameTheModeAndTheCredentials()
+    public void ApplyNotices_PushNamesModeAndCredentials_PullNamesOnlyTheMode()
     {
         ArchidektAuthStatus configured = new("configured", true, false, string.Empty);
         ArchidektAuthStatus missing = new("missing", false, false, string.Empty);
 
-        Assert.Null(ArchidektResultPaging.PushApplyNotice(OperationMode.Remote, configured));
-        Assert.Null(ArchidektResultPaging.PullApplyNotice(OperationMode.Local, configured));
+        Assert.Null(ArchidektApplyAvailability.PushNotice(OperationMode.Remote, configured));
+        Assert.Null(ArchidektApplyAvailability.PullNotice(OperationMode.Local));
+        Assert.Null(ArchidektApplyAvailability.PullNotice(OperationMode.Remote));
         Assert.Contains(
             "read-only mode",
-            ArchidektResultPaging.PushApplyNotice(OperationMode.ReadOnly, configured),
+            ArchidektApplyAvailability.PushNotice(OperationMode.ReadOnly, configured),
             StringComparison.Ordinal);
-        Assert.Contains(
-            "--mode=remote",
-            ArchidektResultPaging.PullApplyNotice(OperationMode.ReadOnly, configured),
-            StringComparison.Ordinal);
-        string both = ArchidektResultPaging.PushApplyNotice(OperationMode.Local, missing)!;
-        Assert.Contains("--mode=remote", both, StringComparison.Ordinal);
-        Assert.Contains("credentials are not configured", both, StringComparison.Ordinal);
-        Assert.Contains(
-            "credentials are not configured",
-            ArchidektResultPaging.PushApplyNotice(OperationMode.Remote, missing),
-            StringComparison.Ordinal);
+        string pull = ArchidektApplyAvailability.PullNotice(OperationMode.ReadOnly)!;
+        Assert.Contains("read-only mode", pull, StringComparison.Ordinal);
+        Assert.Contains("local or remote mode", pull, StringComparison.Ordinal);
+        string both = ArchidektApplyAvailability.PushNotice(OperationMode.Local, missing)!;
+        Assert.Contains("local mode, and Archidekt credentials are not configured", both, StringComparison.Ordinal);
+        Assert.Contains("remote mode", both, StringComparison.Ordinal);
+        string credentialsOnly = ArchidektApplyAvailability.PushNotice(OperationMode.Remote, missing)!;
+        Assert.Contains("credentials are not configured", credentialsOnly, StringComparison.Ordinal);
+        Assert.DoesNotContain("mode", credentialsOnly.Replace("archidekt_push_apply", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies a pull preview in remote mode with no credentials still offers the pull apply tool, because the tool
+    /// is registered by mode and reads public decks without credentials.
+    /// </summary>
+    [Fact]
+    public async Task PullPreview_WithoutCredentials_StillOffersPullApplyInLocalMode()
+    {
+        using World world = new(OperationMode.Local, CreateSmallDeck(), credentials: false);
+
+        ArchidektSyncPreviewView pull = Success(await world.Reads.PreviewPullAsync(
+            "42",
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.True(pull.ApplyAvailable);
+        Assert.Null(pull.ApplyNotice);
     }
 
     /// <summary>
@@ -178,6 +195,7 @@ public sealed class ArchidektWorkflowTests
         using World world = new(OperationMode.Remote, fake);
         CancellationToken token = TestContext.Current.CancellationToken;
         List<string> relationIds = [];
+        List<string> names = [];
         int offset = 0;
         int pages = 0;
 
@@ -190,6 +208,7 @@ public sealed class ArchidektWorkflowTests
             Assert.Equal(offset, page.Offset);
             Assert.Equal(offset == 0, page.Categories.Count > 0);
             relationIds.AddRange(page.Entries.Select(value => value.ProviderRelationId));
+            names.AddRange(page.Entries.Select(value => value.CardName));
             pages++;
             if (page.NextOffset is null)
             {
@@ -204,7 +223,9 @@ public sealed class ArchidektWorkflowTests
         }
 
         Assert.True(pages > 1);
+        Assert.Equal(300, relationIds.Count);
         Assert.Equal(300, relationIds.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(Enumerable.Range(0, 300).Select(index => $"Card Number {index:000}"), names);
     }
 
     /// <summary>
@@ -255,7 +276,7 @@ public sealed class ArchidektWorkflowTests
                 localDeckId,
                 operationOffset,
                 differenceOffset,
-                token);
+                cancellationToken: token);
             ArchidektSyncPreviewView page = Success(result);
             Assert.True(JsonLength(result) < MaximumResultCharacters, $"page {pages.Count} is {JsonLength(result)} characters");
             pages.Add(page);
@@ -275,8 +296,14 @@ public sealed class ArchidektWorkflowTests
         Assert.All(pages, page => Assert.Equal(300, page.Summary.DifferenceCount));
         Assert.All(pages, page => Assert.Equal(pages[0].PreviewFingerprint, page.PreviewFingerprint));
         Assert.All(pages, page => Assert.Equal(pages[0].RemoteFingerprint, page.RemoteFingerprint));
-        Assert.Equal(300, pages.SelectMany(page => page.Operations).Select(value => value.Sequence).Distinct().Count());
-        Assert.Equal(300, pages.SelectMany(page => page.Differences).Select(value => value.Path).Distinct().Count());
+        List<int> sequences = [.. pages.SelectMany(page => page.Operations).Select(value => value.Sequence)];
+        List<string> paths = [.. pages.SelectMany(page => page.Differences).Select(value => value.Path)];
+        Assert.Equal(300, sequences.Count);
+        Assert.Equal(300, sequences.Distinct().Count());
+        Assert.Equal(sequences.Order(), sequences);
+        Assert.Equal(300, paths.Count);
+        Assert.Equal(300, paths.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(paths.Order(StringComparer.Ordinal), paths);
 
         ArchidektSyncPreviewView last = pages[^1];
         ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
@@ -314,20 +341,272 @@ public sealed class ArchidektWorkflowTests
     }
 
     /// <summary>
-    /// Verifies an offset outside a preview's rows is refused.
+    /// Verifies the one offset rule on the deck read and the preview: an offset from 0 up to the number of rows is
+    /// valid (at the number of rows the page holds no row), and a negative offset or one past the end is refused with
+    /// a message that names the list and its size.
     /// </summary>
     [Fact]
-    public async Task PushPreview_WithABadOffset_IsRefused()
+    public async Task Offsets_FollowOneRule_ForTheDeckReadAndThePreview()
     {
         using World world = new(OperationMode.Remote, CreateSmallDeck());
+        CancellationToken token = TestContext.Current.CancellationToken;
         Guid localDeckId = await world.PullAsync();
 
-        OperationResult<ArchidektSyncPreviewView> result = await world.Reads.PreviewPushAsync(
+        ArchidektDeckView atEnd = Success(await world.Reads.GetDeckAsync("42", 4, token));
+        OperationResult<ArchidektDeckView> pastEnd = await world.Reads.GetDeckAsync("42", 5, token);
+        OperationResult<ArchidektDeckView> negative = await world.Reads.GetDeckAsync("42", -1, token);
+        ArchidektSyncPreviewView previewAtEnd = Success(await world.Reads.PreviewPushAsync(
             localDeckId,
-            operationOffset: 5,
-            cancellationToken: TestContext.Current.CancellationToken);
+            operationOffset: 0,
+            differenceOffset: 0,
+            cancellationToken: token));
+        OperationResult<ArchidektSyncPreviewView> previewPast = await world.Reads.PreviewPushAsync(
+            localDeckId,
+            operationOffset: 1,
+            cancellationToken: token);
 
-        Assert.Equal("operationOffset", Assert.IsType<OperationInvalidInput>(result.Value).Path);
+        Assert.Empty(atEnd.Entries);
+        Assert.Equal(4, atEnd.Summary.EntryCount);
+        Assert.Null(atEnd.NextOffset);
+        OperationInvalidInput refused = Assert.IsType<OperationInvalidInput>(pastEnd.Value);
+        Assert.Equal("offset", refused.Path);
+        Assert.Contains("from 0 to 4", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("4 entries", refused.Message, StringComparison.Ordinal);
+        Assert.IsType<OperationInvalidInput>(negative.Value);
+        Assert.Empty(previewAtEnd.Operations);
+        OperationInvalidInput previewRefused = Assert.IsType<OperationInvalidInput>(previewPast.Value);
+        Assert.Equal("operationOffset", previewRefused.Path);
+        Assert.Contains("0 operations", previewRefused.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies a later page of a push preview is refused when the preview changed since the earlier page, and is
+    /// served when the fingerprint is the same.
+    /// </summary>
+    [Fact]
+    public async Task PushPreview_LaterPageWithAnotherFingerprint_IsRefused()
+    {
+        FakeArchidekt fake = CreateLargeDeck(300);
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [.. local.Entries.Select(value => new UpdateDeckEntryChange(value with { Quantity = value.Quantity + 1 }))],
+            token));
+        ArchidektSyncPreviewView first = Success(await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        Assert.Contains("expectedPreviewFingerprint", first.Narrow, StringComparison.Ordinal);
+        int nextOperation = first.NextOperationOffset ?? first.Operations.Count;
+
+        ArchidektSyncPreviewView same = Success(await world.Reads.PreviewPushAsync(
+            localDeckId,
+            operationOffset: nextOperation,
+            differenceOffset: first.NextDifferenceOffset ?? first.Differences.Count,
+            expectedPreviewFingerprint: first.PreviewFingerprint,
+            cancellationToken: token));
+        DeckEntry changed = edited.Entries[0];
+        _ = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            edited.Revision,
+            [new UpdateDeckEntryChange(changed with { Quantity = changed.Quantity + 1 })],
+            token));
+        OperationResult<ArchidektSyncPreviewView> stale = await world.Reads.PreviewPushAsync(
+            localDeckId,
+            operationOffset: nextOperation,
+            differenceOffset: first.NextDifferenceOffset ?? first.Differences.Count,
+            expectedPreviewFingerprint: first.PreviewFingerprint,
+            cancellationToken: token);
+        ArchidektSyncPreviewView firstAgain = Success(await world.Reads.PreviewPushAsync(
+            localDeckId,
+            expectedPreviewFingerprint: "not-checked-on-the-first-page",
+            cancellationToken: token));
+
+        Assert.Equal(first.PreviewFingerprint, same.PreviewFingerprint);
+        Assert.Equal("preview-changed", Assert.IsType<OperationConflict>(stale.Value).ReasonCode);
+        Assert.NotEqual(first.PreviewFingerprint, firstAgain.PreviewFingerprint);
+    }
+
+    /// <summary>
+    /// Verifies the differences of a local deck with 300 edits come in pages under the size limit, each difference
+    /// exactly once and in path order.
+    /// </summary>
+    [Fact]
+    public async Task SyncDiff_With300Changes_PagesUnderTheLimit_AndReachesEveryDifferenceOnce()
+    {
+        FakeArchidekt fake = CreateLargeDeck(300);
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        _ = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [.. local.Entries.Select(value => new UpdateDeckEntryChange(value with { Quantity = value.Quantity + 1 }))],
+            token));
+        List<string> paths = [];
+        int pages = 0;
+        int offset = 0;
+
+        while (true)
+        {
+            OperationResult<ArchidektSyncDiffView> result = await world.Reads.DiffAsync(localDeckId, offset, token);
+            ArchidektSyncDiffView page = Success(result);
+            Assert.True(JsonLength(result) < MaximumResultCharacters, $"page {pages} is {JsonLength(result)} characters");
+            Assert.Equal(300, page.DifferenceCount);
+            paths.AddRange(page.Differences.Select(value => value.Path));
+            pages++;
+            if (page.NextDifferenceOffset is not int next)
+            {
+                break;
+            }
+
+            Assert.True(page.Truncated);
+            Assert.Contains("differenceOffset", page.Narrow, StringComparison.Ordinal);
+            offset = next;
+        }
+
+        Assert.True(pages > 1);
+        Assert.Equal(300, paths.Count);
+        Assert.Equal(300, paths.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(paths.Order(StringComparer.Ordinal), paths);
+    }
+
+    /// <summary>
+    /// Verifies the folder tree and one folder come in pages under the size limit that reach every folder record
+    /// exactly once, in the order of the whole tree.
+    /// </summary>
+    [Theory]
+    [InlineData("list", null)]
+    [InlineData("get", "9")]
+    public async Task FoldersGet_WithManyFolders_PagesUnderTheLimit_AndReachesEveryRecordOnce(string kind, string? folderId)
+    {
+        using World world = new(OperationMode.Remote, CreateSmallDeck());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        List<string> ids = [];
+        int pages = 0;
+        int offset = 0;
+        int total;
+
+        while (true)
+        {
+            OperationResult<ArchidektFoldersResult> result = await world.Reads.GetFoldersAsync(kind, folderId, offset, token);
+            ArchidektFoldersResult data = Success(result);
+            ArchidektFolderTreeView page = data switch
+            {
+                ArchidektFolderListResult list => list.Folders,
+                ArchidektFolderGetResult get => get.Folder,
+                _ => throw new InvalidOperationException("Unexpected folder result."),
+            };
+            Assert.True(
+                JsonLength(result) < MaximumResultCharacters || (page.Items.Count == 1 && JsonLength(result) < 50_000),
+                $"page {pages} has {page.Items.Count} records and is {JsonLength(result)} characters");
+            total = page.FolderCount;
+            ids.AddRange(page.Items.Select(value => value.FolderId));
+            pages++;
+            if (page.NextOffset is not int next)
+            {
+                break;
+            }
+
+            Assert.True(page.Truncated);
+            Assert.Contains("offset", page.Narrow, StringComparison.Ordinal);
+            offset = next;
+        }
+
+        Assert.True(pages > 1);
+        Assert.Equal(total, ids.Count);
+        Assert.Equal(total, ids.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    /// <summary>
+    /// Verifies the saved deck of a snapshot with 300 cards comes in pages under the size limit that reach every entry
+    /// exactly once, in card name order.
+    /// </summary>
+    [Fact]
+    public async Task SnapshotsGet_With300Cards_PagesUnderTheLimit_AndReachesEveryEntryOnce()
+    {
+        FakeArchidekt fake = CreateLargeDeck(300);
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        List<string> names = [];
+        int pages = 0;
+        int offset = 0;
+
+        while (true)
+        {
+            OperationResult<ArchidektSnapshotsResult> result = await world.Reads.GetSnapshotsAsync(
+                "get",
+                "42",
+                "77",
+                offset,
+                token);
+            ArchidektSnapshotView snapshot = Assert.IsType<ArchidektSnapshotGetResult>(Success(result)).Snapshot;
+            Assert.True(JsonLength(result) < MaximumResultCharacters, $"page {pages} is {JsonLength(result)} characters");
+            Assert.Equal(300, snapshot.Deck.Summary.EntryCount);
+            names.AddRange(snapshot.Deck.Entries.Select(value => value.CardName));
+            pages++;
+            if (snapshot.Deck.NextOffset is not int next)
+            {
+                break;
+            }
+
+            Assert.Contains("archidekt_snapshots_get", snapshot.Deck.Narrow, StringComparison.Ordinal);
+            offset = next;
+        }
+
+        Assert.True(pages > 1);
+        Assert.Equal(Enumerable.Range(0, 300).Select(index => $"Card Number {index:000}"), names);
+    }
+
+    /// <summary>
+    /// Verifies a restore preview of a 700-card deck comes in pages under the size limit with the same guards on every
+    /// page, and every operation and difference is reached exactly once.
+    /// </summary>
+    [Fact]
+    public async Task SnapshotRestorePreview_With700Cards_PagesUnderTheLimit_AndReachesEveryRowOnce()
+    {
+        FakeArchidekt fake = CreateLargeDeck(700);
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        List<ArchidektSnapshotRestorePreviewView> pages = [];
+        int operationOffset = 0;
+        int differenceOffset = 0;
+
+        while (true)
+        {
+            OperationResult<ArchidektSnapshotRestorePreviewView> result = await world.Reads.PreviewSnapshotRestoreAsync(
+                "42",
+                "77",
+                operationOffset,
+                differenceOffset,
+                pages.Count == 0 ? null : pages[0].PreviewFingerprint,
+                token);
+            ArchidektSnapshotRestorePreviewView page = Success(result);
+            Assert.True(JsonLength(result) < MaximumResultCharacters, $"page {pages.Count} is {JsonLength(result)} characters");
+            pages.Add(page);
+            if (page.Truncated is null)
+            {
+                break;
+            }
+
+            Assert.Contains("expectedPreviewFingerprint", page.Narrow, StringComparison.Ordinal);
+            operationOffset = page.NextOperationOffset ?? page.OperationOffset + page.Operations.Count;
+            differenceOffset = page.NextDifferenceOffset ?? page.DifferenceOffset + page.Differences.Count;
+        }
+
+        List<int> sequences = [.. pages.SelectMany(page => page.Operations).Select(value => value.Sequence)];
+        List<string> paths = [.. pages.SelectMany(page => page.Differences).Select(value => value.Path)];
+        Assert.True(pages.Count > 1);
+        Assert.All(pages, page => Assert.Equal(pages[0].PreviewFingerprint, page.PreviewFingerprint));
+        Assert.Equal(pages[0].OperationCount, sequences.Count);
+        Assert.Equal(sequences.Count, sequences.Distinct().Count());
+        Assert.Equal(sequences.Order(), sequences);
+        Assert.Equal(pages[0].DifferenceCount, paths.Count);
+        Assert.Equal(paths.Count, paths.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(paths.Order(StringComparer.Ordinal), paths);
+        Assert.True(sequences.Count >= 700);
     }
 
     /// <summary>
@@ -419,10 +698,12 @@ public sealed class ArchidektWorkflowTests
         /// <summary>
         /// Creates the world around one fake Archidekt, in the given mode.
         /// </summary>
-        internal World(OperationMode mode, FakeArchidekt fake)
+        internal World(OperationMode mode, FakeArchidekt fake, bool credentials = true)
         {
             Fake = fake;
-            ArchidektOptions options = ArchidektOptions.CreateDefault("user", "secret") with
+            ArchidektOptions options = ArchidektOptions.CreateDefault(
+                credentials ? "user" : null,
+                credentials ? "secret" : null) with
             {
                 BaseAddress = new Uri("https://archidekt.test/"),
                 MinimumRequestInterval = TimeSpan.Zero,

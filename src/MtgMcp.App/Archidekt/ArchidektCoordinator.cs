@@ -831,7 +831,7 @@ discardLocalChanges
     /// </summary>
     private static bool HasUnverifiedLocalChange(IReadOnlyList<ArchidektDifference> differences)
     {
-        return differences.Any(value => value.State == ArchidektSyncPlanner.LocalChangedUnverifiedState);
+        return differences.Any(value => value.State == ArchidektDifferenceStates.LocalChangedUnverified);
     }
 
     /// <summary>
@@ -839,9 +839,7 @@ discardLocalChanges
     /// </summary>
     private static bool HasLocalChanges(ArchidektSyncDiff diff)
     {
-        return diff.Differences.Any(value =>
-            value.State.StartsWith("local-", StringComparison.Ordinal) ||
-            value.State == "concurrent-changed");
+        return diff.Differences.Any(ArchidektDifferenceStates.IsLocalChange);
     }
 
     /// <summary>
@@ -849,9 +847,7 @@ discardLocalChanges
     /// </summary>
     private static bool HasRemoteChanges(ArchidektSyncDiff diff)
     {
-        return diff.Differences.Any(value =>
-            value.State.StartsWith("remote-", StringComparison.Ordinal) ||
-            value.State == "concurrent-changed");
+        return diff.Differences.Any(ArchidektDifferenceStates.IsRemoteChange);
     }
 
     /// <summary>

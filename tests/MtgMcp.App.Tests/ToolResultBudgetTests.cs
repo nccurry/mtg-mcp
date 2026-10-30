@@ -1,11 +1,12 @@
+using System.Text.Json;
 using MtgMcp.App.Configuration;
 
 namespace MtgMcp.App.Tests;
 
 /// <summary>
 /// Calls every tool the server registers in remote mode against the largest fixtures the offline fakes can hold, and
-/// fails when a successful result is longer than the 50,000 characters at which Claude Code saves a tool result to a
-/// file instead of showing it. A tool that cannot be driven offline is listed with its reason, and a newly registered
+/// fails when a result, successful or not, is longer than the 50,000 characters at which Claude Code saves a tool
+/// result to a file instead of showing it. A tool that cannot be driven offline is listed with its reason, and a newly registered
 /// tool fails the coverage test until it is driven or listed.
 /// </summary>
 public sealed class ToolResultBudgetTests
@@ -17,14 +18,30 @@ public sealed class ToolResultBudgetTests
     private const int HardCeiling = 50_000;
 
     /// <summary>
+    /// Lists the tools whose results grow with the data they read. With the large fixtures each of them must page or
+    /// cut at least once, so removing a limit makes the test fail instead of letting the tool grow unchecked. The
+    /// restore preview is not listed: its 300 operations fit one page, and <see cref="ArchidektWorkflowTests"/> pages it
+    /// with a larger deck.
+    /// </summary>
+    private static readonly string[] MustPage =
+    [
+        "local_deck_get", "local_deck_export_bundle", "local_deck_import_preview",
+        "local_deck_identity_reconcile_preview", "local_deck_category_rules_preview",
+        "scryfall_search", "scryfall_cards_get", "scryfall_installed_cards_by_tag", "card_list_query",
+        "card_lists_compare", "archidekt_deck_list", "archidekt_deck_get", "archidekt_folders_get",
+        "archidekt_snapshots_get", "archidekt_sync_diff",
+        "archidekt_push_preview",
+    ];
+
+    /// <summary>
     /// Lists every tool the test does not call, each with the reason it cannot be driven offline. The reason must say
     /// why the result cannot grow past the limit or why no offline fixture can fill it.
     /// </summary>
     private static readonly Dictionary<string, string> NotDriven = BuildNotDriven();
 
     /// <summary>
-    /// Verifies every successful result of every tool the test can drive stays under the ceiling, and every driven tool
-    /// answered with a success at least once.
+    /// Verifies every result of every tool the test can drive stays under the ceiling, every driven tool answered
+    /// with a success at least once, and every tool in <see cref="MustPage"/> paged or cut at least once.
     /// </summary>
     [Fact]
     public async Task EveryDrivenTool_ReturnsASuccessUnderTheCeiling_WithLargeFixtures()
@@ -34,7 +51,7 @@ public sealed class ToolResultBudgetTests
         List<ToolBudgetWorld.ToolOutcome> outcomes = await new ToolBudgetScript(world, token).RunAsync();
 
         string[] tooLong =
-            [.. outcomes.Where(value => !value.IsError && value.Characters > HardCeiling)
+            [.. outcomes.Where(value => value.Characters > HardCeiling)
                 .Select(value => $"{value.Tool} returned {value.Characters} characters")];
         Assert.True(tooLong.Length == 0, string.Join("; ", tooLong));
         HashSet<string> succeeded = [.. outcomes.Where(value => !value.IsError).Select(value => value.Tool)];
@@ -43,6 +60,11 @@ public sealed class ToolResultBudgetTests
             expected.SetEquals(succeeded),
             "Tools without a success: " + string.Join(", ", expected.Except(succeeded)) +
             "; successes from tools the test does not list: " + string.Join(", ", succeeded.Except(expected)));
+        HashSet<string> paged = [.. outcomes.Where(value => value.Kind == "success" && ShowsPaging(value.Data))
+            .Select(value => value.Tool)];
+        Assert.True(
+            paged.IsSupersetOf(MustPage),
+            "Tools that never paged or cut with the large fixtures: " + string.Join(", ", MustPage.Except(paged)));
         Assert.True(
             outcomes.Max(value => value.Characters) > 5_000,
             "The fixtures never produced a large result, so the test proves nothing.");
@@ -67,6 +89,31 @@ public sealed class ToolResultBudgetTests
             "Registered but neither driven nor listed with a reason: " + string.Join(", ", neither));
         Assert.All(NotDriven.Values, reason => Assert.False(string.IsNullOrWhiteSpace(reason)));
         Assert.Empty(ToolBudgetScript.CoveredTools.Intersect(NotDriven.Keys));
+    }
+
+    /// <summary>
+    /// Tells whether a result says it was cut: a next offset or cursor, or <c>truncated</c> set to true, in the result
+    /// or in a result object inside it.
+    /// </summary>
+    private static bool ShowsPaging(JsonElement node)
+    {
+        if (node.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        foreach (JsonProperty property in node.EnumerateObject())
+        {
+            bool next = property.Name is "nextOffset" or "nextCursor" or "nextOperationOffset" or "nextDifferenceOffset";
+            if ((next && property.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number) ||
+                (property.Name == "truncated" && property.Value.ValueKind == JsonValueKind.True) ||
+                ShowsPaging(property.Value))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

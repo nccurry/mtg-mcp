@@ -1,4 +1,7 @@
+using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 
@@ -16,7 +19,8 @@ internal sealed record DeckExportArtifactInfo(
     string Purpose);
 
 /// <summary>
-/// Carries one chunk of one artifact's content, counted in characters from the start of the content.
+/// Carries one chunk of one artifact's content. The offset counts characters (UTF-16 code units) from the start of
+/// the content, and a chunk never starts or ends inside a surrogate pair.
 /// </summary>
 internal sealed record DeckExportChunk(string FileName, int Offset, string Content)
 {
@@ -26,19 +30,19 @@ internal sealed record DeckExportChunk(string FileName, int Offset, string Conte
     public bool? Truncated { get; init; }
 
     /// <summary>
-    /// Gets the <c>offset</c> that returns the next chunk, or null on the last chunk.
-    /// </summary>
-    public int? NextOffset { get; init; }
-
-    /// <summary>
     /// Gets what to pass to read the rest of the content.
     /// </summary>
     public string? Narrow { get; init; }
+
+    /// <summary>
+    /// Gets the <c>offset</c> that returns the next chunk, or null on the last chunk.
+    /// </summary>
+    public int? NextOffset { get; init; }
 }
 
 /// <summary>
 /// Returns an export bundle's metadata and one chunk of one artifact. The field-preservation report comes with the
-/// chunk at offset 0 only.
+/// chunk at offset 0 only, and each artifact's total length is in characters.
 /// </summary>
 internal sealed record DeckExportBundleView(
     int SchemaVersion,
@@ -57,9 +61,9 @@ internal sealed record DeckExportBundleView(
 internal static class DeckExportPaging
 {
     /// <summary>
-    /// Sets the most JSON-escaped characters one content chunk may take.
+    /// Sets the most UTF-8 bytes one content chunk may take once the server writes it as JSON text, with its escapes.
     /// </summary>
-    internal const int MaximumChunkCharacters = 30_000;
+    internal const int MaximumChunkBytes = 30_000;
 
     /// <summary>
     /// Builds one chunk of one artifact of a bundle.
@@ -84,12 +88,18 @@ internal static class DeckExportPaging
         }
 
         string content = chosen.Content;
-        if (offset < 0 || (offset > 0 && offset >= content.Length))
+        OperationInvalidInput? invalid = ResultPage.CheckOffset("offset", offset, content.Length, "characters");
+        if (invalid is not null)
+        {
+            return invalid;
+        }
+
+        if (offset > 0 && offset < content.Length && char.IsLowSurrogate(content[offset]))
         {
             return new OperationInvalidInput(
                 "invalid-offset",
-                $"offset must be from 0 to {Math.Max(0, content.Length - 1)} for {chosen.FileName}, which has " +
-                $"{content.Length} characters.",
+                $"offset {offset} is inside a character that takes two code units. Use the nextOffset of the " +
+                "previous chunk.",
                 "offset");
         }
 
@@ -124,22 +134,45 @@ internal static class DeckExportPaging
     }
 
     /// <summary>
-    /// Finds how many characters from <paramref name="offset"/> fit the chunk limit once JSON-escaped, without
-    /// splitting a surrogate pair.
+    /// Finds how many characters from <paramref name="offset"/> fit the chunk limit once the server writes them as
+    /// JSON text, never ending a chunk inside a surrogate pair.
     /// </summary>
     private static int FitLength(string content, int offset)
     {
-        int length = Math.Min(MaximumChunkCharacters, content.Length - offset);
-        while (length > 1 && JsonEncodedText.Encode(content.AsSpan(offset, length)).Value.Length > MaximumChunkCharacters)
+        JavaScriptEncoder encoder = ToolCallPolicy.SerializerOptions.Encoder ?? JavaScriptEncoder.Default;
+        int length = Math.Min(MaximumChunkBytes, content.Length - offset);
+        while (true)
         {
+            length = WholeCharacters(content, offset, length);
+            if (length <= 1 || EncodedBytes(content, offset, length, encoder) <= MaximumChunkBytes)
+            {
+                return length;
+            }
+
             length = Math.Max(1, length * 9 / 10);
         }
+    }
 
-        if (offset + length < content.Length && length > 1 && char.IsHighSurrogate(content[offset + length - 1]))
+    /// <summary>
+    /// Adjusts a span so that it does not end between the two halves of a surrogate pair: it gives up the first half
+    /// when the span is longer than one code unit, and takes the second half when the span is only the first half.
+    /// </summary>
+    private static int WholeCharacters(string content, int offset, int length)
+    {
+        int end = offset + length;
+        if (end >= content.Length || !char.IsHighSurrogate(content[end - 1]))
         {
-            length--;
+            return length;
         }
 
-        return length;
+        return length > 1 ? length - 1 : 2;
+    }
+
+    /// <summary>
+    /// Counts the UTF-8 bytes of a span of the content as JSON text, with the escapes the server writes.
+    /// </summary>
+    private static int EncodedBytes(string content, int offset, int length, JavaScriptEncoder encoder)
+    {
+        return Encoding.UTF8.GetByteCount(JsonEncodedText.Encode(content.AsSpan(offset, length), encoder).Value);
     }
 }

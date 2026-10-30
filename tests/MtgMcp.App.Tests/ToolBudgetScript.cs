@@ -17,6 +17,12 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
     private const int MaximumPages = 40;
 
     /// <summary>
+    /// Names the number of characters a page aims to stay under, below the 50,000 at which Claude Code saves a result
+    /// to a file.
+    /// </summary>
+    private const int PageTarget = 40_000;
+
+    /// <summary>
     /// Lists every tool the script calls.
     /// </summary>
     internal static IReadOnlyList<string> CoveredTools { get; } =
@@ -76,13 +82,22 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
 
     /// <summary>
     /// Calls a paged tool until its data holds no <paramref name="nextName"/>, passing the value back as
-    /// <paramref name="passName"/>, and returns the last page.
+    /// <paramref name="passName"/>, and returns the last page. With <paramref name="pageCeiling"/>, every page must
+    /// stay under that many characters.
     /// </summary>
-    private async Task<ToolBudgetWorld.ToolOutcome> PageAsync(string tool, JsonObject arguments, string nextName, string passName)
+    private async Task<ToolBudgetWorld.ToolOutcome> PageAsync(
+        string tool,
+        JsonObject arguments,
+        string nextName,
+        string passName,
+        int pageCeiling = int.MaxValue)
     {
         for (int page = 0; page < MaximumPages; page++)
         {
             ToolBudgetWorld.ToolOutcome outcome = await CallAsync(tool, arguments);
+            Assert.True(
+                outcome.Characters < pageCeiling,
+                $"{tool} page {page} is {outcome.Characters} characters, over {pageCeiling}.");
             JsonElement node = outcome.Data;
             foreach (string part in nextName.Split('.'))
             {
@@ -426,6 +441,7 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
                 local.Revision,
                 [.. local.Entries.Select(value => new UpdateDeckEntryChange(value with { Quantity = value.Quantity + 1 }))],
                 token)).Value).Data;
+        await PreviewNativeImportAsync(localId);
         await PageAsync(
             "archidekt_sync_diff",
             new JsonObject { ["localDeckId"] = localId.ToString() },
@@ -450,6 +466,52 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
     }
 
     /// <summary>
+    /// Previews importing the content in one format and reads every page, each under the 40,000 character target.
+    /// </summary>
+    private async Task PreviewImportAsync(string format, string content)
+    {
+        await PageAsync(
+            "local_deck_import_preview",
+            new JsonObject { ["formatId"] = format, ["content"] = content },
+            "nextOffset",
+            "offset",
+            PageTarget);
+    }
+
+    /// <summary>
+    /// Reads every chunk of the native export of a deck that is bound to Archidekt and categorized, joins them, and
+    /// previews importing the joined document, so the proposal carries its categories, bindings, and sync snapshots.
+    /// </summary>
+    private async Task PreviewNativeImportAsync(Guid deckId)
+    {
+        ToolBudgetWorld.ToolOutcome first = await CallAsync(
+            "local_deck_export_bundle",
+            new JsonObject { ["deckId"] = deckId.ToString(), ["formatId"] = "mtg-mcp-json-v1" });
+        string name = first.Data.GetProperty("artifacts")[0].GetProperty("fileName").GetString()!;
+        System.Text.StringBuilder content = new();
+        JsonObject arguments = new()
+        {
+            ["deckId"] = deckId.ToString(),
+            ["formatId"] = "mtg-mcp-json-v1",
+            ["artifact"] = name,
+        };
+        while (true)
+        {
+            ToolBudgetWorld.ToolOutcome chunk = await CallAsync("local_deck_export_bundle", arguments);
+            JsonElement data = chunk.Data.GetProperty("chunk");
+            content.Append(data.GetProperty("content").GetString());
+            if (!TryReadOffset(data, "nextOffset", out int next))
+            {
+                break;
+            }
+
+            arguments["offset"] = next;
+        }
+
+        await PreviewImportAsync("mtg-mcp-json-v1", content.ToString());
+    }
+
+    /// <summary>
     /// Writes to the local decks: import, create, batch edit, identity and category rules, and delete.
     /// </summary>
     private async Task WriteLocalDecksAsync(DeckDocument main, DeckDocument unresolved)
@@ -457,6 +519,10 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
         string text = string.Join('\n', world.Cards.Take(300).Select(card => "1 " + card["name"]!.GetValue<string>()));
         JsonObject import = new() { ["formatId"] = "generic-text-v1", ["content"] = text };
         ToolBudgetWorld.ToolOutcome importPreview = await PageAsync("local_deck_import_preview", import, "nextOffset", "offset");
+        await PreviewImportAsync("archidekt-text-v1", string.Join('\n', world.Cards.Take(300).Select(
+            (card, index) => $"1 {card["name"]!.GetValue<string>()} `Budget Category {index:000}`")));
+        await PreviewImportAsync("moxfield-bulk-edit-v1", string.Join('\n', world.Cards.Take(300).Select(
+            (card, index) => $"1 {card["name"]!.GetValue<string>()} #Budget Tag {index % 7} #Second Tag {index % 11}")));
         _ = await CallAsync(
             "local_deck_import_create",
             new JsonObject

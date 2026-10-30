@@ -68,12 +68,16 @@ internal sealed class DeckInterchangeReadTools
         [Description("Caller-controlled parsing defaults and explicit opt-ins.")] DeckImportOptions? options = null,
         [Description("Number of proposed entries to skip; use nextOffset from the previous page. Default 0.")]
         int offset = 0,
+        [Description(
+            "When you read a page after the first, pass the fingerprint of the first page; the call is refused if " +
+            "the import changed, so every page comes from the same preview.")]
+        string? expectedPreviewFingerprint = null,
         CancellationToken cancellationToken = default)
     {
         OperationResult<DeckImportPreview> preview = await service
             .PreviewAsync(formatId, content, options, cancellationToken).ConfigureAwait(false);
         return preview is OperationSuccess<DeckImportPreview> success
-            ? DeckPreviewPaging.PageImport(success.Data, offset)
+            ? DeckPreviewPaging.PageImport(success.Data, offset, expectedPreviewFingerprint)
             : OperationFailure.Forward<DeckImportPreview, DeckImportPreviewView>(preview);
     }
 
@@ -91,7 +95,7 @@ internal sealed class DeckInterchangeReadTools
     [Description(
         "Local deck store: exports deterministic artifacts without writing files or contacting providers. The result " +
         "lists every artifact (file name, media type, total length, sha256 of the whole content) and returns one " +
-        "chunk of one artifact's content, at most about 30,000 characters. When chunk.truncated is true, call again " +
+        "chunk of one artifact's content, at most 30,000 bytes of JSON text. When chunk.truncated is true, call again " +
         "with the same arguments, artifact set to the file name, and offset set to chunk.nextOffset; the chunks " +
         "joined in order are the exact file.")]
     internal async Task<OperationResult<DeckExportBundleView>> ExportAsync(

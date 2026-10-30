@@ -6,8 +6,8 @@ using MtgMcp.Scryfall;
 namespace MtgMcp.App.Decks;
 
 /// <summary>
-/// Returns one page of an identity reconciliation preview. The fingerprint and apply token describe the whole
-/// preview, whichever page was read, so <c>local_deck_identity_reconcile_apply</c> needs no page.
+/// Returns one page of an identity reconciliation preview. The rows are paged; the fingerprint and apply token cover
+/// the whole preview, whichever page was read, so <c>local_deck_identity_reconcile_apply</c> needs no page.
 /// </summary>
 internal sealed record DeckIdentityReconciliationPreviewView(
     Guid DeckId,
@@ -27,7 +27,7 @@ internal sealed record DeckIdentityReconciliationPreviewView(
     public bool? Truncated { get; init; }
 
     /// <summary>
-    /// Gets what to pass to read the rows that were left out.
+    /// Gets what to do to read the rows that were left out.
     /// </summary>
     public string? Narrow { get; init; }
 
@@ -38,8 +38,29 @@ internal sealed record DeckIdentityReconciliationPreviewView(
 }
 
 /// <summary>
-/// Returns one page of a manual import preview. The proposal's entries are paged; the categories, assignments, bindings,
-/// diagnostics, and unresolved identities come with the first page only. The fingerprint describes the whole preview.
+/// Returns the proposed deck of an import preview as one page shows it: the proposed entries and the category
+/// assignments of those entries are paged. The categories and provider bindings come with the first page only, and
+/// the saved synchronization snapshots are not returned, only counted, because creating the deck reads them again from
+/// the content.
+/// </summary>
+internal sealed record DeckImportProposalView(
+    Guid? SourceDeckId,
+    long? SourceRevision,
+    DateTimeOffset? SourceCreatedAtUtc,
+    DateTimeOffset? SourceUpdatedAtUtc,
+    string Name,
+    string Description,
+    string Format,
+    IReadOnlyList<DeckEntry> Entries,
+    IReadOnlyList<DeckCategory> Categories,
+    IReadOnlyList<DeckCategoryAssignment> CategoryAssignments,
+    IReadOnlyList<DeckProviderBinding> ProviderBindings,
+    int SyncBaselineCount);
+
+/// <summary>
+/// Returns one page of a manual import preview. The first page carries the diagnostics, unresolved identities,
+/// categories, and provider bindings, each cut to a shared allowance with its exact count beside it; later pages carry
+/// only entries. The fingerprint covers the whole import, whichever page was read.
 /// </summary>
 internal sealed record DeckImportPreviewView(
     string FormatId,
@@ -47,18 +68,43 @@ internal sealed record DeckImportPreviewView(
     string? Fingerprint,
     int EntryCount,
     int Offset,
-    DeckImportProposal? Proposal,
+    DeckImportProposalView? Proposal,
     IReadOnlyList<DeckInterchangeDiagnostic> Diagnostics,
     int OmittedDiagnosticCount,
     IReadOnlyList<string> UnresolvedIdentities)
 {
+    /// <summary>
+    /// Gets the exact number of diagnostics before the first page cut them, not counting the ones the parser omitted.
+    /// </summary>
+    public int? DiagnosticCount { get; init; }
+
+    /// <summary>
+    /// Gets the exact number of unresolved identities before the first page cut them.
+    /// </summary>
+    public int? UnresolvedIdentityCount { get; init; }
+
+    /// <summary>
+    /// Gets the exact number of proposed categories before the first page cut them.
+    /// </summary>
+    public int? CategoryCount { get; init; }
+
+    /// <summary>
+    /// Gets the exact number of proposed provider bindings before the first page cut them.
+    /// </summary>
+    public int? ProviderBindingCount { get; init; }
+
+    /// <summary>
+    /// Gets true when the first page cut a list of diagnostics, identities, categories, or bindings.
+    /// </summary>
+    public bool? HeaderListsCut { get; init; }
+
     /// <summary>
     /// Gets true when entries were left out to keep the result under the size limit.
     /// </summary>
     public bool? Truncated { get; init; }
 
     /// <summary>
-    /// Gets what to pass to read the entries that were left out.
+    /// Gets what to do to read the entries that were left out.
     /// </summary>
     public string? Narrow { get; init; }
 
@@ -69,8 +115,8 @@ internal sealed record DeckImportPreviewView(
 }
 
 /// <summary>
-/// Returns one page of a category rules preview. The fingerprint and apply token describe the whole preview, whichever
-/// page was read, so <c>local_deck_category_rules_apply</c> needs no page.
+/// Returns one page of a category rules preview. The decisions are paged; the fingerprint and apply token cover the
+/// whole preview, whichever page was read, so <c>local_deck_category_rules_apply</c> needs no page.
 /// </summary>
 internal sealed record DeckCategoryRulesPreviewView(
     Guid DeckId,
@@ -91,7 +137,7 @@ internal sealed record DeckCategoryRulesPreviewView(
     public bool? Truncated { get; init; }
 
     /// <summary>
-    /// Gets what to pass to read the decisions that were left out.
+    /// Gets what to do to read the decisions that were left out.
     /// </summary>
     public string? Narrow { get; init; }
 
@@ -108,17 +154,41 @@ internal sealed record DeckCategoryRulesPreviewView(
 internal static class DeckPreviewPaging
 {
     /// <summary>
-    /// Builds one page of an identity reconciliation preview.
+    /// Describes the optional guard that keeps the pages of one preview together.
+    /// </summary>
+    internal const string FingerprintHelp =
+        "When you read a page after the first, pass the previewFingerprint of the first page; the call is refused " +
+        "if the preview changed, so every page comes from the same preview.";
+
+    /// <summary>
+    /// Gives the most bytes the first page of an import preview spends on its diagnostics, unresolved identities,
+    /// categories, and provider bindings together, so the entries always have room.
+    /// </summary>
+    private const int ImportHeaderListBytes = 12_000;
+
+    /// <summary>
+    /// Pairs one proposed entry with its category assignments, so the page measures both together.
+    /// </summary>
+    private sealed record ImportRow(DeckEntry Entry, IReadOnlyList<DeckCategoryAssignment> Assignments);
+
+    /// <summary>
+    /// Builds the page of an identity reconciliation preview that starts at <paramref name="offset"/>; every page has
+    /// the fingerprint and apply token of the whole preview.
     /// </summary>
     internal static OperationResult<DeckIdentityReconciliationPreviewView> PageIdentity(
         DeckIdentityReconciliationPreview preview,
-        int offset)
+        int offset,
+        string? expectedPreviewFingerprint)
     {
         ArgumentNullException.ThrowIfNull(preview);
-        OperationInvalidInput? invalid = CheckOffset(offset, preview.Rows.Count);
-        if (invalid is not null)
+        if (Check<DeckIdentityReconciliationPreviewView>(
+            offset,
+            preview.Rows.Count,
+            "rows",
+            expectedPreviewFingerprint,
+            preview.PreviewFingerprint) is { } refused)
         {
-            return invalid;
+            return refused;
         }
 
         DeckIdentityReconciliationPreviewView header = new(
@@ -132,42 +202,70 @@ internal static class DeckPreviewPaging
             preview.Evidence,
             preview.PreviewFingerprint,
             preview.ApplyToken);
-        (int kept, int next, bool more) = Take(preview.Rows, offset, header);
+        ResultPageSlice slice = ResultPage.Take(preview.Rows, offset, ResultSize.Measure(header));
         return new OperationSuccess<DeckIdentityReconciliationPreviewView>(header with
         {
-            Rows = [.. preview.Rows.Skip(offset).Take(kept)],
-            Truncated = more ? true : null,
-            NextOffset = more ? next : null,
-            Narrow = more ? Narrow("Rows", offset, next, preview.Rows.Count, "local_deck_identity_reconcile_preview") : null,
+            Rows = slice.Rows(preview.Rows),
+            Truncated = slice.More ? true : null,
+            NextOffset = slice.NextOffset,
+            Narrow = slice.More
+                ? Narrow("Rows", offset, slice, "local_deck_identity_reconcile_preview", "previewFingerprint")
+                : null,
         });
     }
 
     /// <summary>
-    /// Builds one page of a manual import preview.
+    /// Builds the page of a manual import preview that starts at <paramref name="offset"/>; the first page also has
+    /// the diagnostics, identities, categories, and bindings, and every page has the fingerprint of the whole import.
     /// </summary>
-    internal static OperationResult<DeckImportPreviewView> PageImport(DeckImportPreview preview, int offset)
+    internal static OperationResult<DeckImportPreviewView> PageImport(
+        DeckImportPreview preview,
+        int offset,
+        string? expectedPreviewFingerprint)
     {
         ArgumentNullException.ThrowIfNull(preview);
         IReadOnlyList<DeckEntry> entries = preview.Proposal?.Entries ?? [];
-        OperationInvalidInput? invalid = CheckOffset(offset, entries.Count);
-        if (invalid is not null)
+        if (Check<DeckImportPreviewView>(
+            offset,
+            entries.Count,
+            "entries",
+            expectedPreviewFingerprint,
+            preview.Fingerprint) is { } refused)
         {
-            return invalid;
+            return refused;
         }
 
         bool first = offset == 0;
-        DeckImportProposal? shell = preview.Proposal is null
+        DeckImportProposal? proposal = preview.Proposal;
+        int allowance = ImportHeaderListBytes;
+        IReadOnlyList<DeckInterchangeDiagnostic> diagnostics = first ? CutList(preview.Diagnostics, ref allowance) : [];
+        IReadOnlyList<string> unresolved = first ? CutList(preview.UnresolvedIdentities, ref allowance) : [];
+        IReadOnlyList<DeckCategory> categories = first && proposal is not null
+            ? CutList(proposal.Categories, ref allowance)
+            : [];
+        IReadOnlyList<DeckProviderBinding> bindings = first && proposal is not null
+            ? CutList(proposal.ProviderBindings, ref allowance)
+            : [];
+        bool cut = first &&
+            (diagnostics.Count < preview.Diagnostics.Count ||
+                unresolved.Count < preview.UnresolvedIdentities.Count ||
+                (proposal is not null &&
+                    (categories.Count < proposal.Categories.Count || bindings.Count < proposal.ProviderBindings.Count)));
+        DeckImportProposalView? shell = proposal is null
             ? null
-            : first
-                ? preview.Proposal with { Entries = [] }
-                : preview.Proposal with
-                {
-                    Entries = [],
-                    Categories = [],
-                    CategoryAssignments = [],
-                    ProviderBindings = [],
-                    SyncBaselines = [],
-                };
+            : new DeckImportProposalView(
+                proposal.SourceDeckId,
+                proposal.SourceRevision,
+                proposal.SourceCreatedAtUtc,
+                proposal.SourceUpdatedAtUtc,
+                proposal.Name,
+                proposal.Description,
+                proposal.Format,
+                [],
+                categories,
+                [],
+                bindings,
+                proposal.SyncBaselines.Count);
         DeckImportPreviewView header = new(
             preview.FormatId,
             preview.Completeness,
@@ -175,31 +273,54 @@ internal static class DeckPreviewPaging
             entries.Count,
             offset,
             shell,
-            first ? preview.Diagnostics : [],
+            diagnostics,
             first ? preview.OmittedDiagnosticCount : 0,
-            first ? preview.UnresolvedIdentities : []);
-        (int kept, int next, bool more) = Take(entries, offset, header);
+            unresolved)
+        {
+            DiagnosticCount = first ? preview.Diagnostics.Count : null,
+            UnresolvedIdentityCount = first ? preview.UnresolvedIdentities.Count : null,
+            CategoryCount = first && proposal is not null ? proposal.Categories.Count : null,
+            ProviderBindingCount = first && proposal is not null ? proposal.ProviderBindings.Count : null,
+            HeaderListsCut = cut ? true : null,
+        };
+        List<ImportRow> rows = ImportRows(proposal, entries);
+        ResultPageSlice slice = ResultPage.Take(rows, offset, ResultSize.Measure(header));
+        List<ImportRow> shown = slice.Rows(rows);
         return new OperationSuccess<DeckImportPreviewView>(header with
         {
-            Proposal = shell is null ? null : shell with { Entries = [.. entries.Skip(offset).Take(kept)] },
-            Truncated = more ? true : null,
-            NextOffset = more ? next : null,
-            Narrow = more ? Narrow("Entries", offset, next, entries.Count, "local_deck_import_preview") : null,
+            Proposal = shell is null
+                ? null
+                : shell with
+                {
+                    Entries = [.. shown.Select(row => row.Entry)],
+                    CategoryAssignments = [.. shown.SelectMany(row => row.Assignments)],
+                },
+            Truncated = slice.More ? true : null,
+            NextOffset = slice.NextOffset,
+            Narrow = slice.More
+                ? Narrow("Entries", offset, slice, "local_deck_import_preview", "fingerprint")
+                : null,
         });
     }
 
     /// <summary>
-    /// Builds one page of a category rules preview.
+    /// Builds the page of a category rules preview that starts at <paramref name="offset"/>; every page has the
+    /// fingerprint and apply token of the whole preview.
     /// </summary>
     internal static OperationResult<DeckCategoryRulesPreviewView> PageCategoryRules(
         DeckCategoryRulesPreview preview,
-        int offset)
+        int offset,
+        string? expectedPreviewFingerprint)
     {
         ArgumentNullException.ThrowIfNull(preview);
-        OperationInvalidInput? invalid = CheckOffset(offset, preview.Decisions.Count);
-        if (invalid is not null)
+        if (Check<DeckCategoryRulesPreviewView>(
+            offset,
+            preview.Decisions.Count,
+            "decisions",
+            expectedPreviewFingerprint,
+            preview.PreviewFingerprint) is { } refused)
         {
-            return invalid;
+            return refused;
         }
 
         DeckCategoryRulesPreviewView header = new(
@@ -214,48 +335,88 @@ internal static class DeckPreviewPaging
             preview.PreviewFingerprint,
             preview.ApplyToken,
             preview.CorpusGenerationId);
-        (int kept, int next, bool more) = Take(preview.Decisions, offset, header);
+        ResultPageSlice slice = ResultPage.Take(preview.Decisions, offset, ResultSize.Measure(header));
         return new OperationSuccess<DeckCategoryRulesPreviewView>(header with
         {
-            Decisions = [.. preview.Decisions.Skip(offset).Take(kept)],
-            Truncated = more ? true : null,
-            NextOffset = more ? next : null,
-            Narrow = more
-                ? Narrow("Decisions", offset, next, preview.Decisions.Count, "local_deck_category_rules_preview")
+            Decisions = slice.Rows(preview.Decisions),
+            Truncated = slice.More ? true : null,
+            NextOffset = slice.NextOffset,
+            Narrow = slice.More
+                ? Narrow("Decisions", offset, slice, "local_deck_category_rules_preview", "previewFingerprint")
                 : null,
         });
     }
 
     /// <summary>
-    /// Counts the rows from <paramref name="offset"/> that fit beside the header, and where the next page starts.
+    /// Pairs every proposed entry with the category assignments that name it.
     /// </summary>
-    private static (int Kept, int Next, bool More) Take<T>(IReadOnlyList<T> rows, int offset, object header)
+    private static List<ImportRow> ImportRows(DeckImportProposal? proposal, IReadOnlyList<DeckEntry> entries)
     {
-        List<int> sizes = [.. rows.Skip(offset).Select(value => ResultSize.Measure(value) + 1)];
-        int kept = ResultSizeLimit.CountFitting(sizes, ResultSize.Measure(header));
-        int next = offset + kept;
-        return (kept, next, next < rows.Count);
+        Dictionary<Guid, List<DeckCategoryAssignment>> assignments = [];
+        foreach (DeckCategoryAssignment assignment in proposal?.CategoryAssignments ?? [])
+        {
+            if (!assignments.TryGetValue(assignment.EntryId, out List<DeckCategoryAssignment>? list))
+            {
+                list = [];
+                assignments.Add(assignment.EntryId, list);
+            }
+
+            list.Add(assignment);
+        }
+
+        List<ImportRow> rows = new(entries.Count);
+        foreach (DeckEntry entry in entries)
+        {
+            rows.Add(new ImportRow(entry, assignments.GetValueOrDefault(entry.EntryId) ?? []));
+        }
+
+        return rows;
     }
 
     /// <summary>
-    /// Names the rows shown and how to read the rest.
+    /// Keeps the leading items of a list that fit the allowance that is left, and spends what they take from it.
     /// </summary>
-    private static string Narrow(string what, int offset, int next, int count, string tool)
+    private static List<T> CutList<T>(IReadOnlyList<T> items, ref int allowance)
     {
-        return $"{what} {offset} to {next - 1} of {count} are shown to stay under the size limit; the fingerprint " +
-            $"and apply token cover the whole preview. Call {tool} again with offset {next} for the rest.";
+        int kept = ResultPage.Fit(items, 0, allowance, out int used);
+        allowance -= used;
+        return [.. items.Take(kept)];
     }
 
     /// <summary>
-    /// Refuses an offset outside the rows it pages.
+    /// Refuses an offset outside the rows, or a later page of a preview that is not the one the earlier pages came
+    /// from.
     /// </summary>
-    private static OperationInvalidInput? CheckOffset(int offset, int count)
+    private static OperationResult<T>? Check<T>(
+        int offset,
+        int count,
+        string list,
+        string? expectedPreviewFingerprint,
+        string? previewFingerprint)
     {
-        return offset < 0 || (offset > 0 && offset >= count)
-            ? new OperationInvalidInput(
-                "invalid-offset",
-                $"offset must be from 0 to {Math.Max(0, count - 1)} for this preview, which has {count} rows.",
-                "offset")
-            : null;
+        OperationInvalidInput? invalid = ResultPage.CheckOffset("offset", offset, count, list);
+        if (invalid is not null)
+        {
+            return invalid;
+        }
+
+        OperationConflict? changed = ResultPage.CheckSameResult(expectedPreviewFingerprint, previewFingerprint, offset > 0);
+        if (changed is not null)
+        {
+            return changed;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Names the rows shown, how to read the rest, and that every page must come from the same preview.
+    /// </summary>
+    private static string Narrow(string what, int offset, ResultPageSlice slice, string tool, string fingerprint)
+    {
+        return $"{what} {offset} to {slice.Next - 1} of {slice.Total} are shown to stay under the size limit; the " +
+            $"fingerprint covers the whole preview. Call {tool} again with offset {slice.Next} and " +
+            $"expectedPreviewFingerprint set to the {fingerprint} of this page, so every page comes from the same " +
+            "preview.";
     }
 }

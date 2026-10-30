@@ -24,6 +24,13 @@ internal sealed class ArchidektReadTools
     private readonly OperationMode mode;
 
     /// <summary>
+    /// Describes the optional guard that keeps the pages of one preview together.
+    /// </summary>
+    private const string PreviewFingerprintHelp =
+        "When you read a page after the first, pass the previewFingerprint of the first page; the call is refused " +
+        "if the preview changed, so every page comes from the same preview.";
+
+    /// <summary>
     /// Creates the complete read and preview surface.
     /// </summary>
     internal ArchidektReadTools(ArchidektCoordinator coordinator, OperationMode mode)
@@ -66,8 +73,9 @@ internal sealed class ArchidektReadTools
     [Description(
         "Archidekt: gets fresh deck metadata, a leading summary (entry, card, and category counts, cards by " +
         "zone), exact printings, zones, categories, provider IDs, and canonical fingerprints. Entries come in " +
-        "pages that fit the size limit; categories and unknown provider fields come with the first page. When " +
-        "truncated is true, call again with offset set to nextOffset." +
+        "pages that fit the size limit, ordered by card name; categories and unknown provider fields come with the " +
+        "first page. Unknown provider fields over 8,000 bytes are left out and extensionsOmitted is true; they " +
+        "cannot be read through this tool. When truncated is true, call again with offset set to nextOffset." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektDeckView>> GetDeckAsync(
         [Description("Exact Archidekt deck identifier.")] string deckId,
@@ -110,8 +118,9 @@ internal sealed class ArchidektReadTools
     [Description(
         "Archidekt: previews creating or transactionally replacing a local deck from fresh Archidekt evidence; " +
         "performs zero writes. The result starts with a summary (operation, difference, and conflict counts) and " +
-        "says whether archidekt_pull_apply is available and which setting enables it. Rows come in pages that fit " +
-        "the size limit; the guards cover the whole preview, so the apply tool needs no page." +
+        "says whether archidekt_pull_apply is available and which setting enables it. A public deck needs no " +
+        "credentials; a private deck needs Archidekt credentials (see archidekt_auth_status). Rows come in pages " +
+        "that fit the size limit; the guards cover the whole preview, so the apply tool needs no page." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSyncPreviewView>> PreviewPullAsync(
         [Description("Exact Archidekt deck identifier to read.")] string remoteDeckId,
@@ -124,6 +133,7 @@ internal sealed class ArchidektReadTools
         int operationOffset = 0,
         [Description("Number of differences to skip; use nextDifferenceOffset from the previous page. Default 0.")]
         int differenceOffset = 0,
+        [Description(PreviewFingerprintHelp)] string? expectedPreviewFingerprint = null,
         CancellationToken cancellationToken = default)
     {
         OperationResult<ArchidektSyncPreview> preview = await coordinator
@@ -133,7 +143,8 @@ internal sealed class ArchidektReadTools
             preview,
             operationOffset,
             differenceOffset,
-            ArchidektResultPaging.PullApplyNotice(mode, ReadAuthStatus()));
+            ArchidektApplyAvailability.PullNotice(mode),
+            expectedPreviewFingerprint);
     }
 
     /// <summary>
@@ -152,6 +163,7 @@ internal sealed class ArchidektReadTools
         int operationOffset = 0,
         [Description("Number of differences to skip; use nextDifferenceOffset from the previous page. Default 0.")]
         int differenceOffset = 0,
+        [Description(PreviewFingerprintHelp)] string? expectedPreviewFingerprint = null,
         CancellationToken cancellationToken = default)
     {
         OperationResult<ArchidektSyncPreview> preview = await coordinator
@@ -160,7 +172,8 @@ internal sealed class ArchidektReadTools
             preview,
             operationOffset,
             differenceOffset,
-            ArchidektResultPaging.PushApplyNotice(mode, ReadAuthStatus()));
+            ArchidektApplyAvailability.PushNotice(mode, ReadAuthStatus()),
+            expectedPreviewFingerprint);
     }
 
     /// <summary>
@@ -180,10 +193,16 @@ internal sealed class ArchidektReadTools
         OperationResult<ArchidektSyncPreview> preview,
         int operationOffset,
         int differenceOffset,
-        string? applyNotice)
+        string? applyNotice,
+        string? expectedPreviewFingerprint)
     {
         return preview is OperationSuccess<ArchidektSyncPreview> success
-            ? ArchidektResultPaging.PagePreview(success.Data, operationOffset, differenceOffset, applyNotice)
+            ? ArchidektResultPaging.PagePreview(
+                success.Data,
+                operationOffset,
+                differenceOffset,
+                applyNotice,
+                expectedPreviewFingerprint)
             : OperationFailure.Forward<ArchidektSyncPreview, ArchidektSyncPreviewView>(preview);
     }
 
@@ -211,12 +230,17 @@ internal sealed class ArchidektReadTools
         int operationOffset = 0,
         [Description("Number of differences to skip; use nextDifferenceOffset from the previous page. Default 0.")]
         int differenceOffset = 0,
+        [Description(PreviewFingerprintHelp)] string? expectedPreviewFingerprint = null,
         CancellationToken cancellationToken = default)
     {
         OperationResult<ArchidektSnapshotRestorePreview> preview = await coordinator.Service
             .PreviewSnapshotRestoreAsync(deckId, snapshotId, cancellationToken).ConfigureAwait(false);
         return preview is OperationSuccess<ArchidektSnapshotRestorePreview> success
-            ? ArchidektResultPaging.PageRestorePreview(success.Data, operationOffset, differenceOffset)
+            ? ArchidektResultPaging.PageRestorePreview(
+                success.Data,
+                operationOffset,
+                differenceOffset,
+                expectedPreviewFingerprint)
             : OperationFailure.Forward<ArchidektSnapshotRestorePreview, ArchidektSnapshotRestorePreviewView>(preview);
     }
 
@@ -301,7 +325,9 @@ internal sealed class ArchidektReadTools
         [Description("Exact Archidekt deck identifier that owns the snapshots.")] string deckId,
         [Description("Only with kind get, and then required: exact Archidekt snapshot identifier.")]
         string? snapshotId = null,
-        [Description("Only with kind get: number of saved deck entries to skip; use nextOffset from the previous page. Default 0.")]
+        [Description(
+            "Only with kind get: number of saved deck entries to skip; use nextOffset from the previous page. " +
+            "Default 0.")]
         int offset = 0,
         CancellationToken cancellationToken = default)
     {

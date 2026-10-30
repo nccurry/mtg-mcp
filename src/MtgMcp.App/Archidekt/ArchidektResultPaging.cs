@@ -1,4 +1,3 @@
-using MtgMcp.App.Configuration;
 using MtgMcp.App.Hosting;
 using MtgMcp.Archidekt;
 using MtgMcp.Core.Results;
@@ -27,13 +26,10 @@ internal static class ArchidektResultPaging
         string callAgain = "Call archidekt_deck_get again")
     {
         ArgumentNullException.ThrowIfNull(deck);
-        if (offset < 0 || (offset > 0 && offset >= deck.Entries.Count))
+        OperationInvalidInput? invalid = ResultPage.CheckOffset("offset", offset, deck.Entries.Count, "entries");
+        if (invalid is not null)
         {
-            return new OperationInvalidInput(
-                "invalid-offset",
-                $"offset must be from 0 to {Math.Max(0, deck.Entries.Count - 1)} for this deck, which has " +
-                $"{deck.Entries.Count} entries.",
-                "offset");
+            return invalid;
         }
 
         Dictionary<string, int> cardsByZone = new(StringComparer.Ordinal);
@@ -43,7 +39,9 @@ internal static class ArchidektResultPaging
         }
 
         bool first = offset == 0;
-        bool omitExtensions = first && deck.Extensions.Count > 0 && ResultSize.Measure(deck.Extensions) > MaximumExtensionBytes;
+        bool omitExtensions = first &&
+            deck.Extensions.Count > 0 &&
+            ResultSize.Measure(deck.Extensions) > MaximumExtensionBytes;
         ArchidektDeckView header = new(
             new ArchidektDeckSummary(
                 deck.Entries.Count,
@@ -63,7 +61,9 @@ internal static class ArchidektResultPaging
             offset,
             first ? deck.Categories : [],
             [],
-            first && !omitExtensions ? deck.Extensions : new Dictionary<string, System.Text.Json.JsonElement>())
+            first && !omitExtensions
+                ? deck.Extensions
+                : new Dictionary<string, System.Text.Json.JsonElement>())
         {
             ExtensionsOmitted = omitExtensions ? true : null,
         };
@@ -75,18 +75,15 @@ internal static class ArchidektResultPaging
                 ? byName
                 : StringComparer.Ordinal.Compare(left.ProviderRelationId, right.ProviderRelationId);
         });
-        List<int> sizes = [.. ordered.Skip(offset).Select(value => ResultSize.Measure(value) + 1)];
-        int keep = ResultSizeLimit.CountFitting(sizes, ResultSize.Measure(header));
-        int next = offset + keep;
-        bool more = next < deck.Entries.Count;
+        ResultPageSlice slice = ResultPage.Take(ordered, offset, ResultSize.Measure(header));
         return new OperationSuccess<ArchidektDeckView>(header with
         {
-            Entries = [.. ordered.Skip(offset).Take(keep)],
-            Truncated = more ? true : null,
-            NextOffset = more ? next : null,
-            Narrow = more
-                ? $"Entries {offset} to {next - 1} of {deck.Entries.Count} are shown to stay under the size limit. " +
-                    $"{callAgain} with offset {next} for the rest."
+            Entries = slice.Rows(ordered),
+            Truncated = slice.More ? true : null,
+            NextOffset = slice.NextOffset,
+            Narrow = slice.More
+                ? $"Entries {offset} to {slice.Next - 1} of {deck.Entries.Count} are shown to stay under the size " +
+                    $"limit. {callAgain} with offset {slice.Next} for the rest."
                 : null,
         });
     }
@@ -99,14 +96,19 @@ internal static class ArchidektResultPaging
         ArchidektSyncPreview preview,
         int operationOffset,
         int differenceOffset,
-        string? applyNotice)
+        string? applyNotice,
+        string? expectedPreviewFingerprint)
     {
         ArgumentNullException.ThrowIfNull(preview);
-        OperationInvalidInput? invalid = CheckOffset("operationOffset", operationOffset, preview.Operations.Count) ??
-            CheckOffset("differenceOffset", differenceOffset, preview.Differences.Count);
-        if (invalid is not null)
+        if (CheckPages<ArchidektSyncPreviewView>(
+            preview.PreviewFingerprint,
+            expectedPreviewFingerprint,
+            operationOffset,
+            preview.Operations.Count,
+            differenceOffset,
+            preview.Differences.Count) is { } refused)
         {
-            return invalid;
+            return refused;
         }
 
         ArchidektSyncPreviewView header = new(
@@ -126,41 +128,21 @@ internal static class ArchidektResultPaging
             differenceOffset,
             [],
             []);
-        int budget = ResultSizeLimit.MaximumBytes - ResultSizeLimit.EnvelopeReserveBytes - ResultSize.Measure(header);
-        List<int> operationSizes = [.. preview.Operations.Skip(operationOffset).Select(value => ResultSize.Measure(value) + 1)];
-        int keptOperations = ResultSizeLimit.CountFitting(operationSizes, ResultSize.Measure(header));
-        int used = operationSizes.Take(keptOperations).Sum();
-        List<int> differenceSizes = [.. preview.Differences.Skip(differenceOffset).Select(value => ResultSize.Measure(value) + 1)];
-        int keptDifferences = 0;
-        while (keptDifferences < differenceSizes.Count && used + differenceSizes[keptDifferences] <= budget)
-        {
-            used += differenceSizes[keptDifferences];
-            keptDifferences++;
-        }
-
-        // A page with no operation to show must still make progress through the differences.
-        if (keptOperations == 0 && keptDifferences == 0 && differenceSizes.Count > 0)
-        {
-            keptDifferences = 1;
-        }
-
-        int nextOperation = operationOffset + keptOperations;
-        int nextDifference = differenceOffset + keptDifferences;
-        bool moreOperations = nextOperation < preview.Operations.Count;
-        bool moreDifferences = nextDifference < preview.Differences.Count;
-        bool more = moreOperations || moreDifferences;
+        (ResultPageSlice operations, ResultPageSlice differences) = ResultPage.TakeTwo(
+            preview.Operations,
+            operationOffset,
+            preview.Differences,
+            differenceOffset,
+            ResultSize.Measure(header));
+        bool more = operations.More || differences.More;
         return new OperationSuccess<ArchidektSyncPreviewView>(header with
         {
-            Operations = [.. preview.Operations.Skip(operationOffset).Take(keptOperations)],
-            Differences = [.. preview.Differences.Skip(differenceOffset).Take(keptDifferences)],
+            Operations = operations.Rows(preview.Operations),
+            Differences = differences.Rows(preview.Differences),
             Truncated = more ? true : null,
-            NextOperationOffset = moreOperations ? nextOperation : null,
-            NextDifferenceOffset = moreDifferences ? nextDifference : null,
-            Narrow = more
-                ? "Rows were left out to stay under the size limit; the summary and every guard cover the whole " +
-                    $"preview. Call again with operationOffset {nextOperation} and differenceOffset {nextDifference} " +
-                    "for the rest."
-                : null,
+            NextOperationOffset = operations.NextOffset,
+            NextDifferenceOffset = differences.NextOffset,
+            Narrow = more ? TwoListNarrow("the summary and every guard", operations, differences) : null,
         });
     }
 
@@ -187,26 +169,22 @@ internal static class ArchidektResultPaging
     internal static OperationResult<ArchidektFolderTreeView> PageFolders(RemoteFolderTree tree, int offset)
     {
         ArgumentNullException.ThrowIfNull(tree);
-        OperationInvalidInput? invalid = CheckOffset("offset", offset, Math.Max(0, tree.Items.Count - 1));
+        OperationInvalidInput? invalid = ResultPage.CheckOffset("offset", offset, tree.Items.Count, "folders");
         if (invalid is not null)
         {
             return invalid;
         }
 
         ArchidektFolderTreeView header = new(tree.Items.Count, offset, [], tree.Evidence, tree.TreeFingerprint);
-        int budget = ResultSizeLimit.MaximumBytes - ResultSizeLimit.EnvelopeReserveBytes - ResultSize.Measure(header);
-        int kept = CountWithin(tree.Items, offset, budget, out _);
-        kept = Math.Max(kept, tree.Items.Count > offset ? 1 : 0);
-        int next = offset + kept;
-        bool more = next < tree.Items.Count;
+        ResultPageSlice slice = ResultPage.Take(tree.Items, offset, ResultSize.Measure(header));
         return new OperationSuccess<ArchidektFolderTreeView>(header with
         {
-            Items = [.. tree.Items.Skip(offset).Take(kept)],
-            Truncated = more ? true : null,
-            NextOffset = more ? next : null,
-            Narrow = more
-                ? $"Folders {offset} to {next - 1} of {tree.Items.Count} are shown to stay under the size limit. " +
-                    $"Call archidekt_folders_get again with offset {next} for the rest."
+            Items = slice.Rows(tree.Items),
+            Truncated = slice.More ? true : null,
+            NextOffset = slice.NextOffset,
+            Narrow = slice.More
+                ? $"Folders {offset} to {slice.Next - 1} of {tree.Items.Count} are shown to stay under the size " +
+                    $"limit. Call archidekt_folders_get again with offset {slice.Next} for the rest."
                 : null,
         });
     }
@@ -217,7 +195,11 @@ internal static class ArchidektResultPaging
     internal static OperationResult<ArchidektSyncDiffView> PageDiff(ArchidektSyncDiff diff, int differenceOffset)
     {
         ArgumentNullException.ThrowIfNull(diff);
-        OperationInvalidInput? invalid = CheckOffset("differenceOffset", differenceOffset, diff.Differences.Count);
+        OperationInvalidInput? invalid = ResultPage.CheckOffset(
+            "differenceOffset",
+            differenceOffset,
+            diff.Differences.Count,
+            "differences");
         if (invalid is not null)
         {
             return invalid;
@@ -233,19 +215,16 @@ internal static class ArchidektResultPaging
             diff.Differences.Count,
             differenceOffset,
             []);
-        int budget = ResultSizeLimit.MaximumBytes - ResultSizeLimit.EnvelopeReserveBytes - ResultSize.Measure(header);
-        int kept = CountWithin(diff.Differences, differenceOffset, budget, out _);
-        kept = Math.Max(kept, diff.Differences.Count > differenceOffset ? 1 : 0);
-        int next = differenceOffset + kept;
-        bool more = next < diff.Differences.Count;
+        ResultPageSlice slice = ResultPage.Take(diff.Differences, differenceOffset, ResultSize.Measure(header));
         return new OperationSuccess<ArchidektSyncDiffView>(header with
         {
-            Differences = [.. diff.Differences.Skip(differenceOffset).Take(kept)],
-            Truncated = more ? true : null,
-            NextDifferenceOffset = more ? next : null,
-            Narrow = more
-                ? $"Differences {differenceOffset} to {next - 1} of {diff.Differences.Count} are shown to stay under " +
-                    $"the size limit. Call archidekt_sync_diff again with differenceOffset {next} for the rest."
+            Differences = slice.Rows(diff.Differences),
+            Truncated = slice.More ? true : null,
+            NextDifferenceOffset = slice.NextOffset,
+            Narrow = slice.More
+                ? $"Differences {differenceOffset} to {slice.Next - 1} of {diff.Differences.Count} are shown to " +
+                    $"stay under the size limit. Call archidekt_sync_diff again with differenceOffset {slice.Next} " +
+                    "for the rest."
                 : null,
         });
     }
@@ -257,14 +236,19 @@ internal static class ArchidektResultPaging
     internal static OperationResult<ArchidektSnapshotRestorePreviewView> PageRestorePreview(
         ArchidektSnapshotRestorePreview preview,
         int operationOffset,
-        int differenceOffset)
+        int differenceOffset,
+        string? expectedPreviewFingerprint)
     {
         ArgumentNullException.ThrowIfNull(preview);
-        OperationInvalidInput? invalid = CheckOffset("operationOffset", operationOffset, preview.Operations.Count) ??
-            CheckOffset("differenceOffset", differenceOffset, preview.Differences.Count);
-        if (invalid is not null)
+        if (CheckPages<ArchidektSnapshotRestorePreviewView>(
+                preview.PreviewFingerprint,
+                expectedPreviewFingerprint,
+                operationOffset,
+                preview.Operations.Count,
+                differenceOffset,
+                preview.Differences.Count) is { } refused)
         {
-            return invalid;
+            return refused;
         }
 
         ArchidektSnapshotRestorePreviewView header = new(
@@ -281,93 +265,65 @@ internal static class ArchidektResultPaging
             differenceOffset,
             [],
             []);
-        int budget = ResultSizeLimit.MaximumBytes - ResultSizeLimit.EnvelopeReserveBytes - ResultSize.Measure(header);
-        int keptOperations = CountWithin(preview.Operations, operationOffset, budget, out int used);
-        int keptDifferences = CountWithin(preview.Differences, differenceOffset, budget - used, out _);
-
-        // A page that fits no row must still make progress, through the operations first.
-        if (keptOperations == 0 && keptDifferences == 0)
-        {
-            if (preview.Operations.Count > operationOffset)
-            {
-                keptOperations = 1;
-            }
-            else if (preview.Differences.Count > differenceOffset)
-            {
-                keptDifferences = 1;
-            }
-        }
-
-        int nextOperation = operationOffset + keptOperations;
-        int nextDifference = differenceOffset + keptDifferences;
-        bool moreOperations = nextOperation < preview.Operations.Count;
-        bool moreDifferences = nextDifference < preview.Differences.Count;
-        bool more = moreOperations || moreDifferences;
+        (ResultPageSlice operations, ResultPageSlice differences) = ResultPage.TakeTwo(
+            preview.Operations,
+            operationOffset,
+            preview.Differences,
+            differenceOffset,
+            ResultSize.Measure(header));
+        bool more = operations.More || differences.More;
         return new OperationSuccess<ArchidektSnapshotRestorePreviewView>(header with
         {
-            Operations = [.. preview.Operations.Skip(operationOffset).Take(keptOperations)],
-            Differences = [.. preview.Differences.Skip(differenceOffset).Take(keptDifferences)],
+            Operations = operations.Rows(preview.Operations),
+            Differences = differences.Rows(preview.Differences),
             Truncated = more ? true : null,
-            NextOperationOffset = moreOperations ? nextOperation : null,
-            NextDifferenceOffset = moreDifferences ? nextDifference : null,
-            Narrow = more
-                ? "Rows were left out to stay under the size limit; the counts and every guard cover the whole " +
-                    $"preview. Call again with operationOffset {nextOperation} and differenceOffset {nextDifference} " +
-                    "for the rest."
-                : null,
+            NextOperationOffset = operations.NextOffset,
+            NextDifferenceOffset = differences.NextOffset,
+            Narrow = more ? TwoListNarrow("the counts and every guard", operations, differences) : null,
         });
     }
 
     /// <summary>
-    /// Counts how many rows from <paramref name="offset"/> fit the byte budget, and how many bytes they take.
+    /// Refuses a request whose offsets are outside the operations or differences, or whose preview is not the one the
+    /// earlier pages came from.
     /// </summary>
-    private static int CountWithin<T>(IReadOnlyList<T> rows, int offset, int budget, out int used)
+    private static OperationResult<T>? CheckPages<T>(
+        string previewFingerprint,
+        string? expectedPreviewFingerprint,
+        int operationOffset,
+        int operationCount,
+        int differenceOffset,
+        int differenceCount)
     {
-        used = 0;
-        int kept = 0;
-        for (int index = offset; index < rows.Count; index++)
+        OperationInvalidInput? invalid =
+            ResultPage.CheckOffset("operationOffset", operationOffset, operationCount, "operations") ??
+            ResultPage.CheckOffset("differenceOffset", differenceOffset, differenceCount, "differences");
+        if (invalid is not null)
         {
-            int size = ResultSize.Measure(rows[index]) + 1;
-            if (used + size > budget)
-            {
-                break;
-            }
-
-            used += size;
-            kept++;
+            return invalid;
         }
 
-        return kept;
+        OperationConflict? changed = ResultPage.CheckSameResult(
+            expectedPreviewFingerprint,
+            previewFingerprint,
+            operationOffset > 0 || differenceOffset > 0);
+        if (changed is not null)
+        {
+            return changed;
+        }
+
+        return null;
     }
 
     /// <summary>
-    /// Explains why the tool that applies a push is not available, or returns null when it is.
+    /// Says how to read the rows a two-list page left out, and that every page must come from the same preview.
     /// </summary>
-    internal static string? PushApplyNotice(OperationMode mode, ArchidektAuthStatus auth)
+    private static string TwoListNarrow(string covers, ResultPageSlice operations, ResultPageSlice differences)
     {
-        string? reasons = Combine(
-            OperationModeGuard.Allows(mode, OperationRequirement.RemoteWrite)
-                ? null
-                : $"the server runs in {OperationModeParser.Format(mode)} mode, and a push needs remote mode, which is " +
-                    $"the default (--mode=remote); remove the --mode={OperationModeParser.Format(mode)} override or " +
-                    "the MTGMCP__MODE setting and restart the server",
-            CredentialReason(auth));
-        return reasons is null ? null : $"archidekt_push_apply is not available: {reasons}.";
-    }
-
-    /// <summary>
-    /// Explains why the tool that applies a pull is not available, or returns null when it is.
-    /// </summary>
-    internal static string? PullApplyNotice(OperationMode mode, ArchidektAuthStatus auth)
-    {
-        string? reasons = Combine(
-            OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite)
-                ? null
-                : "the server runs in read-only mode, and a pull needs local or remote mode; remote is the default " +
-                    "(--mode=remote), so remove the --mode=read-only override or the MTGMCP__MODE setting and " +
-                    "restart the server",
-            CredentialReason(auth));
-        return reasons is null ? null : $"archidekt_pull_apply is not available: {reasons}.";
+        return $"Rows were left out to stay under the size limit; {covers} cover the whole preview. Call again " +
+            $"with operationOffset {operations.Next}, differenceOffset {differences.Next}, and " +
+            "expectedPreviewFingerprint set to the previewFingerprint of this page, so every page comes from the " +
+            "same preview.";
     }
 
     /// <summary>
@@ -383,13 +339,14 @@ internal static class ArchidektResultPaging
 
         SortedDictionary<string, int> byState = new(StringComparer.Ordinal);
         int conflicts = 0;
-        string conflictSide = preview.Direction == "push" ? "remote-" : "local-";
+        bool push = preview.Direction == "push";
         foreach (ArchidektDifference difference in preview.Differences)
         {
             byState[difference.State] = byState.GetValueOrDefault(difference.State) + 1;
             if (preview.HasConflicts &&
-                (difference.State.StartsWith(conflictSide, StringComparison.Ordinal) ||
-                    difference.State == "concurrent-changed"))
+                (push
+                    ? ArchidektDifferenceStates.IsRemoteChange(difference)
+                    : ArchidektDifferenceStates.IsLocalChange(difference)))
             {
                 conflicts++;
             }
@@ -401,42 +358,5 @@ internal static class ArchidektResultPaging
             preview.Differences.Count,
             byState,
             conflicts);
-    }
-
-    /// <summary>
-    /// Refuses an offset outside the list it pages.
-    /// </summary>
-    private static OperationInvalidInput? CheckOffset(string name, int offset, int count)
-    {
-        return offset < 0 || offset > count
-            ? new OperationInvalidInput(
-                "invalid-offset",
-                $"{name} must be from 0 to {count} for this preview.",
-                name)
-            : null;
-    }
-
-    /// <summary>
-    /// Names the missing credentials as a reason, or returns null when they are configured.
-    /// </summary>
-    private static string? CredentialReason(ArchidektAuthStatus auth)
-    {
-        return auth.CredentialsConfigured
-            ? null
-            : "Archidekt credentials are not configured (see archidekt_auth_status)";
-    }
-
-    /// <summary>
-    /// Joins the reasons that apply with "and", or returns null when none does.
-    /// </summary>
-    private static string? Combine(string? first, string? second)
-    {
-        return (first, second) switch
-        {
-            (null, null) => null,
-            (null, _) => second,
-            (_, null) => first,
-            _ => $"{first}; and {second}",
-        };
     }
 }

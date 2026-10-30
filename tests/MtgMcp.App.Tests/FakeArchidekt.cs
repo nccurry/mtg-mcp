@@ -276,11 +276,12 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     }
 
     /// <summary>
-    /// Writes the deck the way one read of the real service shows it.
+    /// Writes the deck the way one read of the real service shows it. A saved snapshot is a stored document, so it
+    /// passes a fixed read number and comes back the same on every read.
     /// </summary>
-    private JsonObject SerializeDeck()
+    private JsonObject SerializeDeck(int? fixedRead = null)
     {
-        int read = ++reads;
+        int read = fixedRead ?? ++reads;
         Random random = new(read);
         JsonArray categoryArray = [];
         for (int index = 0; index < categories.Count; index++)
@@ -434,7 +435,7 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     /// </summary>
     private JsonObject SerializeSnapshot()
     {
-        JsonObject deck = SerializeDeck();
+        JsonObject deck = SerializeDeck(fixedRead: 1);
         foreach (JsonNode? card in deck["cards"]!.AsArray())
         {
             card!["quantity"] = card["quantity"]!.GetValue<int>() + 1;

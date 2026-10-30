@@ -313,13 +313,14 @@ internal sealed class DeckCategorizationReadTools
         string freshnessPolicy = "default",
         [Description("Number of decisions to skip; use nextOffset from the previous page. Default 0.")]
         int offset = 0,
+        [Description(DeckPreviewPaging.FingerprintHelp)] string? expectedPreviewFingerprint = null,
         CancellationToken cancellationToken = default)
     {
         OperationResult<DeckCategoryRulesPreview> preview = await coordinator
             .PreviewAsync(deckId, expectedRevision, source, freshnessPolicy, cancellationToken)
             .ConfigureAwait(false);
         return preview is OperationSuccess<DeckCategoryRulesPreview> success
-            ? DeckPreviewPaging.PageCategoryRules(success.Data, offset)
+            ? DeckPreviewPaging.PageCategoryRules(success.Data, offset, expectedPreviewFingerprint)
             : OperationFailure.Forward<DeckCategoryRulesPreview, DeckCategoryRulesPreviewView>(preview);
     }
 }
