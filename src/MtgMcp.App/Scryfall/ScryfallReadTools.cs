@@ -69,6 +69,10 @@ internal sealed class ScryfallReadTools
         "Example query: otag:removal t:instant id<=wb mv<=2 f:commander. Use scryfall_tags_search to find " +
         "a tag's exact slug, and scryfall_installed_cards_by_tag only to read tag assignments from installed card " +
         "data. " +
+        "Printing-level filters (not:reprint, is:reprint, date, year, set, usd) are checked against the same " +
+        "printing, so a date or year filter alone also returns reprints; add not:reprint to keep only first " +
+        "printings, as in not:reprint year=2024. With unique cards each card appears once, as a printing that " +
+        "meets every condition; unique prints lists every matching printing. " +
         "Use responseFormat concise for broad queries: it returns only the fields an agent needs to compare cards. " +
         "The default standard format returns every card field this server returns, and a page of 25 rows can " +
         "exceed 40,000 bytes, so with standard ask for a smaller pageSize.")]

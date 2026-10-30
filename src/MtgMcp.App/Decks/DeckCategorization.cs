@@ -71,7 +71,7 @@ internal sealed class DeckCategorizationCoordinator
     }
 
     /// <summary>Recomputes and applies an unchanged proposal in one deck revision.</summary>
-    internal async Task<OperationResult<DeckDocument>> ApplyAsync(
+    internal async Task<OperationResult<DeckWriteResult>> ApplyAsync(
         Guid deckId,
         long expectedRevision,
         Guid? expectedCorpusGeneration,
@@ -79,6 +79,7 @@ internal sealed class DeckCategorizationCoordinator
         string freshnessPolicy,
         string previewFingerprint,
         string applyToken,
+        bool returnDeck,
         CancellationToken cancellationToken)
     {
         string expectedToken = Hash(JsonSerializer.Serialize(new { deckId, expectedRevision, previewFingerprint }, SerializerOptions));
@@ -91,7 +92,7 @@ internal sealed class DeckCategorizationCoordinator
             deckId, expectedRevision, source, freshnessPolicy, cancellationToken).ConfigureAwait(false);
         if (previewResult is not OperationSuccess<DeckCategoryRulesPreview> preview)
         {
-            return OperationFailure.Forward<DeckCategoryRulesPreview, DeckDocument>(previewResult);
+            return OperationFailure.Forward<DeckCategoryRulesPreview, DeckWriteResult>(previewResult);
         }
 
         if (!string.Equals(preview.Data.PreviewFingerprint, previewFingerprint, StringComparison.Ordinal))
@@ -112,13 +113,20 @@ internal sealed class DeckCategorizationCoordinator
         OperationResult<DeckDocument> deckResult = await deckStore.GetAsync(deckId, cancellationToken).ConfigureAwait(false);
         if (deckResult is not OperationSuccess<DeckDocument> deck)
         {
-            return deckResult;
+            return OperationFailure.Forward<DeckDocument, DeckWriteResult>(deckResult);
         }
 
         List<DeckChange> changes = BuildChanges(deck.Data, preview.Data);
-        return changes.Count == 0
-            ? deckResult
-            : await deckStore.ApplyChangesAsync(deckId, expectedRevision, changes, cancellationToken).ConfigureAwait(false);
+        if (changes.Count == 0)
+        {
+            return new OperationSuccess<DeckWriteResult>(DeckWriteResults.After(deck.Data, deck.Data, [], returnDeck));
+        }
+
+        OperationResult<DeckDocument> applied = await deckStore
+            .ApplyChangesAsync(deckId, expectedRevision, changes, cancellationToken).ConfigureAwait(false);
+        return applied is OperationSuccess<DeckDocument> after
+            ? new OperationSuccess<DeckWriteResult>(DeckWriteResults.After(deck.Data, after.Data, [], returnDeck))
+            : OperationFailure.Forward<DeckDocument, DeckWriteResult>(applied);
     }
 
     /// <summary>Builds one preview after validating the deck and source.</summary>
@@ -332,8 +340,11 @@ internal sealed class DeckCategorizationWriteTools
         Idempotent = false,
         OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Local deck store: applies only an unchanged, complete category preview in one local deck revision.")]
-    internal Task<OperationResult<DeckDocument>> ApplyAsync(
+    [Description(
+        "Local deck store: applies only an unchanged, complete category preview in one local deck revision. The " +
+        "result is a summary (new revision, counts, IDs of changed entries and categories); pass returnDeck true " +
+        "to also get the whole deck.")]
+    internal Task<OperationResult<DeckWriteResult>> ApplyAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
         [Description("Scryfall card-data generation returned by the preview, or null when no card evidence was needed.")] Guid? expectedCorpusGeneration,
@@ -342,14 +353,16 @@ internal sealed class DeckCategorizationWriteTools
         string freshnessPolicy,
         [Description("Fingerprint returned by local_deck_category_rules_preview.")] string previewFingerprint,
         [Description("Opaque token returned by local_deck_category_rules_preview.")] string applyToken,
+        [Description("Set true to also return the whole deck after the write. The default summary is much smaller.")]
+        bool returnDeck = false,
         CancellationToken cancellationToken = default)
     {
         if (!OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
-            return Task.FromResult<OperationResult<DeckDocument>>(
+            return Task.FromResult<OperationResult<DeckWriteResult>>(
                 new OperationUnsupported("operation-mode-denied", "The effective operation mode does not permit local writes."));
         }
 
-        return coordinator.ApplyAsync(deckId, expectedRevision, expectedCorpusGeneration, source, freshnessPolicy, previewFingerprint, applyToken, cancellationToken);
+        return coordinator.ApplyAsync(deckId, expectedRevision, expectedCorpusGeneration, source, freshnessPolicy, previewFingerprint, applyToken, returnDeck, cancellationToken);
     }
 }

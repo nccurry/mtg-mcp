@@ -55,7 +55,7 @@ public sealed class ManualInterchangeAcceptanceTests
         Guid basicsId = Guid.Parse("20000000-0000-4000-8000-000000000002");
         Guid candidateCategoryId = Guid.Parse("20000000-0000-4000-8000-000000000003");
         Guid creaturesId = Guid.Parse("20000000-0000-4000-8000-000000000004");
-        JsonElement created = await CallSuccessAsync(session, "local_deck_create", new Dictionary<string, object?>
+        JsonElement created = await WholeDeck.SuccessAsync(session, "local_deck_create", new Dictionary<string, object?>
         {
             ["request"] = new
             {

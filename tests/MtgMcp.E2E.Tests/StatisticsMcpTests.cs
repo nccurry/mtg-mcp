@@ -421,7 +421,7 @@ public sealed class StatisticsMcpTests
             entries.Add(new { quantity = 1, cardName = "Winota, Joiner of Forces", zone = "commander" });
         }
 
-        return await CallSuccessAsync(
+        return await WholeDeck.SuccessAsync(
             session,
             "local_deck_create",
             new

@@ -180,13 +180,14 @@ public sealed class DeckCategoryRuleSourceTests
             "cache-only",
             preview.PreviewFingerprint,
             preview.ApplyToken,
-            TestContext.Current.CancellationToken));
+            true,
+            TestContext.Current.CancellationToken)).Deck!;
         DeckDocument edited = RequireSuccess(await store.ApplyChangesAsync(
             deck.DeckId,
             applied.Revision,
             [new UpdateDeckMetadataChange("Edited", null, "custom")],
             TestContext.Current.CancellationToken));
-        OperationResult<DeckDocument> stale = await coordinator.ApplyAsync(
+        OperationResult<DeckWriteResult> stale = await coordinator.ApplyAsync(
             deck.DeckId,
             deck.Revision,
             sync.GenerationId,
@@ -194,6 +195,7 @@ public sealed class DeckCategoryRuleSourceTests
             "cache-only",
             preview.PreviewFingerprint,
             preview.ApplyToken,
+            false,
             TestContext.Current.CancellationToken);
 
         Assert.Equal(

@@ -38,7 +38,8 @@ public sealed class DeckWriteToolsTests
                 "Workflow",
                 Format: "custom",
                 Entries: [new DeckEntryDraft(1, "First", EntryId: initialEntryId)]),
-            TestContext.Current.CancellationToken));
+            returnDeck: true,
+            TestContext.Current.CancellationToken)).Deck!;
 
         deck = await ApplyAsync(
             batchWrites,
@@ -122,9 +123,9 @@ public sealed class DeckWriteToolsTests
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
         DeckWriteTools tools = new(store, OperationMode.ReadOnly);
 
-        OperationResult<DeckDocument> result = await tools.CreateAsync(
+        OperationResult<DeckWriteResult> result = await tools.CreateAsync(
             new DeckCreateRequest("Denied"),
-            TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.IsType<OperationUnsupported>(result.Value);
         Assert.False(File.Exists(Path.Combine(temporary.Path, "decks.db")));
@@ -142,7 +143,8 @@ public sealed class DeckWriteToolsTests
             deck.DeckId,
             deck.Revision,
             changes,
-            TestContext.Current.CancellationToken));
+            returnDeck: true,
+            TestContext.Current.CancellationToken)).Deck!;
     }
 
     /// <summary>

@@ -61,6 +61,7 @@ internal static class DeckToolsetManifest
         DeckIdentityReconciliationCoordinator identityCoordinator = new(deckStore, scryfallService);
         DeckCategorizationCoordinator categorizationCoordinator = new(deckStore, scryfallService);
         DeckCardViewCoordinator cardViewCoordinator = new(deckStore, scryfallService);
+        DeckEntryResolver entryResolver = new(scryfallService);
         builder
             .WithRegisteredTools(ToolRegistration.Create(
                 new DeckReadTools(deckStore, cardViewCoordinator, new DeckRuleCoordinator(deckStore, scryfallService)),
@@ -74,13 +75,13 @@ internal static class DeckToolsetManifest
         if (OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
             builder
-                .WithRegisteredTools(ToolRegistration.Create(new DeckWriteTools(deckStore, mode)))
+                .WithRegisteredTools(ToolRegistration.Create(new DeckWriteTools(deckStore, mode, entryResolver)))
                 .WithRegisteredTools(ToolRegistration.Create(new DeckInterchangeWriteTools(interchangeService, mode)))
                 .WithRegisteredTools(ToolRegistration.Create(
                     new DeckIdentityReconciliationWriteTools(identityCoordinator, mode)))
                 .WithRegisteredTools(ToolRegistration.Create(
                     new DeckCategorizationWriteTools(categorizationCoordinator, mode)))
-                .WithRegisteredTools([DeckBatchWriteTools.Create(deckStore, mode)]);
+                .WithRegisteredTools([DeckBatchWriteTools.Create(deckStore, mode, entryResolver)]);
         }
     }
 }

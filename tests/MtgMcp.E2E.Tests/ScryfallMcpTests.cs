@@ -344,7 +344,7 @@ public sealed class ScryfallMcpTests
             "default",
             SeedAsync,
             TestContext.Current.CancellationToken).ConfigureAwait(false);
-        JsonElement deck = await CallSuccessAsync(
+        JsonElement deck = await WholeDeck.SuccessAsync(
             session,
             "local_deck_create",
             new Dictionary<string, object?>
@@ -362,6 +362,39 @@ public sealed class ScryfallMcpTests
             }).ConfigureAwait(false);
         Guid deckId = deck.GetProperty("deckId").GetGuid();
         long revision = deck.GetProperty("revision").GetInt64();
+
+        // Names are resolved from installed card data when the entries are added, so put the entries back to
+        // name-only to give reconciliation work to do.
+        Assert.All(deck.GetProperty("entries").EnumerateArray(), entry =>
+            Assert.True(entry.GetProperty("oracleId").GetGuid() != Guid.Empty));
+        object[] resets = [.. deck.GetProperty("entries").EnumerateArray().Select(entry => (object)new
+        {
+            kind = "update-entry",
+            entry = new
+            {
+                entryId = entry.GetProperty("entryId").GetGuid(),
+                quantity = entry.GetProperty("quantity").GetInt32(),
+                cardName = entry.GetProperty("cardName").GetString()!.ToLowerInvariant(),
+                oracleId = (Guid?)null,
+                printingId = (Guid?)null,
+                setCode = (string?)null,
+                collectorNumber = (string?)null,
+                language = entry.GetProperty("language").GetString(),
+                finish = entry.GetProperty("finish").GetString(),
+                zone = entry.GetProperty("zone").GetString(),
+                sortOrder = entry.GetProperty("sortOrder").GetInt32(),
+            },
+        })];
+        deck = await WholeDeck.SuccessAsync(
+            session,
+            "local_deck_apply_changes",
+            new Dictionary<string, object?>
+            {
+                ["deckId"] = deckId,
+                ["expectedRevision"] = revision,
+                ["changes"] = resets,
+            }).ConfigureAwait(false);
+        revision = deck.GetProperty("revision").GetInt64();
         JsonElement preview = await CallSuccessAsync(
             session,
             "local_deck_identity_reconcile_preview",
@@ -380,7 +413,7 @@ public sealed class ScryfallMcpTests
             Assert.Equal("corpus", row.GetProperty("evidenceOrigin").GetString());
         });
 
-        JsonElement applied = await CallSuccessAsync(
+        JsonElement applied = await WholeDeck.SuccessAsync(
             session,
             "local_deck_identity_reconcile_apply",
             new Dictionary<string, object?>
