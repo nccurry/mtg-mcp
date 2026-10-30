@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using MtgMcp.Core.Decks;
 
 namespace MtgMcp.Archidekt;
 
@@ -387,7 +388,7 @@ internal sealed class ArchidektDeckTransport
                 oracle.TryGetProperty("name", out JsonElement nameElement)
                 ? nameElement.GetString()
                 : null;
-            if (!ArchidektCardNames.Match(name, entry.CardName))
+            if (!CardNames.Match(name, entry.CardName))
             {
                 continue;
             }

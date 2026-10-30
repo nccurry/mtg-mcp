@@ -1,12 +1,12 @@
-namespace MtgMcp.Archidekt;
+namespace MtgMcp.Core.Decks;
 
 /// <summary>
 /// Compares card names where a double-faced or split card may be named by all of its faces, such as
 /// "Delver of Secrets // Insectile Aberration", or by one face. Scryfall names the card by all of its faces, and a
-/// local entry may carry either form, so two names match when they are equal without regard to case or when one is
-/// a face of the other.
+/// local entry, an Archidekt row, or a caller may carry either form, so two names match when they are equal without
+/// regard to case or when one is a face of the other. This is the one face-name rule of the server.
 /// </summary>
-internal static class ArchidektCardNames
+public static class CardNames
 {
     /// <summary>
     /// Separates the faces of a card name.
@@ -16,7 +16,7 @@ internal static class ArchidektCardNames
     /// <summary>
     /// Tells whether two card names name the same card: equal ignoring case, or one is a single face of the other.
     /// </summary>
-    internal static bool Match(string? left, string? right)
+    public static bool Match(string? left, string? right)
     {
         if (string.Equals(left, right, StringComparison.OrdinalIgnoreCase))
         {

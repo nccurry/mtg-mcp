@@ -238,10 +238,7 @@ internal sealed class DeckEntryResolver
     /// </summary>
     private static bool NameAgrees(string typed, ScryfallCard card)
     {
-        string name = typed.Trim();
-        return string.Equals(name, card.Name, StringComparison.OrdinalIgnoreCase) ||
-            card.Name.StartsWith(name + " // ", StringComparison.OrdinalIgnoreCase) ||
-            card.Name.EndsWith(" // " + name, StringComparison.OrdinalIgnoreCase);
+        return CardNames.Match(typed, card.Name);
     }
 
     /// <summary>

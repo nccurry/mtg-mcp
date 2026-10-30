@@ -94,7 +94,9 @@ public static class ArchidektSyncPlanner
         {
             differences.Add(new ArchidektDifference(
                 "/localOnly/content",
-                legacyBaseline ? ArchidektDifferenceStates.LocalChangedUnverified : "local-changed",
+                legacyBaseline
+                    ? ArchidektDifferenceStates.LocalChangedUnverified
+                    : ArchidektDifferenceStates.LocalChanged,
                 baseline.LocalFingerprint,
                 localFingerprint,
                 RemoteValue: null));
@@ -106,7 +108,7 @@ public static class ArchidektSyncPlanner
         {
             differences.Add(new ArchidektDifference(
                 "/provider/content",
-                "remote-changed",
+                ArchidektDifferenceStates.RemoteChanged,
                 baseline.RemoteFingerprint,
                 LocalValue: null,
                 remote.RemoteFingerprint));
@@ -257,10 +259,8 @@ public static class ArchidektSyncPlanner
                 : ArchidektDifferenceStates.ConcurrentChanged;
         }
 
-        string side = localChanged ? "local" : "remote";
-        string? value = localChanged ? local : remote;
-        string kind = baseline is null ? "added" : value is null ? "removed" : "changed";
-        return $"{side}-{kind}";
+        string? changedSide = localChanged ? local : remote;
+        return ArchidektDifferenceStates.OneSided(localChanged, baseline is not null, changedSide is not null);
     }
 
     /// <summary>
@@ -652,7 +652,7 @@ public static class ArchidektSyncPlanner
     {
         return CardIdentityEqual(observed, expected) &&
             observed.Quantity == expected.Quantity &&
-            ArchidektCardNames.Match(observed.CardName, expected.CardName) &&
+            CardNames.Match(observed.CardName, expected.CardName) &&
             string.Equals(observed.Language, expected.Language, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(observed.Finish, expected.Finish, StringComparison.Ordinal) &&
             string.Equals(observed.Zone, expected.Zone, StringComparison.Ordinal) &&
@@ -738,9 +738,13 @@ public static class ArchidektSyncPlanner
             return observed.OracleId == expected.OracleId;
         }
 
+        // Name-only rows are the rest: an entry with a printing, an Oracle ID, or a provider card ID never gets here.
+        // The name rule pairs a card only with its own faces, so "Fire" matches "Fire // Ice" and not "Fire // Water".
+        // When two rows fit one target ("Ice" and "Fire // Ice" both in the deck), the callers leave the link unset
+        // instead of picking one.
         return !string.IsNullOrWhiteSpace(expected.ProviderCardId)
             ? string.Equals(observed.ProviderCardId, expected.ProviderCardId, StringComparison.Ordinal)
-            : ArchidektCardNames.Match(observed.CardName, expected.CardName);
+            : CardNames.Match(observed.CardName, expected.CardName);
     }
 
     /// <summary>
@@ -805,7 +809,7 @@ public static class ArchidektSyncPlanner
         };
         return left.Quantity == right.Quantity &&
             string.Equals(left.ProviderCardId, right.ProviderCardId, StringComparison.Ordinal) &&
-            ArchidektCardNames.Match(left.CardName, right.CardName) &&
+            CardNames.Match(left.CardName, right.CardName) &&
             PrintingEqual(left, right) &&
             string.Equals(left.Language, right.Language, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(left.Finish, right.Finish, StringComparison.Ordinal) &&
