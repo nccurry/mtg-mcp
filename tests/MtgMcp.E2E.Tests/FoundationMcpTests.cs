@@ -495,7 +495,7 @@ public sealed class FoundationMcpTests
             TestContext.Current.CancellationToken).ConfigureAwait(false);
         Dictionary<string, string[]> expectedProperties = new(StringComparer.Ordinal)
         {
-            ["local_deck_apply_changes"] = ["changes", "deckId", "expectedRevision"],
+            ["local_deck_apply_changes"] = ["changes", "deckId", "expectedRevision", "returnDeck"],
             ["local_deck_backup_create"] = [],
             ["local_deck_backup_delete"] = ["backupId"],
             ["local_deck_backup_list"] = [],
@@ -503,18 +503,18 @@ public sealed class FoundationMcpTests
             ["local_deck_category_rules_apply"] =
             [
                 "applyToken", "deckId", "expectedCorpusGeneration", "expectedRevision", "freshnessPolicy",
-                "previewFingerprint", "source",
+                "previewFingerprint", "returnDeck", "source",
             ],
             ["local_deck_category_rules_preview"] = ["deckId", "expectedRevision", "freshnessPolicy", "source"],
-            ["local_deck_create"] = ["request"],
+            ["local_deck_create"] = ["request", "returnDeck"],
             ["local_deck_delete"] = ["deckId", "expectedRevision"],
             ["local_deck_duplicates_preview"] = ["deckId", "exempt", "expectedRevision", "keepPriority", "matchBy"],
             ["local_deck_export_bundle"] = ["deckId", "formatId", "options"],
             ["local_deck_get"] = ["cursor", "deckId", "fields", "include", "pageSize"],
             ["local_deck_identity_reconcile_apply"] =
-                ["allowPartial", "applyToken", "deckId", "expectedRevision", "previewFingerprint"],
+                ["allowPartial", "applyToken", "deckId", "expectedRevision", "previewFingerprint", "returnDeck"],
             ["local_deck_identity_reconcile_preview"] = ["deckId", "entryIds", "expectedRevision", "freshnessPolicy"],
-            ["local_deck_import_create"] = ["content", "expectedFingerprint", "formatId", "options"],
+            ["local_deck_import_create"] = ["content", "expectedFingerprint", "formatId", "options", "returnDeck"],
             ["local_deck_import_preview"] = ["content", "formatId", "options"],
             ["local_deck_interchange_formats"] = [],
             ["local_deck_list"] = ["cursor", "pageSize"],

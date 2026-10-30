@@ -89,7 +89,7 @@ public sealed class LiveMethodAcceptanceTests
                     ["options"] = new { deckName = "Obeka Acceptance Import", format = "commander" },
                 },
                 token).ConfigureAwait(false);
-            JsonElement importedDeck = imported.GetProperty("deck");
+            JsonElement importedDeck = imported.GetProperty("summary");
             Guid importedDeckId = importedDeck.GetProperty("deckId").GetGuid();
             long importedRevision = importedDeck.GetProperty("revision").GetInt64();
 
@@ -2378,11 +2378,11 @@ public sealed class LiveMethodAcceptanceTests
     {
         CallToolResult call = await session.Client.CallToolAsync(
             toolName,
-            arguments,
+            WholeDeck.Prepare(toolName, arguments),
             cancellationToken: cancellationToken).ConfigureAwait(false);
         JsonElement content = Assert.IsType<JsonElement>(call.StructuredContent);
         Assert.Equal(!string.Equals(content.GetProperty("kind").GetString(), "success", StringComparison.Ordinal), call.IsError == true);
-        return content;
+        return WholeDeck.Unwrap(toolName, content);
     }
 
     /// <summary>

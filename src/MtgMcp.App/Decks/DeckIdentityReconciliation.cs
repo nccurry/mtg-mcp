@@ -255,12 +255,13 @@ internal sealed class DeckIdentityReconciliationCoordinator
     /// <summary>
     /// Replays preview evidence and applies only verified identity field changes in one deck revision.
     /// </summary>
-    internal async Task<OperationResult<DeckDocument>> ApplyAsync(
+    internal async Task<OperationResult<DeckWriteResult>> ApplyAsync(
         Guid deckId,
         long expectedRevision,
         string previewFingerprint,
         string applyToken,
         bool allowPartial,
+        bool returnDeck,
         CancellationToken cancellationToken)
     {
         if (!tokens.TryDecode(applyToken, out DeckIdentityApplyTokenPayload? token) ||
@@ -278,7 +279,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
             .ConfigureAwait(false);
         if (deckResult is not OperationSuccess<DeckDocument> deckSuccess)
         {
-            return deckResult;
+            return OperationFailure.Forward<DeckDocument, DeckWriteResult>(deckResult);
         }
 
         DeckDocument deck = deckSuccess.Data;
@@ -293,7 +294,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
         OperationResult<IReadOnlyList<DeckEntry>> selection = SelectEntries(deck, token.EntryIds);
         if (selection is not OperationSuccess<IReadOnlyList<DeckEntry>> selected)
         {
-            return OperationFailure.Forward<IReadOnlyList<DeckEntry>, DeckDocument>(selection);
+            return OperationFailure.Forward<IReadOnlyList<DeckEntry>, DeckWriteResult>(selection);
         }
 
         IReadOnlyList<DeckEntry> entries = selected.Data;
@@ -307,7 +308,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
                     .ConfigureAwait(false);
             if (replay is not OperationSuccess<ScryfallExactCollectionEvidence> replaySuccess)
             {
-                return OperationFailure.Forward<ScryfallExactCollectionEvidence, DeckDocument>(replay);
+                return OperationFailure.Forward<ScryfallExactCollectionEvidence, DeckWriteResult>(replay);
             }
 
             evidence = replaySuccess.Data;
@@ -355,13 +356,32 @@ internal sealed class DeckIdentityReconciliationCoordinator
             }));
         }
 
-        return changes.Count == 0
-            ? new OperationSuccess<DeckDocument>(deck)
-            : await deckStore.ApplyChangesAsync(
-                deckId,
-                expectedRevision,
-                changes,
-                cancellationToken).ConfigureAwait(false);
+        List<DeckWriteIssue> skipped = [];
+        foreach (DeckIdentityReconciliationRow row in preview.Rows)
+        {
+            if (row.Status is not ("resolved" or "unchanged"))
+            {
+                skipped.Add(new DeckWriteIssue(
+                    DeckWriteIssue.Skipped,
+                    $"{row.Status}: {row.Message}",
+                    row.EntryId,
+                    row.Before.CardName));
+            }
+        }
+
+        if (changes.Count == 0)
+        {
+            return new OperationSuccess<DeckWriteResult>(DeckWriteResults.After(deck, deck, skipped, returnDeck));
+        }
+
+        OperationResult<DeckDocument> applied = await deckStore.ApplyChangesAsync(
+            deckId,
+            expectedRevision,
+            changes,
+            cancellationToken).ConfigureAwait(false);
+        return applied is OperationSuccess<DeckDocument> after
+            ? new OperationSuccess<DeckWriteResult>(DeckWriteResults.After(deck, after.Data, skipped, returnDeck))
+            : OperationFailure.Forward<DeckDocument, DeckWriteResult>(applied);
     }
 
     /// <summary>
@@ -405,7 +425,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
     /// <summary>
     /// Builds strongest-first lookups while deduplicating identical evidence requests.
     /// </summary>
-    private static (
+    internal static (
         IReadOnlyList<DeckIdentityLookupPlan> Plans,
         IReadOnlyList<ScryfallEvidenceLookup> Lookups) BuildLookupPlans(IReadOnlyList<DeckEntry> entries)
     {
@@ -751,8 +771,9 @@ internal sealed class DeckIdentityReconciliationWriteTools
         UseStructuredContent = true)]
     [Description(
         "Local deck store: applies an unchanged exact identity preview in one revision; all non-identity deck fields " +
-        "are preserved.")]
-    internal Task<OperationResult<DeckDocument>> ApplyAsync(
+        "are preserved. The result is a summary (new revision, counts, IDs of changed entries, rows left out as " +
+        "issues); pass returnDeck true to also get the whole deck.")]
+    internal Task<OperationResult<DeckWriteResult>> ApplyAsync(
         [Description("Stable local deck UUID used for preview.")] Guid deckId,
         [Description("Deck revision used for preview.")] long expectedRevision,
         [Description("Evidence-bound fingerprint returned by local_deck_identity_reconcile_preview.")]
@@ -761,11 +782,13 @@ internal sealed class DeckIdentityReconciliationWriteTools
         string applyToken,
         [Description("Whether resolved rows may be applied when other selected identities remain incomplete.")]
         bool allowPartial = false,
+        [Description("Set true to also return the whole deck after the write. The default summary is much smaller.")]
+        bool returnDeck = false,
         CancellationToken cancellationToken = default)
     {
         if (!OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
-            return Task.FromResult<OperationResult<DeckDocument>>(
+            return Task.FromResult<OperationResult<DeckWriteResult>>(
                 new OperationUnsupported(
                     "operation-mode-denied",
                     "The effective operation mode does not permit local writes."));
@@ -777,6 +800,7 @@ internal sealed class DeckIdentityReconciliationWriteTools
             previewFingerprint,
             applyToken,
             allowPartial,
+            returnDeck,
             cancellationToken);
     }
 }

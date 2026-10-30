@@ -24,12 +24,18 @@ internal sealed class DeckWriteTools
     private readonly OperationMode mode;
 
     /// <summary>
-    /// Creates write tools around one store and validated operation mode.
+    /// Stores the lookup that fills in the card identity of new entries, or null to create them as given.
     /// </summary>
-    internal DeckWriteTools(SqliteDeckStore store, OperationMode mode)
+    private readonly DeckEntryResolver? resolver;
+
+    /// <summary>
+    /// Creates write tools around one store, validated operation mode, and the optional entry resolver.
+    /// </summary>
+    internal DeckWriteTools(SqliteDeckStore store, OperationMode mode, DeckEntryResolver? resolver = null)
     {
         this.store = store;
         this.mode = mode;
+        this.resolver = resolver;
     }
 
     /// <summary>
@@ -45,12 +51,41 @@ internal sealed class DeckWriteTools
         UseStructuredContent = true)]
     [Description(
         "Local deck store: creates one local deck from a complete caller-supplied deck graph, " +
-        "without provider calls, legality inference, or entry coalescing.")]
-    internal Task<OperationResult<DeckDocument>> CreateAsync(
+        "without provider calls, legality inference, or entry coalescing. An entry that has only a card name " +
+        "(or a set code and collector number) gets its card identity from installed card data; a name that is " +
+        "not found is still added and listed in issues. The result is a summary (deck ID, revision, counts, " +
+        "entry IDs, issues); pass returnDeck true to also get the whole deck.")]
+    internal Task<OperationResult<DeckWriteResult>> CreateAsync(
         [Description("Complete caller-supplied initial local deck graph.")] DeckCreateRequest request,
+        [Description("Set true to also return the whole deck after the write. The default summary is much smaller.")]
+        bool returnDeck = false,
         CancellationToken cancellationToken = default)
     {
-        return ExecuteAsync(() => store.CreateAsync(request, cancellationToken));
+        return ExecuteAsync(() => CreateResolvedAsync(request, returnDeck, cancellationToken));
+    }
+
+    /// <summary>
+    /// Looks up the identity of the request's entries, creates the deck, and summarizes it.
+    /// </summary>
+    private async Task<OperationResult<DeckWriteResult>> CreateResolvedAsync(
+        DeckCreateRequest request,
+        bool returnDeck,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<DeckWriteIssue> issues = [];
+        if (resolver is not null && request?.Entries is { Count: > 0 } entries)
+        {
+            DeckDraftResolution resolution = await resolver.ResolveAsync(entries, cancellationToken)
+                .ConfigureAwait(false);
+            request = request with { Entries = resolution.Drafts };
+            issues = resolution.Issues;
+        }
+
+        OperationResult<DeckDocument> created = await store.CreateAsync(request!, cancellationToken)
+            .ConfigureAwait(false);
+        return created is OperationSuccess<DeckDocument> success
+            ? new OperationSuccess<DeckWriteResult>(DeckWriteResults.Created(success.Data, issues, returnDeck))
+            : OperationFailure.Forward<DeckDocument, DeckWriteResult>(created);
     }
 
     /// <summary>

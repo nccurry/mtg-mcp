@@ -27,7 +27,7 @@ public sealed class DeckInterchangeMcpTests
         Guid basicsId = Guid.CreateVersion7();
         Guid candidateCategoryId = Guid.CreateVersion7();
         Guid creaturesId = Guid.CreateVersion7();
-        JsonElement original = await CallSuccessAsync(session, "local_deck_create", new Dictionary<string, object?>
+        JsonElement original = await WholeDeck.SuccessAsync(session, "local_deck_create", new Dictionary<string, object?>
         {
             ["request"] = new
             {
@@ -132,7 +132,7 @@ public sealed class DeckInterchangeMcpTests
                 ["expectedFingerprint"] = previews["generic-text-v1"].GetProperty("fingerprint").GetString(),
                 ["options"] = new { deckName = "Imported Dummy Commander", format = "commander" },
             }).ConfigureAwait(false);
-        Guid genericId = genericImported.GetProperty("deck").GetProperty("deckId").GetGuid();
+        Guid genericId = genericImported.GetProperty("summary").GetProperty("deckId").GetGuid();
 
         _ = await CallSuccessAsync(session, "local_deck_delete", new Dictionary<string, object?>
         {
@@ -149,8 +149,9 @@ public sealed class DeckInterchangeMcpTests
                 ["content"] = nativeContent,
                 ["expectedFingerprint"] = previews["mtg-mcp-json-v1"].GetProperty("fingerprint").GetString(),
                 ["options"] = new { },
+                ["returnDeck"] = true,
             }).ConfigureAwait(false);
-        JsonElement restored = nativeImported.GetProperty("deck");
+        JsonElement restored = nativeImported.GetProperty("summary").GetProperty("deck");
 
         Assert.Equal(originalId, restored.GetProperty("deckId").GetGuid());
         Assert.Equal(originalRevision, restored.GetProperty("revision").GetInt64());
@@ -176,7 +177,7 @@ public sealed class DeckInterchangeMcpTests
         _ = await CallSuccessAsync(session, "local_deck_delete", new Dictionary<string, object?>
         {
             ["deckId"] = genericId,
-            ["expectedRevision"] = genericImported.GetProperty("deck").GetProperty("revision").GetInt64(),
+            ["expectedRevision"] = genericImported.GetProperty("summary").GetProperty("revision").GetInt64(),
         }).ConfigureAwait(false);
         _ = await CallSuccessAsync(session, "local_deck_delete", new Dictionary<string, object?>
         {

@@ -67,7 +67,7 @@ public sealed class SpellbookMcpTests
             "decks,spellbook",
             SeedAsync,
             TestContext.Current.CancellationToken).ConfigureAwait(false);
-        JsonElement deck = await CallSuccessAsync(
+        JsonElement deck = await WholeDeck.SuccessAsync(
             session,
             "local_deck_create",
             new Dictionary<string, object?>

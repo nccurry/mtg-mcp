@@ -168,7 +168,7 @@ public sealed class DeckBatchWriteToolsTests
         using BatchFixture fixture = await BatchFixture.CreateAsync();
         Guid drawId = Guid.CreateVersion7();
 
-        OperationResult<DeckDocument> result = await fixture.TryApplyAsync(
+        OperationResult<DeckWriteResult> result = await fixture.TryApplyAsync(
             new AddDeckCategoryInput(new DeckCategoryDraft("Draw", CategoryId: drawId)),
             new AssignDeckCategoryInput(fixture.EntryId, fixture.CategoryId, true),
             new AssignDeckCategoryInput(fixture.EntryId, drawId, true));
@@ -270,11 +270,11 @@ public sealed class DeckBatchWriteToolsTests
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
         DeckBatchWriteTools tools = new(store, OperationMode.ReadOnly);
 
-        OperationResult<DeckDocument> result = await tools.ApplyChangesAsync(
+        OperationResult<DeckWriteResult> result = await tools.ApplyChangesAsync(
             Guid.CreateVersion7(),
             1,
             [new UpdateDeckMetadataInput("Denied", null, "custom")],
-            TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("operation-mode-denied", Assert.IsType<OperationUnsupported>(result.Value).ReasonCode);
     }
@@ -291,7 +291,8 @@ public sealed class DeckBatchWriteToolsTests
             deck.DeckId,
             deck.Revision,
             changes,
-            TestContext.Current.CancellationToken));
+            returnDeck: true,
+            TestContext.Current.CancellationToken)).Deck!;
     }
 
     /// <summary>
@@ -392,12 +393,13 @@ public sealed class DeckBatchWriteToolsTests
         /// <summary>
         /// Applies one batch and returns the outcome without requiring success.
         /// </summary>
-        internal async Task<OperationResult<DeckDocument>> TryApplyAsync(params DeckChangeInput[] changes)
+        internal async Task<OperationResult<DeckWriteResult>> TryApplyAsync(params DeckChangeInput[] changes)
         {
             return await tools.ApplyChangesAsync(
                 Deck.DeckId,
                 Deck.Revision,
                 changes,
+                returnDeck: true,
                 TestContext.Current.CancellationToken);
         }
 

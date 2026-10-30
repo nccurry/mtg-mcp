@@ -48,7 +48,7 @@ public sealed class RedWhiteWeeniesLiveMcpTests
                 sortOrder = index,
             })
             .ToArray();
-        JsonElement deck = await CallSuccessAsync(
+        JsonElement deck = await WholeDeck.SuccessAsync(
             session,
             "local_deck_create",
             new Dictionary<string, object?>
@@ -117,11 +117,11 @@ public sealed class RedWhiteWeeniesLiveMcpTests
     {
         CallToolResult result = await session.Client.CallToolAsync(
             toolName,
-            arguments,
+            WholeDeck.Prepare(toolName, arguments),
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
         JsonElement structured = Assert.IsType<JsonElement>(result.StructuredContent);
         Assert.Equal(!string.Equals(structured.GetProperty("kind").GetString(), "success", StringComparison.Ordinal), result.IsError == true);
-        JsonElement operation = structured;
+        JsonElement operation = WholeDeck.Unwrap(toolName, structured);
         Assert.Equal("success", operation.GetProperty("kind").GetString());
         return operation.GetProperty("data");
     }

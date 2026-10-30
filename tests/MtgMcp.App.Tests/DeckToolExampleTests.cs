@@ -51,14 +51,14 @@ public sealed class DeckToolExampleTests : IClassFixture<ToolCatalogFixture>
             DeckBatchWriteTools tools = new(store, OperationMode.Local);
             IReadOnlyList<DeckChangeInput> changes = arguments["changes"]
                 .Deserialize<IReadOnlyList<DeckChangeInput>>(ToolCallPolicy.SerializerOptions)!;
-            OperationResult<DeckDocument> result = await tools.ApplyChangesAsync(
+            OperationResult<DeckWriteResult> result = await tools.ApplyChangesAsync(
                 arguments["deckId"].GetGuid(),
                 arguments["expectedRevision"].GetInt64(),
                 changes,
-                TestContext.Current.CancellationToken);
+                cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.True(
-                result.Value is OperationSuccess<DeckDocument>,
+                result.Value is OperationSuccess<DeckWriteResult>,
                 $"{name}: {JsonSerializer.Serialize(result.Value)}");
         }
     }
@@ -76,10 +76,10 @@ public sealed class DeckToolExampleTests : IClassFixture<ToolCatalogFixture>
         IReadOnlyList<DeckChangeInput> changes = arguments["changes"]
             .Deserialize<IReadOnlyList<DeckChangeInput>>(ToolCallPolicy.SerializerOptions)!;
 
-        OperationResult<DeckDocument> result = await new DeckBatchWriteTools(store, OperationMode.Local)
-            .ApplyChangesAsync(deck.DeckId, deck.Revision, changes, TestContext.Current.CancellationToken);
+        OperationResult<DeckWriteResult> result = await new DeckBatchWriteTools(store, OperationMode.Local)
+            .ApplyChangesAsync(deck.DeckId, deck.Revision, changes, true, TestContext.Current.CancellationToken);
 
-        DeckDocument updated = Assert.IsType<OperationSuccess<DeckDocument>>(result.Value).Data;
+        DeckDocument updated = Assert.IsType<OperationSuccess<DeckWriteResult>>(result.Value).Data.Deck!;
         Assert.Equal("Golgari Ramp", updated.Name);
         Assert.Equal(["Rhystic Study"], updated.Entries.Select(entry => entry.CardName));
         Assert.Equal(

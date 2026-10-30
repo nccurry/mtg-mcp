@@ -162,7 +162,8 @@ public sealed class DeckDuplicatesTests
             deck.DeckId,
             preview.Deck.Revision,
             preview.Changes,
-            TestContext.Current.CancellationToken));
+            returnDeck: true,
+            TestContext.Current.CancellationToken)).Deck!;
         Assert.Equal(1, Assert.Single(applied.Entries).Quantity);
     }
 
@@ -406,7 +407,7 @@ public sealed class DeckDuplicatesTests
                 localId,
                 preview.Deck.Revision,
                 preview.Changes,
-                TestContext.Current.CancellationToken));
+                cancellationToken: TestContext.Current.CancellationToken));
             ArchidektSyncPreview push = Success(await archidekt.PreviewPushAsync(localId,
                 TestContext.Current.CancellationToken));
 
