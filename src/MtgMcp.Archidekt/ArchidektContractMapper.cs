@@ -644,7 +644,21 @@ internal static class ArchidektJsonContract
                     value.IncludedInPrice,
                     value.IsPremier,
                 }),
-            entries = entries.Select(value => new
+            entries = SortedEntryContent(entries),
+        });
+    }
+
+    /// <summary>
+    /// Lists the content of every entry in comparison form (see <see cref="ArchidektEntryComparison"/>), sorted by its
+    /// own text, so the order of the rows and of an entry's category names does not change the fingerprint.
+    /// </summary>
+    private static IEnumerable<string> SortedEntryContent(IReadOnlyList<RemoteDeckEntry> entries)
+    {
+        List<string> content = [];
+        foreach (RemoteDeckEntry entry in entries)
+        {
+            RemoteDeckEntry value = ArchidektEntryComparison.Canonical(entry);
+            content.Add(ArchidektContract.Fingerprint(new
             {
                 value.Quantity,
                 value.CardName,
@@ -657,13 +671,17 @@ internal static class ArchidektJsonContract
                 value.Zone,
                 value.CategoryNames,
                 value.PrimaryCategoryName,
-            }),
-        });
+            }));
+        }
+
+        content.Sort(StringComparer.Ordinal);
+        return content;
     }
 
     /// <summary>
-    /// Computes the provider-side fingerprint. The order of the rows still counts, but the entry order number is left
-    /// out of the content: Archidekt renumbers it without a user edit, so a renumbering must not look like a change.
+    /// Computes the provider-side fingerprint. Neither the order of the rows nor the entry order numbers count: Archidekt
+    /// renumbers them without a user edit, so a renumbering must not look like a change. The order of the categories
+    /// still counts, so a reordering of them is seen as a change on Archidekt.
     /// </summary>
     private static string RemoteFingerprintOf(
         string remoteId,
@@ -677,7 +695,9 @@ internal static class ArchidektJsonContract
             remoteId,
             contentFingerprint,
             providerCategories = categories.Select(value => value.ProviderCategoryId),
-            providerRelations = entries.Select(value => new { value.ProviderRelationId, value.ProviderCardId }),
+            providerRelations = entries
+                .OrderBy(value => value.ProviderRelationId, StringComparer.Ordinal)
+                .Select(value => new { value.ProviderRelationId, value.ProviderCardId }),
             extensions = StableDeckExtensions(extensions),
         });
     }
