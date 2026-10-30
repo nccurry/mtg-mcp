@@ -114,16 +114,16 @@ public sealed class DeckToolExampleTests : IClassFixture<ToolCatalogFixture>
 
             Assert.Null(ToolCallPolicy.DiagnoseArguments(catalog, "local_deck_category_rules_preview", arguments));
             DeckCategorizationReadTools tools = new(new DeckCategorizationCoordinator(store, scryfall));
-            OperationResult<DeckCategoryRulesPreview> result = await tools.PreviewAsync(
+            OperationResult<DeckCategoryRulesPreviewView> result = await tools.PreviewAsync(
                 arguments["deckId"].GetGuid(),
                 arguments["source"].Deserialize<CategoryRuleSource>(ToolCallPolicy.SerializerOptions)!,
                 arguments.TryGetValue("expectedRevision", out JsonElement revision) ? revision.GetInt64() : null,
                 arguments.TryGetValue("freshnessPolicy", out JsonElement freshness)
                     ? freshness.GetString()!
                     : "default",
-                TestContext.Current.CancellationToken);
+                cancellationToken: TestContext.Current.CancellationToken);
 
-            DeckCategoryRulesPreview preview = Assert.IsType<OperationSuccess<DeckCategoryRulesPreview>>(
+            DeckCategoryRulesPreviewView preview = Assert.IsType<OperationSuccess<DeckCategoryRulesPreviewView>>(
                 result.Value).Data;
             Assert.Equal(name == "full" ? "matched" : "unmatched", Assert.Single(preview.Decisions).Status);
             Assert.True(preview.IsComplete, name);
@@ -149,17 +149,17 @@ public sealed class DeckToolExampleTests : IClassFixture<ToolCatalogFixture>
             [new CategoryRule(Guid.Parse(DeckToolExamples.PlaceholderCategoryId), [], [], [])]));
         DeckCategorizationReadTools tools = new(new DeckCategorizationCoordinator(store, scryfall));
 
-        OperationResult<DeckCategoryRulesPreview> withoutRevision = await tools.PreviewAsync(
+        OperationResult<DeckCategoryRulesPreviewView> withoutRevision = await tools.PreviewAsync(
             deck.DeckId,
             source,
             cancellationToken: TestContext.Current.CancellationToken);
-        OperationResult<DeckCategoryRulesPreview> stale = await tools.PreviewAsync(
+        OperationResult<DeckCategoryRulesPreviewView> stale = await tools.PreviewAsync(
             deck.DeckId,
             source,
             deck.Revision + 5,
             cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.IsType<OperationSuccess<DeckCategoryRulesPreview>>(withoutRevision.Value);
+        Assert.IsType<OperationSuccess<DeckCategoryRulesPreviewView>>(withoutRevision.Value);
         Assert.Equal(deck.Revision, Assert.IsType<OperationConflict>(stale.Value).Current!.Revision);
     }
 

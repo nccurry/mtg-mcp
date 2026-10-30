@@ -24,22 +24,22 @@ public sealed class DeckInterchangeToolsTests
         DeckInterchangeWriteTools writes = new(service, OperationMode.Local);
 
         Assert.Equal(4, RequireSuccess(reads.ListFormats()).Count);
-        DeckImportPreview preview = RequireSuccess(await reads.PreviewAsync(
+        DeckImportPreviewView preview = RequireSuccess(await reads.PreviewAsync(
             "generic-text-v1",
             "[commander]\n1 Commander",
             new DeckImportOptions(DeckName: "Wrapper"),
-            TestContext.Current.CancellationToken));
+            cancellationToken: TestContext.Current.CancellationToken));
         DeckImportCreateView created = RequireSuccess(await writes.CreateAsync(
             "generic-text-v1",
             "[commander]\n1 Commander",
             preview.Fingerprint!,
             new DeckImportOptions(DeckName: "Wrapper"),
             cancellationToken: TestContext.Current.CancellationToken));
-        DeckExportBundle exported = RequireSuccess(await reads.ExportAsync(
+        DeckExportBundleView exported = RequireSuccess(await reads.ExportAsync(
             created.Summary.DeckId,
             "generic-text-v1",
             null,
-            TestContext.Current.CancellationToken));
+            cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal("Wrapper", created.Summary.Name);
         Assert.Null(created.Summary.Deck);

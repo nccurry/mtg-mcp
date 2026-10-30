@@ -298,10 +298,12 @@ internal sealed class DeckCategorizationReadTools
         "reason; the result holds the expanded rules, a decision for every entry (matched, unmatched, or " +
         "unknown), the tag evidence, and the fingerprint and token that local_deck_category_rules_apply needs. " +
         "Card tags come from installed card data (scryfall_card_data_sync). Rules are inline only; send " +
-        "the tags you choose. Omit expectedRevision to only validate and preview." +
+        "the tags you choose. Omit expectedRevision to only validate and preview. Decisions come in pages that fit " +
+        "the size limit; the fingerprint and token cover the whole preview, so apply needs no page. When truncated " +
+        "is true, call again with offset set to nextOffset." +
         DeckToolExamples.ExamplePrefix + "minimal): " + DeckToolExamples.RulesPreviewMinimal +
         DeckToolExamples.ExamplePrefix + "full): " + DeckToolExamples.RulesPreviewFull)]
-    internal Task<OperationResult<DeckCategoryRulesPreview>> PreviewAsync(
+    internal async Task<OperationResult<DeckCategoryRulesPreviewView>> PreviewAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description("Inline category rules; the only supported source kind is inline.")]
         CategoryRuleSource source,
@@ -309,9 +311,16 @@ internal sealed class DeckCategorizationReadTools
         long? expectedRevision = null,
         [Description("default, cache-only, or refresh Scryfall evidence policy."), FreshnessPolicyValues]
         string freshnessPolicy = "default",
+        [Description("Number of decisions to skip; use nextOffset from the previous page. Default 0.")]
+        int offset = 0,
         CancellationToken cancellationToken = default)
     {
-        return coordinator.PreviewAsync(deckId, expectedRevision, source, freshnessPolicy, cancellationToken);
+        OperationResult<DeckCategoryRulesPreview> preview = await coordinator
+            .PreviewAsync(deckId, expectedRevision, source, freshnessPolicy, cancellationToken)
+            .ConfigureAwait(false);
+        return preview is OperationSuccess<DeckCategoryRulesPreview> success
+            ? DeckPreviewPaging.PageCategoryRules(success.Data, offset)
+            : OperationFailure.Forward<DeckCategoryRulesPreview, DeckCategoryRulesPreviewView>(preview);
     }
 }
 

@@ -23,24 +23,8 @@ public sealed class ToolResultBudgetTests
     private static readonly Dictionary<string, string> NotDriven = BuildNotDriven();
 
     /// <summary>
-    /// Lists the tools whose results are known to pass the ceiling with the test fixtures, each with the arguments that
-    /// make it so. Each is named in the plan's risks; the list shrinks as each is fixed. A tool
-    /// on this list must still pass the ceiling, so a fix that lands without removing its entry fails the test.
-    /// </summary>
-    private static readonly Dictionary<string, string> KnownOverCeiling = new(StringComparer.Ordinal)
-    {
-        ["local_deck_export_bundle"] = "a 300-entry deck in any format",
-        ["local_deck_identity_reconcile_preview"] = "150 entries, the most one call accepts",
-        ["local_deck_import_preview"] = "300 lines of text",
-        ["local_deck_category_rules_preview"] = "a rule over a 300-entry deck",
-        ["scryfall_search"] = "responseFormat full, 25 cards a page",
-        ["scryfall_cards_get"] = "responseFormat full, 25 cards a page",
-        ["scryfall_installed_cards_by_tag"] = "responseFormat full, one page",
-    };
-
-    /// <summary>
-    /// Verifies every successful result of every tool the test can drive stays under the ceiling, except the listed
-    /// known cases, which must still be over it, and every driven tool answered with a success at least once.
+    /// Verifies every successful result of every tool the test can drive stays under the ceiling, and every driven tool
+    /// answered with a success at least once.
     /// </summary>
     [Fact]
     public async Task EveryDrivenTool_ReturnsASuccessUnderTheCeiling_WithLargeFixtures()
@@ -49,16 +33,10 @@ public sealed class ToolResultBudgetTests
         await using ToolBudgetWorld world = await ToolBudgetWorld.CreateAsync(token);
         List<ToolBudgetWorld.ToolOutcome> outcomes = await new ToolBudgetScript(world, token).RunAsync();
 
-        List<ToolBudgetWorld.ToolOutcome> over =
-            [.. outcomes.Where(value => !value.IsError && value.Characters > HardCeiling)];
-        string[] unexpected =
-            [.. over.Where(value => !KnownOverCeiling.ContainsKey(value.Tool))
+        string[] tooLong =
+            [.. outcomes.Where(value => !value.IsError && value.Characters > HardCeiling)
                 .Select(value => $"{value.Tool} returned {value.Characters} characters")];
-        Assert.True(unexpected.Length == 0, string.Join("; ", unexpected));
-        string[] fixedAlready = [.. KnownOverCeiling.Keys.Except(over.Select(value => value.Tool))];
-        Assert.True(
-            fixedAlready.Length == 0,
-            "These tools no longer pass the ceiling; remove them from the known list: " + string.Join(", ", fixedAlready));
+        Assert.True(tooLong.Length == 0, string.Join("; ", tooLong));
         HashSet<string> succeeded = [.. outcomes.Where(value => !value.IsError).Select(value => value.Tool)];
         HashSet<string> expected = [.. DrivenTools(world.PublishedTools)];
         Assert.True(

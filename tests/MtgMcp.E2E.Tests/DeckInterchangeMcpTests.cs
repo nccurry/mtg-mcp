@@ -1,4 +1,6 @@
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ModelContextProtocol.Protocol;
 
 namespace MtgMcp.E2E.Tests;
@@ -85,14 +87,7 @@ public sealed class DeckInterchangeMcpTests
                      "moxfield-bulk-edit-v1",
                  })
         {
-            JsonElement bundle = await CallSuccessAsync(
-                session,
-                "local_deck_export_bundle",
-                new Dictionary<string, object?>
-                {
-                    ["deckId"] = originalId,
-                    ["formatId"] = formatId,
-                }).ConfigureAwait(false);
+            JsonElement bundle = await ExportWithContentAsync(session, originalId, formatId).ConfigureAwait(false);
             bundles.Add(formatId, bundle);
             Assert.Equal("available", bundle.GetProperty("status").GetString());
             Assert.All(
@@ -189,6 +184,50 @@ public sealed class DeckInterchangeMcpTests
             "local_deck_list",
             new Dictionary<string, object?>()).ConfigureAwait(false);
         Assert.Empty(decks.GetProperty("items").EnumerateArray());
+    }
+
+    /// <summary>
+    /// Exports a deck and reads every artifact's content in chunks, then returns the bundle with the content of each
+    /// artifact added under <c>artifacts[].content</c>, so a test can read an artifact by its file name.
+    /// </summary>
+    private static async Task<JsonElement> ExportWithContentAsync(McpProcessSession session, Guid deckId, string formatId)
+    {
+        JsonElement first = await CallSuccessAsync(
+            session,
+            "local_deck_export_bundle",
+            new Dictionary<string, object?> { ["deckId"] = deckId, ["formatId"] = formatId }).ConfigureAwait(false);
+        JsonNode bundle = JsonNode.Parse(first.GetRawText())!;
+        foreach (JsonNode? artifact in bundle["artifacts"]!.AsArray())
+        {
+            string name = artifact!["fileName"]!.GetValue<string>();
+            StringBuilder content = new();
+            int offset = 0;
+            while (true)
+            {
+                JsonElement page = await CallSuccessAsync(
+                    session,
+                    "local_deck_export_bundle",
+                    new Dictionary<string, object?>
+                    {
+                        ["deckId"] = deckId,
+                        ["formatId"] = formatId,
+                        ["artifact"] = name,
+                        ["offset"] = offset,
+                    }).ConfigureAwait(false);
+                JsonElement chunk = page.GetProperty("chunk");
+                content.Append(chunk.GetProperty("content").GetString());
+                if (!chunk.TryGetProperty("nextOffset", out JsonElement next))
+                {
+                    break;
+                }
+
+                offset = next.GetInt32();
+            }
+
+            artifact["content"] = content.ToString();
+        }
+
+        return JsonSerializer.SerializeToElement(bundle);
     }
 
     /// <summary>

@@ -76,9 +76,9 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
 
     /// <summary>
     /// Calls a paged tool until its data holds no <paramref name="nextName"/>, passing the value back as
-    /// <paramref name="passName"/>.
+    /// <paramref name="passName"/>, and returns the last page.
     /// </summary>
-    private async Task PageAsync(string tool, JsonObject arguments, string nextName, string passName)
+    private async Task<ToolBudgetWorld.ToolOutcome> PageAsync(string tool, JsonObject arguments, string nextName, string passName)
     {
         for (int page = 0; page < MaximumPages; page++)
         {
@@ -88,19 +88,53 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
             {
                 if (node.ValueKind != JsonValueKind.Object || !node.TryGetProperty(part, out node))
                 {
-                    return;
+                    return outcome;
                 }
             }
 
             if (node.ValueKind == JsonValueKind.Null)
             {
-                return;
+                return outcome;
             }
 
             arguments[passName] = JsonNode.Parse(node.GetRawText());
         }
 
         Assert.Fail($"{tool} did not finish after {MaximumPages} pages.");
+        return null!;
+    }
+
+    /// <summary>
+    /// Reads every chunk of every artifact of one export.
+    /// </summary>
+    private async Task ExportAllAsync(Guid deckId, string format)
+    {
+        ToolBudgetWorld.ToolOutcome first = await CallAsync(
+            "local_deck_export_bundle",
+            new JsonObject { ["deckId"] = deckId.ToString(), ["formatId"] = format });
+        foreach (JsonElement info in first.Data.GetProperty("artifacts").EnumerateArray().Skip(1))
+        {
+            await PageAsync(
+                "local_deck_export_bundle",
+                new JsonObject
+                {
+                    ["deckId"] = deckId.ToString(),
+                    ["formatId"] = format,
+                    ["artifact"] = info.GetProperty("fileName").GetString(),
+                },
+                "chunk.nextOffset",
+                "offset");
+        }
+
+        JsonElement chunk = first.Data.GetProperty("chunk");
+        if (chunk.TryGetProperty("nextOffset", out JsonElement next) && next.ValueKind == JsonValueKind.Number)
+        {
+            await PageAsync(
+                "local_deck_export_bundle",
+                new JsonObject { ["deckId"] = deckId.ToString(), ["formatId"] = format, ["offset"] = next.GetInt32() },
+                "chunk.nextOffset",
+                "offset");
+        }
     }
 
     /// <summary>
@@ -164,9 +198,7 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
         _ = await CallAsync("local_deck_interchange_formats", []);
         foreach (string format in new[] { "mtg-mcp-json-v1", "generic-text-v1", "archidekt-text-v1", "moxfield-bulk-edit-v1" })
         {
-            _ = await CallAsync(
-                "local_deck_export_bundle",
-                new JsonObject { ["deckId"] = main.DeckId.ToString(), ["formatId"] = format });
+            await ExportAllAsync(main.DeckId, format);
         }
 
         _ = await CallAsync(
@@ -424,7 +456,7 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
     {
         string text = string.Join('\n', world.Cards.Take(300).Select(card => "1 " + card["name"]!.GetValue<string>()));
         JsonObject import = new() { ["formatId"] = "generic-text-v1", ["content"] = text };
-        ToolBudgetWorld.ToolOutcome importPreview = await CallAsync("local_deck_import_preview", import);
+        ToolBudgetWorld.ToolOutcome importPreview = await PageAsync("local_deck_import_preview", import, "nextOffset", "offset");
         _ = await CallAsync(
             "local_deck_import_create",
             new JsonObject
@@ -434,14 +466,16 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
                 ["expectedFingerprint"] = importPreview.Data.GetProperty("fingerprint").GetString(),
             });
 
-        ToolBudgetWorld.ToolOutcome reconcile = await CallAsync(
+        ToolBudgetWorld.ToolOutcome reconcile = await PageAsync(
             "local_deck_identity_reconcile_preview",
             new JsonObject
             {
                 ["deckId"] = unresolved.DeckId.ToString(),
                 ["expectedRevision"] = unresolved.Revision,
                 ["entryIds"] = Strings(unresolved.Entries.Take(150).Select(value => value.EntryId.ToString())),
-            });
+            },
+            "nextOffset",
+            "offset");
         _ = await CallAsync(
             "local_deck_identity_reconcile_apply",
             new JsonObject
@@ -467,7 +501,7 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
                 }),
             },
         };
-        ToolBudgetWorld.ToolOutcome rules = await CallAsync(
+        ToolBudgetWorld.ToolOutcome rules = await PageAsync(
             "local_deck_category_rules_preview",
             new JsonObject
             {
@@ -475,7 +509,9 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
                 ["expectedRevision"] = main.Revision,
                 ["source"] = source.DeepClone(),
                 ["freshnessPolicy"] = "cache-only",
-            });
+            },
+            "nextOffset",
+            "offset");
         _ = await CallAsync(
             "local_deck_category_rules_apply",
             new JsonObject

@@ -235,22 +235,35 @@ public sealed class ScryfallMcpTests
             }).ConfigureAwait(false);
         JsonElement firstPage = commanderFirst.GetProperty("page");
         Assert.Equal(100, firstPage.GetProperty("totalCount").GetInt32());
-        Assert.Equal(40, firstPage.GetProperty("items").GetArrayLength());
+        // A page is cut to the result size limit, so the 40 requested rows can arrive in more than one page.
         Assert.Equal(0, firstPage.GetProperty("items")[0].GetProperty("index").GetInt32());
+        int seen = firstPage.GetProperty("items").GetArrayLength();
+        Assert.InRange(seen, 1, 40);
         string commanderCursor = firstPage.GetProperty("nextCursor").GetString()!;
-        JsonElement commanderSecond = await CallSuccessAsync(
-            session,
-            "scryfall_cards_get",
-            new Dictionary<string, object?>
+        while (true)
+        {
+            JsonElement next = await CallSuccessAsync(
+                session,
+                "scryfall_cards_get",
+                new Dictionary<string, object?>
+                {
+                    ["lookups"] = commanderLookups,
+                    ["freshnessPolicy"] = "refresh",
+                    ["cursor"] = commanderCursor,
+                    ["pageSize"] = 100,
+                }).ConfigureAwait(false);
+            JsonElement page = next.GetProperty("page");
+            Assert.Equal(seen, page.GetProperty("items")[0].GetProperty("index").GetInt32());
+            seen += page.GetProperty("items").GetArrayLength();
+            if (!page.TryGetProperty("nextCursor", out JsonElement cursor))
             {
-                ["lookups"] = commanderLookups,
-                ["freshnessPolicy"] = "refresh",
-                ["cursor"] = commanderCursor,
-                ["pageSize"] = 100,
-            }).ConfigureAwait(false);
-        Assert.Equal(60, commanderSecond.GetProperty("page").GetProperty("items").GetArrayLength());
-        Assert.Equal(40, commanderSecond.GetProperty("page").GetProperty("items")[0].GetProperty("index").GetInt32());
-        Assert.False(commanderSecond.GetProperty("page").TryGetProperty("nextCursor", out _));
+                break;
+            }
+
+            commanderCursor = cursor.GetString()!;
+        }
+
+        Assert.Equal(100, seen);
 
         JsonElement inherited = await CallSuccessAsync(
             session,
