@@ -113,12 +113,13 @@ internal sealed class ArchidektReadTools
         "performs zero writes. The result starts with a summary (operation, difference, and conflict counts) and " +
         "says whether archidekt_pull_apply is available and, if not, what to ask the user to change. A public deck " +
         "needs no credentials; a private deck needs Archidekt credentials (see archidekt_auth_status). Rows come in " +
-        "pages that fit the size limit; the guards cover the whole preview, so the apply tool needs no page. On later " +
-        "pages pass expectedPreviewFingerprint, the previewFingerprint of the first page." +
+        "pages that fit the size limit; the guards cover the whole preview, so the apply tool needs no page. On " +
+        "later pages pass expectedPreviewFingerprint, the previewFingerprint of the first page." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSyncPreviewView>> PreviewPullAsync(
         [Description("Exact Archidekt deck identifier to read.")] string remoteDeckId,
-        [Description("Optional stable local deck UUID to compare; omit to preview local creation.")] Guid? localDeckId = null,
+        [Description("Optional stable local deck UUID to compare; omit to preview local creation.")]
+        Guid? localDeckId = null,
         [Description(
             "Set true to take the Archidekt state over local edits made since the last synchronization (a deck " +
             "stuck as locally changed); the preview lists what would be discarded, and archidekt_pull_apply must " +

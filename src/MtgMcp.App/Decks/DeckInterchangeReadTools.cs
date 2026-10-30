@@ -93,8 +93,8 @@ internal sealed class DeckInterchangeReadTools
         UseStructuredContent = true)]
     [Description(
         "Local deck store: exports deterministic artifacts without writing files or contacting providers. The result " +
-        "lists every artifact (file name, media type, total length in UTF-16 code units, sha256 of the whole content) " +
-        "and returns one chunk of one artifact's content, at most 30,000 UTF-8 bytes of JSON text. When " +
+        "lists every artifact (file name, media type, total length in UTF-16 code units, sha256 of the whole " +
+        "content) and returns one chunk of one artifact's content, at most 30,000 UTF-8 bytes of JSON text. When " +
         "chunk.truncated is true, call again with the same arguments, artifact set to the file name, and offset " +
         "set to chunk.nextOffset; the chunks joined in order are the exact file. The field-preservation report " +
         "comes only with the chunk at offset 0.")]

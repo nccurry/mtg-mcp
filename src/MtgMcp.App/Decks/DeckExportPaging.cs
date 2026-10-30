@@ -114,10 +114,10 @@ internal static class DeckExportPaging
             Truncated = more ? true : null,
             NextOffset = more ? next : null,
             Narrow = more
-                ? $"UTF-16 code units {offset} to {next - 1} of {content.Length} of {chosen.FileName} are shown to stay " +
-                    $"under the size limit. Call again with artifact \"{chosen.FileName}\" and offset {next} for " +
-                    "the rest; the chunks joined in order are the whole file, and sha256 is the checksum of the " +
-                    "whole file."
+                ? $"UTF-16 code units {offset} to {next - 1} of {content.Length} of {chosen.FileName} are shown to " +
+                    $"stay under the size limit. Call again with artifact \"{chosen.FileName}\" and offset " +
+                    $"{next} for the rest; the chunks joined in order are the whole file, and sha256 is the checksum " +
+                    "of the whole file."
                 : null,
         };
         return new OperationSuccess<DeckExportBundleView>(new DeckExportBundleView(
