@@ -16,7 +16,8 @@ namespace MtgMcp.App.Tests;
 public sealed class ToolPagingTests
 {
     /// <summary>
-    /// Verifies the chunks of every artifact of every format, joined in order, are the exact content: the length and the
+    /// Verifies the chunks of every artifact of every format, joined in order, are the exact content: the length and
+    /// the
     /// SHA-256 of the whole content match, and a chunk never passes the chunk limit of the export tool.
     /// </summary>
     [Theory]
@@ -80,7 +81,9 @@ public sealed class ToolPagingTests
                 Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant());
         }
 
-        Assert.True(anyPaged || format != "mtg-mcp-json-v1", "The JSON export of 300 entries should take several chunks.");
+        Assert.True(
+            anyPaged || format != "mtg-mcp-json-v1",
+            "The JSON export of 300 entries should take several chunks.");
     }
 
     /// <summary>
@@ -138,16 +141,23 @@ public sealed class ToolPagingTests
         JsonElement guards = pages[^1].Data;
         ToolBudgetWorld.ToolOutcome stale = await world.CallAsync(
             "local_deck_identity_reconcile_apply",
-            ApplyArguments(deck, "0" + guards.GetProperty("previewFingerprint").GetString(), guards.GetProperty("applyToken").GetString()!),
+            ApplyArguments(
+                deck,
+                "0" + guards.GetProperty("previewFingerprint").GetString(),
+                guards.GetProperty("applyToken").GetString()!),
             token);
         Assert.NotEqual("success", stale.Kind);
         ToolBudgetWorld.ToolOutcome applied = await world.CallAsync(
             "local_deck_identity_reconcile_apply",
-            ApplyArguments(deck, guards.GetProperty("previewFingerprint").GetString()!, guards.GetProperty("applyToken").GetString()!),
+            ApplyArguments(
+                deck,
+                guards.GetProperty("previewFingerprint").GetString()!,
+                guards.GetProperty("applyToken").GetString()!),
             token);
         _ = applied.Data;
 
-        DeckDocument after = Assert.IsType<OperationSuccess<DeckDocument>>((await world.Store.GetAsync(deck.DeckId, token)).Value).Data;
+        DeckDocument after = Assert.IsType<OperationSuccess<DeckDocument>>(
+            (await world.Store.GetAsync(deck.DeckId, token)).Value).Data;
         Assert.Equal(150, after.Entries.Count(entry => entry.OracleId is not null));
     }
 
@@ -171,7 +181,8 @@ public sealed class ToolPagingTests
                 ["rules"] = new JsonArray(new JsonObject
                 {
                     ["categoryId"] = category.ToString(),
-                    ["allOf"] = new JsonArray(new JsonObject { ["tagType"] = "oracle", ["exactSlug"] = ToolBudgetWorld.TagSlug }),
+                    ["allOf"] = new JsonArray(
+                        new JsonObject { ["tagType"] = "oracle", ["exactSlug"] = ToolBudgetWorld.TagSlug }),
                     ["anyOf"] = new JsonArray(),
                     ["noneOf"] = new JsonArray(),
                 }),
@@ -226,7 +237,8 @@ public sealed class ToolPagingTests
             Apply(guards.GetProperty("previewFingerprint").GetString()!),
             token)).Data;
 
-        DeckDocument after = Assert.IsType<OperationSuccess<DeckDocument>>((await world.Store.GetAsync(deck.DeckId, token)).Value).Data;
+        DeckDocument after = Assert.IsType<OperationSuccess<DeckDocument>>(
+            (await world.Store.GetAsync(deck.DeckId, token)).Value).Data;
         int tagged = after.CategoryAssignments.Count(value => value.CategoryId == category);
         Assert.True(tagged >= 100, $"{tagged} assignments were added in the category.");
     }
@@ -280,8 +292,11 @@ public sealed class ToolPagingTests
             JsonElement data = outcome.Data;
             ids.AddRange(data.GetProperty("page").GetProperty("items").EnumerateArray()
                 .Select(item => item.GetProperty("id").GetString()!));
-            sawTruncated |= data.TryGetProperty("truncated", out JsonElement cut) && cut.ValueKind == JsonValueKind.True;
-            if (!data.GetProperty("page").TryGetProperty("nextCursor", out JsonElement next) || next.ValueKind != JsonValueKind.String)
+            sawTruncated |= data.TryGetProperty(
+                "truncated",
+                out JsonElement cut) && cut.ValueKind == JsonValueKind.True;
+            if (!data.GetProperty(
+                "page").TryGetProperty("nextCursor", out JsonElement next) || next.ValueKind != JsonValueKind.String)
             {
                 break;
             }
@@ -386,7 +401,9 @@ public sealed class ToolPagingTests
             ToolBudgetWorld.ToolOutcome refused = await world.CallAsync(tool, stale, token);
             ToolBudgetWorld.ToolOutcome firstAgain = await world.CallAsync(tool, onFirstPage, token);
 
-            Assert.Equal(first.Data.GetProperty(fingerprint).GetString(), served.Data.GetProperty(fingerprint).GetString());
+            Assert.Equal(
+                first.Data.GetProperty(fingerprint).GetString(),
+                served.Data.GetProperty(fingerprint).GetString());
             Assert.Equal("conflict", refused.Kind);
             Assert.Equal("preview-changed", refused.Structured.GetProperty("reasonCode").GetString());
             _ = firstAgain.Data;
@@ -402,7 +419,8 @@ public sealed class ToolPagingTests
         {
             ["deckId"] = deck.DeckId.ToString(),
             ["expectedRevision"] = deck.Revision,
-            ["entryIds"] = new JsonArray([.. deck.Entries.Take(150).Select(value => (JsonNode?)value.EntryId.ToString())]),
+            ["entryIds"] = new JsonArray(
+                [.. deck.Entries.Take(150).Select(value => (JsonNode?)value.EntryId.ToString())]),
         };
     }
 
@@ -464,7 +482,9 @@ public sealed class ToolPagingTests
             ToolBudgetWorld.ToolOutcome outcome = await world.CallAsync(tool, arguments, token);
             Assert.True(outcome.Characters < 40_000, $"{tool} page {page} is {outcome.Characters} characters");
             pages.Add(outcome);
-            if (!outcome.Data.TryGetProperty("nextOffset", out JsonElement next) || next.ValueKind != JsonValueKind.Number)
+            if (!outcome.Data.TryGetProperty(
+                "nextOffset",
+                out JsonElement next) || next.ValueKind != JsonValueKind.Number)
             {
                 return pages;
             }

@@ -88,7 +88,9 @@ public sealed class ArchidektEntryComparisonTests
         RemoteDeckSnapshot remote = Parse(changed.ToJsonString());
 
         ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(remote, original);
-        Assert.Equal(["entry-update:Charm"], plan.PlannedOperations.Select(value => $"{value.Public.Kind}:{value.Public.Subject}"));
+        Assert.Equal(
+            ["entry-update:Charm"],
+            plan.PlannedOperations.Select(value => $"{value.Public.Kind}:{value.Public.Subject}"));
         ArchidektSyncDiff diff = Diff(original, original, remote);
         ArchidektDifference row = Assert.Single(diff.Differences);
         Assert.Equal("remote-changed", row.State);
@@ -129,7 +131,8 @@ public sealed class ArchidektEntryComparisonTests
             };
         }
 
-        RemoteDeckSnapshot unnamed = With(bolt with { PrintingId = null, SetCode = null, CollectorNumber = null, OracleId = null });
+        RemoteDeckSnapshot unnamed = With(
+            bolt with { PrintingId = null, SetCode = null, CollectorNumber = null, OracleId = null });
         RemoteDeckSnapshot otherPrinting = With(bolt with { PrintingId = Guid.NewGuid() });
         RemoteDeckSnapshot otherSet = With(bolt with { PrintingId = null, SetCode = "xyz" });
 

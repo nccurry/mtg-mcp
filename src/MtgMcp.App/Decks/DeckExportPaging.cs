@@ -78,7 +78,8 @@ internal static class DeckExportPaging
 
         DeckExportArtifact? chosen = artifact is null
             ? bundle.Artifacts[0]
-            : bundle.Artifacts.FirstOrDefault(value => string.Equals(value.FileName, artifact, StringComparison.Ordinal));
+            : bundle.Artifacts.FirstOrDefault(
+                value => string.Equals(value.FileName, artifact, StringComparison.Ordinal));
         if (chosen is null)
         {
             return new OperationInvalidInput(
@@ -113,7 +114,8 @@ internal static class DeckExportPaging
             Narrow = more
                 ? $"Characters {offset} to {next - 1} of {content.Length} of {chosen.FileName} are shown to stay " +
                     $"under the size limit. Call again with artifact \"{chosen.FileName}\" and offset {next} for " +
-                    "the rest; the chunks joined in order are the whole file, and sha256 is the checksum of the whole file."
+                    "the rest; the chunks joined in order are the whole file, and sha256 is the checksum of the " +
+                    "whole file."
                 : null,
         };
         return new OperationSuccess<DeckExportBundleView>(new DeckExportBundleView(

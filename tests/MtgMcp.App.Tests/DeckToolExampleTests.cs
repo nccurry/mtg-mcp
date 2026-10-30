@@ -78,7 +78,10 @@ public sealed class DeckToolExampleTests : IClassFixture<ToolCatalogFixture>
         IReadOnlyList<DeckChangeInput> changes = arguments["changes"]
             .Deserialize<IReadOnlyList<DeckChangeInput>>(ToolCallPolicy.SerializerOptions)!;
 
-        OperationResult<DeckWriteResult> result = await new DeckBatchWriteTools(store, OperationMode.Local, cardData.Resolver)
+        OperationResult<DeckWriteResult> result = await new DeckBatchWriteTools(
+            store,
+            OperationMode.Local,
+            cardData.Resolver)
             .ApplyChangesAsync(deck.DeckId, deck.Revision, changes, true, TestContext.Current.CancellationToken);
 
         DeckDocument updated = Assert.IsType<OperationSuccess<DeckWriteResult>>(result.Value).Data.Deck!;

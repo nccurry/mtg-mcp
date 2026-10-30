@@ -101,7 +101,11 @@ public sealed class ArchidektKindToolTests
             ? Assert.IsType<OperationInvalidInput>(
                 (await fixture.Tools.GetFoldersAsync(kind, id, cancellationToken: TestContext.Current.CancellationToken)).Value)
             : Assert.IsType<OperationInvalidInput>(
-                (await fixture.Tools.GetSnapshotsAsync(kind, "42", id, cancellationToken: TestContext.Current.CancellationToken))
+                (await fixture.Tools.GetSnapshotsAsync(
+                    kind,
+                    "42",
+                    id,
+                    cancellationToken: TestContext.Current.CancellationToken))
                 .Value);
 
         Assert.Equal((expectedReason, expectedPath), (invalid.ReasonCode, invalid.Path));

@@ -50,7 +50,8 @@ public sealed class ArchidektWorkflowTests
             ],
             token));
 
-        ArchidektSyncPreviewView preview = Success(await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
 
         Assert.True(preview.ApplyAvailable);
         Assert.Null(preview.ApplyNotice);
@@ -74,8 +75,10 @@ public sealed class ArchidektWorkflowTests
         Assert.Contains("Ramp", world.Fake.CategoriesOf("Dart"));
         Assert.Equal(3, world.Fake.Mutations);
 
-        ArchidektSyncPreviewView pull = Success(await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
-        ArchidektSyncPreviewView push = Success(await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        ArchidektSyncPreviewView pull = Success(
+            await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
+        ArchidektSyncPreviewView push = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
 
         Assert.False(pull.HasConflicts);
         Assert.Empty(pull.Differences);
@@ -99,8 +102,10 @@ public sealed class ArchidektWorkflowTests
 
         for (int round = 0; round < 8; round++)
         {
-            ArchidektSyncPreviewView push = Success(await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
-            ArchidektSyncPreviewView pull = Success(await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
+            ArchidektSyncPreviewView push = Success(
+                await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+            ArchidektSyncPreviewView pull = Success(
+                await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
             ArchidektSyncDiffView diff = Success(await world.Reads.DiffAsync(localDeckId, cancellationToken: token));
 
             Assert.Empty(push.Operations);
@@ -122,8 +127,10 @@ public sealed class ArchidektWorkflowTests
         CancellationToken token = TestContext.Current.CancellationToken;
         Guid localDeckId = await world.PullAsync();
 
-        ArchidektSyncPreviewView push = Success(await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
-        ArchidektSyncPreviewView pull = Success(await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
+        ArchidektSyncPreviewView push = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        ArchidektSyncPreviewView pull = Success(
+            await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
         ArchidektRemoteWriteTools localModeWrites = new(world.Coordinator, OperationMode.Local);
         OperationResult<ArchidektApplyResult> denied = await localModeWrites.ApplyPushAsync(
             new ArchidektPushApplyRequest(localDeckId, 1, "remote", "preview"),
@@ -182,8 +189,10 @@ public sealed class ArchidektWorkflowTests
             token));
 
         ArchidektSyncDiffView diff = Success(await world.Reads.DiffAsync(local.DeckId, cancellationToken: token));
-        ArchidektSyncPreviewView push = Success(await world.Reads.PreviewPushAsync(local.DeckId, cancellationToken: token));
-        ArchidektSyncPreviewView pull = Success(await world.Reads.PreviewPullAsync("42", local.DeckId, cancellationToken: token));
+        ArchidektSyncPreviewView push = Success(
+            await world.Reads.PreviewPushAsync(local.DeckId, cancellationToken: token));
+        ArchidektSyncPreviewView pull = Success(
+            await world.Reads.PreviewPullAsync("42", local.DeckId, cancellationToken: token));
 
         Assert.Equal(0, diff.DifferenceCount);
         Assert.False(diff.HasConflicts);
@@ -218,7 +227,8 @@ public sealed class ArchidektWorkflowTests
                 new AssignDeckCategoryChange(delverId, removal.CategoryId, true),
             ],
             token));
-        ArchidektSyncPreviewView preview = Success(await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
 
         ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
             new ArchidektPushApplyRequest(
@@ -227,8 +237,10 @@ public sealed class ArchidektWorkflowTests
                 preview.RemoteFingerprint,
                 preview.PreviewFingerprint),
             token));
-        ArchidektSyncPreviewView push = Success(await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
-        ArchidektSyncPreviewView pull = Success(await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
+        ArchidektSyncPreviewView push = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        ArchidektSyncPreviewView pull = Success(
+            await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
 
         Assert.Equal(1, preview.Summary.OperationCount);
         Assert.Equal("applied", applied.Outcome);
@@ -263,7 +275,10 @@ public sealed class ArchidektWorkflowTests
         Assert.Contains("remote mode", both, StringComparison.Ordinal);
         string credentialsOnly = ArchidektApplyAvailability.PushNotice(OperationMode.Remote, missing)!;
         Assert.Contains("credentials are not configured", credentialsOnly, StringComparison.Ordinal);
-        Assert.DoesNotContain("mode", credentialsOnly.Replace("archidekt_push_apply", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "mode",
+            credentialsOnly.Replace("archidekt_push_apply", string.Empty, StringComparison.Ordinal),
+            StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -302,7 +317,9 @@ public sealed class ArchidektWorkflowTests
         {
             OperationResult<ArchidektDeckView> result = await world.Reads.GetDeckAsync("42", offset, token);
             ArchidektDeckView page = Success(result);
-            Assert.True(JsonLength(result) < MaximumResultCharacters, $"page {pages} is {JsonLength(result)} characters");
+            Assert.True(
+                JsonLength(result) < MaximumResultCharacters,
+                $"page {pages} is {JsonLength(result)} characters");
             Assert.Equal(300, page.Summary.EntryCount);
             Assert.Equal(offset, page.Offset);
             Assert.Equal(offset == 0, page.Categories.Count > 0);
@@ -377,7 +394,9 @@ public sealed class ArchidektWorkflowTests
                 differenceOffset,
                 cancellationToken: token);
             ArchidektSyncPreviewView page = Success(result);
-            Assert.True(JsonLength(result) < MaximumResultCharacters, $"page {pages.Count} is {JsonLength(result)} characters");
+            Assert.True(
+                JsonLength(result) < MaximumResultCharacters,
+                $"page {pages.Count} is {JsonLength(result)} characters");
             pages.Add(page);
             if (page.Truncated is null)
             {
@@ -406,7 +425,11 @@ public sealed class ArchidektWorkflowTests
 
         ArchidektSyncPreviewView last = pages[^1];
         ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
-            new ArchidektPushApplyRequest(localDeckId, edited.Revision, last.RemoteFingerprint, last.PreviewFingerprint),
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                edited.Revision,
+                last.RemoteFingerprint,
+                last.PreviewFingerprint),
             token));
 
         Assert.Equal("applied", applied.Outcome);
@@ -429,7 +452,8 @@ public sealed class ArchidektWorkflowTests
             local.Revision,
             [new UpdateDeckEntryChange(bolt with { Quantity = 3 })],
             token));
-        ArchidektSyncPreviewView preview = Success(await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
 
         OperationResult<ArchidektApplyResult> refused = await world.Writes.ApplyPushAsync(
             new ArchidektPushApplyRequest(localDeckId, edited.Revision, preview.RemoteFingerprint, "not-the-preview"),
@@ -495,7 +519,8 @@ public sealed class ArchidektWorkflowTests
             local.Revision,
             [.. local.Entries.Select(value => new UpdateDeckEntryChange(value with { Quantity = value.Quantity + 1 }))],
             token));
-        ArchidektSyncPreviewView first = Success(await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        ArchidektSyncPreviewView first = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
         Assert.Contains("expectedPreviewFingerprint", first.Narrow, StringComparison.Ordinal);
         int nextOperation = first.NextOperationOffset ?? first.Operations.Count;
 
@@ -552,7 +577,9 @@ public sealed class ArchidektWorkflowTests
         {
             OperationResult<ArchidektSyncDiffView> result = await world.Reads.DiffAsync(localDeckId, offset, token);
             ArchidektSyncDiffView page = Success(result);
-            Assert.True(JsonLength(result) < MaximumResultCharacters, $"page {pages} is {JsonLength(result)} characters");
+            Assert.True(
+                JsonLength(result) < MaximumResultCharacters,
+                $"page {pages} is {JsonLength(result)} characters");
             Assert.Equal(300, page.DifferenceCount);
             paths.AddRange(page.Differences.Select(value => value.Path));
             pages++;
@@ -579,7 +606,9 @@ public sealed class ArchidektWorkflowTests
     [Theory]
     [InlineData("list", null)]
     [InlineData("get", "9")]
-    public async Task FoldersGet_WithManyFolders_PagesUnderTheLimit_AndReachesEveryRecordOnce(string kind, string? folderId)
+    public async Task FoldersGet_WithManyFolders_PagesUnderTheLimit_AndReachesEveryRecordOnce(
+        string kind,
+        string? folderId)
     {
         using World world = new(OperationMode.Remote, CreateSmallDeck());
         CancellationToken token = TestContext.Current.CancellationToken;
@@ -590,7 +619,11 @@ public sealed class ArchidektWorkflowTests
 
         while (true)
         {
-            OperationResult<ArchidektFoldersResult> result = await world.Reads.GetFoldersAsync(kind, folderId, offset, token);
+            OperationResult<ArchidektFoldersResult> result = await world.Reads.GetFoldersAsync(
+                kind,
+                folderId,
+                offset,
+                token);
             ArchidektFoldersResult data = Success(result);
             ArchidektFolderTreeView page = data switch
             {
@@ -642,7 +675,9 @@ public sealed class ArchidektWorkflowTests
                 offset,
                 token);
             ArchidektSnapshotView snapshot = Assert.IsType<ArchidektSnapshotGetResult>(Success(result)).Snapshot;
-            Assert.True(JsonLength(result) < MaximumResultCharacters, $"page {pages} is {JsonLength(result)} characters");
+            Assert.True(
+                JsonLength(result) < MaximumResultCharacters,
+                $"page {pages} is {JsonLength(result)} characters");
             Assert.Equal(300, snapshot.Deck.Summary.EntryCount);
             names.AddRange(snapshot.Deck.Entries.Select(value => value.CardName));
             pages++;
@@ -683,7 +718,9 @@ public sealed class ArchidektWorkflowTests
                 pages.Count == 0 ? null : pages[0].PreviewFingerprint,
                 token);
             ArchidektSnapshotRestorePreviewView page = Success(result);
-            Assert.True(JsonLength(result) < MaximumResultCharacters, $"page {pages.Count} is {JsonLength(result)} characters");
+            Assert.True(
+                JsonLength(result) < MaximumResultCharacters,
+                $"page {pages.Count} is {JsonLength(result)} characters");
             pages.Add(page);
             if (page.Truncated is null)
             {
@@ -810,7 +847,10 @@ public sealed class ArchidektWorkflowTests
                 MaximumRequestsPerOperation = 2_000,
             };
             service = new ArchidektService(
-                new ArchidektSession(new HttpClient(fake) { BaseAddress = options.BaseAddress }, ownsHttpClient: true, options),
+                new ArchidektSession(
+                    new HttpClient(fake) { BaseAddress = options.BaseAddress },
+                    ownsHttpClient: true,
+                    options),
                 options.MaximumRequestsPerOperation);
             Store = new SqliteDeckStore(directory.Path, "test");
             Coordinator = new ArchidektCoordinator(service, Store);

@@ -190,7 +190,10 @@ public sealed class DeckInterchangeMcpTests
     /// Exports a deck and reads every artifact's content in chunks, then returns the bundle with the content of each
     /// artifact added under <c>artifacts[].content</c>, so a test can read an artifact by its file name.
     /// </summary>
-    private static async Task<JsonElement> ExportWithContentAsync(McpProcessSession session, Guid deckId, string formatId)
+    private static async Task<JsonElement> ExportWithContentAsync(
+        McpProcessSession session,
+        Guid deckId,
+        string formatId)
     {
         JsonElement first = await CallSuccessAsync(
             session,

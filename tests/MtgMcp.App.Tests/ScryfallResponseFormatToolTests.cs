@@ -89,8 +89,28 @@ public sealed class ScryfallResponseFormatToolTests
 
         foreach (string name in new[] { "scryfall_search", "scryfall_cards_get", "scryfall_installed_cards_by_tag" })
         {
-            Assert.Contains("40,000 bytes", tools[name].ProtocolTool.Description, StringComparison.Ordinal);
+            string description = tools[name].ProtocolTool.Description!;
+            Assert.Contains("result size limit", description, StringComparison.Ordinal);
+            Assert.Contains("fewer cards than pageSize", description, StringComparison.Ordinal);
+            Assert.Contains("nextCursor", description, StringComparison.Ordinal);
         }
+    }
+
+    /// <summary>
+    /// Verifies the search description says how printing-level filters combine, and the way to keep first printings.
+    /// </summary>
+    [Fact]
+    public void ScryfallSearch_Description_ExplainsPrintingFiltersAndFirstPrintings()
+    {
+        using RegisteredToolSet registered = new(OperationMode.Remote);
+
+        string description = registered.Tools
+            .Single(tool => tool.ProtocolTool.Name == "scryfall_search").ProtocolTool.Description!;
+
+        Assert.Contains("must match one printing", description, StringComparison.Ordinal);
+        Assert.Contains("matches reprints printed in that period", description, StringComparison.Ordinal);
+        Assert.Contains("not:reprint year=2024", description, StringComparison.Ordinal);
+        Assert.True(description.Length <= 4_096, $"{description.Length} characters");
     }
 
     /// <summary>

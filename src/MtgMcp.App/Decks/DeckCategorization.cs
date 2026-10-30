@@ -300,7 +300,8 @@ internal sealed class DeckCategorizationReadTools
         "Card tags come from installed card data (scryfall_card_data_sync). Rules are inline only; send " +
         "the tags you choose. Omit expectedRevision to only validate and preview. Decisions come in pages that fit " +
         "the size limit; the fingerprint and token cover the whole preview, so apply needs no page. When truncated " +
-        "is true, call again with offset set to nextOffset." +
+        "is true, call again with offset set to nextOffset and expectedPreviewFingerprint set to the " +
+        "previewFingerprint of the first page." +
         DeckToolExamples.ExamplePrefix + "minimal): " + DeckToolExamples.RulesPreviewMinimal +
         DeckToolExamples.ExamplePrefix + "full): " + DeckToolExamples.RulesPreviewFull)]
     internal async Task<OperationResult<DeckCategoryRulesPreviewView>> PreviewAsync(
@@ -373,6 +374,15 @@ internal sealed class DeckCategorizationWriteTools
                 new OperationUnsupported("operation-mode-denied", "The effective operation mode does not permit local writes."));
         }
 
-        return coordinator.ApplyAsync(deckId, expectedRevision, expectedCorpusGeneration, source, freshnessPolicy, previewFingerprint, applyToken, returnDeck, cancellationToken);
+        return coordinator.ApplyAsync(
+            deckId,
+            expectedRevision,
+            expectedCorpusGeneration,
+            source,
+            freshnessPolicy,
+            previewFingerprint,
+            applyToken,
+            returnDeck,
+            cancellationToken);
     }
 }

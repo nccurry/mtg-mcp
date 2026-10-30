@@ -250,7 +250,8 @@ internal static class DeckPreviewPaging
             (diagnostics.Count < preview.Diagnostics.Count ||
                 unresolved.Count < preview.UnresolvedIdentities.Count ||
                 (proposal is not null &&
-                    (categories.Count < proposal.Categories.Count || bindings.Count < proposal.ProviderBindings.Count)));
+                    (categories.Count < proposal.Categories.Count ||
+                        bindings.Count < proposal.ProviderBindings.Count)));
         DeckImportProposalView? shell = proposal is null
             ? null
             : new DeckImportProposalView(
@@ -400,7 +401,10 @@ internal static class DeckPreviewPaging
             return invalid;
         }
 
-        OperationConflict? changed = ResultPage.CheckSameResult(expectedPreviewFingerprint, previewFingerprint, offset > 0);
+        OperationConflict? changed = ResultPage.CheckSameResult(
+            expectedPreviewFingerprint,
+            previewFingerprint,
+            offset > 0);
         if (changed is not null)
         {
             return changed;

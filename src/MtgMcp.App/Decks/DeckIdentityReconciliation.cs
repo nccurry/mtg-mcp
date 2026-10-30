@@ -746,7 +746,7 @@ internal sealed class DeckIdentityReconciliationReadTools
         "Local deck store: previews exact Scryfall-backed identity normalization without fuzzy matching, legality " +
         "checks, or deck mutation. Rows come in pages that fit the size limit; the fingerprint and apply token " +
         "cover the whole preview, so apply needs no page. When truncated is true, call again with offset set to " +
-        "nextOffset.")]
+        "nextOffset and expectedPreviewFingerprint set to the previewFingerprint of the first page.")]
     internal async Task<OperationResult<DeckIdentityReconciliationPreviewView>> PreviewAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
@@ -767,7 +767,8 @@ internal sealed class DeckIdentityReconciliationReadTools
             cancellationToken).ConfigureAwait(false);
         return preview is OperationSuccess<DeckIdentityReconciliationPreview> success
             ? DeckPreviewPaging.PageIdentity(success.Data, offset, expectedPreviewFingerprint)
-            : OperationFailure.Forward<DeckIdentityReconciliationPreview, DeckIdentityReconciliationPreviewView>(preview);
+            : OperationFailure.Forward<DeckIdentityReconciliationPreview, DeckIdentityReconciliationPreviewView>(
+                preview);
     }
 }
 

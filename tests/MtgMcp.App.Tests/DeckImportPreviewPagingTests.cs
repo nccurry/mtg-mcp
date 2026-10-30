@@ -80,7 +80,12 @@ public sealed class DeckImportPreviewPagingTests
             "generic-text-v1",
             "complete",
             "fingerprint",
-            Proposal([entry], [category], [new DeckCategoryAssignment(entry.EntryId, category.CategoryId, true)], [], []),
+            Proposal(
+                [entry],
+                [category],
+                [new DeckCategoryAssignment(entry.EntryId, category.CategoryId, true)],
+                [],
+                []),
             [],
             0,
             []);
@@ -104,12 +109,14 @@ public sealed class DeckImportPreviewPagingTests
     {
         List<DeckEntry> entries = [.. Enumerable.Range(0, 300).Select(Entry)];
         List<DeckCategory> categories =
-            [.. Enumerable.Range(0, 400).Select(index => new DeckCategory(Guid.NewGuid(), $"Category number {index:000}", "#aabbcc", index))];
+            [.. Enumerable.Range(0, 400).Select(
+                index => new DeckCategory(Guid.NewGuid(), $"Category number {index:000}", "#aabbcc", index))];
         List<DeckCategoryAssignment> assignments = [];
         for (int index = 0; index < entries.Count; index++)
         {
             assignments.Add(new DeckCategoryAssignment(entries[index].EntryId, categories[index].CategoryId, true));
-            assignments.Add(new DeckCategoryAssignment(entries[index].EntryId, categories[index + 100].CategoryId, false));
+            assignments.Add(
+                new DeckCategoryAssignment(entries[index].EntryId, categories[index + 100].CategoryId, false));
         }
 
         List<DeckProviderBinding> bindings =
@@ -133,7 +140,9 @@ public sealed class DeckImportPreviewPagingTests
                 $"The field number {index} is not part of the native format and was kept as an extension only.",
                 index + 1,
                 "$.entries[" + index + "]"))];
-        List<string> unresolved = [.. Enumerable.Range(0, 300).Select(index => $"Budget Card {index:000} (tst) {index}")];
+        List<string> unresolved = [.. Enumerable.Range(
+            0,
+            300).Select(index => $"Budget Card {index:000} (tst) {index}")];
         return new DeckImportPreview(
             "mtg-mcp-json-v1",
             "complete",

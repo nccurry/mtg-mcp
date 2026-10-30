@@ -143,7 +143,9 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
             characters = Math.Max(characters, structured.GetRawText().Length);
         }
 
-        string kind = structured.ValueKind == JsonValueKind.Object && structured.TryGetProperty("kind", out JsonElement value)
+        string kind = structured.ValueKind == JsonValueKind.Object && structured.TryGetProperty(
+            "kind",
+            out JsonElement value)
             ? value.GetString() ?? string.Empty
             : string.Empty;
         return new ToolOutcome(tool, result.IsError == true, kind, characters, structured);
@@ -158,7 +160,8 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
     }
 
     /// <summary>
-    /// Creates a new local deck, 300 entries unless told otherwise, with a maybeboard, categories, and assignments, and returns it.
+    /// Creates a new local deck, 300 entries unless told otherwise, with a maybeboard, categories, and assignments, and
+    /// returns it.
     /// </summary>
     internal async Task<DeckDocument> CreateLocalDeckAsync(
         string name,
@@ -168,7 +171,8 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
     {
         string[] categoryNames = ["Ramp", "Draw", "Removal", "Threats", "Lands", "Protection", "Finishers", "Utility"];
         List<DeckCategoryDraft> categories =
-            [.. categoryNames.Select((value, index) => new DeckCategoryDraft(value, SortOrder: index, CategoryId: Guid.CreateVersion7()))];
+            [.. categoryNames.Select(
+                (value, index) => new DeckCategoryDraft(value, SortOrder: index, CategoryId: Guid.CreateVersion7()))];
         List<DeckEntryDraft> entries = [];
         List<DeckCategoryAssignment> assignments = [];
         for (int index = 0; index < size; index++)
@@ -185,15 +189,24 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
                 Zone: index < size - (size / 8) ? "main" : "maybeboard",
                 SortOrder: index,
                 EntryId: entryId));
-            assignments.Add(new DeckCategoryAssignment(entryId, categories[index % categories.Count].CategoryId!.Value, true));
+            assignments.Add(
+                new DeckCategoryAssignment(entryId, categories[index % categories.Count].CategoryId!.Value, true));
             if (index % 2 == 0)
             {
-                assignments.Add(new DeckCategoryAssignment(entryId, categories[(index + 3) % categories.Count].CategoryId!.Value, false));
+                assignments.Add(new DeckCategoryAssignment(
+                    entryId,
+                    categories[(index + 3) % categories.Count].CategoryId!.Value,
+                    false));
             }
         }
 
         OperationResult<DeckDocument> created = await Store.CreateAsync(
-            new DeckCreateRequest(name, Format: "commander", Entries: entries, Categories: categories, CategoryAssignments: assignments),
+            new DeckCreateRequest(
+                name,
+                Format: "commander",
+                Entries: entries,
+                Categories: categories,
+                CategoryAssignments: assignments),
             cancellationToken).ConfigureAwait(false);
         return Assert.IsType<OperationSuccess<DeckDocument>>(created.Value).Data;
     }
@@ -251,7 +264,10 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
             MaximumRequestsPerOperation = 2_000,
         };
         ArchidektService archidekt = Own(new ArchidektService(
-            new ArchidektSession(new HttpClient(Fake) { BaseAddress = options.BaseAddress }, ownsHttpClient: true, options),
+            new ArchidektSession(
+                new HttpClient(Fake) { BaseAddress = options.BaseAddress },
+                ownsHttpClient: true,
+                options),
             options.MaximumRequestsPerOperation));
         FillFakeArchidekt();
 
@@ -278,7 +294,8 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
                 DiscoverProbeTimeout = Timeout.InfiniteTimeSpan,
             },
             cancellationToken: cancellationToken).ConfigureAwait(false);
-        IList<McpClientTool> tools = await Client.ListToolsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        IList<McpClientTool> tools = await Client.ListToolsAsync(
+            cancellationToken: cancellationToken).ConfigureAwait(false);
         PublishedTools = [.. tools.Select(tool => tool.Name)];
     }
 
@@ -368,14 +385,19 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
         internal int BulkVersion { get; set; }
 
         /// <inheritdoc/>
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
         {
             string path = request.RequestUri!.AbsolutePath;
             if (path == "/bulk-data" && BulkVersion > 0)
             {
                 HttpResponseMessage bulk = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
                 string body = await bulk.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-                return Json(JsonNode.Parse(body.Replace("2026-09-07T21:00:33", $"2026-10-0{BulkVersion}T21:00:33", StringComparison.Ordinal))!.AsObject());
+                return Json(JsonNode.Parse(body.Replace(
+                    "2026-09-07T21:00:33",
+                    $"2026-10-0{BulkVersion}T21:00:33",
+                    StringComparison.Ordinal))!.AsObject());
             }
 
             if (path == "/sets")

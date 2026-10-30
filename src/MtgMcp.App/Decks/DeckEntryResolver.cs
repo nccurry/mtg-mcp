@@ -187,7 +187,9 @@ internal sealed class DeckEntryResolver
         {
             DeckEntryDraft draft = drafts[batch[position]];
             DeckIdentityLookupPlan plan = plans[position];
-            ScryfallCollectionRow? row = plan.EvidenceIndex is int evidenceIndex ? success.Data.Rows[evidenceIndex] : null;
+            ScryfallCollectionRow? row = plan.EvidenceIndex is int evidenceIndex
+                ? success.Data.Rows[evidenceIndex]
+                : null;
             if (row?.Status == "ambiguous")
             {
                 issues.Add(new DeckWriteIssue(
@@ -200,7 +202,9 @@ internal sealed class DeckEntryResolver
 
             if (row?.Card is null)
             {
-                issues.Add(Unresolved(draft, $"No card named '{draft.CardName.Trim()}' was found in installed card data."));
+                issues.Add(Unresolved(
+                    draft,
+                    $"No card named '{draft.CardName.Trim()}' was found in installed card data."));
                 continue;
             }
 

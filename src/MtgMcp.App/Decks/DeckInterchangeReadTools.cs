@@ -57,9 +57,11 @@ internal sealed class DeckInterchangeReadTools
         UseStructuredContent = true)]
     [Description(
         "Local deck store: returns a normalized proposal, diagnostics, unresolved identities, and guarded " +
-        "fingerprint. Entries come in pages that fit the size limit; the fingerprint covers the whole import, and " +
-        "categories, diagnostics, and unresolved identities come with the first page. When truncated is true, call " +
-        "again with the same content and offset set to nextOffset.")]
+        "fingerprint. Entries come in pages that fit the size limit; the fingerprint covers the whole import. " +
+        "The first page also carries the categories, provider bindings, diagnostics, and unresolved identities, " +
+        "each cut to fit with its exact count beside it, and counts the saved synchronization snapshots without " +
+        "returning them. When truncated is true, call again with the same content, offset set to nextOffset, and " +
+        "expectedPreviewFingerprint set to the fingerprint of the first page.")]
     internal async Task<OperationResult<DeckImportPreviewView>> PreviewAsync(
         [Description(
             "Exact import-capable format ID returned by local_deck_interchange_formats."), InterchangeFormatValues]
@@ -94,10 +96,11 @@ internal sealed class DeckInterchangeReadTools
         UseStructuredContent = true)]
     [Description(
         "Local deck store: exports deterministic artifacts without writing files or contacting providers. The result " +
-        "lists every artifact (file name, media type, total length, sha256 of the whole content) and returns one " +
-        "chunk of one artifact's content, at most 30,000 bytes of JSON text. When chunk.truncated is true, call again " +
-        "with the same arguments, artifact set to the file name, and offset set to chunk.nextOffset; the chunks " +
-        "joined in order are the exact file.")]
+        "lists every artifact (file name, media type, total length in characters, sha256 of the whole content) " +
+        "and returns one chunk of one artifact's content, at most 30,000 bytes of JSON text. When " +
+        "chunk.truncated is true, call again with the same arguments, artifact set to the file name, and offset " +
+        "set to chunk.nextOffset; the chunks joined in order are the exact file. The field-preservation report " +
+        "comes only with the chunk at offset 0.")]
     internal async Task<OperationResult<DeckExportBundleView>> ExportAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description(
@@ -107,7 +110,8 @@ internal sealed class DeckInterchangeReadTools
         DeckExportOptions? options = null,
         [Description("File name of the artifact whose content to read; default the first artifact.")]
         string? artifact = null,
-        [Description("Number of characters of the artifact to skip; use chunk.nextOffset from the previous call. Default 0.")]
+        [Description(
+            "Number of characters of the artifact to skip; use chunk.nextOffset from the previous call. Default 0.")]
         int offset = 0,
         CancellationToken cancellationToken = default)
     {

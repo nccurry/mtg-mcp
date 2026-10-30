@@ -207,7 +207,9 @@ public sealed class DeckEntryResolverTests
     [Fact]
     public async Task ResolveChanges_ManyNamesAcrossBatches_GiveEachEntryItsOwnIdentity()
     {
-        List<JsonObject> cards = [.. Enumerable.Range(0, 300).Select(index => CardJson.Make($"Batch Card {index:000}"))];
+        List<JsonObject> cards = [.. Enumerable.Range(
+            0,
+            300).Select(index => CardJson.Make($"Batch Card {index:000}"))];
         using CardDataFixture data = await CardDataFixture.CreateAsync(cards);
         List<DeckChange> changes = [];
         List<(int Position, string Name, Guid? Expected, bool Pending)> adds = [];
@@ -235,7 +237,11 @@ public sealed class DeckEntryResolverTests
                 unknownIds.Add(id);
             }
 
-            adds.Add((changes.Count, name, unknown ? null : alreadyKnown ? prefilled : CardJson.OracleOf(cards[index]), !alreadyKnown));
+            adds.Add((
+                changes.Count,
+                name,
+                unknown ? null : alreadyKnown ? prefilled : CardJson.OracleOf(cards[index]),
+                !alreadyKnown));
             changes.Add(new AddDeckEntryChange(new DeckEntryDraft(
                 1,
                 name,
@@ -259,7 +265,11 @@ public sealed class DeckEntryResolverTests
         Assert.True(pending.Count > 250, $"{pending.Count} names were looked up.");
         foreach (int pendingIndex in new[] { 0, 99, 100, pending.Count - 1 })
         {
-            (int position, string name, Guid? expected, _) = adds.Single(value => value.Position == pending[pendingIndex]);
+            (
+                int position,
+                string name,
+                Guid? expected,
+                _) = adds.Single(value => value.Position == pending[pendingIndex]);
             Assert.Equal(expected, Assert.IsType<AddDeckEntryChange>(result.Changes[position].Value).Entry.OracleId);
         }
 

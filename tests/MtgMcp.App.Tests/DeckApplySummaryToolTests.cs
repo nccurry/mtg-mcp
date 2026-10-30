@@ -17,7 +17,8 @@ public sealed class DeckApplySummaryToolTests
     private const int SummaryCeiling = 10_000;
 
     /// <summary>
-    /// Verifies a partial identity apply returns the changed entry IDs and a capped list of skipped issues for the rows it left
+    /// Verifies a partial identity apply returns the changed entry IDs and a capped list of skipped issues for the rows
+    /// it left
     /// out, with the exact count, no deck, and fewer than 10,000 characters, and that returnDeck adds the deck.
     /// </summary>
     [Fact]
@@ -29,7 +30,9 @@ public sealed class DeckApplySummaryToolTests
         List<DeckEntryDraft> drafts =
         [
             .. known.Entries.Select(value => new DeckEntryDraft(1, value.CardName, SortOrder: value.SortOrder)),
-            .. Enumerable.Range(0, 50).Select(index => new DeckEntryDraft(1, $"Missing Card {index:00}", SortOrder: 100 + index)),
+            .. Enumerable.Range(
+                0,
+                50).Select(index => new DeckEntryDraft(1, $"Missing Card {index:00}", SortOrder: 100 + index)),
         ];
         DeckDocument deck = Success(await world.Store.CreateAsync(
             new DeckCreateRequest("Partial identity", Format: "custom", Entries: drafts),
@@ -51,7 +54,10 @@ public sealed class DeckApplySummaryToolTests
             ["allowPartial"] = true,
         };
 
-        ToolBudgetWorld.ToolOutcome applied = await world.CallAsync("local_deck_identity_reconcile_apply", apply, token);
+        ToolBudgetWorld.ToolOutcome applied = await world.CallAsync(
+            "local_deck_identity_reconcile_apply",
+            apply,
+            token);
 
         JsonElement summary = applied.Data;
         Assert.True(applied.Characters < SummaryCeiling, $"{applied.Characters} characters");
@@ -68,8 +74,12 @@ public sealed class DeckApplySummaryToolTests
             issue => Assert.Contains("not cached", issue.GetProperty("message").GetString(), StringComparison.Ordinal));
         Assert.False(summary.TryGetProperty("deck", out _));
 
-        JsonElement fresh = (await world.CallAsync("local_deck_get", new JsonObject { ["deckId"] = deck.DeckId.ToString() }, token)).Data;
-        Assert.Equal(100, fresh.GetProperty("entries").EnumerateArray().Count(entry => entry.TryGetProperty("oracleId", out JsonElement id) && id.ValueKind == JsonValueKind.String));
+        JsonElement fresh = (await world.CallAsync(
+            "local_deck_get",
+            new JsonObject { ["deckId"] = deck.DeckId.ToString() },
+            token)).Data;
+        Assert.Equal(100, fresh.GetProperty("entries").EnumerateArray().Count(
+            entry => entry.TryGetProperty("oracleId", out JsonElement id) && id.ValueKind == JsonValueKind.String));
     }
 
     /// <summary>

@@ -85,9 +85,10 @@ internal sealed class DeckReadTools
         "Local deck store: gets one local deck with its stored state: entries, zones, categories, assignments, and " +
         "provider-neutral bindings, plus the entry IDs that edits need. Add include [cards, tags] to also get, " +
         "for each entry, its concise Scryfall card fields (exact printing) and oracle tag slugs from installed " +
-        "card data, in pages of entries. A deck too large for one result is also returned in pages: truncated is " +
-        "true with a narrow hint, and nextCursor reads the rest. Each entry then carries cardData: found, not-installed (run " +
-        "scryfall_card_data_sync), or unresolved (no exact Scryfall identity, or not in the installed data).")]
+        "card data, in pages of entries. Each entry then carries cardData: found, not-installed (run " +
+        "scryfall_card_data_sync), or unresolved (no exact Scryfall identity, or not in the installed data). " +
+        "A deck too large for one result is also returned in pages: truncated is true with a narrow hint, and " +
+        "nextCursor reads the rest.")]
     internal Task<OperationResult<DeckDocumentView>> GetAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description(

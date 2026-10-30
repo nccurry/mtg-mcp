@@ -670,8 +670,9 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                     "ambiguous",
                     "corpus",
                     null,
-                    $"{stored.MatchingOracleIdCount} different cards are named '{evidenceLookup.Lookup.Value?.Trim()}'. " +
-                    "Give an Oracle ID, or a set code and collector number."));
+                    $"{stored.MatchingOracleIdCount} different cards are named " +
+                    $"'{evidenceLookup.Lookup.Value?.Trim()}'. Give an Oracle ID, or a set code and " +
+                    "collector number."));
                 checksumMembers.Add(
                     $"{index}|{CollectionKey(evidenceLookup.Lookup)}|{languageKey}|ambiguous|" +
                     $"{stored.GenerationId:D}|{stored.MatchingOracleIdCount}");

@@ -679,9 +679,9 @@ internal static class ArchidektJsonContract
     }
 
     /// <summary>
-    /// Computes the provider-side fingerprint. Neither the order of the rows nor the entry order numbers count: Archidekt
-    /// renumbers them without a user edit, so a renumbering must not look like a change. The order of the categories
-    /// still counts, so a reordering of them is seen as a change on Archidekt.
+    /// Computes the provider-side fingerprint. Neither the order of the rows nor the entry order numbers count:
+    /// Archidekt renumbers them without a user edit, so a renumbering must not look like a change. The order of the
+    /// categories still counts, so a reordering of them is seen as a change on Archidekt.
     /// </summary>
     private static string RemoteFingerprintOf(
         string remoteId,

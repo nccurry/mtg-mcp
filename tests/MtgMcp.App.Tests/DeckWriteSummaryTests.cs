@@ -114,7 +114,9 @@ public sealed class DeckWriteSummaryTests
         DeckEntry unknown = summary.Deck.Entries.Single(entry => entry.EntryId == unknownId);
         Assert.Null(unknown.OracleId);
         Assert.Equal(2, summary.IssueCount);
-        Assert.Contains(summary.Issues!, issue => issue.EntryId == unknownId && issue.Kind == DeckWriteIssue.Unresolved);
+        Assert.Contains(
+            summary.Issues!,
+            issue => issue.EntryId == unknownId && issue.Kind == DeckWriteIssue.Unresolved);
         Assert.Contains(summary.Issues!, issue => issue.CardName == "Set Mismatch");
         Assert.Equal(4, summary.EntryCount);
     }
@@ -154,7 +156,8 @@ public sealed class DeckWriteSummaryTests
         DeckWriteResult summary = Success(await setup.Batch.ApplyChangesAsync(
             deck.DeckId,
             deck.Revision,
-            [new AddDeckEntryInput(new DeckEntryDraft(1, "Sol Ring")), new AddDeckEntryInput(new DeckEntryDraft(1, "Island"))],
+            [new AddDeckEntryInput(
+                new DeckEntryDraft(1, "Sol Ring")), new AddDeckEntryInput(new DeckEntryDraft(1, "Island"))],
             returnDeck: true,
             TestContext.Current.CancellationToken));
 

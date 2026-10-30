@@ -38,7 +38,8 @@ public sealed class AddByNameScenarioTests
             printingId: CardJson.PrintingOf(delver));
         (string localDeckId, long revision) = await PullAsync(world, token);
         string delverId = Guid.NewGuid().ToString();
-        JsonElement pulledDeck = (await world.CallAsync("local_deck_get", new JsonObject { ["deckId"] = localDeckId }, token)).Data;
+        JsonElement pulledDeck = (
+            await world.CallAsync("local_deck_get", new JsonObject { ["deckId"] = localDeckId }, token)).Data;
         string categoryId = pulledDeck.GetProperty("categories")[0].GetProperty("categoryId").GetString()!;
 
         JsonElement summary = (await world.CallAsync(
@@ -67,8 +68,12 @@ public sealed class AddByNameScenarioTests
                     }),
             },
             token)).Data;
-        JsonElement deck = (await world.CallAsync("local_deck_get", new JsonObject { ["deckId"] = localDeckId }, token)).Data;
-        JsonElement push = (await world.CallAsync("archidekt_push_preview", new JsonObject { ["localDeckId"] = localDeckId }, token)).Data;
+        JsonElement deck = (
+            await world.CallAsync("local_deck_get", new JsonObject { ["deckId"] = localDeckId }, token)).Data;
+        JsonElement push = (await world.CallAsync(
+            "archidekt_push_preview",
+            new JsonObject { ["localDeckId"] = localDeckId },
+            token)).Data;
         JsonElement applied = (await world.CallAsync(
             "archidekt_push_apply",
             new JsonObject
@@ -82,7 +87,10 @@ public sealed class AddByNameScenarioTests
                 },
             },
             token)).Data;
-        JsonElement pushAfter = (await world.CallAsync("archidekt_push_preview", new JsonObject { ["localDeckId"] = localDeckId }, token)).Data;
+        JsonElement pushAfter = (await world.CallAsync(
+            "archidekt_push_preview",
+            new JsonObject { ["localDeckId"] = localDeckId },
+            token)).Data;
         JsonElement pullAfter = (await world.CallAsync(
             "archidekt_pull_preview",
             new JsonObject { ["remoteDeckId"] = "42", ["localDeckId"] = localDeckId },
@@ -94,7 +102,9 @@ public sealed class AddByNameScenarioTests
             deck.GetProperty("entries").EnumerateArray()
                 .Select(entry => entry.GetProperty("cardName").GetString())
                 .Single(name => name!.StartsWith("Delver", StringComparison.Ordinal)));
-        Assert.Equal(1, push.GetProperty("summary").GetProperty("operationsByKind").GetProperty("entry-add").GetInt32());
+        Assert.Equal(
+            1,
+            push.GetProperty("summary").GetProperty("operationsByKind").GetProperty("entry-add").GetInt32());
         Assert.Equal("applied", applied.GetProperty("outcome").GetString());
         Assert.Equal(1, world.Fake.QuantityOf(fullName));
         Assert.Equal(0, pushAfter.GetProperty("summary").GetProperty("operationCount").GetInt32());
@@ -109,7 +119,8 @@ public sealed class AddByNameScenarioTests
         ToolBudgetWorld world,
         CancellationToken token)
     {
-        JsonElement pull = (await world.CallAsync("archidekt_pull_preview", new JsonObject { ["remoteDeckId"] = "42" }, token)).Data;
+        JsonElement pull = (
+            await world.CallAsync("archidekt_pull_preview", new JsonObject { ["remoteDeckId"] = "42" }, token)).Data;
         JsonElement pulled = (await world.CallAsync(
             "archidekt_pull_apply",
             new JsonObject
@@ -138,7 +149,8 @@ public sealed class AddByNameScenarioTests
         await using ToolBudgetWorld world = await ToolBudgetWorld.CreateAsync(token, remoteDeckSize: 3);
         string[] added = ["Budget Card 310", "Budget Card 311", "Budget Card 312", "budget card 313", "Budget Card 314"];
 
-        JsonElement pull = (await world.CallAsync("archidekt_pull_preview", new JsonObject { ["remoteDeckId"] = "42" }, token)).Data;
+        JsonElement pull = (
+            await world.CallAsync("archidekt_pull_preview", new JsonObject { ["remoteDeckId"] = "42" }, token)).Data;
         JsonElement pulled = (await world.CallAsync(
             "archidekt_pull_apply",
             new JsonObject
@@ -173,7 +185,10 @@ public sealed class AddByNameScenarioTests
                 ["changes"] = changes,
             },
             token)).Data;
-        JsonElement push = (await world.CallAsync("archidekt_push_preview", new JsonObject { ["localDeckId"] = localDeckId }, token)).Data;
+        JsonElement push = (await world.CallAsync(
+            "archidekt_push_preview",
+            new JsonObject { ["localDeckId"] = localDeckId },
+            token)).Data;
 
         Assert.Equal(0, summary.GetProperty("issueCount").GetInt32());
         Assert.Equal(added.Length, summary.GetProperty("changeCounts").GetProperty("entriesAdded").GetInt32());
@@ -182,11 +197,15 @@ public sealed class AddByNameScenarioTests
         JsonElement kinds = push.GetProperty("summary").GetProperty("operationsByKind");
         Assert.Equal(added.Length, push.GetProperty("summary").GetProperty("operationCount").GetInt32());
         Assert.Equal(added.Length, kinds.GetProperty("entry-add").GetInt32());
-        Assert.All(push.GetProperty("operations").EnumerateArray(), operation => Assert.Equal("entry-add", operation.GetProperty("kind").GetString()));
+        Assert.All(
+            push.GetProperty("operations").EnumerateArray(),
+            operation => Assert.Equal("entry-add", operation.GetProperty("kind").GetString()));
         Assert.Equal(
             ["archidekt_pull_preview", "archidekt_pull_apply", "local_deck_apply_changes", "archidekt_push_preview"],
             world.CalledTools);
         Assert.Equal(ExpectedToolCalls, world.CalledTools.Count);
-        Assert.DoesNotContain(world.CalledTools, tool => tool.StartsWith("local_deck_identity_reconcile", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            world.CalledTools,
+            tool => tool.StartsWith("local_deck_identity_reconcile", StringComparison.Ordinal));
     }
 }

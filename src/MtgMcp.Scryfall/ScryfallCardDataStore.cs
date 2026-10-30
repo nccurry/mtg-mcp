@@ -19,7 +19,8 @@ internal sealed class ScryfallCardDataStore
     /// </summary>
     private const string NotInDeckLayout =
         "COALESCE(json_extract(c.raw_json, '$.layout') IN " +
-        "('token', 'double_faced_token', 'emblem', 'art_series', 'vanguard', 'scheme', 'planar', 'augment', 'host'), 0)";
+        "('token', 'double_faced_token', 'emblem', 'art_series', 'vanguard', 'scheme', 'planar', 'augment', " +
+        "'host'), 0)";
 
     /// <summary>
     /// Stores the shared SQLite connection and schema support.
@@ -316,7 +317,8 @@ internal sealed class ScryfallCardDataStore
         }
 
         StoredCardDataObject? found;
-        await using (SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+        await using (SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken)
+            .ConfigureAwait(false))
         {
             found = await reader.ReadAsync(cancellationToken).ConfigureAwait(false)
                 ? new StoredCardDataObject(

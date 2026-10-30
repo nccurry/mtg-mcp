@@ -209,9 +209,12 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
             await PageAsync("local_deck_get", arguments, "nextCursor", "cursor");
         }
 
-        _ = await CallAsync("local_deck_validate", new JsonObject { ["deckId"] = main.DeckId.ToString(), ["rules"] = "commander" });
+        _ = await CallAsync(
+            "local_deck_validate",
+            new JsonObject { ["deckId"] = main.DeckId.ToString(), ["rules"] = "commander" });
         _ = await CallAsync("local_deck_interchange_formats", []);
-        foreach (string format in new[] { "mtg-mcp-json-v1", "generic-text-v1", "archidekt-text-v1", "moxfield-bulk-edit-v1" })
+        string[] formats = ["mtg-mcp-json-v1", "generic-text-v1", "archidekt-text-v1", "moxfield-bulk-edit-v1"];
+        foreach (string format in formats)
         {
             await ExportAllAsync(main.DeckId, format);
         }
@@ -264,7 +267,12 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
         _ = await CallAsync("scryfall_tags_search", new JsonObject { ["query"] = "budget" });
         await PageAsync(
             "scryfall_installed_cards_by_tag",
-            new JsonObject { ["tagIdentity"] = ToolBudgetWorld.TagSlug, ["tagType"] = "oracle", ["responseFormat"] = "full" },
+            new JsonObject
+            {
+                ["tagIdentity"] = ToolBudgetWorld.TagSlug,
+                ["tagType"] = "oracle",
+                ["responseFormat"] = "full",
+            },
             "nextCursor",
             "cursor");
         _ = await CallAsync(
@@ -286,19 +294,31 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
             new JsonObject
             {
                 ["source"] = deck.DeepClone(),
-                ["rows"] = new JsonObject { ["fields"] = Strings(["name", "manaValue", "typeLine", "oracleText", "tags", "zone", "category"]) },
+                ["rows"] = new JsonObject
+                {
+                    ["fields"] = Strings(["name", "manaValue", "typeLine", "oracleText", "tags", "zone", "category"]),
+                },
             },
             "nextCursor",
             "cursor");
         _ = await CallAsync(
             "card_list_query",
-            new JsonObject { ["source"] = deck.DeepClone(), ["groupBy"] = Strings(["manaValue"]), ["metrics"] = Strings(["quantity"]) });
+            new JsonObject
+            {
+                ["source"] = deck.DeepClone(),
+                ["groupBy"] = Strings(["manaValue"]),
+                ["metrics"] = Strings(["quantity"]),
+            });
         await PageAsync(
             "card_lists_compare",
             new JsonObject
             {
                 ["left"] = deck.DeepClone(),
-                ["right"] = new JsonObject { ["kind"] = "cards", ["ids"] = Strings([.. world.Cards.Skip(150).Take(100).Select(card => card["id"]!.GetValue<string>())]) },
+                ["right"] = new JsonObject
+                {
+                    ["kind"] = "cards",
+                    ["ids"] = Strings([.. world.Cards.Skip(150).Take(100).Select(card => card["id"]!.GetValue<string>())]),
+                },
                 ["operation"] = "union",
                 ["responseFormat"] = "full",
             },
@@ -364,7 +384,11 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
                 ["groups"] = new JsonArray(new JsonObject
                 {
                     ["id"] = "lands",
-                    ["select"] = new JsonObject { ["kind"] = "entry-ids", ["ids"] = Strings([small.Entries[0].EntryId.ToString()]) },
+                    ["select"] = new JsonObject
+                    {
+                        ["kind"] = "entry-ids",
+                        ["ids"] = Strings([small.Entries[0].EntryId.ToString()]),
+                    },
                 }),
                 ["openingHand"] = new JsonObject { ["size"] = 7, ["onThePlay"] = true },
                 ["eachTurn"] = new JsonArray(new JsonObject
@@ -411,7 +435,9 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
             "archidekt_snapshot_restore_preview",
             new JsonObject { ["deckId"] = "42", ["snapshotId"] = "77" });
 
-        ToolBudgetWorld.ToolOutcome pull = await CallAsync("archidekt_pull_preview", new JsonObject { ["remoteDeckId"] = "42" });
+        ToolBudgetWorld.ToolOutcome pull = await CallAsync(
+            "archidekt_pull_preview",
+            new JsonObject { ["remoteDeckId"] = "42" });
         JsonElement pulled = pull.Data;
         ToolBudgetWorld.ToolOutcome applied = await CallAsync(
             "archidekt_pull_apply",
@@ -439,7 +465,8 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
             (await world.Store.ApplyChangesAsync(
                 localId,
                 local.Revision,
-                [.. local.Entries.Select(value => new UpdateDeckEntryChange(value with { Quantity = value.Quantity + 1 }))],
+                [.. local.Entries.Select(
+                    value => new UpdateDeckEntryChange(value with { Quantity = value.Quantity + 1 }))],
                 token)).Value).Data;
         await PreviewNativeImportAsync(localId);
         await PageAsync(
@@ -518,11 +545,18 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
     {
         string text = string.Join('\n', world.Cards.Take(300).Select(card => "1 " + card["name"]!.GetValue<string>()));
         JsonObject import = new() { ["formatId"] = "generic-text-v1", ["content"] = text };
-        ToolBudgetWorld.ToolOutcome importPreview = await PageAsync("local_deck_import_preview", import, "nextOffset", "offset");
-        await PreviewImportAsync("archidekt-text-v1", string.Join('\n', world.Cards.Take(300).Select(
-            (card, index) => $"1 {card["name"]!.GetValue<string>()} `Budget Category {index:000}`")));
-        await PreviewImportAsync("moxfield-bulk-edit-v1", string.Join('\n', world.Cards.Take(300).Select(
-            (card, index) => $"1 {card["name"]!.GetValue<string>()} #Budget Tag {index % 7} #Second Tag {index % 11}")));
+        ToolBudgetWorld.ToolOutcome importPreview = await PageAsync(
+            "local_deck_import_preview",
+            import,
+            "nextOffset",
+            "offset");
+        string[] names = [.. world.Cards.Take(300).Select(card => card["name"]!.GetValue<string>())];
+        await PreviewImportAsync(
+            "archidekt-text-v1",
+            string.Join('\n', names.Select((name, index) => $"1 {name} `Budget Category {index:000}`")));
+        await PreviewImportAsync(
+            "moxfield-bulk-edit-v1",
+            string.Join('\n', names.Select((name, index) => $"1 {name} #Budget Tag {index % 7} #Second Tag {index % 11}")));
         _ = await CallAsync(
             "local_deck_import_create",
             new JsonObject
@@ -561,7 +595,8 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
                 ["rules"] = new JsonArray(new JsonObject
                 {
                     ["categoryId"] = main.Categories.Single(value => value.Name == "Ramp").CategoryId.ToString(),
-                    ["allOf"] = new JsonArray(new JsonObject { ["tagType"] = "oracle", ["exactSlug"] = ToolBudgetWorld.TagSlug }),
+                    ["allOf"] = new JsonArray(
+                        new JsonObject { ["tagType"] = "oracle", ["exactSlug"] = ToolBudgetWorld.TagSlug }),
                     ["anyOf"] = new JsonArray(),
                     ["noneOf"] = new JsonArray(),
                 }),
@@ -599,21 +634,43 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
             additions.Add(new JsonObject
             {
                 ["kind"] = "add-entry",
-                ["entryDraft"] = new JsonObject { ["quantity"] = 1, ["cardName"] = card["name"]!.GetValue<string>(), ["zone"] = "maybeboard" },
+                ["entryDraft"] = new JsonObject
+                {
+                    ["quantity"] = 1,
+                    ["cardName"] = card["name"]!.GetValue<string>(),
+                    ["zone"] = "maybeboard",
+                },
             });
         }
 
         ToolBudgetWorld.ToolOutcome created = await CallAsync(
             "local_deck_create",
-            new JsonObject { ["request"] = new JsonObject { ["name"] = "Created by name", ["format"] = "commander", ["entries"] = drafts } });
+            new JsonObject
+            {
+                ["request"] = new JsonObject
+                {
+                    ["name"] = "Created by name",
+                    ["format"] = "commander",
+                    ["entries"] = drafts,
+                },
+            });
         Guid createdId = created.Data.GetProperty("deckId").GetGuid();
         long revision = created.Data.GetProperty("revision").GetInt64();
         ToolBudgetWorld.ToolOutcome edited = await CallAsync(
             "local_deck_apply_changes",
-            new JsonObject { ["deckId"] = createdId.ToString(), ["expectedRevision"] = revision, ["changes"] = additions });
+            new JsonObject
+            {
+                ["deckId"] = createdId.ToString(),
+                ["expectedRevision"] = revision,
+                ["changes"] = additions,
+            });
         _ = await CallAsync(
             "local_deck_delete",
-            new JsonObject { ["deckId"] = createdId.ToString(), ["expectedRevision"] = edited.Data.GetProperty("revision").GetInt64() });
+            new JsonObject
+            {
+                ["deckId"] = createdId.ToString(),
+                ["expectedRevision"] = edited.Data.GetProperty("revision").GetInt64(),
+            });
     }
 
     /// <summary>
@@ -621,9 +678,10 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
     /// </summary>
     private async Task WriteScryfallAsync()
     {
-        ToolBudgetWorld.ToolOutcome status = await CallAsync("scryfall_card_data_status", []);
-        _ = status.Data;
-        ToolBudgetWorld.ToolOutcome list = await CallAsync("scryfall_request_snapshots_get", new JsonObject { ["kind"] = "list" });
+        _ = await CallAsync("scryfall_card_data_status", []);
+        ToolBudgetWorld.ToolOutcome list = await CallAsync(
+            "scryfall_request_snapshots_get",
+            new JsonObject { ["kind"] = "list" });
         JsonElement first = list.Data.GetProperty("snapshots").GetProperty("items")[0];
         string snapshotId = first.GetProperty("snapshotId").GetString()!;
         _ = await CallAsync(
@@ -668,7 +726,9 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
         _ = await CallAsync(
             "local_deck_backup_delete",
             new JsonObject { ["backupId"] = restored.Data.GetProperty("rollbackBackupId").GetString() });
-        _ = await CallAsync("scryfall_card_data_delete", ScryfallDeleteArguments(await CallAsync("scryfall_card_data_status", [])));
+        _ = await CallAsync(
+            "scryfall_card_data_delete",
+            ScryfallDeleteArguments(await CallAsync("scryfall_card_data_status", [])));
     }
 
     /// <summary>

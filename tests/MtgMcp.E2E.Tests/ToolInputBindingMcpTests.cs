@@ -315,7 +315,8 @@ public sealed class ToolInputBindingMcpTests
             }).ConfigureAwait(false);
 
         Assert.NotEqual(true, result.IsError);
-        JsonElement entries = Assert.IsType<JsonElement>(result.StructuredContent).GetProperty("data").GetProperty("deck").GetProperty("entries");
+        JsonElement entries = Assert.IsType<JsonElement>(
+            result.StructuredContent).GetProperty("data").GetProperty("deck").GetProperty("entries");
         Assert.Contains(
             entries.EnumerateArray(),
             entry => entry.GetProperty("cardName").GetString() == "Sol Ring" &&

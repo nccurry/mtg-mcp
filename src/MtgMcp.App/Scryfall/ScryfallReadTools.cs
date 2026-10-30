@@ -69,13 +69,13 @@ internal sealed class ScryfallReadTools
         "Example query: otag:removal t:instant id<=wb mv<=2 f:commander. Use scryfall_tags_search to find " +
         "a tag's exact slug, and scryfall_installed_cards_by_tag only to read tag assignments from installed card " +
         "data. " +
-        "Printing-level filters (not:reprint, is:reprint, date, year, set, usd) are checked against the same " +
-        "printing, so a date or year filter alone also returns reprints; add not:reprint to keep only first " +
+        "Every printing-level filter (not:reprint, is:reprint, date, year, set, usd) must match one printing. " +
+        "A date or year filter matches reprints printed in that period, so add not:reprint to keep only first " +
         "printings, as in not:reprint year=2024. With unique cards each card appears once, as a printing that " +
         "meets every condition; unique prints lists every matching printing. " +
         "Use responseFormat concise for broad queries: it returns only the fields an agent needs to compare cards. " +
-        "The default standard format returns every card field this server returns, and a page of 25 rows can " +
-        "exceed 40,000 bytes, so with standard ask for a smaller pageSize.")]
+        "Every format is cut to the result size limit, with truncated, narrow, and nextCursor for the rest, so a " +
+        "standard or full page can hold fewer cards than pageSize; use concise or fields to fit more.")]
     internal Task<OperationResult<ScryfallSearchResponse>> SearchAsync(
         [Description("Official Scryfall search expression evaluated by Scryfall, not by mtg-mcp.")] string query,
         [Description("Scryfall uniqueness mode: cards, art, or prints."), AllowedValues("cards", "art", "prints")]
@@ -122,9 +122,9 @@ internal sealed class ScryfallReadTools
         "75 identifiers. A single lookup of kind fuzzy-name returns one row; fuzzy names cannot be mixed with " +
         "other lookups. Pass one lookup to read one card. Example: " +
         "{\"lookups\":[{\"kind\":\"exact-name\",\"value\":\"Sol Ring\"}],\"responseFormat\":\"concise\"}. " +
-        "responseFormat concise returns compact cards and cuts a page that would exceed the result size " +
-        "limit, with truncated, narrow, and a nextCursor for the rest. The standard format can exceed 40,000 " +
-        "bytes; use concise or a smaller pageSize.")]
+        "Every response format is cut to the result size limit, with truncated, narrow, and nextCursor for the " +
+        "rest, so a standard or full page can hold fewer cards than pageSize; use concise or fields to fit " +
+        "more.")]
     internal Task<OperationResult<ScryfallCollectionResponse>> GetCardsAsync(
         [Description(
             "One through 150 card lookups, each {kind, value} (or setCode and collectorNumber for a printing); " +
@@ -237,10 +237,9 @@ internal sealed class ScryfallReadTools
         "Installed Scryfall card data: returns cards assigned to one installed tag with direct or explicitly " +
         "requested descendant " +
         "evidence; it does not map tags to deck categories. To filter cards by tag together with type, " +
-        "color, mana value, or format, use scryfall_search with otag: instead. responseFormat concise returns " +
-        "compact cards and cuts a page that would exceed the result size limit, with truncated, narrow, and " +
-        "a nextCursor for the rest. The standard format can exceed 40,000 bytes; use concise or a smaller " +
-        "pageSize.")]
+        "color, mana value, or format, use scryfall_search with otag: instead. Every response format is cut to " +
+        "the result size limit, with truncated, narrow, and nextCursor for the rest, so a standard or full page " +
+        "can hold fewer cards than pageSize; use concise or fields to fit more.")]
     internal Task<OperationResult<ScryfallCardsByTagResponse>> GetCardsByTagAsync(
         [Description("Exact community tag identity returned by scryfall_tags_search.")] string tagIdentity,
         [Description("Required tag kind: oracle or art."), TagKindValues]

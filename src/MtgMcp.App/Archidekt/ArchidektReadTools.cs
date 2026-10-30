@@ -120,7 +120,8 @@ internal sealed class ArchidektReadTools
         "performs zero writes. The result starts with a summary (operation, difference, and conflict counts) and " +
         "says whether archidekt_pull_apply is available and which setting enables it. A public deck needs no " +
         "credentials; a private deck needs Archidekt credentials (see archidekt_auth_status). Rows come in pages " +
-        "that fit the size limit; the guards cover the whole preview, so the apply tool needs no page." +
+        "that fit the size limit; the guards cover the whole preview, so the apply tool needs no page. On later " +
+        "pages pass expectedPreviewFingerprint, the previewFingerprint of the first page." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSyncPreviewView>> PreviewPullAsync(
         [Description("Exact Archidekt deck identifier to read.")] string remoteDeckId,
@@ -155,7 +156,8 @@ internal sealed class ArchidektReadTools
         "Archidekt: previews stable primitive Archidekt operations and refuses remote drift; performs zero writes. " +
         "The result starts with a summary (operation counts by kind, difference and conflict counts) and says " +
         "whether archidekt_push_apply is available and which setting enables it. Rows come in pages that fit the " +
-        "size limit; the guards cover the whole preview, so the apply tool needs no page." +
+        "size limit; the guards cover the whole preview, so the apply tool needs no page. On later pages pass " +
+        "expectedPreviewFingerprint, the previewFingerprint of the first page." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSyncPreviewView>> PreviewPushAsync(
         [Description("Stable local deck UUID with an Archidekt provider binding.")] Guid localDeckId,
@@ -183,7 +185,11 @@ internal sealed class ArchidektReadTools
     {
         return coordinator.Service.GetAuthStatus() is OperationSuccess<ArchidektAuthStatus> status
             ? status.Data
-            : new ArchidektAuthStatus("unknown", CredentialsConfigured: false, SessionAuthenticated: false, string.Empty);
+            : new ArchidektAuthStatus(
+                "unknown",
+                CredentialsConfigured: false,
+                SessionAuthenticated: false,
+                string.Empty);
     }
 
     /// <summary>
@@ -221,7 +227,8 @@ internal sealed class ArchidektReadTools
         "Archidekt: diffs a fresh named snapshot against the fresh current deck and returns immutable restore " +
         "guards; performs zero writes. The result starts with operation and difference counts; rows come in pages " +
         "that fit the size limit and the guards cover the whole preview, so when truncated is true, call again " +
-        "with operationOffset and differenceOffset set to the next values." +
+        "with operationOffset and differenceOffset set to the next values and expectedPreviewFingerprint set " +
+        "to the previewFingerprint of the first page." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSnapshotRestorePreviewView>> PreviewSnapshotRestoreAsync(
         [Description("Exact Archidekt deck identifier that would be restored.")] string deckId,

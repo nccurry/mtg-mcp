@@ -23,7 +23,10 @@ internal static class WholeDeck
     /// <summary>
     /// Adds <c>returnDeck: true</c> to the arguments of a deck write tool and leaves other calls alone.
     /// </summary>
-    internal static IReadOnlyDictionary<string, object?> Prepare(string toolName, IReadOnlyDictionary<string, object?> arguments)
+    internal static IReadOnlyDictionary<string, object?> Prepare(
+        string toolName,
+        IReadOnlyDictionary<string,
+        object?> arguments)
     {
         if (!Tools.Contains(toolName))
         {
@@ -35,7 +38,8 @@ internal static class WholeDeck
     }
 
     /// <summary>
-    /// Replaces the data of a successful deck write result with the deck it carries; any other result is returned as is.
+    /// Replaces the data of a successful deck write result with the deck it carries; any other result is returned as
+    /// is.
     /// </summary>
     internal static JsonElement Unwrap(string toolName, JsonElement result)
     {

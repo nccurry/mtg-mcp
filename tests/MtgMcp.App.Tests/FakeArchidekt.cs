@@ -128,7 +128,9 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     }
 
     /// <inheritdoc/>
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
     {
         string path = request.RequestUri!.PathAndQuery.TrimStart('/');
         string body = request.Content is null
@@ -472,7 +474,13 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     /// <summary>
     /// Describes one card Archidekt knows.
     /// </summary>
-    internal sealed record FakeCard(int Id, string Name, Guid PrintingId, Guid OracleId, string SetCode, string CollectorNumber);
+    internal sealed record FakeCard(
+        int Id,
+        string Name,
+        Guid PrintingId,
+        Guid OracleId,
+        string SetCode,
+        string CollectorNumber);
 
     /// <summary>
     /// Stores one category of the fake deck.
