@@ -23,6 +23,42 @@ internal sealed class ScryfallCardDataStore
         "'host'), 0)";
 
     /// <summary>
+    /// Selects the IDs of the printings that carry an exact name as their own name or as the name of one face, as
+    /// two index searches (<c>ix_cards_name</c> and <c>ix_faces_name</c>) joined by UNION, so a lookup reads only the
+    /// printings of that name instead of scanning every card of the generation. The indexes are named because
+    /// SQLite, with no table statistics, otherwise picks the primary key index and reads the whole generation. Uses
+    /// the <c>$generation</c> and <c>$value</c> parameters.
+    /// </summary>
+    private const string NameCandidateIds =
+        "SELECT card_id FROM card_objects INDEXED BY ix_cards_name " +
+        "WHERE generation_id = $generation AND name_key = $value " +
+        "UNION SELECT card_id FROM card_faces INDEXED BY ix_faces_name " +
+        "WHERE generation_id = $generation AND name_key = $value";
+
+    /// <summary>
+    /// Selects the best printing for a name: a card played in a deck beats a token, emblem, or art card; then a
+    /// full-name match beats a face-name match; then English, newest, and set order decide.
+    /// </summary>
+    internal const string NameBestCardSql =
+        "SELECT c.raw_json, g.created_at_utc, d.provider_updated_at_utc FROM card_objects c " +
+        "JOIN corpus_generations g ON g.generation_id = c.generation_id " +
+        "JOIN corpus_datasets d ON d.generation_id = c.generation_id AND d.dataset_type = 'all_cards' " +
+        "WHERE c.generation_id = $generation AND c.card_id IN (" + NameCandidateIds + ") " +
+        "ORDER BY " + NotInDeckLayout + " ASC, c.name_key = $value DESC, c.lang = 'en' DESC, " +
+        "c.released_at DESC, c.set_code, c.collector_number LIMIT 1;";
+
+    /// <summary>
+    /// Counts the different Oracle IDs in the best group of printings of a name, using the same two ranks as
+    /// <see cref="NameBestCardSql"/>.
+    /// </summary>
+    internal const string NameMatchCountSql =
+        "SELECT COUNT(DISTINCT oracle_id) FROM (" +
+        "SELECT " + NotInDeckLayout + " AS not_in_deck, c.name_key = $value AS is_full_name, " +
+        "c.oracle_id AS oracle_id FROM card_objects c " +
+        "WHERE c.generation_id = $generation AND c.card_id IN (" + NameCandidateIds + ")) " +
+        "GROUP BY not_in_deck, is_full_name ORDER BY not_in_deck ASC, is_full_name DESC LIMIT 1;";
+
+    /// <summary>
     /// Stores the shared SQLite connection and schema support.
     /// </summary>
     private readonly ScryfallDatabase database;
@@ -126,8 +162,13 @@ internal sealed class ScryfallCardDataStore
             return null;
         }
 
-        return await FindCardOnConnectionAsync(connection, generationId.Value, lookup, null, cancellationToken)
-            .ConfigureAwait(false);
+        return await FindCardOnConnectionAsync(
+            connection,
+            generationId.Value,
+            lookup,
+            null,
+            countMatches: false,
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -162,6 +203,7 @@ internal sealed class ScryfallCardDataStore
                 generationId,
                 lookup,
                 requiredLanguage,
+                countMatches: false,
                 cancellationToken).ConfigureAwait(false);
     }
 
@@ -193,6 +235,7 @@ internal sealed class ScryfallCardDataStore
                 generationId,
                 lookup.Lookup,
                 lookup.RequiredLanguage,
+                countMatches: true,
                 cancellationToken).ConfigureAwait(false));
         }
 
@@ -226,6 +269,7 @@ internal sealed class ScryfallCardDataStore
                 generationId,
                 lookup.Lookup,
                 lookup.RequiredLanguage,
+                countMatches: false,
                 cancellationToken).ConfigureAwait(false));
         }
 
@@ -253,13 +297,16 @@ internal sealed class ScryfallCardDataStore
     }
 
     /// <summary>
-    /// Executes one validated card lookup against a caller-selected card-data generation.
+    /// Executes one validated card lookup against a caller-selected card-data generation. An exact-name lookup runs a
+    /// second query for <see cref="StoredCardDataObject.MatchingOracleIdCount"/> only when
+    /// <paramref name="countMatches"/> is true, so a caller that ignores the count does not pay for it.
     /// </summary>
     private static async Task<StoredCardDataObject?> FindCardOnConnectionAsync(
         SqliteConnection connection,
         Guid generationId,
         ScryfallCardLookup lookup,
         string? requiredLanguage,
+        bool countMatches,
         CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
@@ -285,15 +332,7 @@ internal sealed class ScryfallCardDataStore
                 break;
             case "exact-name":
             case "fuzzy-name":
-                command.CommandText =
-                    "SELECT c.raw_json, g.created_at_utc, d.provider_updated_at_utc FROM card_objects c " +
-                    "JOIN corpus_generations g ON g.generation_id = c.generation_id " +
-                    "JOIN corpus_datasets d ON d.generation_id = c.generation_id AND d.dataset_type = 'all_cards' " +
-                    "WHERE c.generation_id = $generation AND (c.name_key = $value OR EXISTS " +
-                    "(SELECT 1 FROM card_faces f WHERE f.generation_id = c.generation_id " +
-                    "AND f.card_id = c.card_id AND f.name_key = $value)) " +
-                    "ORDER BY c.name_key = $value DESC, " + NotInDeckLayout + " ASC, c.lang = 'en' DESC, " +
-                    "c.released_at DESC, c.set_code, c.collector_number LIMIT 1;";
+                command.CommandText = NameBestCardSql;
                 command.Parameters.AddWithValue("$value", lookup.Value!.Trim().ToUpperInvariant());
                 break;
             case "printing":
@@ -329,7 +368,7 @@ internal sealed class ScryfallCardDataStore
                 : null;
         }
 
-        if (found is null || lookup.Kind != "exact-name")
+        if (found is null || lookup.Kind != "exact-name" || !countMatches)
         {
             return found;
         }
@@ -345,9 +384,9 @@ internal sealed class ScryfallCardDataStore
     }
 
     /// <summary>
-    /// Counts the different cards (Oracle IDs) that carry an exact name, among the best matches only: a full-name
-    /// match beats a face-name match, and a card that is played in a deck beats a token, emblem, or art card of the
-    /// same name. More than one means the name does not settle which card is meant.
+    /// Counts the different cards (Oracle IDs) that carry an exact name, among the best matches only: a card that is
+    /// played in a deck beats a token, emblem, or art card of the same name, and then a full-name match beats a
+    /// face-name match. More than one means the name does not settle which card is meant.
     /// </summary>
     private static async Task<int> CountMatchingOracleIdsAsync(
         SqliteConnection connection,
@@ -356,14 +395,7 @@ internal sealed class ScryfallCardDataStore
         CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText =
-            "SELECT COUNT(DISTINCT oracle_id) FROM (" +
-            "SELECT c.name_key = $value AS is_full_name, " + NotInDeckLayout + " AS not_in_deck, " +
-            "c.oracle_id AS oracle_id FROM card_objects c " +
-            "WHERE c.generation_id = $generation AND (c.name_key = $value OR EXISTS " +
-            "(SELECT 1 FROM card_faces f WHERE f.generation_id = c.generation_id " +
-            "AND f.card_id = c.card_id AND f.name_key = $value))) " +
-            "GROUP BY is_full_name, not_in_deck ORDER BY is_full_name DESC, not_in_deck ASC LIMIT 1;";
+        command.CommandText = NameMatchCountSql;
         command.Parameters.AddWithValue("$generation", ScryfallSql.FormatGuid(generationId));
         command.Parameters.AddWithValue("$value", nameKey);
         object? count = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
@@ -691,6 +723,7 @@ internal sealed class ScryfallCardDataStore
                 generationId,
                 lookup,
                 null,
+                countMatches: false,
                 cancellationToken).ConfigureAwait(false);
             if (card is null)
             {

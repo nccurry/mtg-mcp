@@ -40,6 +40,28 @@ public sealed class DeckEntryResolverTests
     }
 
     /// <summary>
+    /// Verifies a token whose full name equals the front-face name of a playable double-faced card does not win: the
+    /// name resolves to the playable card.
+    /// </summary>
+    [Fact]
+    public async Task Resolve_TokenNamedLikeAFaceOfAPlayableCard_ResolvesThePlayableCard()
+    {
+        JsonObject delver = RecordedCards.Object(RecordedCards.Transform);
+        JsonObject token = CardJson.Make("Delver of Secrets", typeLine: "Token Creature — Wizard");
+        token["layout"] = "token";
+        token["released_at"] = "2030-01-01";
+        using CardDataFixture data = await CardDataFixture.CreateAsync([delver, token]);
+
+        DeckDraftResolution result = await new DeckEntryResolver(data.Scryfall).ResolveAsync(
+            [new DeckEntryDraft(1, "Delver of Secrets")],
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(CardJson.OracleOf(delver), result.Drafts[0].OracleId);
+        Assert.Equal(DelverFullName, result.Drafts[0].CardName);
+        Assert.Empty(result.Issues);
+    }
+
+    /// <summary>
     /// Verifies a name that only a token has still resolves, because no playable card competes for it.
     /// </summary>
     [Fact]
