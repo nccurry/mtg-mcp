@@ -169,12 +169,12 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
                 return outcome;
             }
 
-            arguments["operationOffset"] = moreOperations
-                ? operations
-                : data.GetProperty("operationOffset").GetInt32() + data.GetProperty("operations").GetArrayLength();
-            arguments["differenceOffset"] = moreDifferences
-                ? differences
-                : data.GetProperty("differenceOffset").GetInt32() + data.GetProperty("differences").GetArrayLength();
+            // A page that is not the last carries both next offsets; a missing one is a defect, not a cue to guess.
+            Assert.True(
+                moreOperations && moreDifferences,
+                $"{tool} left out a next offset on a page that is not the last.");
+            arguments["operationOffset"] = operations;
+            arguments["differenceOffset"] = differences;
         }
 
         Assert.Fail($"{tool} did not finish after {MaximumPages} pages.");

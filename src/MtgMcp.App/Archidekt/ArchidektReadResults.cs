@@ -141,12 +141,12 @@ internal sealed record ArchidektSnapshotRestorePreviewView(
     public string? Narrow { get; init; }
 
     /// <summary>
-    /// Gets the <c>operationOffset</c> that returns the next page of operations, or null when none are left.
+    /// Gets the <c>operationOffset</c> that returns the next page of operations, or null on the last page. When the operations ended but the differences did not, it is the number of operations.
     /// </summary>
     public int? NextOperationOffset { get; init; }
 
     /// <summary>
-    /// Gets the <c>differenceOffset</c> that returns the next page of differences, or null when none are left.
+    /// Gets the <c>differenceOffset</c> that returns the next page of differences, or null on the last page. When the differences ended but the operations did not, it is the number of differences.
     /// </summary>
     public int? NextDifferenceOffset { get; init; }
 }
@@ -248,12 +248,12 @@ internal sealed record ArchidektSyncPreviewView(
     public string? Narrow { get; init; }
 
     /// <summary>
-    /// Gets the <c>operationOffset</c> that returns the next page of operations, or null when none are left.
+    /// Gets the <c>operationOffset</c> that returns the next page of operations, or null on the last page. When the operations ended but the differences did not, it is the number of operations.
     /// </summary>
     public int? NextOperationOffset { get; init; }
 
     /// <summary>
-    /// Gets the <c>differenceOffset</c> that returns the next page of differences, or null when none are left.
+    /// Gets the <c>differenceOffset</c> that returns the next page of differences, or null on the last page. When the differences ended but the operations did not, it is the number of differences.
     /// </summary>
     public int? NextDifferenceOffset { get; init; }
 }

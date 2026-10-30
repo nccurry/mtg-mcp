@@ -14,6 +14,17 @@ internal readonly record struct ResultPageSlice(int Offset, int Count, int Total
     internal int Next => Offset + Count;
 
     /// <summary>
+    /// Gets the offset of the next page while the result goes on, even when this list has ended, in which case the
+    /// offset is the list's row count. A result with two lists needs both next offsets on every page that is not the
+    /// last, or a caller that leaves one out starts that list again from row 0.
+    /// </summary>
+    /// <param name="resultContinues">True when any list of the result has rows left.</param>
+    internal int? NextOffsetIf(bool resultContinues)
+    {
+        return resultContinues ? Next : null;
+    }
+
+    /// <summary>
     /// Gets true when rows of the list come after this page.
     /// </summary>
     internal bool More => Next < Total;

@@ -140,8 +140,8 @@ internal static class ArchidektResultPaging
             Operations = operations.Rows(preview.Operations),
             Differences = differences.Rows(preview.Differences),
             Truncated = more ? true : null,
-            NextOperationOffset = operations.NextOffset,
-            NextDifferenceOffset = differences.NextOffset,
+            NextOperationOffset = operations.NextOffsetIf(more),
+            NextDifferenceOffset = differences.NextOffsetIf(more),
             Narrow = more ? TwoListNarrow("the summary and every guard", operations, differences) : null,
         });
     }
@@ -277,8 +277,8 @@ internal static class ArchidektResultPaging
             Operations = operations.Rows(preview.Operations),
             Differences = differences.Rows(preview.Differences),
             Truncated = more ? true : null,
-            NextOperationOffset = operations.NextOffset,
-            NextDifferenceOffset = differences.NextOffset,
+            NextOperationOffset = operations.NextOffsetIf(more),
+            NextDifferenceOffset = differences.NextOffsetIf(more),
             Narrow = more ? TwoListNarrow("the counts and every guard", operations, differences) : null,
         });
     }

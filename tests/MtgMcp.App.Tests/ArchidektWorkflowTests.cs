@@ -404,8 +404,8 @@ public sealed class ArchidektWorkflowTests
             }
 
             Assert.Contains("operationOffset", page.Narrow, StringComparison.Ordinal);
-            operationOffset = page.NextOperationOffset ?? page.OperationOffset + page.Operations.Count;
-            differenceOffset = page.NextDifferenceOffset ?? page.DifferenceOffset + page.Differences.Count;
+            operationOffset = Assert.NotNull(page.NextOperationOffset);
+            differenceOffset = Assert.NotNull(page.NextDifferenceOffset);
         }
 
         Assert.True(pages.Count > 1);
@@ -522,12 +522,13 @@ public sealed class ArchidektWorkflowTests
         ArchidektSyncPreviewView first = Success(
             await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
         Assert.Contains("expectedPreviewFingerprint", first.Narrow, StringComparison.Ordinal);
-        int nextOperation = first.NextOperationOffset ?? first.Operations.Count;
+        int nextOperation = Assert.NotNull(first.NextOperationOffset);
+        int nextDifference = Assert.NotNull(first.NextDifferenceOffset);
 
         ArchidektSyncPreviewView same = Success(await world.Reads.PreviewPushAsync(
             localDeckId,
             operationOffset: nextOperation,
-            differenceOffset: first.NextDifferenceOffset ?? first.Differences.Count,
+            differenceOffset: nextDifference,
             expectedPreviewFingerprint: first.PreviewFingerprint,
             cancellationToken: token));
         DeckEntry changed = edited.Entries[0];
@@ -539,7 +540,7 @@ public sealed class ArchidektWorkflowTests
         OperationResult<ArchidektSyncPreviewView> stale = await world.Reads.PreviewPushAsync(
             localDeckId,
             operationOffset: nextOperation,
-            differenceOffset: first.NextDifferenceOffset ?? first.Differences.Count,
+            differenceOffset: nextDifference,
             expectedPreviewFingerprint: first.PreviewFingerprint,
             cancellationToken: token);
         ArchidektSyncPreviewView firstAgain = Success(await world.Reads.PreviewPushAsync(
@@ -728,8 +729,8 @@ public sealed class ArchidektWorkflowTests
             }
 
             Assert.Contains("expectedPreviewFingerprint", page.Narrow, StringComparison.Ordinal);
-            operationOffset = page.NextOperationOffset ?? page.OperationOffset + page.Operations.Count;
-            differenceOffset = page.NextDifferenceOffset ?? page.DifferenceOffset + page.Differences.Count;
+            operationOffset = Assert.NotNull(page.NextOperationOffset);
+            differenceOffset = Assert.NotNull(page.NextDifferenceOffset);
         }
 
         List<int> sequences = [.. pages.SelectMany(page => page.Operations).Select(value => value.Sequence)];
