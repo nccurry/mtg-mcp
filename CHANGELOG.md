@@ -93,7 +93,8 @@ inline for a large deck, so each is taken under the `docs/versioning.md` excepti
   that follows the fields alone reaches every row once.
 - A deck's name and description are cut on a paged result so a long one cannot push every page over the limit: the name
   to 1,000 UTF-8 bytes on every page (`nameTruncated`), and the description to 8,000 UTF-8 bytes on the first page only
-  (`descriptionTruncated`, with `descriptionLength`); a later page shows no description.
+  (`descriptionTruncated`, with `descriptionLength`); a later page shows no description. A deck write summary cuts
+  the name the same way.
 - A test that calls every tool against large offline fixtures and fails on any result, successful or not, over
   50,000 characters, or on a tool that grows with its data but never pages (`ToolResultBudgetTests`), and a scenario
   test that adds cards by name and reaches a clean push preview in

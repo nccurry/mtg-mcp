@@ -308,7 +308,7 @@ On later pages pass `expectedPreviewFingerprint` (the `previewFingerprint`, or f
 import preview also carries the diagnostics, unresolved identities, categories, and provider bindings, each cut to
 fit with its exact count beside it; the saved synchronization snapshots of a native file are counted, not returned.
 A paged deck cuts its name to 1,000 UTF-8 bytes (`nameTruncated`) and its description to 8,000 on the first page only
-(`descriptionTruncated`, `descriptionLength`).
+(`descriptionTruncated`, `descriptionLength`). A deck write summary cuts the name the same way.
 `local_deck_export_bundle` lists every artifact (file name, media type, total length in UTF-16 code units, and the
 SHA-256 of the whole content) and returns one chunk of one artifact's content of at most 30,000 UTF-8 bytes of
 JSON text; pass `artifact` and `offset` (the previous `chunk.nextOffset`, a count of UTF-16 code units) to read on.

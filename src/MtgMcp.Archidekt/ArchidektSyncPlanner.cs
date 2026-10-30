@@ -740,8 +740,9 @@ public static class ArchidektSyncPlanner
 
         // Name-only rows are the rest: an entry with a printing, an Oracle ID, or a provider card ID never gets here.
         // The name rule pairs a card only with its own faces, so "Fire" matches "Fire // Ice" and not "Fire // Water".
-        // When two rows fit one target ("Ice" and "Fire // Ice" both in the deck), the callers leave the link unset
-        // instead of picking one.
+        // When two rows fit one target ("Ice" and "Fire // Ice" both in the deck), the identity link leaves it unset;
+        // entry matching takes the first by relation ID, and verification still compares quantity, zone, finish and
+        // categories.
         return !string.IsNullOrWhiteSpace(expected.ProviderCardId)
             ? string.Equals(observed.ProviderCardId, expected.ProviderCardId, StringComparison.Ordinal)
             : CardNames.Match(observed.CardName, expected.CardName);

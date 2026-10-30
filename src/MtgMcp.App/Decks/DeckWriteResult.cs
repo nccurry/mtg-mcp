@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 
 namespace MtgMcp.App.Decks;
@@ -105,6 +106,13 @@ internal sealed record DeckWriteResult(
     [JsonPropertyName("issues")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<DeckWriteIssue>? Issues { get; init; }
+
+    /// <summary>
+    /// Gets true when the name is cut to the length a summary may show, or null when it is whole.
+    /// </summary>
+    [JsonPropertyName("nameTruncated")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? NameTruncated { get; init; }
 
     /// <summary>
     /// Gets the number of issues the write found, which can be more than the list holds.
@@ -226,9 +234,10 @@ internal static class DeckWriteResults
             updatedCategories.Count + removedCategories.Count;
         bool issuesCut = issues.Count > MaximumListedIssues;
         bool truncated = listed < changed || issuesCut;
+        ShownText name = ResultText.Name(after.Name);
         return new DeckWriteResult(
             after.DeckId,
-            after.Name,
+            name.Text,
             after.Revision,
             after.Entries.Count,
             after.Entries.Sum(entry => entry.Quantity),
@@ -236,6 +245,7 @@ internal static class DeckWriteResults
             counts)
         {
             PreviousRevision = before?.Revision,
+            NameTruncated = name.TruncatedOrNull,
             AddedEntryIds = addedEntryIds,
             UpdatedEntryIds = updatedEntryIds,
             RemovedEntryIds = removedEntryIds,

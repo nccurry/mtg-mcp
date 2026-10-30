@@ -16,6 +16,29 @@ namespace MtgMcp.App.Tests;
 public sealed class DeckWriteSummaryTests
 {
     /// <summary>
+    /// Verifies a deck with a 50,000-character name gets a summary with the name cut and marked, so the summary stays
+    /// small.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_HugeDeckName_CutsTheNameInTheSummary()
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = Success(await setup.Store.CreateAsync(
+            new DeckCreateRequest(new string('n', 50_000), Format: "custom"),
+            TestContext.Current.CancellationToken));
+
+        DeckWriteResult summary = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [new AddDeckCategoryInput(new DeckCategoryDraft("Ramp"))],
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.True(summary.NameTruncated);
+        Assert.Equal(ResultText.MaximumNameBytes, summary.Name.Length);
+        Assert.True(Json(summary).Length < 10_000);
+    }
+
+    /// <summary>
     /// Verifies a batch on a 300-entry deck returns a summary under 10,000 characters with the listed fields, and
     /// returnDeck adds the whole deck.
     /// </summary>

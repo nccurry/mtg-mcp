@@ -63,9 +63,9 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     private int nextRelationId = 1000;
 
     /// <summary>
-    /// Holds the deck name.
+    /// Gets or sets the name the fake deck reports.
     /// </summary>
-    private string name = "Fake deck";
+    internal string DeckName { get; set; } = "Fake deck";
 
     /// <summary>
     /// Gets or sets the description the fake deck reports.
@@ -232,7 +232,7 @@ internal sealed class FakeArchidekt : HttpMessageHandler
         if (method == HttpMethod.Patch && path == $"api/decks/{DeckId}/")
         {
             JsonNode metadata = JsonNode.Parse(body)!;
-            name = metadata["name"]?.GetValue<string>() ?? name;
+            DeckName = metadata["name"]?.GetValue<string>() ?? DeckName;
         }
         else if (method == HttpMethod.Post && path == "api/decks/createCategory/")
         {
@@ -361,7 +361,7 @@ internal sealed class FakeArchidekt : HttpMessageHandler
         return new JsonObject
         {
             ["id"] = int.Parse(DeckId, System.Globalization.CultureInfo.InvariantCulture),
-            ["name"] = name,
+            ["name"] = DeckName,
             ["description"] = Description,
             ["deckFormat"] = 3,
             ["private"] = true,
@@ -381,7 +381,7 @@ internal sealed class FakeArchidekt : HttpMessageHandler
             decks.Add(new JsonObject
             {
                 ["id"] = index == 0 ? 42 : 5000 + index,
-                ["name"] = index == 0 ? name : $"Listed deck {index:000}",
+                ["name"] = index == 0 ? DeckName : $"Listed deck {index:000}",
                 ["description"] = "A deck in the owner's list.",
                 ["deckFormat"] = 3,
                 ["private"] = true,
@@ -400,7 +400,7 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     private JsonObject SerializeFolder()
     {
         JsonArray children = [];
-        JsonArray decks = [new JsonObject { ["id"] = 42, ["name"] = name, ["deckFormat"] = 3, ["private"] = true }];
+        JsonArray decks = [new JsonObject { ["id"] = 42, ["name"] = DeckName, ["deckFormat"] = 3, ["private"] = true }];
         for (int index = 0; index < ListedDecks; index++)
         {
             children.Add(new JsonObject
