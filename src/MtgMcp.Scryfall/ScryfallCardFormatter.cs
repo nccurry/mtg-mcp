@@ -48,8 +48,7 @@ internal sealed class ScryfallCardFormatter
     internal ScryfallCardFormat Format { get; }
 
     /// <summary>
-    /// Gets the item counter that page builders call. For concise cards it cuts the page to the size limit; for the
-    /// other formats it keeps every item.
+    /// Gets the item counter that page builders call. It cuts the page to the size limit in every format.
     /// </summary>
     internal ScryfallPageItemCounter CountItemsThatFit => CountAsync;
 
@@ -133,7 +132,7 @@ internal sealed class ScryfallCardFormatter
     }
 
     /// <summary>
-    /// Shapes a page and, for concise cards, keeps the leading items that fit the result size limit, always at
+    /// Shapes a page and keeps the leading items that fit the result size limit, always at
     /// least one. The limit notes describe only the kept cards.
     /// </summary>
     private async Task<ScryfallFormattedCards> CountAsync(
@@ -146,23 +145,19 @@ internal sealed class ScryfallCardFormatter
             cards,
             generationId,
             cancellationToken).ConfigureAwait(false);
-        int keep = views.Count;
-        if (Format.IsConcise)
+        List<int> sizes = new(views.Count);
+        for (int index = 0; index < views.Count; index++)
         {
-            List<int> sizes = new(views.Count);
-            for (int index = 0; index < views.Count; index++)
+            int size = 1 + Measure(companions[index]);
+            if (views[index] is { } view)
             {
-                int size = 1 + Measure(companions[index]);
-                if (views[index] is { } view)
-                {
-                    size += Measure(view);
-                }
-
-                sizes.Add(size);
+                size += Measure(view);
             }
 
-            keep = ResultSizeLimit.CountFitting(sizes);
+            sizes.Add(size);
         }
+
+        int keep = ResultSizeLimit.CountFitting(sizes);
 
         return new ScryfallFormattedCards(
             [.. views.Take(keep)],

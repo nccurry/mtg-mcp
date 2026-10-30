@@ -2037,20 +2037,20 @@ public sealed class ArchidektCoordinatorTests
             using ArchidektService service = CreateService(handler);
             using SqliteDeckStore store = new(root, "test");
             ArchidektCoordinator coordinator = new(service, store);
-            ArchidektReadTools reads = new(coordinator);
+            ArchidektReadTools reads = new(coordinator, OperationMode.Remote);
             CancellationToken token = TestContext.Current.CancellationToken;
 
             Assert.IsType<OperationSuccess<ArchidektAuthStatus>>(reads.AuthStatus().Value);
             AssertPermitted(await reads.ListDecksAsync(pageSize: 0, cancellationToken: token));
-            AssertPermitted(await reads.GetDeckAsync(" ", token));
-            AssertPermitted(await reads.DiffAsync(Guid.NewGuid(), token));
+            AssertPermitted(await reads.GetDeckAsync(" ", cancellationToken: token));
+            AssertPermitted(await reads.DiffAsync(Guid.NewGuid(), cancellationToken: token));
             AssertPermitted(await reads.PreviewPullAsync(" ", cancellationToken: token));
-            AssertPermitted(await reads.PreviewPushAsync(Guid.NewGuid(), token));
+            AssertPermitted(await reads.PreviewPushAsync(Guid.NewGuid(), cancellationToken: token));
             AssertPermitted(await reads.GetFoldersAsync("list", cancellationToken: token));
-            AssertPermitted(await reads.GetFoldersAsync("get", " ", token));
+            AssertPermitted(await reads.GetFoldersAsync("get", " ", cancellationToken: token));
             AssertPermitted(await reads.GetSnapshotsAsync("list", " ", cancellationToken: token));
-            AssertPermitted(await reads.GetSnapshotsAsync("get", " ", " ", token));
-            AssertPermitted(await reads.PreviewSnapshotRestoreAsync(" ", " ", token));
+            AssertPermitted(await reads.GetSnapshotsAsync("get", " ", " ", cancellationToken: token));
+            AssertPermitted(await reads.PreviewSnapshotRestoreAsync(" ", " ", cancellationToken: token));
 
             ArchidektLocalWriteTools localWrites = new(coordinator, OperationMode.Local);
             AssertPermitted(await localWrites.ApplyPullAsync(

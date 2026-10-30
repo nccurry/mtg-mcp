@@ -18,7 +18,7 @@ public sealed class DeckMcpTests
         await using McpProcessSession session = await McpProcessSession.StartAsync(
             "local",
             TestContext.Current.CancellationToken).ConfigureAwait(false);
-        JsonElement deck = await CallSuccessAsync(
+        JsonElement deck = await WholeDeck.SuccessAsync(
             session,
             "local_deck_create",
             new Dictionary<string, object?>
@@ -145,7 +145,7 @@ public sealed class DeckMcpTests
         revision = deck.GetProperty("revision").GetInt64();
         Assert.Empty(deck.GetProperty("categoryAssignments").EnumerateArray());
 
-        JsonElement invalidBatch = await CallAsync(
+        JsonElement invalidBatch = await WholeDeck.CallAsync(
             session,
             "local_deck_apply_changes",
             new Dictionary<string, object?>
@@ -167,7 +167,7 @@ public sealed class DeckMcpTests
             "Deck change at index 0 with kind 'remove-entry' requires a non-empty entryId.",
             invalidBatch.GetProperty("message").GetString());
 
-        deck = await CallSuccessAsync(
+        deck = await WholeDeck.SuccessAsync(
             session,
             "local_deck_apply_changes",
             new Dictionary<string, object?>
@@ -285,7 +285,7 @@ public sealed class DeckMcpTests
         await using McpProcessSession session = await McpProcessSession.StartAsync(
             "local",
             TestContext.Current.CancellationToken).ConfigureAwait(false);
-        JsonElement created = await CallAsync(
+        JsonElement created = await WholeDeck.CallAsync(
             session,
             "local_deck_create",
             new Dictionary<string, object?>
@@ -391,7 +391,7 @@ public sealed class DeckMcpTests
         long revision,
         object change)
     {
-        return CallAsync(
+        return WholeDeck.CallAsync(
             session,
             "local_deck_apply_changes",
             new Dictionary<string, object?>

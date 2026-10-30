@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MtgMcp.App.Archidekt;
+using MtgMcp.App.Configuration;
 using MtgMcp.App.Hosting;
 using MtgMcp.Archidekt;
 using MtgMcp.Archidekt.Tests;
@@ -38,7 +39,7 @@ public sealed class ArchidektKindToolTests
         JsonElement get = Data(await fixture.Tools.GetFoldersAsync(
             "get",
             "9",
-            TestContext.Current.CancellationToken));
+            cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal("list", list.GetProperty("kind").GetString());
         Assert.Equal("Tests", list.GetProperty("folders").GetProperty("items")[0].GetProperty("name").GetString());
@@ -66,7 +67,7 @@ public sealed class ArchidektKindToolTests
             "get",
             "42",
             "77",
-            TestContext.Current.CancellationToken));
+            cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal("list", list.GetProperty("kind").GetString());
         Assert.Equal("77", list.GetProperty("snapshots").GetProperty("items")[0].GetProperty("snapshotId").GetString());
@@ -98,9 +99,16 @@ public sealed class ArchidektKindToolTests
 
         OperationInvalidInput invalid = tool == "folders"
             ? Assert.IsType<OperationInvalidInput>(
-                (await fixture.Tools.GetFoldersAsync(kind, id, TestContext.Current.CancellationToken)).Value)
+                (await fixture.Tools.GetFoldersAsync(
+                    kind,
+                    id,
+                    cancellationToken: TestContext.Current.CancellationToken)).Value)
             : Assert.IsType<OperationInvalidInput>(
-                (await fixture.Tools.GetSnapshotsAsync(kind, "42", id, TestContext.Current.CancellationToken))
+                (await fixture.Tools.GetSnapshotsAsync(
+                    kind,
+                    "42",
+                    id,
+                    cancellationToken: TestContext.Current.CancellationToken))
                 .Value);
 
         Assert.Equal((expectedReason, expectedPath), (invalid.ReasonCode, invalid.Path));
@@ -119,7 +127,7 @@ public sealed class ArchidektKindToolTests
         OperationResult<ArchidektFoldersResult> result = await fixture.Tools.GetFoldersAsync(
             "get",
             "404",
-            TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken);
 
         OperationNotFound missing = Assert.IsType<OperationNotFound>(result.Value);
         Assert.Equal("provider-entity-not-found", missing.ReasonCode);
@@ -175,7 +183,7 @@ public sealed class ArchidektKindToolTests
                 new ArchidektSession(client, ownsHttpClient: true, options),
                 options.MaximumRequestsPerOperation);
             store = new SqliteDeckStore(temporary.Path, "test");
-            Tools = new ArchidektReadTools(new ArchidektCoordinator(service, store));
+            Tools = new ArchidektReadTools(new ArchidektCoordinator(service, store), OperationMode.Remote);
         }
 
         /// <summary>

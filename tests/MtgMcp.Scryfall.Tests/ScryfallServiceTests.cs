@@ -1568,6 +1568,39 @@ public sealed class ScryfallServiceTests
     }
 
     /// <summary>
+    /// Verifies a single-card read by exact name returns the card, not a newer token with the same name, from installed
+    /// card data alone.
+    /// </summary>
+    [Fact]
+    public async Task CardGet_ExactNameSharedByTokenAndCard_ReturnsTheCard()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        JsonObject token = JsonNode.Parse(ScryfallTestFixture.RedCard())!.AsObject();
+        token["id"] = "88888888-8888-4888-8888-888888888888";
+        token["oracle_id"] = "99999999-9999-4999-8999-999999999999";
+        token["set"] = "ttt";
+        token["collector_number"] = "1";
+        token["layout"] = "token";
+        token["released_at"] = "2030-01-01";
+        RecordingHandler handler = ScryfallTestFixture.Provider(
+            intercept: request => request.RequestUri!.AbsolutePath == "/download/all_cards.jsonl.gz"
+                ? ScryfallTestFixture.Bytes(ScryfallTestFixture.GzipLines(
+                    [ScryfallTestFixture.WhiteCard(), ScryfallTestFixture.RedCard(), token.ToJsonString()]))
+                : null);
+        using ScryfallService service = CreateService(temporary.Path, handler);
+        _ = RequireSuccess(await service.SyncCorpusAsync(
+            "refresh",
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        ScryfallCardResult result = RequireSuccess(await service.ReadCardAsync(
+            new ScryfallCardLookup("exact-name", "Monastery Swiftspear"),
+            "cache-only",
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(ScryfallTestFixture.RedCardId, result.Card.Id);
+    }
+
+    /// <summary>
     /// Verifies an expired corpus lease lets the next explicit sync remove abandoned staging data.
     /// </summary>
     [Fact]

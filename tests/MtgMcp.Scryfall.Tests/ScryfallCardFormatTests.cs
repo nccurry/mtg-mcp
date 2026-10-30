@@ -316,7 +316,8 @@ public sealed class ScryfallCardFormatTests
     }
 
     /// <summary>
-    /// Verifies a concise page of 25 recorded-shape cards is at most 40 percent of the standard page's size.
+    /// Verifies a concise card is at most 40 percent of the size of a standard card, comparing the average size of the
+    /// cards each page kept, because a page is cut to the size limit.
     /// </summary>
     [Fact]
     public async Task Search_ConcisePage_IsAtMostFortyPercentOfStandard()
@@ -337,11 +338,14 @@ public sealed class ScryfallCardFormatTests
         int standardBytes = JsonSerializer.SerializeToUtf8Bytes(standard.Page, ResultOptions).Length;
         int conciseBytes = JsonSerializer.SerializeToUtf8Bytes(concise.Page, ResultOptions).Length;
         Assert.Equal(25, concise.Page.Items.Count);
-        Assert.True(conciseBytes * 10 <= standardBytes * 4, $"concise {conciseBytes}, standard {standardBytes}");
+        Assert.True(
+            conciseBytes * 10 * standard.Page.Items.Count <= standardBytes * 4 * concise.Page.Items.Count,
+            $"concise {conciseBytes} for {concise.Page.Items.Count}, standard {standardBytes} for {standard.Page.Items.Count}");
     }
 
     /// <summary>
-    /// Verifies the full format carries each recorded raw card object unchanged and keeps the 25-row page cap.
+    /// Verifies the full format carries each recorded raw card object unchanged, cuts a page to the size limit with a
+    /// note and a cursor, reaches every card through the cursor, and keeps the 25-row page cap.
     /// </summary>
     [Fact]
     public async Task Search_Full_CarriesTheRecordedRawObjectsAndKeepsThePageCap()
@@ -350,21 +354,42 @@ public sealed class ScryfallCardFormatTests
         using ScryfallService service = CreateService(temporary.Path, RecordedProvider());
         CancellationToken token = TestContext.Current.CancellationToken;
 
-        ScryfallSearchResponse full = RequireSuccess(await service.SearchAsync(
+        List<ScryfallCard> cards = [];
+        ScryfallSearchResponse first = RequireSuccess(await service.SearchAsync(
             "x",
             responseFormat: "full",
             cancellationToken: token));
+        ScryfallSearchResponse page = first;
+        while (true)
+        {
+            Assert.True(JsonSerializer.SerializeToUtf8Bytes(page, ResultOptions).Length < 50_000);
+            cards.AddRange(page.Page.Items.Select(item => Assert.IsType<ScryfallCard>(item.Value)));
+            if (page.Page.NextCursor is null)
+            {
+                break;
+            }
+
+            Assert.True(page.Truncated);
+            Assert.False(string.IsNullOrWhiteSpace(page.Narrow));
+            page = RequireSuccess(await service.SearchAsync(
+                "x",
+                cursor: page.Page.NextCursor,
+                responseFormat: "full",
+                cancellationToken: token));
+        }
+
         OperationInvalidInput tooLarge = Assert.IsType<OperationInvalidInput>((await service.SearchAsync(
             "x",
             pageSize: 26,
             responseFormat: "full",
             cancellationToken: token)).Value);
 
-        Assert.Equal(RecordedCards.All.Count, full.Page.Items.Count);
+        Assert.True(first.Truncated);
+        Assert.True(first.Page.Items.Count < RecordedCards.All.Count);
+        Assert.Equal(RecordedCards.All.Count, cards.Count);
         for (int index = 0; index < RecordedCards.All.Count; index++)
         {
-            ScryfallCard card = Assert.IsType<ScryfallCard>(full.Page.Items[index].Value);
-            JsonNode? raw = JsonNode.Parse(card.Raw!.Value.GetRawText());
+            JsonNode? raw = JsonNode.Parse(cards[index].Raw!.Value.GetRawText());
             Assert.True(JsonNode.DeepEquals(RecordedCards.Object(RecordedCards.All[index]), raw));
         }
 

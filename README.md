@@ -85,8 +85,11 @@ Modes control authority.
 | `local` | Yes | Yes | No |
 | `remote` | Yes | Yes | Yes |
 
-`remote` is the default. Use `--mode=local` to hide Archidekt and Playgroup writes, or
-`--mode=read-only` to hide every write. A Scryfall cache miss can need a local write to record
+`remote` is the default and gives full read and write access, so start the
+server with no mode setting. Use `--mode=local` to hide Archidekt and Playgroup writes (which also hides
+`archidekt_push_apply`), or `--mode=read-only` to hide every write. In Claude Code, the destructive
+remote tools (including `archidekt_push_apply`) ask you to approve each call, so full access does not mean unattended
+changes to Archidekt. A Scryfall cache miss can need a local write to record
 the response and rate-limit timing. In `read-only`, that miss returns
 `local-write-required` before any HTTP request.
 
@@ -191,9 +194,33 @@ printing) and official oracle tag slugs, read from installed card data and
 returned in pages of entries with `nextCursor`. Each entry then carries
 `cardData`: `found`, `not-installed` (run `scryfall_card_data_sync`), or
 `unresolved` (no exact Scryfall identity, or not in the installed data). A page
-is cut to stay under 40,000 bytes and then sets `truncated`, `narrow`, and
+is cut to stay under 40,000 UTF-8 bytes and then sets `truncated`, `narrow`, and
 `nextCursor`. `fields` narrows the card fields; it uses the same names as the
-Scryfall card tools.
+Scryfall card tools. A deck too large for one result pages the same way even
+without `include`, so read every page (pass `nextCursor` back as `cursor`; `pageSize` sets the page
+length) before you decide what a deck holds.
+
+The tools that write a deck (`local_deck_apply_changes`, `local_deck_create`,
+`local_deck_import_create`, `local_deck_identity_reconcile_apply`, and
+`local_deck_category_rules_apply`) return a summary: the deck ID, the new and
+previous revision, the entry count, counts of each kind of change, the IDs of the
+entries and categories that changed (the first 100 in all, with `truncated` and
+`narrow` when there are more; the change counts are always exact), and `issues` for
+anything refused, skipped, ambiguous, or unresolved (the first 30, with `issueCount` exact). Pass `returnDeck: true` to get the whole deck as well; for a deck of a few hundred
+entries that result can be too large for the client to show inline, so read the deck with
+`local_deck_get` instead.
+
+An entry added with only a card name resolves its card identity when it is added,
+from installed card data and with the same exact-name rule as identity
+reconciliation. An exact name gives the Oracle ID; a card played in a deck is preferred over a token,
+emblem, or art card of the same name. A name with a set code and collector number also gives the
+printing. A double-faced card typed by one face takes Scryfall's full name, such as
+`Delver of Secrets // Insectile Aberration`. A name that fits two different cards (two Oracle IDs) is
+not resolved and is listed in `issues` as `ambiguous`, with the count. A name that does not resolve is
+still added, left unresolved, and listed in `issues`, so one typo never fails a batch. When card data is not
+installed, the entries are added as given and one note in `issues` says resolution was skipped
+(run `scryfall_card_data_sync`). Entries added by name therefore need no
+`local_deck_identity_reconcile_*` step before an Archidekt push.
 
 Use `local_deck_category_rules_preview` and `local_deck_category_rules_apply` to
 evaluate caller-owned tag rules. The preview validates the rules first; rules
@@ -267,6 +294,28 @@ Use `local_deck_interchange_formats` to inspect preservation limits.
 These provider export files do not contact a provider. Excluded entries remain
 in the native companion file and are omitted from provider text.
 
+### Large results
+
+Results are cut to fit the client; see [Output control](docs/output-control.md). Claude Code saves a tool
+result of more than 50,000 characters to a file, so the server aims for 40,000 UTF-8 bytes.
+These tools page their rows, so read every page before you decide what a result holds. Each
+sets `truncated` and `narrow` when it left rows out, and names the argument that reads the next page:
+`local_deck_identity_reconcile_preview`, `local_deck_import_preview`, and
+`local_deck_category_rules_preview` take `offset` and return `nextOffset`; their fingerprints and apply
+tokens cover the whole preview, so the apply tool takes the guards of any page and still applies everything.
+On later pages pass `expectedPreviewFingerprint` (the `previewFingerprint`, or for the import preview the
+`fingerprint`, of the first page) to be refused if the preview changed in between. The first page of the
+import preview also carries the diagnostics, unresolved identities, categories, and provider bindings, each cut to
+fit with its exact count beside it; the saved synchronization snapshots of a native file are counted, not returned.
+A paged deck cuts its name to 1,000 UTF-8 bytes (`nameTruncated`) and its description to 8,000 on the first page only
+(`descriptionTruncated`, `descriptionLength`). A deck write summary cuts the name the same way.
+`local_deck_export_bundle` lists every artifact (file name, media type, total length in UTF-16 code units, and the
+SHA-256 of the whole content) and returns one chunk of one artifact's content of at most 30,000 UTF-8 bytes of
+JSON text; pass `artifact` and `offset` (the previous `chunk.nextOffset`, a count of UTF-16 code units) to read on.
+The chunks joined in order are the exact file. The field-preservation report comes only with the chunk at
+offset 0. The Scryfall card tools cut a page of cards, in any `responseFormat`, to the size limit and return
+`nextCursor` for the rest.
+
 ## Query Scryfall
 
 The `scryfall` toolset supports search, card lookup (`scryfall_cards_get`, one or
@@ -304,15 +353,16 @@ The card tools `scryfall_search`, `scryfall_cards_get`, and
 
 | Value | Result |
 | --- | --- |
-| `standard` (default) | Every card field this server returns. New fields are added, never removed. A page of 25 rows can pass 40,000 bytes: use `concise` or a smaller `pageSize`. |
+| `standard` (default) | Every card field this server returns. New fields are added, never removed. |
 | `concise` | A small set of fields for comparing many cards: IDs, name, cost, type, colors, color identity, produced mana, keywords, oracle text, power, toughness, loyalty, the formats the card is legal in, USD price, cheapest USD price among installed English printings, rarity, set, oracle tag slugs, Game Changer flag, and EDHREC rank. `fields` picks other names, including `prices.usdFoil`, `prices.usdEtched`, `prices.eur`, `prices.eurFoil`, `prices.tix`, `legalitiesAll`, `games`, `reserved`, and `layout`. |
 | `full` | `standard` plus the raw provider objects. Pages are limited to 25 rows. |
 
 In `concise`, `tags` and `cheapestPriceUsd` come from installed card data and are
-`null`, with the reason in `limits`, when it is not installed. A `concise` page
-is cut to stay under 40,000 bytes and then sets `truncated`, `narrow`, and
-`nextCursor`. `includeRaw` was replaced by `responseFormat: "full"` on these
-three tools.
+`null`, with the reason in `limits`, when it is not installed. Every format is
+cut to stay under 40,000 UTF-8 bytes and then sets `truncated`, `narrow`, and
+`nextCursor`, so a `standard` or `full` page can hold fewer cards than
+`pageSize`; use `concise` or `fields` to fit more. `includeRaw` was replaced by
+`responseFormat: "full"` on these three tools.
 
 For arbitrary queries, Scryfall remains the source of truth. The cache reuses
 only the exact same request. Card facts and community tags stay separate kinds
@@ -589,7 +639,33 @@ fingerprints, and preview evidence. The MCP never chooses a conflict winner.
 
 Requests start at least two seconds apart per configured account. The adapter
 allows at most 30 starts in 60 seconds and 150 requests per tool invocation.
-It stops on `403` and `429`. Ambiguous mutations are not retried.
+It stops on `403` and `429`. Ambiguous mutations are not retried. A push of more
+than about 140 operations needs more than 150 requests, so `archidekt_push_apply`
+cannot run it in one call; push the change in smaller edits.
+
+Results are cut to fit the client. Claude Code saves a tool result longer than
+50,000 characters to a file and shows the agent only the path, so these tools aim
+for 40,000 UTF-8 bytes and page their rows. `archidekt_deck_get` leads with a summary (entry, card,
+and category counts, cards by zone) and pages entries with `offset` and `nextOffset`;
+`archidekt_push_preview` and `archidekt_pull_preview` lead with a summary (operations by kind,
+differences, conflicts) and page with `operationOffset` and `differenceOffset`; the guards and the
+preview fingerprint cover the whole preview, so the apply tool needs no page.
+`archidekt_sync_diff` (`differenceOffset`), `archidekt_snapshot_restore_preview`
+(`operationOffset`, `differenceOffset`), `archidekt_folders_get` (`offset`), and
+`archidekt_snapshots_get` with `kind` `get` (`offset`, over the saved deck) page
+the same way. When `truncated` is true, call again with the next offset in
+`narrow`. A preview with two lists (operations and differences) has one offset for each; give
+the later pages `expectedPreviewFingerprint`, the `previewFingerprint` of the first page, so a
+preview that changed in between is refused instead of paged out of line.
+`archidekt_deck_get` leaves out unknown provider fields over 8,000 bytes and sets
+`extensionsOmitted`; they cannot be read through this tool.
+
+When `archidekt_push_apply` is not available (the mode is below `remote`, or
+credentials are missing), the push preview says so in `applyNotice`, with
+`applyAvailable: false`, and tells the agent what to ask the user: start the server in
+`remote` mode (the default), or set up Archidekt credentials. The pull preview does the same for
+`archidekt_pull_apply` based on the mode alone (local or remote mode is enough): a pull reads a public deck without
+credentials, and a private deck also needs them.
 
 Archidekt may renumber category positions and the order of an entry's
 secondary categories. Content equality therefore compares category identity,
@@ -745,6 +821,10 @@ task release:tool-smoke
 ```
 
 Normal tests are deterministic and offline. Live tests require explicit opt-in.
+A test calls every tool in `remote` mode against a 300-entry deck, a 300-card Archidekt deck, and
+large card fixtures, and fails when any result passes 50,000 characters, the point at which Claude Code
+stops showing a result inline, or when a tool that should page never pages. A tool that cannot be driven
+offline (Playgroup, Commander Spellbook, and some Archidekt writes) is listed in the test with the reason.
 `task benchmark:simulation` runs the separate fixed 99-card Release measurement.
 Each production assembly must maintain at least 90 percent line coverage.
 

@@ -2,6 +2,114 @@
 
 ## Unreleased
 
+Agents using `0.12.0` in Claude Code reported five problems: deck tool results too large to read, a push they could
+not send, false category-order differences in push previews, an extra reconcile step after adding cards by name, and
+Scryfall searches that mixed in reprints. Claude Code saves any tool text result over 50,000 characters to a file and
+shows the agent only the path, so results now aim for 40,000 UTF-8 bytes (Claude Code's hard ceiling is 50,000
+characters) and page past that. Every change below marked **Breaking** changes a result that could not be read
+inline for a large deck, so each is taken under the `docs/versioning.md` exception for a clearly broken contract.
+
+### Changed
+
+- **Breaking:** `local_deck_apply_changes`, `local_deck_create`, `local_deck_import_create`,
+  `local_deck_identity_reconcile_apply`, and `local_deck_category_rules_apply` return a summary by default instead of
+  the whole deck: the deck ID, the new and previous revision, the entry count, counts of each kind of change, the IDs
+  of the entries and categories that changed, and `issues` for anything refused, skipped, or unresolved. Pass
+  `returnDeck: true` to get the old result as well (the whole deck is under `deck`). This is a change of a default
+  result, which `docs/versioning.md` treats as breaking. It is taken under that policy's exception for a clearly
+  broken contract: a result over 50,000 characters cannot be read inline in Claude Code, so a 300-entry deck was
+  unusable after any write.
+- **Breaking:** `local_deck_get` pages a deck that is too large for one result, with or without `include`
+  (`cursor`, `pageSize`, `nextCursor`, `truncated`, `narrow`), so one call may no longer return every entry.
+- **Breaking:** `archidekt_deck_get` returns an `ArchidektDeckView` instead of the whole remote deck: a summary (entry,
+  card, and category counts, cards by zone) and a page of entries, read with `offset` and `nextOffset`. Entries are
+  ordered by card name, then relation ID, not by Archidekt's order numbers. Unknown provider fields larger than 8,000
+  bytes are left out and `extensionsOmitted` is true; no tool returns them.
+- **Breaking:** `archidekt_push_preview` and `archidekt_pull_preview` lead with a summary (operations by kind,
+  differences, conflicts) and page operations and differences with `operationOffset` and `differenceOffset`. The
+  guards and the preview fingerprint cover the whole preview, so `archidekt_push_apply` and `archidekt_pull_apply`
+  take no page.
+- **Breaking:** `archidekt_sync_diff`, `archidekt_snapshot_restore_preview`, `archidekt_folders_get`, and
+  `archidekt_snapshots_get` (kind `get`) page the same way, so none of them can pass 50,000 characters. Their result
+  shapes changed:
+  `archidekt_sync_diff` and `archidekt_snapshot_restore_preview` add a count and offset fields beside the rows,
+  `archidekt_folders_get` returns `folderCount`, `offset`, and a page of `items`, and the saved deck inside
+  `archidekt_snapshots_get` is a deck page with `summary` and `nextOffset`.
+- One offset rule for every paged result: an offset from 0 up to the number of rows is valid (at the number of rows
+  the page holds no row), and a negative offset or one past the end is refused with `invalid-offset`, naming the list
+  and its size. The Archidekt previews, the snapshot restore preview, and the three local previews take an optional
+  `expectedPreviewFingerprint` on later pages; a preview that changed since the first page is refused with
+  `preview-changed` instead of being paged out of line.
+- **Breaking:** `local_deck_import_preview`, `local_deck_identity_reconcile_preview`, and
+  `local_deck_category_rules_preview` page their rows (`offset`, `nextOffset`, `truncated`, `narrow`). Their
+  results gain a count (`entryCount`, `rowCount`, `decisionCount`) and `offset`; the proposal's entries, rows, or
+  decisions are one page. The fingerprint and apply token still cover the whole preview, so the apply tools are
+  unchanged and accept the guards of any page. The import preview's first page also carries its diagnostics,
+  unresolved identities, categories, and provider bindings, each cut to fit with an exact count beside it; the
+  proposal's category assignments page with its entries, and its saved synchronization snapshots are counted
+  (`syncBaselineCount`), not returned.
+- **Breaking:** `local_deck_export_bundle` no longer returns every artifact's whole content. It lists each artifact
+  (`fileName`, `mediaType`, `totalLength` in UTF-16 code units (the string length), `sha256` of the whole content,
+  `purpose`) and returns one
+  `chunk` of one artifact of at most 30,000 UTF-8 bytes of JSON text. New arguments `artifact` (default the first)
+  and `offset` (a count of UTF-16 code units) read the rest; the chunks joined in order are the exact file, and a chunk
+  never splits a surrogate pair (an emoji, for example). The field-preservation report comes only with the chunk at
+  offset 0. It still writes no files. A 300-entry export was 305,000 to 370,000 characters.
+- **Breaking:** `scryfall_search`, `scryfall_cards_get`, and `scryfall_installed_cards_by_tag` cut a page to the
+  result size limit in every `responseFormat` (before, only `concise` was cut), set `truncated` and `narrow`, and
+  return the usual cursor for the rest. A `full` or `standard` page can therefore hold fewer cards than `pageSize`
+  (a short page); every card stays reachable through the cursor. Use `concise` or `fields` to fit more.
+- The `scryfall_search` description now warns how Scryfall combines printing-level conditions such as `not:reprint`
+  with dates, and names a workaround.
+
+### Fixed
+
+- Fixed false differences and push operations for a deck nobody edited. An entry's comparison form is now defined once
+  in the Archidekt adapter (primary category apart, other category names as a set, order numbers and row order
+  ignored) and used for the difference rows, the push plan, the fingerprints, and the check after a push, so
+  Archidekt reordering an entry's categories no longer shows as a change.
+- Fixed a push of a card added by name failing the check when Archidekt chose a different printing of it; the printing
+  Archidekt chose is accepted.
+
+### Added
+
+- `returnDeck` on the deck write tools (see Changed).
+- Entries added by card name now resolve their card identity when they are added, from installed card data, so a push
+  needs no `local_deck_identity_reconcile_*` step. An exact name gives the Oracle ID, and a card played in a deck is
+  preferred over a token, emblem, or art card of the same name; a name with a set code and collector number also gives
+  the printing. A double-faced card typed by one face takes Scryfall's full name. Archidekt names such a card by both
+  faces and its card search matches the front face (checked against the real service on 2026-10-29), so a push finds
+  the card and verifies it. A name that fits two different cards is added unresolved and
+  listed in `issues` as `ambiguous`, with the count; a name that does not resolve is added unresolved and listed as
+  `unresolved`; with no card data installed, or card data that cannot be read, one note in `issues` says resolution
+  was skipped. The same rule now applies in `local_deck_identity_reconcile_preview`, which reports an ambiguous name as
+  unresolved with the count. A summary lists at most the first 100 IDs and the first 30 issues, with exact counts.
+- `archidekt_push_preview` and `archidekt_pull_preview` report `applyAvailable` and, when the apply tool is not
+  available, an `applyNotice` that names the reason and what to ask the user to change (start the server in
+  `remote` mode, the default, or for the push, set up Archidekt credentials). The pull notice depends on the mode
+  alone: a pull reads a public deck without credentials.
+- `offset`, `operationOffset`, and `differenceOffset` arguments on the Archidekt read tools listed above. A preview
+  with two lists (operations and differences) gives both next offsets on every page that is not the last, so a caller
+  that follows the fields alone reaches every row once.
+- A deck's name and description are cut on a paged result so a long one cannot push every page over the limit: the name
+  to 1,000 UTF-8 bytes on every page (`nameTruncated`), and the description to 8,000 UTF-8 bytes on the first page only
+  (`descriptionTruncated`, with `descriptionLength`); a later page shows no description. A deck write summary cuts
+  the name the same way.
+- A test that calls every tool against large offline fixtures and fails on any result, successful or not, over
+  50,000 characters, or on a tool that grows with its data but never pages (`ToolResultBudgetTests`), and a scenario
+  test that adds cards by name and reaches a clean push preview in
+  four calls with no reconcile step.
+
+### Known limits
+
+- A deck write called with `returnDeck: true` can return a result over 50,000 characters for a large deck; read
+  the deck with `local_deck_get` instead.
+- A push of more than about 140 operations needs more than the 150 requests one tool call may make, so it cannot be
+  applied in one call.
+- A Claude Code configuration that starts the server with `--mode=local` hides `archidekt_push_apply`. The default
+  mode is `remote` (full read and write), so remove any mode override; the previews now say when the apply tool is
+  missing.
+
 ## 0.12.0 - 2026-10-29
 
 This release carries every change listed under `0.11.0` below as well: `0.11.0` was never published, so users

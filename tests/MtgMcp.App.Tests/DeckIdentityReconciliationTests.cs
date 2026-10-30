@@ -96,7 +96,8 @@ public sealed class DeckIdentityReconciliationTests
             preview.PreviewFingerprint,
             preview.ApplyToken,
             allowPartial: false,
-            TestContext.Current.CancellationToken));
+            returnDeck: true,
+            TestContext.Current.CancellationToken)).Deck!;
 
         Assert.Equal(deck.Revision + 1, applied.Revision);
         Assert.Single(handler.RequestBodies);
@@ -156,6 +157,7 @@ public sealed class DeckIdentityReconciliationTests
             preview.PreviewFingerprint,
             tampered,
             true,
+            false,
             TestContext.Current.CancellationToken)).Value);
         string incompleteEnvelope = Convert.ToBase64String(Encoding.UTF8.GetBytes("{}"))
             .TrimEnd('=')
@@ -167,6 +169,7 @@ public sealed class DeckIdentityReconciliationTests
             preview.PreviewFingerprint,
             incompleteEnvelope,
             true,
+            false,
             TestContext.Current.CancellationToken)).Value);
         DeckIdentityReconciliationCoordinator restartedCoordinator = new(store, scryfall);
         OperationInvalidInput processBound = Assert.IsType<OperationInvalidInput>(
@@ -176,6 +179,7 @@ public sealed class DeckIdentityReconciliationTests
                 preview.PreviewFingerprint,
                 preview.ApplyToken,
                 true,
+                false,
                 TestContext.Current.CancellationToken)).Value);
         Assert.Equal("invalid-identity-apply-token", processBound.ReasonCode);
         OperationInvalidInput partial = Assert.IsType<OperationInvalidInput>((await coordinator.ApplyAsync(
@@ -183,6 +187,7 @@ public sealed class DeckIdentityReconciliationTests
             deck.Revision,
             preview.PreviewFingerprint,
             preview.ApplyToken,
+            false,
             false,
             TestContext.Current.CancellationToken)).Value);
         Assert.Equal("partial-identity-reconciliation-not-allowed", partial.ReasonCode);
@@ -196,7 +201,8 @@ public sealed class DeckIdentityReconciliationTests
             preview.PreviewFingerprint,
             preview.ApplyToken,
             true,
-            TestContext.Current.CancellationToken));
+            returnDeck: true,
+            TestContext.Current.CancellationToken)).Deck!;
         Assert.Equal("Canonical Card", Assert.Single(applied.Entries, value => value.EntryId == resolvedId).CardName);
         Assert.Equal("Conflicting Name", Assert.Single(applied.Entries, value => value.EntryId == conflictId).CardName);
         OperationConflict stale = Assert.IsType<OperationConflict>((await coordinator.ApplyAsync(
@@ -205,6 +211,7 @@ public sealed class DeckIdentityReconciliationTests
             preview.PreviewFingerprint,
             preview.ApplyToken,
             true,
+            false,
             TestContext.Current.CancellationToken)).Value);
         Assert.Equal("deck-revision-conflict", stale.ReasonCode);
         Assert.Equal(new ConflictState(Revision: applied.Revision), stale.Current);
@@ -269,6 +276,7 @@ public sealed class DeckIdentityReconciliationTests
             deck.Revision,
             preview.PreviewFingerprint,
             preview.ApplyToken,
+            false,
             false,
             TestContext.Current.CancellationToken)).Value);
         Assert.Equal("identity-evidence-unavailable", unavailable.ReasonCode);

@@ -48,7 +48,9 @@ internal static class ServerInstructions
         ("Commander rule facts (rules \"commander\")", ["local_deck_validate"]),
         ("Find duplicate cards in a local deck", ["local_deck_duplicates_preview"]),
         ("Install card data that tags and card views need", ["scryfall_card_data_status", "scryfall_card_data_sync"]),
-        ("Sync a local deck with Archidekt", ["archidekt_pull_preview", "archidekt_push_preview"]),
+        (
+            "Sync a local deck with Archidekt",
+            ["archidekt_pull_preview", "archidekt_push_preview", "archidekt_push_apply"]),
         ("Read Playgroup games and playgroups", ["playgroup_user_playgroups_list", "playgroup_playgroup_games_list"]),
         ("Total Playgroup games by deck or player", ["playgroup_games_stats_get"]),
         ("Combos and bracket facts", ["spellbook_deck_combos_find", "spellbook_deck_bracket_facts_get"]),

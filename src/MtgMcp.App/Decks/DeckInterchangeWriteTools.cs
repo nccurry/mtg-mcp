@@ -43,24 +43,32 @@ internal sealed class DeckInterchangeWriteTools
         Idempotent = false,
         OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Local deck store: creates one local deck from an accepted import preview without provider calls.")]
-    internal Task<OperationResult<DeckImportCreateResult>> CreateAsync(
+    [Description(
+        "Local deck store: creates one local deck from an accepted import preview without provider calls. The " +
+        "result is a deck summary (deck ID, revision, counts, entry IDs) with the accepted diagnostics; pass " +
+        "returnDeck true to also get the whole deck.")]
+    internal async Task<OperationResult<DeckImportCreateView>> CreateAsync(
         [Description("Exact format ID used for the accepted preview."), InterchangeFormatValues]
         string formatId,
         [Description("Exact content used for the accepted preview.")] string content,
         [Description("Fingerprint returned by local_deck_import_preview.")] string expectedFingerprint,
         [Description("The same parsing defaults and explicit opt-ins used for preview.")]
         DeckImportOptions? options = null,
+        [Description("Set true to also return the whole deck after the write. The default summary is much smaller.")]
+        bool returnDeck = false,
         CancellationToken cancellationToken = default)
     {
         if (!OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
-            return Task.FromResult<OperationResult<DeckImportCreateResult>>(
-                new OperationUnsupported(
-                    "operation-mode-denied",
-                    "The effective operation mode does not permit local writes."));
+            return new OperationUnsupported(
+                "operation-mode-denied",
+                "The effective operation mode does not permit local writes.");
         }
 
-        return service.CreateAsync(formatId, content, expectedFingerprint, options, cancellationToken);
+        OperationResult<DeckImportCreateResult> created = await service
+            .CreateAsync(formatId, content, expectedFingerprint, options, cancellationToken).ConfigureAwait(false);
+        return created is OperationSuccess<DeckImportCreateResult> success
+            ? new OperationSuccess<DeckImportCreateView>(DeckImportCreateView.From(success.Data, returnDeck))
+            : OperationFailure.Forward<DeckImportCreateResult, DeckImportCreateView>(created);
     }
 }

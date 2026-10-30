@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.Scryfall.Tests;
@@ -159,6 +160,49 @@ public sealed class ScryfallStoreTests
             generationId,
             activatedAtUtc,
             cancellationToken)).GenerationId;
+    }
+
+    /// <summary>
+    /// Verifies the exact-name lookups search the card and face name indexes and never scan every card of a
+    /// generation, which took about 0.3 seconds per name on 300,000 cards.
+    /// </summary>
+    [Theory]
+    [InlineData(ScryfallCardDataStore.NameBestCardSql)]
+    [InlineData(ScryfallCardDataStore.NameMatchCountSql)]
+    public async Task ExactNameLookup_UsesTheNameIndexesAndNeverScansTheCards(string sql)
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        Guid generationId;
+        using (ScryfallDatabase database = new(temporary.Path))
+        {
+            generationId = await InstallGenerationAsync(
+                new ScryfallCardDataStore(database),
+                revision: 1,
+                activatedAtUtc: new DateTimeOffset(2026, 7, 4, 12, 0, 0, TimeSpan.Zero),
+                cancellationToken: TestContext.Current.CancellationToken);
+        }
+
+        await using SqliteConnection connection = new(
+            $"Data Source={Path.Combine(temporary.Path, "scryfall.db")};Mode=ReadOnly;Pooling=False");
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "EXPLAIN QUERY PLAN " + sql;
+        command.Parameters.AddWithValue("$generation", ScryfallSql.FormatGuid(generationId));
+        command.Parameters.AddWithValue("$value", "MONASTERY SWIFTSPEAR");
+        List<string> plan = [];
+        await using (SqliteDataReader reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken))
+        {
+            while (await reader.ReadAsync(TestContext.Current.CancellationToken))
+            {
+                plan.Add(reader.GetString(3));
+            }
+        }
+
+        string whole = string.Join(" | ", plan);
+        Assert.Contains("SEARCH card_objects USING INDEX ix_cards_name (generation_id=? AND name_key=?)", whole);
+        Assert.Contains("SEARCH card_faces USING INDEX ix_faces_name (generation_id=? AND name_key=?)", whole);
+        Assert.DoesNotContain(plan, step => step.StartsWith("SCAN c", StringComparison.Ordinal) ||
+            step.StartsWith("SCAN card_objects", StringComparison.Ordinal));
     }
 
     /// <summary>

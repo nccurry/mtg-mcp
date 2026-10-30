@@ -44,6 +44,13 @@ internal sealed class DeckCardViewCoordinator
         "Run scryfall_card_data_sync to install it.";
 
     /// <summary>
+    /// Says how to read a stored deck that is too large for one result.
+    /// </summary>
+    private const string StoredNarrowHint =
+        "The deck is too large for one result, so this page holds only some entries. Use nextCursor to read the " +
+        "rest, or ask for a smaller pageSize. Every entry is reachable by following nextCursor.";
+
+    /// <summary>
     /// Reads stored decks.
     /// </summary>
     private readonly SqliteDeckStore store;
@@ -90,8 +97,7 @@ internal sealed class DeckCardViewCoordinator
         DeckDocument deck = success.Data;
         if (include is null)
         {
-            List<DeckEntryView> all = [.. deck.Entries.Select(DeckEntryView.From)];
-            return new OperationSuccess<DeckDocumentView>(ToView(deck, all, deck.CategoryAssignments));
+            return GetStored(deck, cursor, pageSize);
         }
 
         string fingerprint = Fingerprint(deckId, include, fields);
@@ -115,7 +121,56 @@ internal sealed class DeckCardViewCoordinator
             return OperationFailure.Forward<ScryfallInstalledCardViews, DeckDocumentView>(read);
         }
 
-        return BuildPage(deck, slice, views.Data, offset.Data, fingerprint);
+        List<DeckEntryView> entries = [];
+        for (int index = 0; index < slice.Count; index++)
+        {
+            ScryfallInstalledCardView view = views.Data.Cards[index];
+            entries.Add(DeckEntryView.From(slice[index]) with
+            {
+                CardData = view.Status,
+                Card = view.Card,
+                Tags = view.Tags,
+            });
+        }
+
+        return BuildPage(
+            deck,
+            entries,
+            offset.Data,
+            fingerprint,
+            views.Data.Installed ? null : [NotInstalledLimit],
+            ScryfallFormattedResponse.NarrowHint);
+    }
+
+    /// <summary>
+    /// Gets the stored deck. A deck that fits the result size limit comes back whole and unchanged; a larger one is
+    /// paged by entries, with the same cursor and pageSize arguments as a page with card data.
+    /// </summary>
+    private static OperationResult<DeckDocumentView> GetStored(DeckDocument deck, string? cursor, int? pageSize)
+    {
+        List<DeckEntryView> all = [.. deck.Entries.Select(DeckEntryView.From)];
+        if (cursor is null && pageSize is null)
+        {
+            ResultPageSlice whole = ResultPage.Take(
+                all,
+                0,
+                ResultSize.Measure(ToView(deck, [], [])),
+                entry => EntryBytes(entry, deck.CategoryAssignments));
+            if (!whole.More)
+            {
+                return new OperationSuccess<DeckDocumentView>(ToView(deck, all, deck.CategoryAssignments));
+            }
+        }
+
+        string fingerprint = Fingerprint(deck.DeckId, [], null);
+        OperationResult<int> start = ReadStart(cursor, fingerprint, deck);
+        if (start is not OperationSuccess<int> offset)
+        {
+            return OperationFailure.Forward<int, DeckDocumentView>(start);
+        }
+
+        List<DeckEntryView> slice = [.. all.Skip(offset.Data).Take(pageSize ?? int.MaxValue)];
+        return BuildPage(deck, slice, offset.Data, fingerprint, null, StoredNarrowHint);
     }
 
     /// <summary>
@@ -129,7 +184,12 @@ internal sealed class DeckCardViewCoordinator
     {
         if (include is null)
         {
-            return IncludeRequired(fields, cursor, pageSize);
+            return fields is not null
+                ? new OperationInvalidInput(
+                    "include-required",
+                    "fields applies only when include is given.",
+                    "fields")
+                : ValidatePageSize(pageSize);
         }
 
         if (include.Count == 0)
@@ -159,39 +219,20 @@ internal sealed class DeckCardViewCoordinator
                 "fields");
         }
 
+        return ValidatePageSize(pageSize);
+    }
+
+    /// <summary>
+    /// Checks that a page size, when given, is in range.
+    /// </summary>
+    private static OperationInvalidInput? ValidatePageSize(int? pageSize)
+    {
         return pageSize is >= 1 and <= MaximumPageSize or null
             ? null
             : new OperationInvalidInput(
                 "invalid-page-size",
                 $"Page size must be from 1 through {MaximumPageSize}.",
                 "pageSize");
-    }
-
-    /// <summary>
-    /// Rejects the arguments that only make sense with include when include is missing.
-    /// </summary>
-    private static OperationInvalidInput? IncludeRequired(IReadOnlyList<string>? fields, string? cursor, int? pageSize)
-    {
-        string? name = null;
-        if (fields is not null)
-        {
-            name = "fields";
-        }
-        else if (cursor is not null)
-        {
-            name = "cursor";
-        }
-        else if (pageSize is not null)
-        {
-            name = "pageSize";
-        }
-
-        return name is null
-            ? null
-            : new OperationInvalidInput(
-                "include-required",
-                "fields, cursor, and pageSize apply only when include is given.",
-                name);
     }
 
     /// <summary>
@@ -267,47 +308,37 @@ internal sealed class DeckCardViewCoordinator
     }
 
     /// <summary>
-    /// Builds the page result from the entries, their installed-data views, and the deck's other parts.
+    /// Builds the page result from the page's entries, cutting the page short when it would pass the size limit.
     /// </summary>
     private static OperationResult<DeckDocumentView> BuildPage(
         DeckDocument deck,
-        List<DeckEntry> slice,
-        ScryfallInstalledCardViews views,
+        List<DeckEntryView> entries,
         int offset,
-        string fingerprint)
+        string fingerprint,
+        IReadOnlyList<string>? limits,
+        string narrowHint)
     {
-        List<DeckEntryView> entries = [];
-        List<int> sizes = [];
-        for (int index = 0; index < slice.Count; index++)
-        {
-            ScryfallInstalledCardView view = views.Cards[index];
-            DeckEntryView entry = DeckEntryView.From(slice[index]) with
-            {
-                CardData = view.Status,
-                Card = view.Card,
-                Tags = view.Tags,
-            };
-            entries.Add(entry);
-            sizes.Add(EntryBytes(entry, deck.CategoryAssignments));
-        }
-
-        int keep = ResultSizeLimit.CountFitting(sizes, HeaderBytes(deck));
-
-        // A page must always advance, or a caller following nextCursor would loop on the same entries.
-        keep = Math.Max(keep, Math.Min(1, entries.Count));
+        ResultPageSlice slice = ResultPage.Take(
+            entries,
+            0,
+            ResultSize.Measure(PageHeader(deck, offset)),
+            entry => EntryBytes(entry, deck.CategoryAssignments));
+        int keep = slice.Count;
         bool truncated = keep < entries.Count;
         List<DeckEntryView> kept = entries.GetRange(0, keep);
         HashSet<Guid> keptIds = [.. kept.Select(entry => entry.EntryId)];
         List<DeckCategoryAssignment> assignments =
             [.. deck.CategoryAssignments.Where(assignment => keptIds.Contains(assignment.EntryId))];
         int next = offset + keep;
-        return new OperationSuccess<DeckDocumentView>(ToView(deck, kept, assignments) with
+        return new OperationSuccess<DeckDocumentView>(PageHeader(deck, offset) with
         {
+            Entries = kept,
+            CategoryAssignments = assignments,
             TotalEntries = deck.Entries.Count,
             NextCursor = next < deck.Entries.Count ? EncodeCursor(fingerprint, deck.Revision, next) : null,
-            Limits = views.Installed ? null : [NotInstalledLimit],
+            Limits = limits,
             Truncated = truncated ? true : null,
-            Narrow = truncated ? ScryfallFormattedResponse.NarrowHint : null,
+            Narrow = truncated ? narrowHint : null,
         });
     }
 
@@ -338,7 +369,7 @@ internal sealed class DeckCardViewCoordinator
     /// </summary>
     private static int EntryBytes(DeckEntryView entry, IReadOnlyList<DeckCategoryAssignment> assignments)
     {
-        int total = ResultSize.Measure(entry) + 1;
+        int total = ResultSize.Measure(entry);
         foreach (DeckCategoryAssignment assignment in assignments)
         {
             if (assignment.EntryId == entry.EntryId)
@@ -351,12 +382,22 @@ internal sealed class DeckCardViewCoordinator
     }
 
     /// <summary>
-    /// Measures the serialized size of the deck's parts that every page repeats: its details, categories, and
-    /// provider bindings.
+    /// Builds the deck view that every page repeats, without entries or assignments: the details, categories, and
+    /// provider bindings. The name is cut to a fixed length, and the description is cut on the first page and left
+    /// out of the pages after it, so a long one cannot push every page over the size limit.
     /// </summary>
-    private static int HeaderBytes(DeckDocument deck)
+    private static DeckDocumentView PageHeader(DeckDocument deck, int offset)
     {
-        return ResultSize.Measure(ToView(deck, [], []));
+        ShownText name = ResultText.Name(deck.Name);
+        ShownText description = ResultText.Description(deck.Description, offset == 0);
+        return ToView(deck, [], []) with
+        {
+            Name = name.Text,
+            Description = description.Text,
+            NameTruncated = name.TruncatedOrNull,
+            DescriptionTruncated = description.TruncatedOrNull,
+            DescriptionLength = description.LengthIfTruncated,
+        };
     }
 
     /// <summary>

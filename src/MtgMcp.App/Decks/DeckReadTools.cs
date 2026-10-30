@@ -86,7 +86,9 @@ internal sealed class DeckReadTools
         "provider-neutral bindings, plus the entry IDs that edits need. Add include [cards, tags] to also get, " +
         "for each entry, its concise Scryfall card fields (exact printing) and oracle tag slugs from installed " +
         "card data, in pages of entries. Each entry then carries cardData: found, not-installed (run " +
-        "scryfall_card_data_sync), or unresolved (no exact Scryfall identity, or not in the installed data).")]
+        "scryfall_card_data_sync), or unresolved (no exact Scryfall identity, or not in the installed data). " +
+        "A deck too large for one result is also returned in pages: truncated is true with a narrow hint, and " +
+        "nextCursor reads the rest.")]
     internal Task<OperationResult<DeckDocumentView>> GetAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description(
@@ -102,7 +104,9 @@ internal sealed class DeckReadTools
             "Opaque cursor from nextCursor of a previous local_deck_get call with the same deckId, include, and " +
             "fields.")]
         string? cursor = null,
-        [Description("Only with include: entries per page, from 1 through 100; the default is 25.")]
+        [Description(
+            "Entries per page, from 1 through 100. With include the default is 25; without include the deck " +
+            "comes back whole unless it is too large for one result.")]
         int? pageSize = null,
         CancellationToken cancellationToken = default)
     {

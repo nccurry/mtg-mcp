@@ -20,6 +20,33 @@ public static class ResultSizeLimit
     public const int EnvelopeReserveBytes = 3_000;
 
     /// <summary>
+    /// Counts how many leading items fit a byte budget, and how many bytes they take. Items are read one at a time,
+    /// so the items after the first one that does not fit are never measured. This is the one fitting loop; callers
+    /// that must show a row anyway use <see cref="CountFitting"/>.
+    /// </summary>
+    /// <param name="itemSizes">The serialized size in bytes of each item, including its separator, in order.</param>
+    /// <param name="budgetBytes">The bytes the items may take together.</param>
+    /// <param name="usedBytes">The bytes the counted items take.</param>
+    public static int CountWithin(IEnumerable<int> itemSizes, int budgetBytes, out int usedBytes)
+    {
+        ArgumentNullException.ThrowIfNull(itemSizes);
+        usedBytes = 0;
+        int kept = 0;
+        foreach (int size in itemSizes)
+        {
+            if (usedBytes + size > budgetBytes)
+            {
+                break;
+            }
+
+            usedBytes += size;
+            kept++;
+        }
+
+        return kept;
+    }
+
+    /// <summary>
     /// Counts how many leading items fit the size limit. At least one item is kept when the list is not empty, so
     /// a single large item never leaves the caller without progress.
     /// </summary>
@@ -28,15 +55,7 @@ public static class ResultSizeLimit
     public static int CountFitting(IReadOnlyList<int> itemSizes, int fixedBytes = 0)
     {
         ArgumentNullException.ThrowIfNull(itemSizes);
-        int budget = MaximumBytes - EnvelopeReserveBytes - fixedBytes;
-        int total = 0;
-        int kept = 0;
-        while (kept < itemSizes.Count && (kept == 0 || total + itemSizes[kept] <= budget))
-        {
-            total += itemSizes[kept];
-            kept++;
-        }
-
-        return kept;
+        int kept = CountWithin(itemSizes, MaximumBytes - EnvelopeReserveBytes - fixedBytes, out _);
+        return Math.Max(kept, Math.Min(1, itemSizes.Count));
     }
 }

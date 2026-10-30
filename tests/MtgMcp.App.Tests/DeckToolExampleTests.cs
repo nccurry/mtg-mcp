@@ -48,17 +48,18 @@ public sealed class DeckToolExampleTests : IClassFixture<ToolCatalogFixture>
 
             Dictionary<string, JsonElement> arguments = Arguments(request);
             Assert.Null(ToolCallPolicy.DiagnoseArguments(catalog, "local_deck_apply_changes", arguments));
-            DeckBatchWriteTools tools = new(store, OperationMode.Local);
+            using UninstalledCardData cardData = new();
+            DeckBatchWriteTools tools = new(store, OperationMode.Local, cardData.Resolver);
             IReadOnlyList<DeckChangeInput> changes = arguments["changes"]
                 .Deserialize<IReadOnlyList<DeckChangeInput>>(ToolCallPolicy.SerializerOptions)!;
-            OperationResult<DeckDocument> result = await tools.ApplyChangesAsync(
+            OperationResult<DeckWriteResult> result = await tools.ApplyChangesAsync(
                 arguments["deckId"].GetGuid(),
                 arguments["expectedRevision"].GetInt64(),
                 changes,
-                TestContext.Current.CancellationToken);
+                cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.True(
-                result.Value is OperationSuccess<DeckDocument>,
+                result.Value is OperationSuccess<DeckWriteResult>,
                 $"{name}: {JsonSerializer.Serialize(result.Value)}");
         }
     }
@@ -71,15 +72,19 @@ public sealed class DeckToolExampleTests : IClassFixture<ToolCatalogFixture>
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "test");
+        using UninstalledCardData cardData = new();
         DeckDocument deck = await CreateDeckAsync(store);
         Dictionary<string, JsonElement> arguments = Arguments(Fill(DeckToolExamples.ApplyChangesFull, deck));
         IReadOnlyList<DeckChangeInput> changes = arguments["changes"]
             .Deserialize<IReadOnlyList<DeckChangeInput>>(ToolCallPolicy.SerializerOptions)!;
 
-        OperationResult<DeckDocument> result = await new DeckBatchWriteTools(store, OperationMode.Local)
-            .ApplyChangesAsync(deck.DeckId, deck.Revision, changes, TestContext.Current.CancellationToken);
+        OperationResult<DeckWriteResult> result = await new DeckBatchWriteTools(
+            store,
+            OperationMode.Local,
+            cardData.Resolver)
+            .ApplyChangesAsync(deck.DeckId, deck.Revision, changes, true, TestContext.Current.CancellationToken);
 
-        DeckDocument updated = Assert.IsType<OperationSuccess<DeckDocument>>(result.Value).Data;
+        DeckDocument updated = Assert.IsType<OperationSuccess<DeckWriteResult>>(result.Value).Data.Deck!;
         Assert.Equal("Golgari Ramp", updated.Name);
         Assert.Equal(["Rhystic Study"], updated.Entries.Select(entry => entry.CardName));
         Assert.Equal(
@@ -114,16 +119,16 @@ public sealed class DeckToolExampleTests : IClassFixture<ToolCatalogFixture>
 
             Assert.Null(ToolCallPolicy.DiagnoseArguments(catalog, "local_deck_category_rules_preview", arguments));
             DeckCategorizationReadTools tools = new(new DeckCategorizationCoordinator(store, scryfall));
-            OperationResult<DeckCategoryRulesPreview> result = await tools.PreviewAsync(
+            OperationResult<DeckCategoryRulesPreviewView> result = await tools.PreviewAsync(
                 arguments["deckId"].GetGuid(),
                 arguments["source"].Deserialize<CategoryRuleSource>(ToolCallPolicy.SerializerOptions)!,
                 arguments.TryGetValue("expectedRevision", out JsonElement revision) ? revision.GetInt64() : null,
                 arguments.TryGetValue("freshnessPolicy", out JsonElement freshness)
                     ? freshness.GetString()!
                     : "default",
-                TestContext.Current.CancellationToken);
+                cancellationToken: TestContext.Current.CancellationToken);
 
-            DeckCategoryRulesPreview preview = Assert.IsType<OperationSuccess<DeckCategoryRulesPreview>>(
+            DeckCategoryRulesPreviewView preview = Assert.IsType<OperationSuccess<DeckCategoryRulesPreviewView>>(
                 result.Value).Data;
             Assert.Equal(name == "full" ? "matched" : "unmatched", Assert.Single(preview.Decisions).Status);
             Assert.True(preview.IsComplete, name);
@@ -149,17 +154,17 @@ public sealed class DeckToolExampleTests : IClassFixture<ToolCatalogFixture>
             [new CategoryRule(Guid.Parse(DeckToolExamples.PlaceholderCategoryId), [], [], [])]));
         DeckCategorizationReadTools tools = new(new DeckCategorizationCoordinator(store, scryfall));
 
-        OperationResult<DeckCategoryRulesPreview> withoutRevision = await tools.PreviewAsync(
+        OperationResult<DeckCategoryRulesPreviewView> withoutRevision = await tools.PreviewAsync(
             deck.DeckId,
             source,
             cancellationToken: TestContext.Current.CancellationToken);
-        OperationResult<DeckCategoryRulesPreview> stale = await tools.PreviewAsync(
+        OperationResult<DeckCategoryRulesPreviewView> stale = await tools.PreviewAsync(
             deck.DeckId,
             source,
             deck.Revision + 5,
             cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.IsType<OperationSuccess<DeckCategoryRulesPreview>>(withoutRevision.Value);
+        Assert.IsType<OperationSuccess<DeckCategoryRulesPreviewView>>(withoutRevision.Value);
         Assert.Equal(deck.Revision, Assert.IsType<OperationConflict>(stale.Value).Current!.Revision);
     }
 

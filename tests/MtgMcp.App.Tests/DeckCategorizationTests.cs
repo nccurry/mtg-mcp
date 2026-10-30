@@ -70,8 +70,16 @@ public sealed class DeckCategorizationTests
             TestContext.Current.CancellationToken));
         CategoryRuleSource source = new InlineCategoryRuleSource(new CategoryRuleSet("add-only", []));
 
-        OperationResult<DeckDocument> result = await coordinator.ApplyAsync(
-            deck.DeckId, deck.Revision, null, source, "cache-only", "fingerprint", "tampered", TestContext.Current.CancellationToken);
+        OperationResult<DeckWriteResult> result = await coordinator.ApplyAsync(
+            deck.DeckId,
+            deck.Revision,
+            null,
+            source,
+            "cache-only",
+            "fingerprint",
+            "tampered",
+            false,
+            TestContext.Current.CancellationToken);
 
         Assert.Equal("invalid-category-apply-token", Assert.IsType<OperationInvalidInput>(result.Value).ReasonCode);
     }

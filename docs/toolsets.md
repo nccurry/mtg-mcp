@@ -63,7 +63,12 @@ allows. The default mode is `remote`.
 `read-only` allows reads only. `local` adds local writes. `remote` adds remote
 writes, including Archidekt uploads. A toolset cannot widen these permissions.
 Destructive tools carry a destructive annotation, so clients ask before running
-them.
+them. The Archidekt remote destructive tools also carry the
+`anthropic/requiresUserInteraction` tag, so Claude Code asks you to approve each
+call even in `remote` mode. `remote` is the default and gives full read and write
+access: start the server with no `--mode` setting. A mode override hides tools
+from the tool list; for example `--mode=local` hides `archidekt_push_apply`. Only
+the push and pull previews report this, in `applyNotice`.
 
 ## Tools in each toolset
 

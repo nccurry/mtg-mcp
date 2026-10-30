@@ -144,9 +144,9 @@ public sealed class DeckCardViewTests
     /// Verifies arguments that do not fit together are rejected with invalid input.
     /// </summary>
     [Theory]
-    [InlineData("include-required", null, null, null, 10)]
+    [InlineData("invalid-page-size", null, null, null, 0)]
     [InlineData("include-required", null, new[] { "name" }, null, null)]
-    [InlineData("include-required", null, null, "abc", null)]
+    [InlineData("invalid-cursor", null, null, "abc", null)]
     [InlineData("empty-include", new string[0], null, null, null)]
     [InlineData("invalid-include", new[] { "cards", "prices" }, null, null, null)]
     [InlineData("fields-require-cards", new[] { "tags" }, new[] { "name" }, null, null)]
@@ -218,6 +218,110 @@ public sealed class DeckCardViewTests
     }
 
     /// <summary>
+    /// Verifies a deck with a 60,000-character description and a long name pages under the size limit: the name is cut
+    /// on every page, and the description is cut on the first page and empty on the pages after it.
+    /// </summary>
+    [Fact]
+    public async Task Get_LongDescriptionAndName_AreCutSoEveryPageStaysUnderTheLimit()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
+        DeckDocument deck = Success(await setup.Store.CreateAsync(
+            new DeckCreateRequest(
+                new string('n', 5_000),
+                Description: new string('d', 60_000),
+                Format: "custom",
+                Entries: [.. Enumerable.Range(0, 300).Select(index => new DeckEntryDraft(1, $"Entry {index:D3}"))]),
+            TestContext.Current.CancellationToken));
+        List<DeckDocumentView> pages = [];
+        string? cursor = null;
+
+        do
+        {
+            OperationResult<DeckDocumentView> result = await setup.Get(deck.DeckId, null, null, cursor, null);
+            Assert.True(Bytes(result) <= 40_000, $"page {pages.Count} has {Bytes(result)} bytes");
+            pages.Add(Success(result));
+            cursor = pages[^1].NextCursor;
+        }
+        while (cursor is not null);
+
+        Assert.True(pages.Count > 1);
+        Assert.All(pages, page => Assert.Equal(ResultText.MaximumNameBytes, page.Name.Length));
+        Assert.All(pages, page => Assert.True(page.NameTruncated));
+        Assert.Equal(ResultText.MaximumDescriptionBytes, pages[0].Description.Length);
+        Assert.Equal(60_000, pages[0].DescriptionLength);
+        Assert.All(pages.Skip(1), page => Assert.Equal(string.Empty, page.Description));
+        Assert.All(pages, page => Assert.True(page.DescriptionTruncated));
+    }
+
+    /// <summary>
+    /// Verifies a 300-entry deck stays within 40,000 characters (the hard ceiling is 50,000) for a read with no include
+    /// and with every include combination, and that following nextCursor reaches every entry once, in order.
+    /// </summary>
+    /// <param name="includeText">Comma-separated include values, or empty for none.</param>
+    [Theory]
+    [InlineData("")]
+    [InlineData("cards")]
+    [InlineData("tags")]
+    [InlineData("cards,tags")]
+    public async Task Get_ThreeHundredEntryDeck_EveryPageIsWithinFortyThousandCharacters(string includeText)
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: true);
+        DeckDocument deck = await setup.CreateDeckAsync(300, withCategories: true);
+        string[]? include = includeText.Length == 0 ? null : includeText.Split(',');
+        List<string> names = [];
+        int pages = 0;
+        string? cursor = null;
+
+        do
+        {
+            OperationResult<DeckDocumentView> result = await setup.Get(deck.DeckId, include, null, cursor);
+
+            DeckDocumentView page = Success(result);
+            Assert.True(Bytes(result) <= 40_000, $"page {pages} has {Bytes(result)} bytes");
+            Assert.Equal(300, page.TotalEntries);
+            Assert.True(include is not null || page.NextCursor is null || page.Truncated == true);
+            if (page.Truncated == true)
+            {
+                Assert.False(string.IsNullOrWhiteSpace(page.Narrow));
+                Assert.Contains("nextCursor", page.Narrow, StringComparison.Ordinal);
+            }
+
+            names.AddRange(page.Entries.Select(entry => entry.CardName));
+            cursor = page.NextCursor;
+            pages++;
+        }
+        while (cursor is not null);
+
+        Assert.True(pages > 1);
+        Assert.Equal(Enumerable.Range(0, 300).Select(index => $"Entry {index:D3}"), names);
+    }
+
+    /// <summary>
+    /// Verifies a deck that fits one result is returned whole with no paging fields, and a caller can still ask for
+    /// smaller pages of the stored deck with pageSize and a cursor.
+    /// </summary>
+    [Fact]
+    public async Task Get_WithoutInclude_PagesOnlyWhenAskedOrTooLarge()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
+        DeckDocument small = await setup.CreateDeckAsync(10);
+
+        DeckDocumentView whole = Success(await setup.Get(small.DeckId));
+        DeckDocumentView first = Success(await setup.Get(small.DeckId, pageSize: 4));
+        DeckDocumentView second = Success(await setup.Get(small.DeckId, pageSize: 4, cursor: first.NextCursor));
+
+        Assert.Equal(10, whole.Entries.Count);
+        Assert.Null(whole.NextCursor);
+        Assert.Null(whole.TotalEntries);
+        Assert.Equal(4, first.Entries.Count);
+        Assert.Equal(10, first.TotalEntries);
+        Assert.Null(first.Truncated);
+        Assert.Equal(
+            small.Entries.Skip(4).Take(4).Select(entry => entry.EntryId),
+            second.Entries.Select(entry => entry.EntryId));
+    }
+
+    /// <summary>
     /// Verifies a small page size pages without truncation and the cursor reads exactly the next entries.
     /// </summary>
     [Fact]
@@ -274,11 +378,11 @@ public sealed class DeckCardViewTests
             null,
             first.NextCursor,
             2);
-        DeckDocument renamed = Success(await setup.Writes.ApplyChangesAsync(
+        DeckWriteResult renamed = Success(await setup.Writes.ApplyChangesAsync(
             deck.DeckId,
             deck.Revision,
             [new UpdateDeckMetadataInput("Renamed", null, "custom")],
-            TestContext.Current.CancellationToken));
+            cancellationToken: TestContext.Current.CancellationToken));
         OperationResult<DeckDocumentView> changed = await setup.Get(deck.DeckId, ["tags"], null, first.NextCursor, 2);
 
         Assert.Equal("invalid-cursor", Assert.IsType<OperationInvalidInput>(otherRequest.Value).ReasonCode);
@@ -296,20 +400,22 @@ public sealed class DeckCardViewTests
         using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
         DeckDocument deck = await setup.CreateDeckAsync(6);
         DeckDocumentView first = Success(await setup.Get(deck.DeckId, ["tags"], null, null, 5));
-        DeckDocument current = deck;
+        DeckWriteResult? current = null;
+        long revision = deck.Revision;
         foreach (DeckEntry entry in deck.Entries.Take(5))
         {
             current = Success(await setup.Writes.ApplyChangesAsync(
-                current.DeckId,
-                current.Revision,
+                deck.DeckId,
+                revision,
                 [new RemoveDeckEntryInput(entry.EntryId)],
-                TestContext.Current.CancellationToken));
+                cancellationToken: TestContext.Current.CancellationToken));
+            revision = current.Revision;
         }
 
         OperationResult<DeckDocumentView> result = await setup.Get(deck.DeckId, ["tags"], null, first.NextCursor, 5);
 
         OperationConflict conflict = Assert.IsType<OperationConflict>(result.Value);
-        Assert.Equal(current.Revision, conflict.Current!.Revision);
+        Assert.Equal(current!.Revision, conflict.Current!.Revision);
     }
 
     /// <summary>
@@ -438,7 +544,7 @@ public sealed class DeckCardViewTests
             Store = store;
             reads = new DeckReadTools(store, new DeckCardViewCoordinator(store, scryfall),
                 new DeckRuleCoordinator(store, scryfall));
-            Writes = new DeckBatchWriteTools(store, OperationMode.Local);
+            Writes = new DeckBatchWriteTools(store, OperationMode.Local, new DeckEntryResolver(scryfall));
         }
 
         /// <summary>

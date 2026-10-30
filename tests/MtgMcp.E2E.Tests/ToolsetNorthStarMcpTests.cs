@@ -53,11 +53,11 @@ public sealed class ToolsetNorthStarMcpTests
                         format = "commander",
                     },
                 }).ConfigureAwait(false);
-            JsonElement importedDeck = imported.GetProperty("deck");
+            JsonElement importedDeck = imported.GetProperty("summary");
             Guid deckId = importedDeck.GetProperty("deckId").GetGuid();
             long revision = importedDeck.GetProperty("revision").GetInt64();
 
-            JsonElement updated = await CallSuccessAsync(
+            JsonElement updated = await WholeDeck.SuccessAsync(
                 defaultSession,
                 "local_deck_apply_changes",
                 new Dictionary<string, object?>

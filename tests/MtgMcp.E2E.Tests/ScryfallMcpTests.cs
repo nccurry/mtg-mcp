@@ -235,22 +235,35 @@ public sealed class ScryfallMcpTests
             }).ConfigureAwait(false);
         JsonElement firstPage = commanderFirst.GetProperty("page");
         Assert.Equal(100, firstPage.GetProperty("totalCount").GetInt32());
-        Assert.Equal(40, firstPage.GetProperty("items").GetArrayLength());
+        // A page is cut to the result size limit, so the 40 requested rows can arrive in more than one page.
         Assert.Equal(0, firstPage.GetProperty("items")[0].GetProperty("index").GetInt32());
+        int seen = firstPage.GetProperty("items").GetArrayLength();
+        Assert.InRange(seen, 1, 40);
         string commanderCursor = firstPage.GetProperty("nextCursor").GetString()!;
-        JsonElement commanderSecond = await CallSuccessAsync(
-            session,
-            "scryfall_cards_get",
-            new Dictionary<string, object?>
+        while (true)
+        {
+            JsonElement next = await CallSuccessAsync(
+                session,
+                "scryfall_cards_get",
+                new Dictionary<string, object?>
+                {
+                    ["lookups"] = commanderLookups,
+                    ["freshnessPolicy"] = "refresh",
+                    ["cursor"] = commanderCursor,
+                    ["pageSize"] = 100,
+                }).ConfigureAwait(false);
+            JsonElement page = next.GetProperty("page");
+            Assert.Equal(seen, page.GetProperty("items")[0].GetProperty("index").GetInt32());
+            seen += page.GetProperty("items").GetArrayLength();
+            if (!page.TryGetProperty("nextCursor", out JsonElement cursor))
             {
-                ["lookups"] = commanderLookups,
-                ["freshnessPolicy"] = "refresh",
-                ["cursor"] = commanderCursor,
-                ["pageSize"] = 100,
-            }).ConfigureAwait(false);
-        Assert.Equal(60, commanderSecond.GetProperty("page").GetProperty("items").GetArrayLength());
-        Assert.Equal(40, commanderSecond.GetProperty("page").GetProperty("items")[0].GetProperty("index").GetInt32());
-        Assert.False(commanderSecond.GetProperty("page").TryGetProperty("nextCursor", out _));
+                break;
+            }
+
+            commanderCursor = cursor.GetString()!;
+        }
+
+        Assert.Equal(100, seen);
 
         JsonElement inherited = await CallSuccessAsync(
             session,
@@ -344,7 +357,7 @@ public sealed class ScryfallMcpTests
             "default",
             SeedAsync,
             TestContext.Current.CancellationToken).ConfigureAwait(false);
-        JsonElement deck = await CallSuccessAsync(
+        JsonElement deck = await WholeDeck.SuccessAsync(
             session,
             "local_deck_create",
             new Dictionary<string, object?>
@@ -362,6 +375,39 @@ public sealed class ScryfallMcpTests
             }).ConfigureAwait(false);
         Guid deckId = deck.GetProperty("deckId").GetGuid();
         long revision = deck.GetProperty("revision").GetInt64();
+
+        // Names are resolved from installed card data when the entries are added, so put the entries back to
+        // name-only to give reconciliation work to do.
+        Assert.All(deck.GetProperty("entries").EnumerateArray(), entry =>
+            Assert.True(entry.GetProperty("oracleId").GetGuid() != Guid.Empty));
+        object[] resets = [.. deck.GetProperty("entries").EnumerateArray().Select(entry => (object)new
+        {
+            kind = "update-entry",
+            entry = new
+            {
+                entryId = entry.GetProperty("entryId").GetGuid(),
+                quantity = entry.GetProperty("quantity").GetInt32(),
+                cardName = entry.GetProperty("cardName").GetString()!.ToLowerInvariant(),
+                oracleId = (Guid?)null,
+                printingId = (Guid?)null,
+                setCode = (string?)null,
+                collectorNumber = (string?)null,
+                language = entry.GetProperty("language").GetString(),
+                finish = entry.GetProperty("finish").GetString(),
+                zone = entry.GetProperty("zone").GetString(),
+                sortOrder = entry.GetProperty("sortOrder").GetInt32(),
+            },
+        })];
+        deck = await WholeDeck.SuccessAsync(
+            session,
+            "local_deck_apply_changes",
+            new Dictionary<string, object?>
+            {
+                ["deckId"] = deckId,
+                ["expectedRevision"] = revision,
+                ["changes"] = resets,
+            }).ConfigureAwait(false);
+        revision = deck.GetProperty("revision").GetInt64();
         JsonElement preview = await CallSuccessAsync(
             session,
             "local_deck_identity_reconcile_preview",
@@ -380,7 +426,7 @@ public sealed class ScryfallMcpTests
             Assert.Equal("corpus", row.GetProperty("evidenceOrigin").GetString());
         });
 
-        JsonElement applied = await CallSuccessAsync(
+        JsonElement applied = await WholeDeck.SuccessAsync(
             session,
             "local_deck_identity_reconcile_apply",
             new Dictionary<string, object?>

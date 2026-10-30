@@ -168,6 +168,26 @@ internal sealed class DeckIdentityApplyToken
 internal sealed class DeckIdentityReconciliationCoordinator
 {
     /// <summary>
+    /// Names the match method of a lookup by Scryfall printing ID.
+    /// </summary>
+    internal const string MatchPrintingId = "scryfall-printing-id";
+
+    /// <summary>
+    /// Names the match method of a lookup by set code, collector number, and language.
+    /// </summary>
+    internal const string MatchSetCollectorLanguage = "set-collector-language";
+
+    /// <summary>
+    /// Names the match method of a lookup by Oracle ID.
+    /// </summary>
+    internal const string MatchOracleId = "oracle-id";
+
+    /// <summary>
+    /// Names the match method of a lookup by exact card name.
+    /// </summary>
+    internal const string MatchExactName = "exact-name";
+
+    /// <summary>
     /// Uses deterministic web JSON for proposal fingerprints.
     /// </summary>
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -255,12 +275,13 @@ internal sealed class DeckIdentityReconciliationCoordinator
     /// <summary>
     /// Replays preview evidence and applies only verified identity field changes in one deck revision.
     /// </summary>
-    internal async Task<OperationResult<DeckDocument>> ApplyAsync(
+    internal async Task<OperationResult<DeckWriteResult>> ApplyAsync(
         Guid deckId,
         long expectedRevision,
         string previewFingerprint,
         string applyToken,
         bool allowPartial,
+        bool returnDeck,
         CancellationToken cancellationToken)
     {
         if (!tokens.TryDecode(applyToken, out DeckIdentityApplyTokenPayload? token) ||
@@ -278,7 +299,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
             .ConfigureAwait(false);
         if (deckResult is not OperationSuccess<DeckDocument> deckSuccess)
         {
-            return deckResult;
+            return OperationFailure.Forward<DeckDocument, DeckWriteResult>(deckResult);
         }
 
         DeckDocument deck = deckSuccess.Data;
@@ -293,7 +314,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
         OperationResult<IReadOnlyList<DeckEntry>> selection = SelectEntries(deck, token.EntryIds);
         if (selection is not OperationSuccess<IReadOnlyList<DeckEntry>> selected)
         {
-            return OperationFailure.Forward<IReadOnlyList<DeckEntry>, DeckDocument>(selection);
+            return OperationFailure.Forward<IReadOnlyList<DeckEntry>, DeckWriteResult>(selection);
         }
 
         IReadOnlyList<DeckEntry> entries = selected.Data;
@@ -307,7 +328,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
                     .ConfigureAwait(false);
             if (replay is not OperationSuccess<ScryfallExactCollectionEvidence> replaySuccess)
             {
-                return OperationFailure.Forward<ScryfallExactCollectionEvidence, DeckDocument>(replay);
+                return OperationFailure.Forward<ScryfallExactCollectionEvidence, DeckWriteResult>(replay);
             }
 
             evidence = replaySuccess.Data;
@@ -355,13 +376,32 @@ internal sealed class DeckIdentityReconciliationCoordinator
             }));
         }
 
-        return changes.Count == 0
-            ? new OperationSuccess<DeckDocument>(deck)
-            : await deckStore.ApplyChangesAsync(
-                deckId,
-                expectedRevision,
-                changes,
-                cancellationToken).ConfigureAwait(false);
+        List<DeckWriteIssue> skipped = [];
+        foreach (DeckIdentityReconciliationRow row in preview.Rows)
+        {
+            if (row.Status is not ("resolved" or "unchanged"))
+            {
+                skipped.Add(new DeckWriteIssue(
+                    DeckWriteIssue.Skipped,
+                    $"{row.Status}: {row.Message}",
+                    row.EntryId,
+                    row.Before.CardName));
+            }
+        }
+
+        if (changes.Count == 0)
+        {
+            return new OperationSuccess<DeckWriteResult>(DeckWriteResults.After(deck, deck, skipped, returnDeck));
+        }
+
+        OperationResult<DeckDocument> applied = await deckStore.ApplyChangesAsync(
+            deckId,
+            expectedRevision,
+            changes,
+            cancellationToken).ConfigureAwait(false);
+        return applied is OperationSuccess<DeckDocument> after
+            ? new OperationSuccess<DeckWriteResult>(DeckWriteResults.After(deck, after.Data, skipped, returnDeck))
+            : OperationFailure.Forward<DeckDocument, DeckWriteResult>(applied);
     }
 
     /// <summary>
@@ -403,9 +443,33 @@ internal sealed class DeckIdentityReconciliationCoordinator
     }
 
     /// <summary>
+    /// Gives the identity an entry takes from the card its lookup found: every identity field when the lookup named a
+    /// printing, and only the card name and Oracle ID when it named only the card. Identity reconciliation and the
+    /// add-time lookup of new entries both use this one rule.
+    /// </summary>
+    internal static DeckEntryIdentity ProposedIdentity(DeckIdentityLookupPlan plan, ScryfallCard card)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(card);
+        return plan.MatchMethod is MatchPrintingId or MatchSetCollectorLanguage
+            ? new DeckEntryIdentity(
+                card.Name,
+                card.OracleId,
+                card.Id,
+                card.SetCode,
+                card.CollectorNumber,
+                card.Language)
+            : Identity(plan.Entry) with
+            {
+                CardName = card.Name,
+                OracleId = card.OracleId,
+            };
+    }
+
+    /// <summary>
     /// Builds strongest-first lookups while deduplicating identical evidence requests.
     /// </summary>
-    private static (
+    internal static (
         IReadOnlyList<DeckIdentityLookupPlan> Plans,
         IReadOnlyList<ScryfallEvidenceLookup> Lookups) BuildLookupPlans(IReadOnlyList<DeckEntry> entries)
     {
@@ -442,7 +506,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
     {
         if (entry.PrintingId is Guid printingId)
         {
-            return ("scryfall-printing-id", new ScryfallEvidenceLookup(
+            return (MatchPrintingId, new ScryfallEvidenceLookup(
                 new ScryfallCardLookup("scryfall-id", printingId.ToString("D"))));
         }
 
@@ -450,7 +514,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
             !string.IsNullOrWhiteSpace(entry.CollectorNumber) &&
             !string.IsNullOrWhiteSpace(entry.Language))
         {
-            return ("set-collector-language", new ScryfallEvidenceLookup(
+            return (MatchSetCollectorLanguage, new ScryfallEvidenceLookup(
                 new ScryfallCardLookup(
                     "printing",
                     SetCode: entry.SetCode.Trim().ToLowerInvariant(),
@@ -460,13 +524,13 @@ internal sealed class DeckIdentityReconciliationCoordinator
 
         if (entry.OracleId is Guid oracleId)
         {
-            return ("oracle-id", new ScryfallEvidenceLookup(
+            return (MatchOracleId, new ScryfallEvidenceLookup(
                 new ScryfallCardLookup("oracle-id", oracleId.ToString("D"))));
         }
 
         return string.IsNullOrWhiteSpace(entry.CardName)
             ? (null, null)
-            : ("exact-name", new ScryfallEvidenceLookup(
+            : (MatchExactName, new ScryfallEvidenceLookup(
                 new ScryfallCardLookup("exact-name", entry.CardName.Trim())));
     }
 
@@ -571,19 +635,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
                 binding);
         }
 
-        DeckEntryIdentity after = plan.MatchMethod is "scryfall-printing-id" or "set-collector-language"
-            ? new DeckEntryIdentity(
-                card.Name,
-                card.OracleId,
-                card.Id,
-                card.SetCode,
-                card.CollectorNumber,
-                card.Language)
-            : before with
-            {
-                CardName = card.Name,
-                OracleId = card.OracleId,
-            };
+        DeckEntryIdentity after = ProposedIdentity(plan, card);
         bool changed = before != after;
         return Row(
             plan,
@@ -631,7 +683,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
             (entry.OracleId is null || entry.OracleId == card.OracleId) &&
             (string.IsNullOrWhiteSpace(entry.CardName) ||
              string.Equals(entry.CardName.Trim(), card.Name, StringComparison.OrdinalIgnoreCase));
-        if (!baseIdentity || matchMethod is not ("scryfall-printing-id" or "set-collector-language"))
+        if (!baseIdentity || matchMethod is not (MatchPrintingId or MatchSetCollectorLanguage))
         {
             return baseIdentity;
         }
@@ -692,24 +744,32 @@ internal sealed class DeckIdentityReconciliationReadTools
         UseStructuredContent = true)]
     [Description(
         "Local deck store: previews exact Scryfall-backed identity normalization without fuzzy matching, legality " +
-        "checks, or deck mutation.")]
-    internal Task<OperationResult<DeckIdentityReconciliationPreview>> PreviewAsync(
+        "checks, or deck mutation. Rows come in pages that fit the size limit; the fingerprint and apply token " +
+        "cover the whole preview, so apply needs no page. When truncated is true, call again with offset set to " +
+        "nextOffset and expectedPreviewFingerprint set to the previewFingerprint of the first page.")]
+    internal async Task<OperationResult<DeckIdentityReconciliationPreviewView>> PreviewAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
         [Description("Optional unique entry UUIDs; omit to select every entry, up to 150.")]
         IReadOnlyList<Guid>? entryIds = null,
         [Description("Scryfall evidence policy: default, cache-only, or refresh."), FreshnessPolicyValues]
         string freshnessPolicy = "default",
+        [Description("Number of rows to skip; use nextOffset from the previous page. Default 0.")]
+        int offset = 0,
+        [Description(ResultPage.FingerprintHelp)] string? expectedPreviewFingerprint = null,
         CancellationToken cancellationToken = default)
     {
-        return coordinator.PreviewAsync(
+        OperationResult<DeckIdentityReconciliationPreview> preview = await coordinator.PreviewAsync(
             deckId,
             expectedRevision,
             entryIds,
             freshnessPolicy,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
+        return preview is OperationSuccess<DeckIdentityReconciliationPreview> success
+            ? DeckPreviewPaging.PageIdentity(success.Data, offset, expectedPreviewFingerprint)
+            : OperationFailure.Forward<DeckIdentityReconciliationPreview, DeckIdentityReconciliationPreviewView>(
+                preview);
     }
-
 }
 
 /// <summary>
@@ -751,8 +811,9 @@ internal sealed class DeckIdentityReconciliationWriteTools
         UseStructuredContent = true)]
     [Description(
         "Local deck store: applies an unchanged exact identity preview in one revision; all non-identity deck fields " +
-        "are preserved.")]
-    internal Task<OperationResult<DeckDocument>> ApplyAsync(
+        "are preserved. The result is a summary (new revision, counts, IDs of changed entries, rows left out as " +
+        "issues); pass returnDeck true to also get the whole deck.")]
+    internal Task<OperationResult<DeckWriteResult>> ApplyAsync(
         [Description("Stable local deck UUID used for preview.")] Guid deckId,
         [Description("Deck revision used for preview.")] long expectedRevision,
         [Description("Evidence-bound fingerprint returned by local_deck_identity_reconcile_preview.")]
@@ -761,11 +822,13 @@ internal sealed class DeckIdentityReconciliationWriteTools
         string applyToken,
         [Description("Whether resolved rows may be applied when other selected identities remain incomplete.")]
         bool allowPartial = false,
+        [Description("Set true to also return the whole deck after the write. The default summary is much smaller.")]
+        bool returnDeck = false,
         CancellationToken cancellationToken = default)
     {
         if (!OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
-            return Task.FromResult<OperationResult<DeckDocument>>(
+            return Task.FromResult<OperationResult<DeckWriteResult>>(
                 new OperationUnsupported(
                     "operation-mode-denied",
                     "The effective operation mode does not permit local writes."));
@@ -777,6 +840,7 @@ internal sealed class DeckIdentityReconciliationWriteTools
             previewFingerprint,
             applyToken,
             allowPartial,
+            returnDeck,
             cancellationToken);
     }
 }

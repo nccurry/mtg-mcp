@@ -42,7 +42,7 @@ public sealed class ToolInputBindingMcpTests
         Assert.NotEqual(true, result.IsError);
         JsonElement structured = Assert.IsType<JsonElement>(result.StructuredContent);
         Assert.Equal("success", structured.GetProperty("kind").GetString());
-        Assert.Equal(2, structured.GetProperty("data").GetProperty("entries").GetArrayLength());
+        Assert.Equal(2, structured.GetProperty("data").GetProperty("entryCount").GetInt32());
     }
 
     /// <summary>
@@ -298,6 +298,7 @@ public sealed class ToolInputBindingMcpTests
             {
                 ["deckId"] = deckId,
                 ["expectedRevision"] = JsonElement.Parse($"{revision}.0"),
+                ["returnDeck"] = true,
                 ["changes"] = new[]
                 {
                     new
@@ -314,7 +315,8 @@ public sealed class ToolInputBindingMcpTests
             }).ConfigureAwait(false);
 
         Assert.NotEqual(true, result.IsError);
-        JsonElement entries = Assert.IsType<JsonElement>(result.StructuredContent).GetProperty("data").GetProperty("entries");
+        JsonElement entries = Assert.IsType<JsonElement>(
+            result.StructuredContent).GetProperty("data").GetProperty("deck").GetProperty("entries");
         Assert.Contains(
             entries.EnumerateArray(),
             entry => entry.GetProperty("cardName").GetString() == "Sol Ring" &&
