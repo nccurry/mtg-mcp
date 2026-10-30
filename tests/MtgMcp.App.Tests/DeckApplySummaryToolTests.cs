@@ -18,8 +18,7 @@ public sealed class DeckApplySummaryToolTests
 
     /// <summary>
     /// Verifies a partial identity apply returns the changed entry IDs and a capped list of skipped issues for the rows
-    /// it left
-    /// out, with the exact count, no deck, and fewer than 10,000 characters, and that returnDeck adds the deck.
+    /// it left out, with the exact count, no deck, and fewer than 10,000 characters.
     /// </summary>
     [Fact]
     public async Task IdentityApply_Partial_ReturnsUpdatedIdsAndSkippedIssues_WithoutTheDeck()

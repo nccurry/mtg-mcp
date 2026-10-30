@@ -8,7 +8,12 @@ namespace MtgMcp.App.Tests;
 /// Stands in for Archidekt in offline workflow tests. It keeps one deck and applies the same writes the server sends,
 /// then answers every read the way the real service has been seen to: it returns each entry's other category names in
 /// a new order on every read, renumbers entry order numbers and category ranks on every read (the category order stays
-/// the same), and keeps no zone, so the zone of a card is derived by the client from its categories.
+/// the same), and keeps no zone, so the zone of a card is derived by the client from its categories. A double-faced
+/// card is named by both faces, as Archidekt names it: a read-only query on 2026-10-29,
+/// <c>GET /api/cards/v2/?name=Delver%20of%20Secrets</c>, returned 9 printings whose <c>oracleCard.name</c> is
+/// "Delver of Secrets // Insectile Aberration" (faces "Delver of Secrets" and "Insectile Aberration", layout
+/// transform), and the same query with the full name returned 8 printings with that same name. So the search matches
+/// the front face, and the card is always named by both faces.
 /// </summary>
 internal sealed class FakeArchidekt : HttpMessageHandler
 {
@@ -194,6 +199,7 @@ internal sealed class FakeArchidekt : HttpMessageHandler
 
         if (path.StartsWith("api/cards/v2/?name=", StringComparison.Ordinal))
         {
+            // Matches the full name or the front face, as the recorded Archidekt search does for a double-faced card.
             string wanted = Uri.UnescapeDataString(path["api/cards/v2/?name=".Length..].Split('&')[0]);
             JsonArray results = [];
             foreach (FakeCard card in catalog.Values.Where(value => value.Name == wanted ||

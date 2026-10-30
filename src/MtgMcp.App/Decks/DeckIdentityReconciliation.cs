@@ -168,6 +168,26 @@ internal sealed class DeckIdentityApplyToken
 internal sealed class DeckIdentityReconciliationCoordinator
 {
     /// <summary>
+    /// Names the match method of a lookup by Scryfall printing ID.
+    /// </summary>
+    internal const string MatchPrintingId = "scryfall-printing-id";
+
+    /// <summary>
+    /// Names the match method of a lookup by set code, collector number, and language.
+    /// </summary>
+    internal const string MatchSetCollectorLanguage = "set-collector-language";
+
+    /// <summary>
+    /// Names the match method of a lookup by Oracle ID.
+    /// </summary>
+    internal const string MatchOracleId = "oracle-id";
+
+    /// <summary>
+    /// Names the match method of a lookup by exact card name.
+    /// </summary>
+    internal const string MatchExactName = "exact-name";
+
+    /// <summary>
     /// Uses deterministic web JSON for proposal fingerprints.
     /// </summary>
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -421,26 +441,6 @@ internal sealed class DeckIdentityReconciliationCoordinator
             "invalid-identity-entry-selection",
             "Identity reconciliation requires 1 through 150 unique existing entry IDs.");
     }
-
-    /// <summary>
-    /// Names the match method of a lookup by Scryfall printing ID.
-    /// </summary>
-    internal const string MatchPrintingId = "scryfall-printing-id";
-
-    /// <summary>
-    /// Names the match method of a lookup by set code, collector number, and language.
-    /// </summary>
-    internal const string MatchSetCollectorLanguage = "set-collector-language";
-
-    /// <summary>
-    /// Names the match method of a lookup by Oracle ID.
-    /// </summary>
-    internal const string MatchOracleId = "oracle-id";
-
-    /// <summary>
-    /// Names the match method of a lookup by exact card name.
-    /// </summary>
-    internal const string MatchExactName = "exact-name";
 
     /// <summary>
     /// Gives the identity an entry takes from the card its lookup found: every identity field when the lookup named a

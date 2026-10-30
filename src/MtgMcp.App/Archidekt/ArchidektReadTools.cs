@@ -111,9 +111,9 @@ internal sealed class ArchidektReadTools
     [Description(
         "Archidekt: previews creating or transactionally replacing a local deck from fresh Archidekt evidence; " +
         "performs zero writes. The result starts with a summary (operation, difference, and conflict counts) and " +
-        "says whether archidekt_pull_apply is available and which setting enables it. A public deck needs no " +
-        "credentials; a private deck needs Archidekt credentials (see archidekt_auth_status). Rows come in pages " +
-        "that fit the size limit; the guards cover the whole preview, so the apply tool needs no page. On later " +
+        "says whether archidekt_pull_apply is available and, if not, what to ask the user to change. A public deck " +
+        "needs no credentials; a private deck needs Archidekt credentials (see archidekt_auth_status). Rows come in " +
+        "pages that fit the size limit; the guards cover the whole preview, so the apply tool needs no page. On later " +
         "pages pass expectedPreviewFingerprint, the previewFingerprint of the first page." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSyncPreviewView>> PreviewPullAsync(
@@ -148,9 +148,9 @@ internal sealed class ArchidektReadTools
     [Description(
         "Archidekt: previews stable primitive Archidekt operations and refuses remote drift; performs zero writes. " +
         "The result starts with a summary (operation counts by kind, difference and conflict counts) and says " +
-        "whether archidekt_push_apply is available and which setting enables it. Rows come in pages that fit the " +
-        "size limit; the guards cover the whole preview, so the apply tool needs no page. On later pages pass " +
-        "expectedPreviewFingerprint, the previewFingerprint of the first page." +
+        "whether archidekt_push_apply is available and, if not, what to ask the user to change. Rows come in pages " +
+        "that fit the size limit; the guards cover the whole preview, so the apply tool needs no page. On later " +
+        "pages pass expectedPreviewFingerprint, the previewFingerprint of the first page." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSyncPreviewView>> PreviewPushAsync(
         [Description("Stable local deck UUID with an Archidekt provider binding.")] Guid localDeckId,

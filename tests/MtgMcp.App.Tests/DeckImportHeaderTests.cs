@@ -94,7 +94,17 @@ public sealed class DeckImportHeaderTests
             description,
             "custom",
             [.. Enumerable.Range(0, entries).Select(index => new DeckEntry(
-                Guid.CreateVersion7(), 1, $"Card {index:000}", null, null, null, null, "en", "nonfoil", "main", index))],
+                Guid.CreateVersion7(),
+                1,
+                $"Card {index:000}",
+                null,
+                null,
+                null,
+                null,
+                "en",
+                "nonfoil",
+                "main",
+                index))],
             [.. Enumerable.Range(0, categories).Select(index => new DeckCategory(
                 Guid.CreateVersion7(), $"Category {index}", null, index))],
             [],

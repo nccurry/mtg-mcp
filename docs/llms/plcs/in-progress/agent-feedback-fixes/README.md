@@ -8,12 +8,10 @@
 - Selected work and endpoint: REQ-001 to REQ-011 below, merged into `main` on
   this host and pushed, followed by a full audit (every `audit-codebase`
   specialist) over the combined changes. No release is part of this work.
-- State: implemented in blocks A, B, and C. Audit pass 1 found problems; the
-  repair for them is in progress on `aff/c-budget`. Verification of the repair
-  and delivery are pending.
-- Next action and blocker: finish the repair, run `task ci`,
-  `task test:integration`, and `task test:e2e` on it, then audit again. No
-  blocker.
+- State: audit pass 2 repair done; parent final checks pending. Audit pass 1 and pass 2 found problems; both
+  repairs are on `aff/c-budget`.
+- Next action and blocker: parent final checks (the known-fault check of REQ-009 and the owner configuration of
+  REQ-011), then delivery. No blocker.
 - Resume check: `git worktree list` and `git log --oneline -3 aff/c-budget`
   match the table below.
 
@@ -23,7 +21,7 @@ against cleanup):
 | Checkout | Branch | State |
 | --- | --- | --- |
 | `mtg-mcp-wt/agent-feedback-fixes/integ` | `aff/integ` | blocks A and B, merged |
-| `mtg-mcp-wt/agent-feedback-fixes/c-budget` | `aff/c-budget` | block C and the audit pass 1 repair |
+| `mtg-mcp-wt/agent-feedback-fixes/c-budget` | `aff/c-budget` | block C and the audit pass 1 and pass 2 repairs |
 | `mtg-mcp-wt/agent-feedback-fixes/a-decks` | `aff/a-decks` | merged into `aff/integ`; to remove |
 | `mtg-mcp-wt/agent-feedback-fixes/b-archidekt` | `aff/b-archidekt` | merged into `aff/integ`; to remove |
 
@@ -49,7 +47,7 @@ to keep results small and high-signal, not to raise per-tool limits.
 | REQ-002 | `local_deck_get` aims for at most 40,000 characters per result and never exceeds 50,000: large decks page or set `truncated: true` with a `narrow` hint naming the option to use (page, fields, `include`), as `card_list_query` does. | Test with a 300-entry deck and every `include`: each page under 40,000 characters, all entries reachable. |
 | REQ-003 | `archidekt_deck_get` and `archidekt_push_preview` aim for at most 40,000 characters per result and never exceed 50,000. The push preview leads with a summary (operation counts by kind, conflict count, real difference count) and pages its operations and differences. | Tests on a 300-card remote deck and a 300-operation push: under 40,000 characters, summary present, every operation reachable. |
 | REQ-004 | When `archidekt_push_apply` is not available (mode below `remote`, or credentials missing), `archidekt_push_preview` and `archidekt_pull_preview` say so and name the setting that enables it. The existing `_meta["anthropic/requiresUserInteraction"]: true` tag (SAFE-002, `ToolMetadata.cs`, shipped in 0.12.0) stays on exactly the remote destructive tools and gains a test that pins that set. | Preview tests in `local` mode show the message; a `tools/list` E2E test shows the `_meta` key on exactly the remote destructive tools. |
-| REQ-005 | Adding an entry with only a card name resolves its card identity at add time from installed card data (the same resolver the reconcile tools use), and its printing when set code and collector number are given. A name that does not resolve or is ambiguous is added unresolved and reported in the summary, never a failure. An exact name prefers a card played in a deck over a token, emblem, or art card; a name shared by two different Oracle IDs is ambiguous. | Tests: exact name resolves `oracleId`; name plus set and number resolves `printingId`; unknown and ambiguous names report a warning; no card data installed reports that resolution was skipped. |
+| REQ-005 | Adding an entry with only a card name resolves its card identity at add time from installed card data (the same resolver the reconcile tools use), and its printing when set code and collector number are given. A name that does not resolve or is ambiguous is added unresolved and reported in the summary, never a failure. An exact name prefers a card played in a deck over a token, emblem, or art card; a name shared by two different Oracle IDs is ambiguous. | Tests: exact name resolves `oracleId`; name plus set and number resolves `printingId`; unknown and ambiguous names are listed in `issues` as `unresolved` and `ambiguous`; no card data installed reports that resolution was skipped. |
 | REQ-006 | An entry's comparison form is defined once in the Archidekt adapter (primary category separate, other category names as a set, order fields ignored) and used for both difference rows and push operations. | Metamorphic tests: reordering category names, renumbering sort orders, or recasing names yields zero differences and zero operations; a real change still shows. |
 | REQ-007 | The offline fake Archidekt used by tests behaves like the real one where it has bitten us: it reorders an entry's category names, renumbers sort orders, and derives a card's zone from its primary category. A scripted workflow (pull, edit, push preview, push apply, pull preview) passes against it in `remote` mode, and in `local` mode the preview explains the missing apply. | App tests using the fake. |
 | REQ-008 | The `scryfall_search` description warns about how Scryfall combines printing-level conditions such as `not:reprint` with dates, and names a workaround verified against Scryfall. | One bounded live read-only Scryfall query (or recorded response) confirms the behavior and the workaround; the description test passes the 4,096-character limit. |
@@ -125,6 +123,12 @@ Checks per block: focused tests, then `task ci`, `task test:integration`, and
   The exact-name lookup now prefers a card played in a deck over a token, emblem, or art card of the same name, and a
   name that still fits two Oracle IDs is not resolved: it is added unresolved and reported as `ambiguous` with the
   count. Identity reconciliation shares the lookup and reports the same name as unresolved with the count.
+- Double-faced names (REQ-005): a read-only query of the real Archidekt card search on 2026-10-29,
+  `GET /api/cards/v2/?name=Delver%20of%20Secrets`, returned 9 printings whose `oracleCard.name` is "Delver of Secrets //
+  Insectile Aberration" (faces "Delver of Secrets" and "Insectile Aberration", layout transform), and the same query
+  with the full name returned 8 printings with that same name. So Archidekt names the card by both faces and its search
+  matches the front face. `FakeArchidekt` copies this, and `ArchidektWorkflowTests` and `AddByNameScenarioTests`
+  push a double-faced card typed by its front face and read it back clean.
 - Block C drove every tool at large offline sizes (REQ-009) and found seven results over 50,000 characters:
   `local_deck_export_bundle` (305,000 to 370,000 for 300 entries), `local_deck_identity_reconcile_preview` (71,000 for
   150 entries), `local_deck_import_preview` (53,000 for 300 lines), `local_deck_category_rules_preview` (62,000 for
@@ -158,7 +162,7 @@ commit.
 | Requirement | State | Evidence | Checks |
 | --- | --- | --- | --- |
 | REQ-001 | delivered in block A (`4066c36`) | `DeckWriteResult` summary with `returnDeck`; `DeckWriteSummaryTests` on a 300-entry deck (summary under 10,000 characters). | pending: `task ci`, `task test:integration`, `task test:e2e` on the merged commit |
-| REQ-002 | delivered in block A (`4066c36`) | `local_deck_get` pages with `cursor`, `pageSize`, `nextCursor`, `truncated`, `narrow`; `ToolResultBudgetTests` reads every page of a 300-entry deck with every `include`, all under 50,000. | pending: `task ci`, `task test:integration`, `task test:e2e` on the merged commit |
+| REQ-002 | delivered in block A (`4066c36`) | `local_deck_get` pages with `cursor`, `pageSize`, `nextCursor`, `truncated`, `narrow`; `ToolResultBudgetTests` reads every page of a 300-entry deck with every `include`, all under 40,000. | pending: `task ci`, `task test:integration`, `task test:e2e` on the merged commit |
 | REQ-003 | delivered in block B (`31b4db7`), extended in block C | `ArchidektWorkflowTests` pages a 300-card deck and a 300-operation push under 40,000; block C adds the same paging to the diff, restore preview, folder, and snapshot reads. | pending: `task ci`, `task test:integration`, `task test:e2e` on the merged commit |
 | REQ-004 | delivered in block B (`31b4db7`) | `applyAvailable` and `applyNotice` on both previews (`ArchidektWorkflowTests`); the `_meta` set is pinned in `ToolSurfaceRulesTests` and `FoundationMcpTests`. | pending: `task ci`, `task test:integration`, `task test:e2e` on the merged commit |
 | REQ-005 | delivered in block A (`4066c36`) | Names resolve at add time (`DeckWriteSummaryTests`, `DeckEntryResolverTests`); a token or art card never beats a playable card, and a name shared by two cards is reported as ambiguous (see Risks). | pending: `task ci`, `task test:integration`, `task test:e2e` on the merged commit |

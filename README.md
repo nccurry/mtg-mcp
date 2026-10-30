@@ -307,9 +307,11 @@ On later pages pass `expectedPreviewFingerprint` (the `previewFingerprint`, or f
 `fingerprint`, of the first page) to be refused if the preview changed in between. The first page of the
 import preview also carries the diagnostics, unresolved identities, categories, and provider bindings, each cut to
 fit with its exact count beside it; the saved synchronization snapshots of a native file are counted, not returned.
-`local_deck_export_bundle` lists every artifact (file name, media type, total length in characters, and the
+A paged deck cuts its name to 1,000 UTF-8 bytes (`nameTruncated`) and its description to 8,000 on the first page only
+(`descriptionTruncated`, `descriptionLength`).
+`local_deck_export_bundle` lists every artifact (file name, media type, total length in UTF-16 code units, and the
 SHA-256 of the whole content) and returns one chunk of one artifact's content of at most 30,000 UTF-8 bytes of
-JSON text; pass `artifact` and `offset` (the previous `chunk.nextOffset`, a count of characters) to read on.
+JSON text; pass `artifact` and `offset` (the previous `chunk.nextOffset`, a count of UTF-16 code units) to read on.
 The chunks joined in order are the exact file. The field-preservation report comes only with the chunk at
 offset 0. The Scryfall card tools cut a page of cards, in any `responseFormat`, to the size limit and return
 `nextCursor` for the rest.
@@ -660,10 +662,10 @@ preview that changed in between is refused instead of paged out of line.
 
 When `archidekt_push_apply` is not available (the mode is below `remote`, or
 credentials are missing), the push preview says so in `applyNotice`, with
-`applyAvailable: false`, and tells the agent what to ask the user to change (start the
-server in `remote` mode, the default). The pull preview does the same for
-`archidekt_pull_apply`, based on the mode alone: a pull reads a public deck without
-credentials, and a private deck needs them.
+`applyAvailable: false`, and tells the agent what to ask the user: start the server in
+`remote` mode (the default), or set up Archidekt credentials. The pull preview does the same for
+`archidekt_pull_apply` based on the mode alone (local or remote mode is enough): a pull reads a public deck without
+credentials, and a private deck also needs them.
 
 Archidekt may renumber category positions and the order of an entry's
 secondary categories. Content equality therefore compares category identity,

@@ -5,8 +5,8 @@
 Agents using `0.12.0` in Claude Code reported five problems: deck tool results too large to read, a push they could
 not send, false category-order differences in push previews, an extra reconcile step after adding cards by name, and
 Scryfall searches that mixed in reprints. Claude Code saves any tool text result over 50,000 characters to a file and
-shows the agent only the path, so results now aim for 40,000 UTF-8 bytes (the 50,000 characters of Claude Code is the
-hard ceiling) and page past that. Every change below marked **Breaking** changes a result that could not be read
+shows the agent only the path, so results now aim for 40,000 UTF-8 bytes (Claude Code's hard ceiling is 50,000
+characters) and page past that. Every change below marked **Breaking** changes a result that could not be read
 inline for a large deck, so each is taken under the `docs/versioning.md` exception for a clearly broken contract.
 
 ### Changed
@@ -49,10 +49,11 @@ inline for a large deck, so each is taken under the `docs/versioning.md` excepti
   proposal's category assignments page with its entries, and its saved synchronization snapshots are counted
   (`syncBaselineCount`), not returned.
 - **Breaking:** `local_deck_export_bundle` no longer returns every artifact's whole content. It lists each artifact
-  (`fileName`, `mediaType`, `totalLength` in characters, `sha256` of the whole content, `purpose`) and returns one
+  (`fileName`, `mediaType`, `totalLength` in UTF-16 code units (the string length), `sha256` of the whole content,
+  `purpose`) and returns one
   `chunk` of one artifact of at most 30,000 UTF-8 bytes of JSON text. New arguments `artifact` (default the first)
-  and `offset` (a count of characters) read the rest; the chunks joined in order are the exact file, and a chunk never
-  splits a character that takes two UTF-16 code units. The field-preservation report comes only with the chunk at
+  and `offset` (a count of UTF-16 code units) read the rest; the chunks joined in order are the exact file, and a chunk
+  never splits a surrogate pair (an emoji, for example). The field-preservation report comes only with the chunk at
   offset 0. It still writes no files. A 300-entry export was 305,000 to 370,000 characters.
 - **Breaking:** `scryfall_search`, `scryfall_cards_get`, and `scryfall_installed_cards_by_tag` cut a page to the
   result size limit in every `responseFormat` (before, only `concise` was cut), set `truncated` and `narrow`, and
@@ -76,8 +77,9 @@ inline for a large deck, so each is taken under the `docs/versioning.md` excepti
 - Entries added by card name now resolve their card identity when they are added, from installed card data, so a push
   needs no `local_deck_identity_reconcile_*` step. An exact name gives the Oracle ID, and a card played in a deck is
   preferred over a token, emblem, or art card of the same name; a name with a set code and collector number also gives
-  the printing. A double-faced card typed by one face takes Scryfall's full name, and a push finds and verifies it
-  whether Archidekt names the card by one face or both. A name that fits two different cards is added unresolved and
+  the printing. A double-faced card typed by one face takes Scryfall's full name. Archidekt names such a card by both
+  faces and its card search matches the front face (checked against the real service on 2026-10-29), so a push finds
+  the card and verifies it. A name that fits two different cards is added unresolved and
   listed in `issues` as `ambiguous`, with the count; a name that does not resolve is added unresolved and listed as
   `unresolved`; with no card data installed, or card data that cannot be read, one note in `issues` says resolution
   was skipped. The same rule now applies in `local_deck_identity_reconcile_preview`, which reports an ambiguous name as
@@ -86,9 +88,15 @@ inline for a large deck, so each is taken under the `docs/versioning.md` excepti
   available, an `applyNotice` that names the reason and what to ask the user to change (start the server in
   `remote` mode, the default, or for the push, set up Archidekt credentials). The pull notice depends on the mode
   alone: a pull reads a public deck without credentials.
-- `offset`, `operationOffset`, and `differenceOffset` arguments on the Archidekt read tools listed above.
-- A test that calls every tool against large offline fixtures and fails on any successful result over 50,000
-  characters (`ToolResultBudgetTests`), and a scenario test that adds cards by name and reaches a clean push preview in
+- `offset`, `operationOffset`, and `differenceOffset` arguments on the Archidekt read tools listed above. A preview
+  with two lists (operations and differences) gives both next offsets on every page that is not the last, so a caller
+  that follows the fields alone reaches every row once.
+- A deck's name and description are cut on a paged result so a long one cannot push every page over the limit: the name
+  to 1,000 UTF-8 bytes on every page (`nameTruncated`), and the description to 8,000 UTF-8 bytes on the first page only
+  (`descriptionTruncated`, with `descriptionLength`); a later page shows no description.
+- A test that calls every tool against large offline fixtures and fails on any result, successful or not, over
+  50,000 characters, or on a tool that grows with its data but never pages (`ToolResultBudgetTests`), and a scenario
+  test that adds cards by name and reaches a clean push preview in
   four calls with no reconcile step.
 
 ### Known limits

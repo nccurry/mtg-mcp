@@ -63,4 +63,33 @@ public sealed class ArchidektTwoListPagingTests
         Assert.Equal([1, 2, 3], sequences);
         Assert.Equal(differences.Select(value => value.Path), paths);
     }
+
+    /// <summary>
+    /// Verifies a request whose offsets lie past a preview that has shrunk is told the preview changed when it names
+    /// another fingerprint, and told the offset is out of range only when the fingerprint is the preview's own.
+    /// </summary>
+    [Fact]
+    public void PushPreview_OffsetsPastAShrunkPreview_ReportTheChangeBeforeTheOffset()
+    {
+        ArchidektSyncPreview preview = new(
+            "push",
+            Guid.NewGuid(),
+            1,
+            "42",
+            "remote",
+            "content",
+            "now",
+            false,
+            [new ArchidektDifference("/entries/000", "local-changed", null, "a", "b")],
+            [new ArchidektRemoteOperation(1, "entry-update", "x", "y")],
+            1);
+
+        OperationResult<ArchidektSyncPreviewView> changed =
+            ArchidektResultPaging.PagePreview(preview, 50, 50, null, "before");
+        OperationResult<ArchidektSyncPreviewView> outOfRange =
+            ArchidektResultPaging.PagePreview(preview, 50, 50, null, "now");
+
+        Assert.Equal("preview-changed", Assert.IsType<OperationConflict>(changed.Value).ReasonCode);
+        Assert.Equal("operationOffset", Assert.IsType<OperationInvalidInput>(outOfRange.Value).Path);
+    }
 }

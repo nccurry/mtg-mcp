@@ -169,12 +169,13 @@ public sealed class DeckWriteSummaryTests
     }
 
     /// <summary>
-    /// Verifies two writes that start from the same revision cannot both succeed: the first summary compares exactly
-    /// the state it started from, and the second is refused with a conflict and changes nothing, so a summary is never
-    /// built from a deck another write has changed in between.
+    /// Verifies a write that names a revision another write has already replaced is refused with a conflict and
+    /// changes nothing, and the first write's summary compares exactly the state it started from. The expected
+    /// revision is what keeps a summary from being built on a deck another write changed between the read and the
+    /// apply; this test checks the refusal, one write after the other, not an interleaving.
     /// </summary>
     [Fact]
-    public async Task ApplyChanges_TwoWritesFromTheSameRevision_OnlyTheFirstIsSummarized()
+    public async Task ApplyChanges_SecondWriteFromTheSameRevision_IsRefusedAndLeavesTheFirstSummaryExact()
     {
         using Setup setup = await Setup.CreateAsync(installCardData: false);
         DeckDocument deck = await setup.CreateDeckAsync(3);

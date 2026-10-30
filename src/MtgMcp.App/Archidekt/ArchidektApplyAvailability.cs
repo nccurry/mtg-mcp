@@ -43,6 +43,7 @@ internal static class ArchidektApplyAvailability
         return OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite)
             ? null
             : $"archidekt_pull_apply is not available because the server runs in {OperationModeParser.Format(mode)} " +
-                "mode. Ask the user to start the server in local or remote mode (remote is the default).";
+                "mode. Ask the user to start the server in local or remote mode (remote is the default). A private " +
+                "deck also needs Archidekt credentials.";
     }
 }

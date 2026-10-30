@@ -206,7 +206,9 @@ public sealed class ArchidektWorkflowTests
     /// <summary>
     /// Verifies a double-faced card kept under its front-face name, because no card data resolved it, still finds its
     /// printing on Archidekt, pushes, and reads clean: Archidekt names the card by both faces and the local entry by
-    /// one, and the comparison treats them as the same card.
+    /// one, and the comparison treats them as the same card. A read-only query of the real Archidekt card search on
+    /// 2026-10-29 showed both facts (see <see cref="FakeArchidekt"/>): the name search for the front face finds the
+    /// card, and the card comes back named by both faces.
     /// </summary>
     [Fact]
     public async Task DoubleFacedCard_KeptUnderItsFrontFaceName_PushesAndVerifiesCleanly()
@@ -270,6 +272,7 @@ public sealed class ArchidektWorkflowTests
         string pull = ArchidektApplyAvailability.PullNotice(OperationMode.ReadOnly)!;
         Assert.Contains("read-only mode", pull, StringComparison.Ordinal);
         Assert.Contains("local or remote mode", pull, StringComparison.Ordinal);
+        Assert.Contains("private deck also needs Archidekt credentials", pull, StringComparison.Ordinal);
         string both = ArchidektApplyAvailability.PushNotice(OperationMode.Local, missing)!;
         Assert.Contains("local mode, and Archidekt credentials are not configured", both, StringComparison.Ordinal);
         Assert.Contains("remote mode", both, StringComparison.Ordinal);
@@ -282,13 +285,18 @@ public sealed class ArchidektWorkflowTests
     }
 
     /// <summary>
-    /// Verifies a pull preview in remote mode with no credentials still offers the pull apply tool, because the tool
-    /// is registered by mode and reads public decks without credentials.
+    /// Verifies a pull preview with no credentials still offers the pull apply tool in local and in remote mode,
+    /// because the tool is registered by mode and reads public decks without credentials.
     /// </summary>
-    [Fact]
-    public async Task PullPreview_WithoutCredentials_StillOffersPullApplyInLocalMode()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PullPreview_WithoutCredentials_StillOffersPullApply(bool remoteMode)
     {
-        using World world = new(OperationMode.Local, CreateSmallDeck(), credentials: false);
+        using World world = new(
+            remoteMode ? OperationMode.Remote : OperationMode.Local,
+            CreateSmallDeck(),
+            credentials: false);
 
         ArchidektSyncPreviewView pull = Success(await world.Reads.PreviewPullAsync(
             "42",
@@ -589,6 +597,88 @@ public sealed class ArchidektWorkflowTests
     }
 
     /// <summary>
+    /// Verifies a later page of a pull preview is refused when the fingerprint is not the one of the preview, and is
+    /// served when it is.
+    /// </summary>
+    [Fact]
+    public async Task PullPreview_LaterPageWithAnotherFingerprint_IsRefused()
+    {
+        FakeArchidekt fake = CreateLargeDeck(300);
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        _ = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [.. local.Entries.Select(value => new UpdateDeckEntryChange(value with { Quantity = value.Quantity + 1 }))],
+            token));
+        ArchidektSyncPreviewView first = Success(await world.Reads.PreviewPullAsync(
+            "42",
+            localDeckId,
+            discardLocalChanges: true,
+            cancellationToken: token));
+        Assert.True(first.Truncated);
+        int nextOperation = Assert.NotNull(first.NextOperationOffset);
+        int nextDifference = Assert.NotNull(first.NextDifferenceOffset);
+
+        ArchidektSyncPreviewView same = Success(await world.Reads.PreviewPullAsync(
+            "42",
+            localDeckId,
+            discardLocalChanges: true,
+            operationOffset: nextOperation,
+            differenceOffset: nextDifference,
+            expectedPreviewFingerprint: first.PreviewFingerprint,
+            cancellationToken: token));
+        OperationResult<ArchidektSyncPreviewView> other = await world.Reads.PreviewPullAsync(
+            "42",
+            localDeckId,
+            discardLocalChanges: true,
+            operationOffset: nextOperation,
+            differenceOffset: nextDifference,
+            expectedPreviewFingerprint: "another-preview",
+            cancellationToken: token);
+
+        Assert.Equal(first.PreviewFingerprint, same.PreviewFingerprint);
+        Assert.Equal("preview-changed", Assert.IsType<OperationConflict>(other.Value).ReasonCode);
+    }
+
+    /// <summary>
+    /// Verifies a later page of a snapshot restore preview is refused when the fingerprint is not the one of the
+    /// preview, and is served when it is.
+    /// </summary>
+    [Fact]
+    public async Task SnapshotRestorePreview_LaterPageWithAnotherFingerprint_IsRefused()
+    {
+        FakeArchidekt fake = CreateLargeDeck(700);
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        ArchidektSnapshotRestorePreviewView first = Success(
+            await world.Reads.PreviewSnapshotRestoreAsync("42", "77", cancellationToken: token));
+        Assert.True(first.Truncated);
+        int nextOperation = Assert.NotNull(first.NextOperationOffset);
+        int nextDifference = Assert.NotNull(first.NextDifferenceOffset);
+
+        ArchidektSnapshotRestorePreviewView same = Success(await world.Reads.PreviewSnapshotRestoreAsync(
+            "42",
+            "77",
+            nextOperation,
+            nextDifference,
+            first.PreviewFingerprint,
+            token));
+        OperationResult<ArchidektSnapshotRestorePreviewView> other = await world.Reads.PreviewSnapshotRestoreAsync(
+            "42",
+            "77",
+            nextOperation,
+            nextDifference,
+            "another-preview",
+            token);
+
+        Assert.Equal(first.PreviewFingerprint, same.PreviewFingerprint);
+        Assert.Equal("preview-changed", Assert.IsType<OperationConflict>(other.Value).ReasonCode);
+    }
+
+    /// <summary>
     /// Verifies the differences of a local deck with 300 edits come in pages under the size limit, each difference
     /// exactly once and in path order.
     /// </summary>
@@ -683,9 +773,12 @@ public sealed class ArchidektWorkflowTests
             offset = next;
         }
 
+        OperationResult<RemoteFolderTree> whole = kind == "list"
+            ? await world.Coordinator.Service.ListFoldersAsync(token)
+            : await world.Coordinator.Service.GetFolderAsync(folderId!, token);
         Assert.True(pages > 1);
         Assert.Equal(total, ids.Count);
-        Assert.Equal(total, ids.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(Success(whole).Items.Select(value => value.FolderId), ids);
     }
 
     /// <summary>

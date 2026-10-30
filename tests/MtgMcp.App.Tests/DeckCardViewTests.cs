@@ -255,8 +255,7 @@ public sealed class DeckCardViewTests
 
     /// <summary>
     /// Verifies a 300-entry deck stays within 40,000 characters (the hard ceiling is 50,000) for a read with no include
-    /// and with every include
-    /// combination, and that following nextCursor reaches every entry once, in order.
+    /// and with every include combination, and that following nextCursor reaches every entry once, in order.
     /// </summary>
     /// <param name="includeText">Comma-separated include values, or empty for none.</param>
     [Theory]

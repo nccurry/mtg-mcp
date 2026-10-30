@@ -22,7 +22,8 @@ and a client passes only one of the two to the model. A `concise` page, and a
 first item left out. The same cut applies in the `standard` and `full` formats, so a page of real cards
 can hold fewer cards than `pageSize`; use `concise` or `fields` to fit more cards in a page.
 
-The limit is 40,000 UTF-8 bytes of structured result, and it is a target, not the hard limit. Claude Code warns above about 10,000 tokens and saves a tool
+The server aims for 40,000 UTF-8 bytes of structured result. This is a target below the hard ceiling: Claude
+Code warns above about 10,000 tokens and saves a tool
 text result of more than 50,000 characters to a file, showing the agent only the path (code.claude.com/docs/en/mcp,
 "MCP output limits and warnings"). The ceiling is the same whatever `MAX_MCP_OUTPUT_TOKENS` is set to, so the fix is
 small, high-signal results, not a larger per-tool limit. The deck write tools therefore return a summary unless
@@ -35,7 +36,10 @@ offline (Playgroup, Commander Spellbook, and the Archidekt writes the fake has n
 tool fails the test until it is driven or in that list. `local_deck_import_preview`,
 `local_deck_identity_reconcile_preview`, and `local_deck_category_rules_preview` page with `offset` (the
 fingerprint and apply token cover the whole preview), `local_deck_export_bundle` returns one chunk of one artifact by
-character `offset`, and the Scryfall card tools cut a page to the limit in every format.
+character `offset`, and the Scryfall card tools cut a page to the limit in every format. A paged deck result (the
+local and Archidekt deck reads and the import preview) also cuts its free text: the name to 1,000 UTF-8 bytes on every
+page (`nameTruncated`), and the description to 8,000 UTF-8 bytes on the first page only (`descriptionTruncated` and
+`descriptionLength`), so a long description cannot push every page over the limit.
 
 Every paged result follows one offset rule: an `offset` from 0 up to the number of rows is valid (at the number of
 rows the page holds no row), and a negative offset or one past the end is refused with `invalid-offset` and the size

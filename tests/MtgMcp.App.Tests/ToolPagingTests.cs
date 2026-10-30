@@ -17,8 +17,7 @@ public sealed class ToolPagingTests
 {
     /// <summary>
     /// Verifies the chunks of every artifact of every format, joined in order, are the exact content: the length and
-    /// the
-    /// SHA-256 of the whole content match, and a chunk never passes the chunk limit of the export tool.
+    /// the SHA-256 of the whole content match, and a chunk never passes the chunk limit of the export tool.
     /// </summary>
     [Theory]
     [InlineData("mtg-mcp-json-v1")]
@@ -169,7 +168,7 @@ public sealed class ToolPagingTests
                 guards.GetProperty("previewFingerprint").GetString()!,
                 guards.GetProperty("applyToken").GetString()!),
             token);
-        _ = applied.Data;
+        Assert.False(applied.IsError, applied.Kind);
 
         DeckDocument after = Assert.IsType<OperationSuccess<DeckDocument>>(
             (await world.Store.GetAsync(deck.DeckId, token)).Value).Data;

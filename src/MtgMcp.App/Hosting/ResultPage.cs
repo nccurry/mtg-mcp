@@ -79,7 +79,7 @@ internal static class ResultPage
     /// <param name="offset">The offset the caller passed.</param>
     /// <param name="count">The number of rows in the list.</param>
     /// <param name="list">What the rows are, in the plural, such as "entries".</param>
-    internal static OperationInvalidInput? CheckOffset(string parameter, int offset, int count, string list)
+    private static OperationInvalidInput? CheckOffset(string parameter, int offset, int count, string list)
     {
         return offset < 0 || offset > count
             ? new OperationInvalidInput(

@@ -19,8 +19,8 @@ internal sealed record DeckExportArtifactInfo(
     string Purpose);
 
 /// <summary>
-/// Carries one chunk of one artifact's content. The offset counts characters (UTF-16 code units) from the start of
-/// the content, and a chunk never starts or ends inside a surrogate pair.
+/// Carries one chunk of one artifact's content. The offset counts UTF-16 code units (the string length) from the start
+/// of the content, and a chunk never starts or ends inside a surrogate pair.
 /// </summary>
 internal sealed record DeckExportChunk(string FileName, int Offset, string Content)
 {
@@ -42,7 +42,7 @@ internal sealed record DeckExportChunk(string FileName, int Offset, string Conte
 
 /// <summary>
 /// Returns an export bundle's metadata and one chunk of one artifact. The field-preservation report comes with the
-/// chunk at offset 0 only, and each artifact's total length is in characters.
+/// chunk at offset 0 only, and each artifact's total length is in UTF-16 code units (the string length).
 /// </summary>
 internal sealed record DeckExportBundleView(
     int SchemaVersion,
@@ -89,18 +89,20 @@ internal static class DeckExportPaging
         }
 
         string content = chosen.Content;
-        OperationInvalidInput? invalid = ResultPage.CheckOffset("offset", offset, content.Length, "characters");
-        if (invalid is not null)
+        if (ResultPage.CheckPage<DeckExportBundleView>(
+            null,
+            null,
+            new PageList("offset", offset, content.Length, "UTF-16 code units")) is { } refused)
         {
-            return invalid;
+            return refused;
         }
 
         if (offset > 0 && offset < content.Length && char.IsLowSurrogate(content[offset]))
         {
             return new OperationInvalidInput(
                 "invalid-offset",
-                $"offset {offset} is inside a character that takes two code units. Use the nextOffset of the " +
-                "previous chunk.",
+                $"offset {offset} falls between the two halves of a surrogate pair (for example an emoji); use the " +
+                "nextOffset of the previous chunk.",
                 "offset");
         }
 
@@ -112,7 +114,7 @@ internal static class DeckExportPaging
             Truncated = more ? true : null,
             NextOffset = more ? next : null,
             Narrow = more
-                ? $"Characters {offset} to {next - 1} of {content.Length} of {chosen.FileName} are shown to stay " +
+                ? $"UTF-16 code units {offset} to {next - 1} of {content.Length} of {chosen.FileName} are shown to stay " +
                     $"under the size limit. Call again with artifact \"{chosen.FileName}\" and offset {next} for " +
                     "the rest; the chunks joined in order are the whole file, and sha256 is the checksum of the " +
                     "whole file."

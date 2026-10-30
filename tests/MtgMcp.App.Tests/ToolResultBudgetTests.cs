@@ -7,8 +7,7 @@ namespace MtgMcp.App.Tests;
 /// Calls every tool the server registers in remote mode against the largest fixtures the offline fakes can hold, and
 /// fails when a result, successful or not, is longer than the 50,000 characters at which Claude Code saves a tool
 /// result to a file instead of showing it. A tool that cannot be driven offline is listed with its reason, and a newly
-/// registered
-/// tool fails the coverage test until it is driven or listed.
+/// registered tool fails the coverage test until it is driven or listed.
 /// </summary>
 public sealed class ToolResultBudgetTests
 {
@@ -22,8 +21,7 @@ public sealed class ToolResultBudgetTests
     /// Lists the tools whose results grow with the data they read. With the large fixtures each of them must page or
     /// cut at least once, so removing a limit makes the test fail instead of letting the tool grow unchecked. The
     /// restore preview is not listed: its 300 operations fit one page, and <see cref="ArchidektWorkflowTests"/> pages
-    /// it
-    /// with a larger deck.
+    /// it with a larger deck.
     /// </summary>
     private static readonly string[] MustPage =
     [
