@@ -32,16 +32,18 @@ already defaults to `remote` mode (full read and write); the push tool was
 missing because the owner's Claude Code configuration passed `--mode=local`.
 
 Claude Code saves any tool text result over 50,000 characters to a file and
-shows the agent only the path, regardless of `MAX_MCP_OUTPUT_TOKENS`
-(code.claude.com/docs/en/mcp, "MCP output limits and warnings"). The fix is
+shows the agent only the path, regardless of `MAX_MCP_OUTPUT_TOKENS`, and
+warns above 10,000 tokens (code.claude.com/docs/en/mcp, "MCP output limits
+and warnings"). Pages therefore aim for 40,000 characters, and 50,000 is the
+hard ceiling the E2E test enforces. The fix is
 to keep results small and high-signal, not to raise per-tool limits.
 
 | ID | Required behavior | Acceptance criteria |
 | --- | --- | --- |
 | REQ-001 | `local_deck_apply_changes` and `local_deck_identity_reconcile_apply` (and any other local deck write that returns a whole deck) return a summary by default: deck ID, new revision, counts, the IDs of changed entries and categories, and anything refused, skipped, or unresolved. An opt-in `returnDeck: true` returns today's whole deck. | Tests on a 300-entry deck: default result under 10,000 characters with the listed fields; `returnDeck: true` returns the deck. |
-| REQ-002 | `local_deck_get` never returns more than 50,000 characters: large decks page or set `truncated: true` with a `narrow` hint naming the option to use (page, fields, `include`), as `card_list_query` does. | Test with a 300-entry deck and every `include`: each page under 50,000 characters, all entries reachable. |
-| REQ-003 | `archidekt_deck_get` and `archidekt_push_preview` never return more than 50,000 characters. The push preview leads with a summary (operation counts by kind, conflict count, real difference count) and pages its operations and differences. | Tests on a 300-card remote deck and a 300-operation push: under 50,000 characters, summary present, every operation reachable. |
-| REQ-004 | When `archidekt_push_apply` is not available (mode below `remote`, or credentials missing), `archidekt_push_preview` and `archidekt_pull_preview` say so and name the setting that enables it. Every tool that writes to a remote provider and is annotated destructive carries `_meta["anthropic/requiresUserInteraction"]: true`, so Claude Code asks the user before each call even in auto modes. | Preview tests in `local` mode show the message; a `tools/list` E2E test shows the `_meta` key on exactly the remote destructive tools. |
+| REQ-002 | `local_deck_get` aims for at most 40,000 characters per result and never exceeds 50,000: large decks page or set `truncated: true` with a `narrow` hint naming the option to use (page, fields, `include`), as `card_list_query` does. | Test with a 300-entry deck and every `include`: each page under 40,000 characters, all entries reachable. |
+| REQ-003 | `archidekt_deck_get` and `archidekt_push_preview` aim for at most 40,000 characters per result and never exceed 50,000. The push preview leads with a summary (operation counts by kind, conflict count, real difference count) and pages its operations and differences. | Tests on a 300-card remote deck and a 300-operation push: under 40,000 characters, summary present, every operation reachable. |
+| REQ-004 | When `archidekt_push_apply` is not available (mode below `remote`, or credentials missing), `archidekt_push_preview` and `archidekt_pull_preview` say so and name the setting that enables it. The existing `_meta["anthropic/requiresUserInteraction"]: true` tag (SAFE-002, `ToolMetadata.cs`, shipped in 0.12.0) stays on exactly the remote destructive tools and gains a test that pins that set. | Preview tests in `local` mode show the message; a `tools/list` E2E test shows the `_meta` key on exactly the remote destructive tools. |
 | REQ-005 | Adding an entry with only a card name resolves its card identity at add time from installed card data (the same resolver the reconcile tools use), and its printing when set code and collector number are given. A name that does not resolve or is ambiguous is added unresolved and reported in the summary, never a failure. | Tests: exact name resolves `oracleId`; name plus set and number resolves `printingId`; unknown and ambiguous names report a warning; no card data installed reports that resolution was skipped. |
 | REQ-006 | An entry's comparison form is defined once in the Archidekt adapter (primary category separate, other category names as a set, order fields ignored) and used for both difference rows and push operations. | Metamorphic tests: reordering category names, renumbering sort orders, or recasing names yields zero differences and zero operations; a real change still shows. |
 | REQ-007 | The offline fake Archidekt used by tests behaves like the real one where it has bitten us: it reorders an entry's category names, renumbers sort orders, and derives a card's zone from its primary category. A scripted workflow (pull, edit, push preview, push apply, pull preview) passes against it in `remote` mode, and in `local` mode the preview explains the missing apply. | App tests using the fake. |
@@ -74,9 +76,11 @@ Decisions (owner, 2026-10-29, by asking for these fixes):
   `docs/versioning.md`; it is taken under the "clearly broken contract"
   exception, because results over 50,000 characters cannot be read inline in
   Claude Code. `returnDeck: true` keeps the old result available.
-- Default mode stays `remote`, which is full read and write. Remote writes get
-  a per-call approval prompt through `anthropic/requiresUserInteraction`
-  instead of being hidden.
+- Default mode stays `remote`, which is full read and write. Remote
+  destructive writes keep the per-call approval prompt that 0.12.0 already
+  sends through `anthropic/requiresUserInteraction` (SAFE-002).
+- Push apply already resolves an Archidekt card by name when no printing is
+  set (`ArchidektDeckOperations.cs`), so REQ-005 covers only local identity.
 - Resolution on add lives in the App layer, which already composes decks and
   Scryfall; `MtgMcp.Core` and `MtgMcp.Decks` stay free of Scryfall.
 
@@ -101,9 +105,6 @@ Checks per block: focused tests, then `task ci`, `task test:integration`, and
 
 ## Risks And Open Questions
 
-- SDK support for tool `_meta` (REQ-004): block B checks ModelContextProtocol
-  2.2.0; if it cannot set `_meta` per tool, B reports options before working
-  around it.
 - REQ-008 needs Scryfall's real behavior; a bounded read-only live query is
   allowed.
 
