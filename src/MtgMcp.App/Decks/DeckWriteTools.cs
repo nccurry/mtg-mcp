@@ -24,15 +24,16 @@ internal sealed class DeckWriteTools
     private readonly OperationMode mode;
 
     /// <summary>
-    /// Stores the lookup that fills in the card identity of new entries, or null to create them as given.
+    /// Stores the lookup that fills in the card identity of new entries.
     /// </summary>
-    private readonly DeckEntryResolver? resolver;
+    private readonly DeckEntryResolver resolver;
 
     /// <summary>
-    /// Creates write tools around one store, validated operation mode, and the optional entry resolver.
+    /// Creates write tools around one store, validated operation mode, and the entry resolver.
     /// </summary>
-    internal DeckWriteTools(SqliteDeckStore store, OperationMode mode, DeckEntryResolver? resolver = null)
+    internal DeckWriteTools(SqliteDeckStore store, OperationMode mode, DeckEntryResolver resolver)
     {
+        ArgumentNullException.ThrowIfNull(resolver);
         this.store = store;
         this.mode = mode;
         this.resolver = resolver;
@@ -73,7 +74,7 @@ internal sealed class DeckWriteTools
         CancellationToken cancellationToken)
     {
         IReadOnlyList<DeckWriteIssue> issues = [];
-        if (resolver is not null && request?.Entries is { Count: > 0 } entries)
+        if (request is { Entries: { Count: > 0 } entries })
         {
             DeckDraftResolution resolution = await resolver.ResolveAsync(entries, cancellationToken)
                 .ConfigureAwait(false);
@@ -81,7 +82,7 @@ internal sealed class DeckWriteTools
             issues = resolution.Issues;
         }
 
-        OperationResult<DeckDocument> created = await store.CreateAsync(request!, cancellationToken)
+        OperationResult<DeckDocument> created = await store.CreateAsync(request, cancellationToken)
             .ConfigureAwait(false);
         return created is OperationSuccess<DeckDocument> success
             ? new OperationSuccess<DeckWriteResult>(DeckWriteResults.Created(success.Data, issues, returnDeck))

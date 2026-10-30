@@ -166,6 +166,38 @@ public sealed class DeckWriteSummaryTests
     }
 
     /// <summary>
+    /// Verifies two writes that start from the same revision cannot both succeed: the first summary compares exactly
+    /// the state it started from, and the second is refused with a conflict and changes nothing, so a summary is never
+    /// built from a deck another write has changed in between.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_TwoWritesFromTheSameRevision_OnlyTheFirstIsSummarized()
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckAsync(3);
+        DeckEntry first = deck.Entries[0];
+
+        DeckWriteResult summary = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [new RemoveDeckEntryInput(first.EntryId)],
+            cancellationToken: TestContext.Current.CancellationToken));
+        OperationResult<DeckWriteResult> second = await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [new RemoveDeckEntryInput(deck.Entries[1].EntryId)],
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(deck.Revision, summary.PreviousRevision);
+        Assert.Equal([first.EntryId], summary.RemovedEntryIds);
+        Assert.Equal(2, summary.EntryCount);
+        Assert.IsType<OperationConflict>(second.Value);
+        DeckDocument after = Success(await setup.Store.GetAsync(deck.DeckId, TestContext.Current.CancellationToken));
+        Assert.Equal(summary.Revision, after.Revision);
+        Assert.Equal(2, after.Entries.Count);
+    }
+
+    /// <summary>
     /// Reads the result as the server writes it.
     /// </summary>
     private static string Json(DeckWriteResult value)

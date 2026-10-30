@@ -55,6 +55,11 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
     private int remoteDeckSize;
 
     /// <summary>
+    /// Holds cards added to the installed card data after the 320 fixture cards.
+    /// </summary>
+    private IReadOnlyList<JsonObject> extraCards = [];
+
+    /// <summary>
     /// Holds the running server host.
     /// </summary>
     private IHost? host;
@@ -99,9 +104,12 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
     /// <summary>
     /// Builds the fixtures, starts the server, and connects the client.
     /// </summary>
-    internal static async Task<ToolBudgetWorld> CreateAsync(CancellationToken cancellationToken, int remoteDeckSize = DeckSize)
+    internal static async Task<ToolBudgetWorld> CreateAsync(
+        CancellationToken cancellationToken,
+        int remoteDeckSize = DeckSize,
+        IReadOnlyList<JsonObject>? extraCards = null)
     {
-        ToolBudgetWorld world = new() { remoteDeckSize = remoteDeckSize };
+        ToolBudgetWorld world = new() { remoteDeckSize = remoteDeckSize, extraCards = extraCards ?? [] };
         try
         {
             await world.StartAsync(cancellationToken).ConfigureAwait(false);
@@ -216,7 +224,7 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
     private async Task StartAsync(CancellationToken cancellationToken)
     {
         TemporaryDirectory folder = Own(new TemporaryDirectory());
-        Cards = [.. Enumerable.Range(0, 320).Select(MakeCard)];
+        Cards = [.. Enumerable.Range(0, 320).Select(MakeCard), .. extraCards];
         Dictionary<string, string[]> tags = [];
         for (int index = 0; index < 110; index++)
         {

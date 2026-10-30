@@ -423,6 +423,50 @@ internal sealed class DeckIdentityReconciliationCoordinator
     }
 
     /// <summary>
+    /// Names the match method of a lookup by Scryfall printing ID.
+    /// </summary>
+    internal const string MatchPrintingId = "scryfall-printing-id";
+
+    /// <summary>
+    /// Names the match method of a lookup by set code, collector number, and language.
+    /// </summary>
+    internal const string MatchSetCollectorLanguage = "set-collector-language";
+
+    /// <summary>
+    /// Names the match method of a lookup by Oracle ID.
+    /// </summary>
+    internal const string MatchOracleId = "oracle-id";
+
+    /// <summary>
+    /// Names the match method of a lookup by exact card name.
+    /// </summary>
+    internal const string MatchExactName = "exact-name";
+
+    /// <summary>
+    /// Gives the identity an entry takes from the card its lookup found: every identity field when the lookup named a
+    /// printing, and only the card name and Oracle ID when it named only the card. Identity reconciliation and the
+    /// add-time lookup of new entries both use this one rule.
+    /// </summary>
+    internal static DeckEntryIdentity ProposedIdentity(DeckIdentityLookupPlan plan, ScryfallCard card)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(card);
+        return plan.MatchMethod is MatchPrintingId or MatchSetCollectorLanguage
+            ? new DeckEntryIdentity(
+                card.Name,
+                card.OracleId,
+                card.Id,
+                card.SetCode,
+                card.CollectorNumber,
+                card.Language)
+            : Identity(plan.Entry) with
+            {
+                CardName = card.Name,
+                OracleId = card.OracleId,
+            };
+    }
+
+    /// <summary>
     /// Builds strongest-first lookups while deduplicating identical evidence requests.
     /// </summary>
     internal static (
@@ -462,7 +506,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
     {
         if (entry.PrintingId is Guid printingId)
         {
-            return ("scryfall-printing-id", new ScryfallEvidenceLookup(
+            return (MatchPrintingId, new ScryfallEvidenceLookup(
                 new ScryfallCardLookup("scryfall-id", printingId.ToString("D"))));
         }
 
@@ -470,7 +514,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
             !string.IsNullOrWhiteSpace(entry.CollectorNumber) &&
             !string.IsNullOrWhiteSpace(entry.Language))
         {
-            return ("set-collector-language", new ScryfallEvidenceLookup(
+            return (MatchSetCollectorLanguage, new ScryfallEvidenceLookup(
                 new ScryfallCardLookup(
                     "printing",
                     SetCode: entry.SetCode.Trim().ToLowerInvariant(),
@@ -480,13 +524,13 @@ internal sealed class DeckIdentityReconciliationCoordinator
 
         if (entry.OracleId is Guid oracleId)
         {
-            return ("oracle-id", new ScryfallEvidenceLookup(
+            return (MatchOracleId, new ScryfallEvidenceLookup(
                 new ScryfallCardLookup("oracle-id", oracleId.ToString("D"))));
         }
 
         return string.IsNullOrWhiteSpace(entry.CardName)
             ? (null, null)
-            : ("exact-name", new ScryfallEvidenceLookup(
+            : (MatchExactName, new ScryfallEvidenceLookup(
                 new ScryfallCardLookup("exact-name", entry.CardName.Trim())));
     }
 
@@ -591,19 +635,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
                 binding);
         }
 
-        DeckEntryIdentity after = plan.MatchMethod is "scryfall-printing-id" or "set-collector-language"
-            ? new DeckEntryIdentity(
-                card.Name,
-                card.OracleId,
-                card.Id,
-                card.SetCode,
-                card.CollectorNumber,
-                card.Language)
-            : before with
-            {
-                CardName = card.Name,
-                OracleId = card.OracleId,
-            };
+        DeckEntryIdentity after = ProposedIdentity(plan, card);
         bool changed = before != after;
         return Row(
             plan,
@@ -651,7 +683,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
             (entry.OracleId is null || entry.OracleId == card.OracleId) &&
             (string.IsNullOrWhiteSpace(entry.CardName) ||
              string.Equals(entry.CardName.Trim(), card.Name, StringComparison.OrdinalIgnoreCase));
-        if (!baseIdentity || matchMethod is not ("scryfall-printing-id" or "set-collector-language"))
+        if (!baseIdentity || matchMethod is not (MatchPrintingId or MatchSetCollectorLanguage))
         {
             return baseIdentity;
         }

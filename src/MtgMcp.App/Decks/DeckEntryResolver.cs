@@ -161,8 +161,18 @@ internal sealed class DeckEntryResolver
         List<DeckEntry> entries = [.. batch.Select(index => AsEntry(drafts[index]))];
         (IReadOnlyList<DeckIdentityLookupPlan> plans, IReadOnlyList<ScryfallEvidenceLookup> lookups) =
             DeckIdentityReconciliationCoordinator.BuildLookupPlans(entries);
-        OperationResult<ScryfallExactCollectionEvidence> result = await scryfall
-            .ResolveExactCollectionAsync(lookups, "cache-only", cancellationToken).ConfigureAwait(false);
+        OperationResult<ScryfallExactCollectionEvidence> result;
+        try
+        {
+            result = await scryfall.ResolveExactCollectionAsync(lookups, "cache-only", cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // The lookup only adds identity, so a card data file that cannot be opened must not fail the write.
+            return LookupFailedMessage;
+        }
+
         if (result is not OperationSuccess<ScryfallExactCollectionEvidence> success)
         {
             return LookupFailedMessage;
@@ -178,13 +188,24 @@ internal sealed class DeckEntryResolver
             DeckEntryDraft draft = drafts[batch[position]];
             DeckIdentityLookupPlan plan = plans[position];
             ScryfallCollectionRow? row = plan.EvidenceIndex is int evidenceIndex ? success.Data.Rows[evidenceIndex] : null;
+            if (row?.Status == "ambiguous")
+            {
+                issues.Add(new DeckWriteIssue(
+                    DeckWriteIssue.Ambiguous,
+                    row.Message ?? $"More than one card is named '{draft.CardName.Trim()}'.",
+                    draft.EntryId,
+                    draft.CardName.Trim()));
+                continue;
+            }
+
             if (row?.Card is null)
             {
                 issues.Add(Unresolved(draft, $"No card named '{draft.CardName.Trim()}' was found in installed card data."));
                 continue;
             }
 
-            if (plan.MatchMethod == "set-collector-language" && !NameAgrees(draft.CardName, row.Card))
+            if (plan.MatchMethod == DeckIdentityReconciliationCoordinator.MatchSetCollectorLanguage &&
+                !NameAgrees(draft.CardName, row.Card))
             {
                 issues.Add(Unresolved(
                     draft,
@@ -193,17 +214,16 @@ internal sealed class DeckEntryResolver
                 continue;
             }
 
-            resolved[batch[position]] = plan.MatchMethod == "set-collector-language"
-                ? draft with
-                {
-                    CardName = row.Card.Name,
-                    OracleId = row.Card.OracleId,
-                    PrintingId = row.Card.Id,
-                    SetCode = row.Card.SetCode,
-                    CollectorNumber = row.Card.CollectorNumber,
-                    Language = row.Card.Language,
-                }
-                : draft with { CardName = row.Card.Name, OracleId = row.Card.OracleId };
+            DeckEntryIdentity identity = DeckIdentityReconciliationCoordinator.ProposedIdentity(plan, row.Card);
+            resolved[batch[position]] = draft with
+            {
+                CardName = identity.CardName,
+                OracleId = identity.OracleId,
+                PrintingId = identity.PrintingId,
+                SetCode = identity.SetCode,
+                CollectorNumber = identity.CollectorNumber,
+                Language = identity.Language,
+            };
         }
 
         return null;

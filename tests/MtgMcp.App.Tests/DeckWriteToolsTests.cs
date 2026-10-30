@@ -21,13 +21,14 @@ public sealed class DeckWriteToolsTests
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
-        DeckWriteTools writes = new(store, OperationMode.Local);
-        DeckBatchWriteTools batchWrites = new(store, OperationMode.Local);
         using ScryfallService scryfall = new(
             temporary.Path,
             allowLocalWrites: false,
             "0.9.0-preview.1",
             ToolCallPolicy.SerializerOptions);
+        DeckEntryResolver resolver = new(scryfall);
+        DeckWriteTools writes = new(store, OperationMode.Local, resolver);
+        DeckBatchWriteTools batchWrites = new(store, OperationMode.Local, resolver);
         DeckReadTools reads = new(
             store,
             new DeckCardViewCoordinator(store, scryfall),
@@ -121,7 +122,8 @@ public sealed class DeckWriteToolsTests
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
-        DeckWriteTools tools = new(store, OperationMode.ReadOnly);
+        using UninstalledCardData cardData = new();
+        DeckWriteTools tools = new(store, OperationMode.ReadOnly, cardData.Resolver);
 
         OperationResult<DeckWriteResult> result = await tools.CreateAsync(
             new DeckCreateRequest("Denied"),

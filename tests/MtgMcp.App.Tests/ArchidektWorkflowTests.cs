@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MtgMcp.App.Archidekt;
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Hosting;
@@ -123,9 +124,8 @@ public sealed class ArchidektWorkflowTests
 
         ArchidektSyncPreviewView push = Success(await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
         ArchidektSyncPreviewView pull = Success(await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
-        OperationResult<ArchidektApplyResult> denied = await new ArchidektRemoteWriteTools(
-            world.Coordinator,
-            OperationMode.Local).ApplyPushAsync(
+        ArchidektRemoteWriteTools localModeWrites = new(world.Coordinator, OperationMode.Local);
+        OperationResult<ArchidektApplyResult> denied = await localModeWrites.ApplyPushAsync(
             new ArchidektPushApplyRequest(localDeckId, 1, "remote", "preview"),
             token);
 
@@ -137,6 +137,105 @@ public sealed class ArchidektWorkflowTests
         Assert.True(pull.ApplyAvailable);
         Assert.Null(pull.ApplyNotice);
         Assert.IsType<OperationUnsupported>(denied.Value);
+    }
+
+    /// <summary>
+    /// Verifies a deck synchronized by the earlier version, whose stored baseline carries fingerprints from the old
+    /// formula and category names in the order the provider sent them, shows no difference, no push operation, and no
+    /// pull difference: the baseline is read again with the current rules.
+    /// </summary>
+    [Fact]
+    public async Task BaselineFromTheEarlierFormula_ShowsNoDifferenceAndNoOperation()
+    {
+        using World world = new(OperationMode.Remote, CreateSmallDeck());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        RemoteDeckSnapshot remote = Success(await world.Coordinator.Service.GetDeckAsync("42", token));
+        DeckProviderBinding binding = new(
+            Guid.CreateVersion7(),
+            "archidekt",
+            remote.RemoteId,
+            remote.RemoteUri,
+            remote.Evidence.ContractVersion,
+            "old-formula-remote-fingerprint",
+            DateTimeOffset.UtcNow,
+            null);
+        DeckCreateRequest create = ArchidektLocalMapper.ToCreateRequest(remote, binding);
+        JsonNode baseline = JsonNode.Parse(ArchidektLocalMapper.CreateBaseline(create, remote))!;
+        baseline["remoteFingerprint"] = "old-formula-remote-fingerprint";
+        JsonObject snapshot = baseline["remoteSnapshot"]!.AsObject();
+        snapshot["remoteFingerprint"] = "old-formula-remote-fingerprint";
+        snapshot["contentFingerprint"] = "old-formula-content-fingerprint";
+        foreach (JsonNode? entry in snapshot["entries"]!.AsArray())
+        {
+            JsonArray names = entry!["categoryNames"]!.AsArray();
+            List<string> reversed = [.. names.Select(value => value!.GetValue<string>()).Reverse()];
+            names.Clear();
+            foreach (string name in reversed)
+            {
+                names.Add(name);
+            }
+        }
+
+        DeckDocument local = Success(await world.Store.CreateSynchronizedAsync(
+            create,
+            new DeckSyncBaseline(binding.BindingId, baseline.ToJsonString()),
+            token));
+
+        ArchidektSyncDiffView diff = Success(await world.Reads.DiffAsync(local.DeckId, cancellationToken: token));
+        ArchidektSyncPreviewView push = Success(await world.Reads.PreviewPushAsync(local.DeckId, cancellationToken: token));
+        ArchidektSyncPreviewView pull = Success(await world.Reads.PreviewPullAsync("42", local.DeckId, cancellationToken: token));
+
+        Assert.Equal(0, diff.DifferenceCount);
+        Assert.False(diff.HasConflicts);
+        Assert.Empty(push.Operations);
+        Assert.Equal(0, push.Summary.DifferenceCount);
+        Assert.False(push.HasConflicts);
+        Assert.Equal(0, pull.Summary.DifferenceCount);
+        Assert.Empty(pull.Differences);
+    }
+
+    /// <summary>
+    /// Verifies a double-faced card kept under its front-face name, because no card data resolved it, still finds its
+    /// printing on Archidekt, pushes, and reads clean: Archidekt names the card by both faces and the local entry by
+    /// one, and the comparison treats them as the same card.
+    /// </summary>
+    [Fact]
+    public async Task DoubleFacedCard_KeptUnderItsFrontFaceName_PushesAndVerifiesCleanly()
+    {
+        FakeArchidekt fake = CreateSmallDeck();
+        _ = fake.AddCardToCatalog(2001, "Delver of Secrets // Insectile Aberration", "inr", "60");
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        Guid delverId = Guid.NewGuid();
+        DeckCategory removal = local.Categories.Single(value => value.Name == "Removal");
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [
+                new AddDeckEntryChange(new DeckEntryDraft(1, "Delver of Secrets", EntryId: delverId)),
+                new AssignDeckCategoryChange(delverId, removal.CategoryId, true),
+            ],
+            token));
+        ArchidektSyncPreviewView preview = Success(await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token));
+        ArchidektSyncPreviewView push = Success(await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        ArchidektSyncPreviewView pull = Success(await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
+
+        Assert.Equal(1, preview.Summary.OperationCount);
+        Assert.Equal("applied", applied.Outcome);
+        Assert.Equal(1, fake.QuantityOf("Delver of Secrets // Insectile Aberration"));
+        Assert.Empty(push.Operations);
+        Assert.Empty(push.Differences);
+        Assert.Empty(pull.Differences);
     }
 
     /// <summary>

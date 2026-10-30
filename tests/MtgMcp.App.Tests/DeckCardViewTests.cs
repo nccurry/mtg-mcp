@@ -508,7 +508,7 @@ public sealed class DeckCardViewTests
             Store = store;
             reads = new DeckReadTools(store, new DeckCardViewCoordinator(store, scryfall),
                 new DeckRuleCoordinator(store, scryfall));
-            Writes = new DeckBatchWriteTools(store, OperationMode.Local);
+            Writes = new DeckBatchWriteTools(store, OperationMode.Local, new DeckEntryResolver(scryfall));
         }
 
         /// <summary>

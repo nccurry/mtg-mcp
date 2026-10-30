@@ -83,13 +83,19 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     /// <summary>
     /// Makes a card known to the fake, so it can be searched for and added.
     /// </summary>
-    internal FakeCard AddCardToCatalog(int cardId, string cardName, string setCode = "dmu", string? collectorNumber = null)
+    internal FakeCard AddCardToCatalog(
+        int cardId,
+        string cardName,
+        string setCode = "dmu",
+        string? collectorNumber = null,
+        Guid? oracleId = null,
+        Guid? printingId = null)
     {
         FakeCard card = new(
             cardId,
             cardName,
-            new Guid(cardId, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1),
-            new Guid(cardId, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2),
+            printingId ?? new Guid(cardId, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1),
+            oracleId ?? new Guid(cardId, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2),
             setCode,
             collectorNumber ?? cardId.ToString(System.Globalization.CultureInfo.InvariantCulture));
         catalog[cardId] = card;
@@ -183,7 +189,8 @@ internal sealed class FakeArchidekt : HttpMessageHandler
         {
             string wanted = Uri.UnescapeDataString(path["api/cards/v2/?name=".Length..].Split('&')[0]);
             JsonArray results = [];
-            foreach (FakeCard card in catalog.Values.Where(value => value.Name == wanted))
+            foreach (FakeCard card in catalog.Values.Where(value => value.Name == wanted ||
+                value.Name.StartsWith(wanted + " // ", StringComparison.Ordinal)))
             {
                 results.Add(new JsonObject
                 {

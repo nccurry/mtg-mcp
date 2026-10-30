@@ -387,7 +387,7 @@ internal sealed class ArchidektDeckTransport
                 oracle.TryGetProperty("name", out JsonElement nameElement)
                 ? nameElement.GetString()
                 : null;
-            if (!string.Equals(name, entry.CardName, StringComparison.OrdinalIgnoreCase))
+            if (!ArchidektCardNames.Match(name, entry.CardName))
             {
                 continue;
             }

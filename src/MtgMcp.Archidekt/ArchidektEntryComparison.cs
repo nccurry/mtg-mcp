@@ -1,10 +1,10 @@
 namespace MtgMcp.Archidekt;
 
 /// <summary>
-/// Defines once how two Archidekt entries are compared. Archidekt may return an entry's category names in another
-/// order and renumbers entry and category order numbers without any user edit, so the primary category is kept apart,
-/// the other category names count as a set, and the order numbers are ignored. Difference rows, fingerprints, push
-/// plans, and push verification all use this one form.
+/// Defines once how two Archidekt entries compare in the two things Archidekt changes without a user edit: an entry's
+/// category names, which may come back in another order, and the order numbers of entries and categories, which it
+/// renumbers. The primary category is kept apart, the other category names count as a set, and the order numbers are
+/// ignored. The comparison of every other field (card, quantity, finish, zone) stays with the planner.
 /// </summary>
 internal static class ArchidektEntryComparison
 {

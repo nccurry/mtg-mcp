@@ -268,7 +268,8 @@ public sealed class DeckBatchWriteToolsTests
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
-        DeckBatchWriteTools tools = new(store, OperationMode.ReadOnly);
+        using UninstalledCardData cardData = new();
+        DeckBatchWriteTools tools = new(store, OperationMode.ReadOnly, cardData.Resolver);
 
         OperationResult<DeckWriteResult> result = await tools.ApplyChangesAsync(
             Guid.CreateVersion7(),
@@ -319,6 +320,11 @@ public sealed class DeckBatchWriteToolsTests
         private readonly SqliteDeckStore store;
 
         /// <summary>
+        /// Gives the batch tool an entry resolver over card data that is not installed.
+        /// </summary>
+        private readonly UninstalledCardData cardData = new();
+
+        /// <summary>
         /// Applies changes through the batch tool.
         /// </summary>
         private readonly DeckBatchWriteTools tools;
@@ -335,7 +341,7 @@ public sealed class DeckBatchWriteToolsTests
         {
             this.directory = directory;
             this.store = store;
-            tools = new DeckBatchWriteTools(store, OperationMode.Local);
+            tools = new DeckBatchWriteTools(store, OperationMode.Local, cardData.Resolver);
             Deck = deck;
             EntryId = entryId;
             CategoryId = categoryId;
@@ -414,6 +420,7 @@ public sealed class DeckBatchWriteToolsTests
         /// <inheritdoc/>
         public void Dispose()
         {
+            cardData.Dispose();
             store.Dispose();
             directory.Dispose();
         }

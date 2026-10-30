@@ -652,7 +652,7 @@ public static class ArchidektSyncPlanner
     {
         return CardIdentityEqual(observed, expected) &&
             observed.Quantity == expected.Quantity &&
-            string.Equals(observed.CardName, expected.CardName, StringComparison.OrdinalIgnoreCase) &&
+            ArchidektCardNames.Match(observed.CardName, expected.CardName) &&
             string.Equals(observed.Language, expected.Language, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(observed.Finish, expected.Finish, StringComparison.Ordinal) &&
             string.Equals(observed.Zone, expected.Zone, StringComparison.Ordinal) &&
@@ -740,7 +740,7 @@ public static class ArchidektSyncPlanner
 
         return !string.IsNullOrWhiteSpace(expected.ProviderCardId)
             ? string.Equals(observed.ProviderCardId, expected.ProviderCardId, StringComparison.Ordinal)
-            : string.Equals(observed.CardName, expected.CardName, StringComparison.OrdinalIgnoreCase);
+            : ArchidektCardNames.Match(observed.CardName, expected.CardName);
     }
 
     /// <summary>
@@ -805,7 +805,7 @@ public static class ArchidektSyncPlanner
         };
         return left.Quantity == right.Quantity &&
             string.Equals(left.ProviderCardId, right.ProviderCardId, StringComparison.Ordinal) &&
-            string.Equals(left.CardName, right.CardName, StringComparison.Ordinal) &&
+            ArchidektCardNames.Match(left.CardName, right.CardName) &&
             PrintingEqual(left, right) &&
             string.Equals(left.Language, right.Language, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(left.Finish, right.Finish, StringComparison.Ordinal) &&

@@ -662,6 +662,22 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             ScryfallEvidenceLookup evidenceLookup = lookups[index];
             StoredCardDataObject? stored = cardDataMatches[index];
             string languageKey = evidenceLookup.RequiredLanguage ?? "-";
+            if (stored is not null && stored.MatchingOracleIdCount > 1)
+            {
+                rows.Add(new ScryfallCollectionRow(
+                    index,
+                    evidenceLookup.Lookup,
+                    "ambiguous",
+                    "corpus",
+                    null,
+                    $"{stored.MatchingOracleIdCount} different cards are named '{evidenceLookup.Lookup.Value?.Trim()}'. " +
+                    "Give an Oracle ID, or a set code and collector number."));
+                checksumMembers.Add(
+                    $"{index}|{CollectionKey(evidenceLookup.Lookup)}|{languageKey}|ambiguous|" +
+                    $"{stored.GenerationId:D}|{stored.MatchingOracleIdCount}");
+                continue;
+            }
+
             if (stored is not null)
             {
                 ScryfallCard card = await MapStoredCardAsync(stored, includeRaw, cancellationToken).ConfigureAwait(false);

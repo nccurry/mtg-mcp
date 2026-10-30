@@ -48,7 +48,8 @@ public sealed class DeckToolExampleTests : IClassFixture<ToolCatalogFixture>
 
             Dictionary<string, JsonElement> arguments = Arguments(request);
             Assert.Null(ToolCallPolicy.DiagnoseArguments(catalog, "local_deck_apply_changes", arguments));
-            DeckBatchWriteTools tools = new(store, OperationMode.Local);
+            using UninstalledCardData cardData = new();
+            DeckBatchWriteTools tools = new(store, OperationMode.Local, cardData.Resolver);
             IReadOnlyList<DeckChangeInput> changes = arguments["changes"]
                 .Deserialize<IReadOnlyList<DeckChangeInput>>(ToolCallPolicy.SerializerOptions)!;
             OperationResult<DeckWriteResult> result = await tools.ApplyChangesAsync(
@@ -71,12 +72,13 @@ public sealed class DeckToolExampleTests : IClassFixture<ToolCatalogFixture>
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "test");
+        using UninstalledCardData cardData = new();
         DeckDocument deck = await CreateDeckAsync(store);
         Dictionary<string, JsonElement> arguments = Arguments(Fill(DeckToolExamples.ApplyChangesFull, deck));
         IReadOnlyList<DeckChangeInput> changes = arguments["changes"]
             .Deserialize<IReadOnlyList<DeckChangeInput>>(ToolCallPolicy.SerializerOptions)!;
 
-        OperationResult<DeckWriteResult> result = await new DeckBatchWriteTools(store, OperationMode.Local)
+        OperationResult<DeckWriteResult> result = await new DeckBatchWriteTools(store, OperationMode.Local, cardData.Resolver)
             .ApplyChangesAsync(deck.DeckId, deck.Revision, changes, true, TestContext.Current.CancellationToken);
 
         DeckDocument updated = Assert.IsType<OperationSuccess<DeckWriteResult>>(result.Value).Data.Deck!;

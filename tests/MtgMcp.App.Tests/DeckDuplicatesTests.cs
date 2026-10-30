@@ -157,7 +157,10 @@ public sealed class DeckDuplicatesTests
         UpdateDeckEntryInput update = Assert.IsType<UpdateDeckEntryInput>(Assert.Single(preview.Changes));
         Assert.Equal(1, update.Entry.Quantity);
         Assert.Equal(deck.Entries[0].EntryId, update.Entry.EntryId);
-        DeckBatchWriteTools writes = new(world.Data.Store, OperationMode.Local);
+        DeckBatchWriteTools writes = new(
+            world.Data.Store,
+            OperationMode.Local,
+            new DeckEntryResolver(world.Data.Scryfall));
         DeckDocument applied = Success(await writes.ApplyChangesAsync(
             deck.DeckId,
             preview.Deck.Revision,
@@ -403,7 +406,8 @@ public sealed class DeckDuplicatesTests
                 "none",
                 [new DuplicateKeepGroupInput(Category: "Removal"), new DuplicateKeepGroupInput(Category: "Maybeboard")],
                 TestContext.Current.CancellationToken));
-            _ = Success(await new DeckBatchWriteTools(store, OperationMode.Local).ApplyChangesAsync(
+            _ = Success(await new DeckBatchWriteTools(store, OperationMode.Local, new DeckEntryResolver(scryfall))
+                .ApplyChangesAsync(
                 localId,
                 preview.Deck.Revision,
                 preview.Changes,

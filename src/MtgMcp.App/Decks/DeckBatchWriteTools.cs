@@ -44,15 +44,16 @@ internal sealed class DeckBatchWriteTools
     private readonly OperationMode mode;
 
     /// <summary>
-    /// Stores the lookup that fills in the card identity of added entries, or null to add them as given.
+    /// Stores the lookup that fills in the card identity of added entries.
     /// </summary>
-    private readonly DeckEntryResolver? resolver;
+    private readonly DeckEntryResolver resolver;
 
     /// <summary>
-    /// Creates the batch tool around one store, validated operation mode, and the optional entry resolver.
+    /// Creates the batch tool around one store, validated operation mode, and the entry resolver.
     /// </summary>
-    internal DeckBatchWriteTools(SqliteDeckStore store, OperationMode mode, DeckEntryResolver? resolver = null)
+    internal DeckBatchWriteTools(SqliteDeckStore store, OperationMode mode, DeckEntryResolver resolver)
     {
+        ArgumentNullException.ThrowIfNull(resolver);
         this.store = store;
         this.mode = mode;
         this.resolver = resolver;
@@ -61,7 +62,7 @@ internal sealed class DeckBatchWriteTools
     /// <summary>
     /// Creates the explicitly registered tool with a description on its synthetic discriminator field.
     /// </summary>
-    internal static RegisteredTool Create(SqliteDeckStore store, OperationMode mode, DeckEntryResolver? resolver = null)
+    internal static RegisteredTool Create(SqliteDeckStore store, OperationMode mode, DeckEntryResolver resolver)
     {
         DeckBatchWriteTools target = new(store, mode, resolver);
         MethodInfo method = typeof(DeckBatchWriteTools).GetMethod(
@@ -122,8 +123,11 @@ internal sealed class DeckBatchWriteTools
             return OperationFailure.Forward<DeckDocument, DeckWriteResult>(read);
         }
 
+        // The apply below succeeds only when the deck is still at expectedRevision, and every write raises the
+        // revision. So when the revision read here matches, the summary compares the state the apply starts from;
+        // when it differs the apply is refused and no summary is built, so the read needs no transaction of its own.
         IReadOnlyList<DeckWriteIssue> issues = [];
-        if (resolver is not null && before.Data.Revision == expectedRevision)
+        if (before.Data.Revision == expectedRevision)
         {
             DeckChangeResolution resolution = await resolver.ResolveChangesAsync(mapped, cancellationToken)
                 .ConfigureAwait(false);

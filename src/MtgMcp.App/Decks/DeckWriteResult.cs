@@ -20,6 +20,11 @@ internal sealed record DeckWriteIssue(
     internal const string Unresolved = "unresolved";
 
     /// <summary>
+    /// Names an entry whose card name fits more than one card, so no identity was chosen for it.
+    /// </summary>
+    internal const string Ambiguous = "ambiguous";
+
+    /// <summary>
     /// Names an entry or step that the write left out on purpose.
     /// </summary>
     internal const string Skipped = "skipped";
@@ -145,9 +150,9 @@ internal static class DeckWriteResults
     internal const int MaximumListedIds = 100;
 
     /// <summary>
-    /// Gives the most issues a result lists.
+    /// Gives the most issues a result lists. With the most listed IDs the result stays under 10,000 characters.
     /// </summary>
-    internal const int MaximumListedIssues = 50;
+    internal const int MaximumListedIssues = 30;
 
     /// <summary>
     /// Says what to do when an ID list or the issue list was cut short.
