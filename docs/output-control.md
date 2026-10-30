@@ -22,6 +22,17 @@ and a client passes only one of the two to the model. A `concise` page, and a
 first item left out. The `standard` format is reported, not truncated: a page of
 25 rows can pass 40,000 bytes, so use `concise` or a smaller `pageSize`.
 
+The 40,000 bytes is a target, not the hard limit. Claude Code warns above about 10,000 tokens and saves a tool
+text result of more than 50,000 characters to a file, showing the agent only the path (code.claude.com/docs/en/mcp,
+"MCP output limits and warnings"). The ceiling is the same whatever `MAX_MCP_OUTPUT_TOKENS` is set to, so the fix is
+small, high-signal results, not a larger per-tool limit. The deck write tools therefore return a summary unless
+`returnDeck` is true, and `local_deck_get`, `archidekt_deck_get`, `archidekt_push_preview`,
+`archidekt_pull_preview`, `archidekt_sync_diff`, `archidekt_snapshot_restore_preview`, `archidekt_folders_get`, and
+`archidekt_snapshots_get` (kind `get`) page. `ToolResultBudgetTests` calls every tool in `remote` mode with the largest
+offline fixtures and fails on a successful result over 50,000 characters, with two explicit lists: tools it cannot
+drive offline (Playgroup, Commander Spellbook, and the Archidekt writes the fake has no route for), and tools known to
+pass the ceiling today. A newly registered tool fails the test until it is in one of the two lists.
+
 `card_lists_compare` takes the same `responseFormat` and `fields`, and pages its result with a `nextCursor`; a page
 that would pass the size limit keeps the leading cards that fit and sets `truncated` and `narrow`. `card_list_query`
 returns groups and, when `rows` is asked for, a page of rows. Groups are cut first to a fixed share of the limit

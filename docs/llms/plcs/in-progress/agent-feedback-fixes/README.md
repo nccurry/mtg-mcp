@@ -106,12 +106,57 @@ Checks per block: focused tests, then `task ci`, `task test:integration`, and
 ## Risks And Open Questions
 
 - REQ-008 needs Scryfall's real behavior; a bounded read-only live query is
-  allowed.
+  allowed. Result (block A): live queries showed printing-level conditions
+  apply to the same printing, and the description says so.
+- REQ-005 ambiguity: an exact card name is unique per card in Scryfall card
+  data, and the resolver picks the newest English printing, so no ambiguous
+  case exists. The "ambiguous name" branch of REQ-005 therefore has nothing to
+  report; only unresolved names and a missing card-data install are reported.
+- Block C drove every tool at large offline sizes (REQ-009) and found results
+  over 50,000 characters that this plan does not fix. Each is in the
+  `KnownOverCeiling` list of `ToolResultBudgetTests` with its input, and the
+  test fails when one is fixed without removing its entry: `local_deck_export_bundle`
+  (305,000 to 370,000 characters for 300 entries, any format),
+  `local_deck_identity_reconcile_preview` (71,000 for 150 entries),
+  `local_deck_import_preview` (53,000 for 300 lines),
+  `local_deck_category_rules_preview` (62,000 for 300 entries), and the
+  Scryfall card tools with `responseFormat` `full` (`scryfall_search` 51,000,
+  `scryfall_cards_get` 65,000, `scryfall_installed_cards_by_tag` 82,000 for
+  one page of fixture cards; real cards are larger). Follow-up: give them
+  `truncated`/`narrow` paging or a smaller default, and remove the entries.
+- Block C also paged `archidekt_sync_diff`, `archidekt_snapshots_get` (kind
+  `get`, 116,000 characters before), `archidekt_snapshot_restore_preview`, and
+  `archidekt_folders_get` (65,000 before), the same way as block B.
+- The Archidekt base address is fixed in the stdio server, so the offline fake
+  cannot sit behind a real stdio process. REQ-009 therefore runs in the App
+  test project over a real MCP client and server joined by in-memory pipes, not
+  through `MtgMcp.E2E.Tests`. Playgroup, Commander Spellbook, and the ten
+  Archidekt writes the fake has no route for are listed in the test with a
+  reason, not driven.
+- Follow-up: a push of more than about 140 operations exceeds
+  `MaximumRequestsPerOperation` (150) and cannot be applied in one call.
+- Category reorder on Archidekt still counts as a remote change; this is by
+  design.
+- `local_deck_*` write tools with `returnDeck: true` can return a result over
+  50,000 characters for a large deck. The budget test does not call them that
+  way; the opt-in is documented.
 
 ## Evidence And Completion
 
-Results are recorded here as blocks land.
+Results are recorded here as blocks land. "Checks" cells are for the parent to
+fill after `task ci`, `task test:integration`, and `task test:e2e` on the merged
+commit.
 
-| Requirement | State | Evidence |
-| --- | --- | --- |
-| REQ-001 to REQ-011 | pending | |
+| Requirement | State | Evidence | Checks |
+| --- | --- | --- | --- |
+| REQ-001 | delivered in block A (`4066c36`) | `DeckWriteResult` summary with `returnDeck`; `DeckWriteSummaryTests` on a 300-entry deck (summary under 10,000 characters). | parent |
+| REQ-002 | delivered in block A (`4066c36`) | `local_deck_get` pages with `cursor`, `pageSize`, `nextCursor`, `truncated`, `narrow`; `ToolResultBudgetTests` reads every page of a 300-entry deck with every `include`, all under 50,000. | parent |
+| REQ-003 | delivered in block B (`31b4db7`), extended in block C | `ArchidektWorkflowTests` pages a 300-card deck and a 300-operation push under 40,000; block C adds the same paging to the diff, restore preview, folder, and snapshot reads. | parent |
+| REQ-004 | delivered in block B (`31b4db7`) | `applyAvailable` and `applyNotice` on both previews (`ArchidektWorkflowTests`); the `_meta` set is pinned in `ToolSurfaceRulesTests` and `FoundationMcpTests`. | parent |
+| REQ-005 | delivered in block A (`4066c36`) | Names resolve at add time (`DeckWriteSummaryTests`); the ambiguous-name case does not exist (see Risks). | parent |
+| REQ-006 | delivered in block B (`615d14e`, `aa473c2`) | `ArchidektEntryComparison` is the one comparison form; `ArchidektEntryComparisonTests`. | parent |
+| REQ-007 | delivered in block B (`31b4db7`) | Stateful `FakeArchidekt` and `ArchidektWorkflowTests` in remote and local mode; block C added list, folder, and snapshot routes. | parent |
+| REQ-008 | delivered in block A (`4066c36`) | `scryfall_search` description note; live result in Risks. | parent |
+| REQ-009 | delivered in block C | `ToolResultBudgetTests` (App test project, in-memory MCP client and server): drives 55 of 86 tools, lists 31 with reasons, fails on a result over 50,000 characters or a tool in neither list; seven known over-ceiling cases are listed (see Risks). Parent: confirm it fails when a limit is removed. | parent |
+| REQ-010 | delivered in block C | `AddByNameScenarioTests`: pull preview, pull apply, add five cards by name, push preview is all `entry-add` with no conflict and no unresolved card, in four tool calls and no reconcile call. The deck is bound by pulling the fake deck, because the fake has no deck-create route. | parent |
+| REQ-011 | documentation delivered in block C | README, `docs/toolsets.md`, `docs/output-control.md`, CHANGELOG `Unreleased`. Parent: `~/.claude.json` mtg-mcp entry has no `--mode`. | parent |

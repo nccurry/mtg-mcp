@@ -2,6 +2,72 @@
 
 ## Unreleased
 
+Agents using `0.12.0` in Claude Code reported five problems: deck tool results too large to read, a push they could
+not send, false category-order differences in push previews, an extra reconcile step after adding cards by name, and
+Scryfall searches that mixed in reprints. Claude Code saves any tool text result over 50,000 characters to a file and
+shows the agent only the path, so results now aim for 40,000 characters and page past that.
+
+### Changed
+
+- **Breaking:** `local_deck_apply_changes`, `local_deck_create`, `local_deck_import_create`,
+  `local_deck_identity_reconcile_apply`, and `local_deck_category_rules_apply` return a summary by default instead of
+  the whole deck: the deck ID, the new and previous revision, the entry count, counts of each kind of change, the IDs
+  of the entries and categories that changed, and `issues` for anything refused, skipped, or unresolved. Pass
+  `returnDeck: true` to get the old result as well (the whole deck is under `deck`). This is a change of a default
+  result, which `docs/versioning.md` treats as breaking. It is taken under that policy's exception for a clearly
+  broken contract: a result over 50,000 characters cannot be read inline in Claude Code, so a 300-entry deck was
+  unusable after any write.
+- `local_deck_get` pages a deck that is too large for one result, with or without `include` (`cursor`, `pageSize`,
+  `nextCursor`, `truncated`, `narrow`).
+- `archidekt_deck_get` leads with a summary (entry, card, and category counts, cards by zone) and pages its entries
+  with `offset` and `nextOffset`. Entries are ordered by card name, not by Archidekt's order numbers.
+- `archidekt_push_preview` and `archidekt_pull_preview` lead with a summary (operations by kind, differences,
+  conflicts) and page operations and differences with `operationOffset` and `differenceOffset`. The guards and the
+  preview fingerprint cover the whole preview, so `archidekt_push_apply` and `archidekt_pull_apply` take no page.
+- `archidekt_sync_diff`, `archidekt_snapshot_restore_preview`, `archidekt_folders_get`, and `archidekt_snapshots_get`
+  (kind `get`) page the same way, so none of them can pass 50,000 characters. Their result shapes changed:
+  `archidekt_sync_diff` and `archidekt_snapshot_restore_preview` add a count and offset fields beside the rows,
+  `archidekt_folders_get` returns `folderCount`, `offset`, and a page of `items`, and the saved deck inside
+  `archidekt_snapshots_get` is a deck page with `summary` and `nextOffset`.
+- The `scryfall_search` description now warns how Scryfall combines printing-level conditions such as `not:reprint`
+  with dates, and names a workaround.
+
+### Fixed
+
+- Fixed false differences and push operations for a deck nobody edited. An entry's comparison form is now defined once
+  in the Archidekt adapter (primary category apart, other category names as a set, order numbers and row order
+  ignored) and used for the difference rows, the push plan, the fingerprints, and the check after a push, so
+  Archidekt reordering an entry's categories no longer shows as a change.
+- Fixed a push of a card added by name failing the check when Archidekt chose a different printing of it; the printing
+  Archidekt chose is accepted.
+
+### Added
+
+- `returnDeck` on the deck write tools (see Changed).
+- Entries added by card name now resolve their card identity when they are added, from installed card data, so a push
+  needs no `local_deck_identity_reconcile_*` step. An exact name gives the Oracle ID; a name with a set code and
+  collector number also gives the printing. A name that does not resolve is added unresolved and listed in `issues`;
+  with no card data installed, one note in `issues` says resolution was skipped.
+- `archidekt_push_preview` and `archidekt_pull_preview` report `applyAvailable` and, when the apply tool is not
+  available, an `applyNotice` that names the reason (mode or missing credentials) and the setting that enables it
+  (`--mode=remote`, the default).
+- `offset`, `operationOffset`, and `differenceOffset` arguments on the Archidekt read tools listed above.
+- A test that calls every tool against large offline fixtures and fails on any successful result over 50,000
+  characters (`ToolResultBudgetTests`), and a scenario test that adds cards by name and reaches a clean push preview in
+  four calls with no reconcile step.
+
+### Known limits
+
+- Some results can still pass 50,000 characters with very large inputs: `local_deck_export_bundle` of a 300-entry
+  deck, `local_deck_identity_reconcile_preview` of 150 entries, `local_deck_import_preview` of 300 lines,
+  `local_deck_category_rules_preview` over a 300-entry deck, and the Scryfall card tools with `responseFormat`
+  `full`. The budget test lists them until they are fixed.
+- A push of more than about 140 operations needs more than the 150 requests one tool call may make, so it cannot be
+  applied in one call.
+- A Claude Code configuration that starts the server with `--mode=local` hides `archidekt_push_apply`. The default
+  mode is `remote` (full read and write), so remove any mode override; the previews now say when the apply tool is
+  missing.
+
 ## 0.12.0 - 2026-10-29
 
 This release carries every change listed under `0.11.0` below as well: `0.11.0` was never published, so users

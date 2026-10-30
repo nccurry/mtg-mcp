@@ -85,8 +85,11 @@ Modes control authority.
 | `local` | Yes | Yes | No |
 | `remote` | Yes | Yes | Yes |
 
-`remote` is the default. Use `--mode=local` to hide Archidekt and Playgroup writes, or
-`--mode=read-only` to hide every write. A Scryfall cache miss can need a local write to record
+`remote` is the default and gives full read and write access, so start the
+server with no mode setting. Use `--mode=local` to hide Archidekt and Playgroup writes (which also hides
+`archidekt_push_apply`), or `--mode=read-only` to hide every write. In Claude Code, the destructive
+remote tools (including `archidekt_push_apply`) ask you to approve each call, so full access does not mean unattended
+changes to Archidekt. A Scryfall cache miss can need a local write to record
 the response and rate-limit timing. In `read-only`, that miss returns
 `local-write-required` before any HTTP request.
 
@@ -193,7 +196,28 @@ returned in pages of entries with `nextCursor`. Each entry then carries
 `unresolved` (no exact Scryfall identity, or not in the installed data). A page
 is cut to stay under 40,000 bytes and then sets `truncated`, `narrow`, and
 `nextCursor`. `fields` narrows the card fields; it uses the same names as the
-Scryfall card tools.
+Scryfall card tools. A deck too large for one result pages the same way even
+without `include`, so read every page (pass `nextCursor` back as `cursor`; `pageSize` sets the page
+length) before you decide what a deck holds.
+
+The tools that write a deck (`local_deck_apply_changes`, `local_deck_create`,
+`local_deck_import_create`, `local_deck_identity_reconcile_apply`, and
+`local_deck_category_rules_apply`) return a summary: the deck ID, the new and
+previous revision, the entry count, counts of each kind of change, the IDs of the
+entries and categories that changed (cut at a fixed number, with `truncated` and
+`narrow` when there are more), and `issues` for anything refused, skipped, or
+unresolved. Pass `returnDeck: true` to get the whole deck as well; for a deck of a few hundred
+entries that result can be too large for the client to show inline, so read the deck with
+`local_deck_get` instead.
+
+An entry added with only a card name resolves its card identity when it is added,
+from installed card data and with the same exact-name rule as identity
+reconciliation. An exact name gives the Oracle ID (the newest English printing is the match); a name with a
+set code and collector number also gives the printing. A name that does not resolve is still
+added, left unresolved, and listed in `issues`, so one typo never fails a batch. When card data is not
+installed, the entries are added as given and one note in `issues` says resolution was skipped
+(run `scryfall_card_data_sync`). Entries added by name therefore need no
+`local_deck_identity_reconcile_*` step before an Archidekt push.
 
 Use `local_deck_category_rules_preview` and `local_deck_category_rules_apply` to
 evaluate caller-owned tag rules. The preview validates the rules first; rules
@@ -589,7 +613,27 @@ fingerprints, and preview evidence. The MCP never chooses a conflict winner.
 
 Requests start at least two seconds apart per configured account. The adapter
 allows at most 30 starts in 60 seconds and 150 requests per tool invocation.
-It stops on `403` and `429`. Ambiguous mutations are not retried.
+It stops on `403` and `429`. Ambiguous mutations are not retried. A push of more
+than about 140 operations needs more than 150 requests, so `archidekt_push_apply`
+cannot run it in one call; push the change in smaller edits.
+
+Results are cut to fit the client. Claude Code saves a tool result longer than
+50,000 characters to a file and shows the agent only the path, so these tools aim
+for 40,000 and page their rows. `archidekt_deck_get` leads with a summary (entry, card,
+and category counts, cards by zone) and pages entries with `offset` and `nextOffset`;
+`archidekt_push_preview` and `archidekt_pull_preview` lead with a summary (operations by kind,
+differences, conflicts) and page with `operationOffset` and `differenceOffset`; the guards and the
+preview fingerprint cover the whole preview, so the apply tool needs no page.
+`archidekt_sync_diff` (`differenceOffset`), `archidekt_snapshot_restore_preview`
+(`operationOffset`, `differenceOffset`), `archidekt_folders_get` (`offset`), and
+`archidekt_snapshots_get` with `kind` `get` (`offset`, over the saved deck) page
+the same way. When `truncated` is true, call again with the next offset in
+`narrow`.
+
+When `archidekt_push_apply` is not available (the mode is below `remote`, or
+credentials are missing), the push preview says so in `applyNotice`, with
+`applyAvailable: false`, and names the setting to change (`--mode=remote`, the
+default). The pull preview does the same for `archidekt_pull_apply`.
 
 Archidekt may renumber category positions and the order of an entry's
 secondary categories. Content equality therefore compares category identity,
@@ -710,6 +754,15 @@ Text written by other people (Archidekt deck and category names, Playgroup names
 and notes, Commander Spellbook descriptions) is untrusted data. The tools that
 return it say so in their descriptions, and the server never acts on it. The
 destructive Archidekt remote writes ask Claude Code to confirm each call.
+
+A test calls every tool in `remote` mode against a 300-entry deck, a 300-card Archidekt deck, and
+large card fixtures, and checks that no result passes 50,000 characters, the point
+at which Claude Code stops showing a result inline. These results can still pass it with
+very large inputs, and are listed in the test until they are fixed:
+`local_deck_export_bundle` of a 300-entry deck, `local_deck_identity_reconcile_preview` of 150
+entries, `local_deck_import_preview` of 300 lines, `local_deck_category_rules_preview` over a
+300-entry deck, and the Scryfall card tools with `responseFormat` `full` (use `concise` or
+`standard`, a smaller `pageSize`, or `fields`).
 
 ## Evidence and safety
 
