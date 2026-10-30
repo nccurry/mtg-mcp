@@ -112,18 +112,13 @@ Checks per block: focused tests, then `task ci`, `task test:integration`, and
   data, and the resolver picks the newest English printing, so no ambiguous
   case exists. The "ambiguous name" branch of REQ-005 therefore has nothing to
   report; only unresolved names and a missing card-data install are reported.
-- Block C drove every tool at large offline sizes (REQ-009) and found results
-  over 50,000 characters that this plan does not fix. Each is in the
-  `KnownOverCeiling` list of `ToolResultBudgetTests` with its input, and the
-  test fails when one is fixed without removing its entry: `local_deck_export_bundle`
-  (305,000 to 370,000 characters for 300 entries, any format),
-  `local_deck_identity_reconcile_preview` (71,000 for 150 entries),
-  `local_deck_import_preview` (53,000 for 300 lines),
-  `local_deck_category_rules_preview` (62,000 for 300 entries), and the
-  Scryfall card tools with `responseFormat` `full` (`scryfall_search` 51,000,
-  `scryfall_cards_get` 65,000, `scryfall_installed_cards_by_tag` 82,000 for
-  one page of fixture cards; real cards are larger). Follow-up: give them
-  `truncated`/`narrow` paging or a smaller default, and remove the entries.
+- Block C drove every tool at large offline sizes (REQ-009) and found seven results over 50,000 characters:
+  `local_deck_export_bundle` (305,000 to 370,000 for 300 entries), `local_deck_identity_reconcile_preview` (71,000 for
+  150 entries), `local_deck_import_preview` (53,000 for 300 lines), `local_deck_category_rules_preview` (62,000 for
+  300 entries), and the Scryfall card tools with `responseFormat` `full`. The owner decided to fix all seven in this
+  block. The three deck previews now page their rows with `offset` (the fingerprint and apply token stay bound to the
+  whole preview); the export returns metadata and one chunk of one artifact by character offset; the Scryfall tools cut
+  every format to the size limit. Real recorded full cards are large: only two of six recorded cards fit a page.
 - Block C also paged `archidekt_sync_diff`, `archidekt_snapshots_get` (kind
   `get`, 116,000 characters before), `archidekt_snapshot_restore_preview`, and
   `archidekt_folders_get` (65,000 before), the same way as block B.
@@ -157,6 +152,6 @@ commit.
 | REQ-006 | delivered in block B (`615d14e`, `aa473c2`) | `ArchidektEntryComparison` is the one comparison form; `ArchidektEntryComparisonTests`. | parent |
 | REQ-007 | delivered in block B (`31b4db7`) | Stateful `FakeArchidekt` and `ArchidektWorkflowTests` in remote and local mode; block C added list, folder, and snapshot routes. | parent |
 | REQ-008 | delivered in block A (`4066c36`) | `scryfall_search` description note; live result in Risks. | parent |
-| REQ-009 | delivered in block C | `ToolResultBudgetTests` (App test project, in-memory MCP client and server): drives 55 of 86 tools, lists 31 with reasons, fails on a result over 50,000 characters or a tool in neither list; seven known over-ceiling cases are listed (see Risks). Parent: confirm it fails when a limit is removed. | parent |
+| REQ-009 | delivered in block C | `ToolResultBudgetTests` (App test project, in-memory MCP client and server): drives 55 of 86 tools, lists 31 with reasons, and fails on a result over 50,000 characters or a tool in neither list. There is no known-over-ceiling list. Parent: confirm it fails when a limit is removed. | parent |
 | REQ-010 | delivered in block C | `AddByNameScenarioTests`: pull preview, pull apply, add five cards by name, push preview is all `entry-add` with no conflict and no unresolved card, in four tool calls and no reconcile call. The deck is bound by pulling the fake deck, because the fake has no deck-create route. | parent |
 | REQ-011 | documentation delivered in block C | README, `docs/toolsets.md`, `docs/output-control.md`, CHANGELOG `Unreleased`. Parent: `~/.claude.json` mtg-mcp entry has no `--mode`. | parent |

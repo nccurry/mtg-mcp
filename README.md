@@ -757,12 +757,19 @@ destructive Archidekt remote writes ask Claude Code to confirm each call.
 
 A test calls every tool in `remote` mode against a 300-entry deck, a 300-card Archidekt deck, and
 large card fixtures, and checks that no result passes 50,000 characters, the point
-at which Claude Code stops showing a result inline. These results can still pass it with
-very large inputs, and are listed in the test until they are fixed:
-`local_deck_export_bundle` of a 300-entry deck, `local_deck_identity_reconcile_preview` of 150
-entries, `local_deck_import_preview` of 300 lines, `local_deck_category_rules_preview` over a
-300-entry deck, and the Scryfall card tools with `responseFormat` `full` (use `concise` or
-`standard`, a smaller `pageSize`, or `fields`).
+at which Claude Code stops showing a result inline. A tool that cannot be driven offline
+(Playgroup, Commander Spellbook, and some Archidekt writes) is listed in the test with the reason.
+
+These tools page their rows, so read every page before you decide what a result holds. Each
+sets `truncated` and `narrow` when it left rows out, and names the argument that reads the next page:
+`local_deck_identity_reconcile_preview`, `local_deck_import_preview`, and
+`local_deck_category_rules_preview` take `offset` and return `nextOffset`; their fingerprints and apply
+tokens cover the whole preview, so the apply tool takes the guards of any page and still applies everything.
+`local_deck_export_bundle` lists every artifact (file name, media type, total length, and the SHA-256 of the whole
+content) and returns one chunk of one artifact's content of at most about 30,000 characters; pass `artifact`
+and `offset` (the previous `chunk.nextOffset`) to read on. The chunks joined in order are the exact file. The Scryfall card tools
+cut a page of cards, in any `responseFormat`, to the size limit and return `nextCursor` for the rest; a
+`full` page of real cards is only a few cards long.
 
 ## Evidence and safety
 

@@ -29,6 +29,20 @@ shows the agent only the path, so results now aim for 40,000 characters and page
   `archidekt_sync_diff` and `archidekt_snapshot_restore_preview` add a count and offset fields beside the rows,
   `archidekt_folders_get` returns `folderCount`, `offset`, and a page of `items`, and the saved deck inside
   `archidekt_snapshots_get` is a deck page with `summary` and `nextOffset`.
+- **Breaking:** `local_deck_import_preview`, `local_deck_identity_reconcile_preview`, and
+  `local_deck_category_rules_preview` page their rows (`offset`, `nextOffset`, `truncated`, `narrow`). Their
+  results gain a count (`entryCount`, `rowCount`, `decisionCount`) and `offset`; the proposal's entries, rows, or
+  decisions are one page. The fingerprint and apply token still cover the whole preview, so the apply tools are
+  unchanged and accept the guards of any page.
+- **Breaking:** `local_deck_export_bundle` no longer returns every artifact's whole content. It lists each artifact
+  (`fileName`, `mediaType`, `totalLength`, `sha256` of the whole content, `purpose`) and returns one `chunk` of one
+  artifact of at most about 30,000 characters. New arguments `artifact` (default the first) and `offset` read the rest;
+  the chunks joined in order are the exact file. It still writes no files. A 300-entry export was 305,000 to 370,000
+  characters. Both changes are taken under the same clearly-broken-contract exception as the deck write summaries.
+- `scryfall_search`, `scryfall_cards_get`, and `scryfall_installed_cards_by_tag` cut a page to the result size
+  limit in every `responseFormat` (before, only `concise` was cut), set `truncated` and `narrow`, and return the
+  usual cursor for the rest. A `full` or `standard` page can therefore hold fewer cards than `pageSize`; every card
+  stays reachable through the cursor.
 - The `scryfall_search` description now warns how Scryfall combines printing-level conditions such as `not:reprint`
   with dates, and names a workaround.
 
@@ -58,10 +72,8 @@ shows the agent only the path, so results now aim for 40,000 characters and page
 
 ### Known limits
 
-- Some results can still pass 50,000 characters with very large inputs: `local_deck_export_bundle` of a 300-entry
-  deck, `local_deck_identity_reconcile_preview` of 150 entries, `local_deck_import_preview` of 300 lines,
-  `local_deck_category_rules_preview` over a 300-entry deck, and the Scryfall card tools with `responseFormat`
-  `full`. The budget test lists them until they are fixed.
+- A deck write called with `returnDeck: true` can return a result over 50,000 characters for a large deck; read
+  the deck with `local_deck_get` instead.
 - A push of more than about 140 operations needs more than the 150 requests one tool call may make, so it cannot be
   applied in one call.
 - A Claude Code configuration that starts the server with `--mode=local` hides `archidekt_push_apply`. The default
