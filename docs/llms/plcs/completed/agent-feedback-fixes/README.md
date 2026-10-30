@@ -2,28 +2,20 @@
 
 ## Current Work
 
-- Status: In progress
+- Status: Complete
 - Owner: mtg-mcp (Opus parent session with Sonnet implementation children)
-- Last updated: 2026-10-29, `main` at `5efc62a`
-- Selected work and endpoint: REQ-001 to REQ-011 below, merged into `main` on
-  this host and pushed, followed by a full audit (every `audit-codebase`
-  specialist) over the combined changes. No release is part of this work.
-- State: audit pass 2 repair done; parent final checks pending. Audit pass 1 and pass 2 found problems; both
-  repairs are on `aff/c-budget`.
-- Next action and blocker: parent final checks (the known-fault check of REQ-009 and the owner configuration of
-  REQ-011), then delivery. No blocker.
-- Resume check: `git worktree list` and `git log --oneline -3 aff/c-budget`
-  match the table below.
+- Last updated: 2026-10-30, `main` at the merge commit `d8b3999`
+- Selected work and endpoint: REQ-001 to REQ-011, merged into `main` on this
+  host and pushed, with a full audit over the combined changes. No release is part
+  of this work.
+- State: delivered. Audit pass 1 (14 specialists) and pass 2 (14) found problems;
+  both were repaired, and pass 3 (correctness, performance, test quality) passed.
+  The parent made the pass 3 follow-ups (`be6a389`).
+- Next action and blocker: none. A release (0.13.0) is the owner's call.
+- Resume check: `git log --oneline -3 origin/main` shows the merge.
 
-Where the work lives (a worktree lock, not this table, holds a checkout
-against cleanup):
-
-| Checkout | Branch | State |
-| --- | --- | --- |
-| `mtg-mcp-wt/agent-feedback-fixes/integ` | `aff/integ` | blocks A and B, merged |
-| `mtg-mcp-wt/agent-feedback-fixes/c-budget` | `aff/c-budget` | block C and the audit pass 1 and pass 2 repairs |
-| `mtg-mcp-wt/agent-feedback-fixes/a-decks` | `aff/a-decks` | merged into `aff/integ`; to remove |
-| `mtg-mcp-wt/agent-feedback-fixes/b-archidekt` | `aff/b-archidekt` | merged into `aff/integ`; to remove |
+The worktrees and branches (`aff/a-decks`, `aff/b-archidekt`, `aff/integ`,
+`aff/c-budget`) were removed after the merge.
 
 ## Outcome And Requirements
 
@@ -155,20 +147,18 @@ Checks per block: focused tests, then `task ci`, `task test:integration`, and
 
 ## Evidence And Completion
 
-Results are recorded here as blocks land. "Checks" cells are for the parent to
-fill after `task ci`, `task test:integration`, and `task test:e2e` on the merged
-commit.
+All requirements are merged into `main` (`d8b3999`) and checked on that commit.
 
 | Requirement | State | Evidence | Checks |
 | --- | --- | --- | --- |
-| REQ-001 | delivered in block A (`4066c36`) | `DeckWriteResult` summary with `returnDeck`; `DeckWriteSummaryTests` on a 300-entry deck (summary under 10,000 characters). | pending: `task ci`, `task test:integration`, `task test:e2e` on the merged commit |
-| REQ-002 | delivered in block A (`4066c36`) | `local_deck_get` pages with `cursor`, `pageSize`, `nextCursor`, `truncated`, `narrow`; `ToolResultBudgetTests` reads every page of a 300-entry deck with every `include`, all under 40,000. | pending: `task ci`, `task test:integration`, `task test:e2e` on the merged commit |
-| REQ-003 | delivered in block B (`31b4db7`), extended in block C | `ArchidektWorkflowTests` pages a 300-card deck and a 300-operation push under 40,000; block C adds the same paging to the diff, restore preview, folder, and snapshot reads. | pending: `task ci`, `task test:integration`, `task test:e2e` on the merged commit |
-| REQ-004 | delivered in block B (`31b4db7`) | `applyAvailable` and `applyNotice` on both previews (`ArchidektWorkflowTests`); the `_meta` set is pinned in `ToolSurfaceRulesTests` and `FoundationMcpTests`. | pending: `task ci`, `task test:integration`, `task test:e2e` on the merged commit |
-| REQ-005 | delivered in block A (`4066c36`) | Names resolve at add time (`DeckWriteSummaryTests`, `DeckEntryResolverTests`); a token or art card never beats a playable card, and a name shared by two cards is reported as ambiguous (see Risks). | pending: `task ci`, `task test:integration`, `task test:e2e` on the merged commit |
-| REQ-006 | delivered in block B (`615d14e`, `aa473c2`) | `ArchidektEntryComparison` is the one comparison form; `ArchidektEntryComparisonTests`. | pending: `task ci`, `task test:integration`, `task test:e2e` on the merged commit |
-| REQ-007 | delivered in block B (`31b4db7`) | Stateful `FakeArchidekt` and `ArchidektWorkflowTests` in remote and local mode; block C added list, folder, and snapshot routes. | pending: `task ci`, `task test:integration`, `task test:e2e` on the merged commit |
-| REQ-008 | delivered in block A (`4066c36`) | `scryfall_search` description note; live result in Risks. | pending: `task ci`, `task test:integration`, `task test:e2e` on the merged commit |
-| REQ-009 | delivered in block C | `ToolResultBudgetTests` (App test project, in-memory MCP client and server): drives 55 of 86 tools, lists 31 with reasons, and fails on any result, successful or not, over 50,000 characters, a tool in neither list, or a tool that grows with its data and never pages with the large fixtures. There is no known-over-ceiling list. Parent: confirm it fails when a limit is removed. | pending: `task ci`, `task test:integration`, `task test:e2e` on the merged commit |
-| REQ-010 | delivered in block C | `AddByNameScenarioTests`: pull preview, pull apply, add five cards by name, push preview is all `entry-add` with no conflict and no unresolved card, in four tool calls and no reconcile call. The deck is bound by pulling the fake deck, because the fake has no deck-create route. | pending: `task ci`, `task test:integration`, `task test:e2e` on the merged commit |
-| REQ-011 | documentation delivered in block C | README, `docs/toolsets.md`, `docs/output-control.md`, CHANGELOG `Unreleased`. Parent: `~/.claude.json` mtg-mcp entry has no `--mode`. | pending: `task ci`, `task test:integration`, `task test:e2e` on the merged commit |
+| REQ-001 | delivered in block A (`4066c36`) | `DeckWriteResult` summary with `returnDeck`; `DeckWriteSummaryTests` on a 300-entry deck (summary under 10,000 characters). | passed on `d8b3999`: `task ci` (1,761 tests, 77 smoke), `task test:integration` (515), `task test:e2e` (101) |
+| REQ-002 | delivered in block A (`4066c36`) | `local_deck_get` pages with `cursor`, `pageSize`, `nextCursor`, `truncated`, `narrow`; `ToolResultBudgetTests` reads every page of a 300-entry deck with every `include`, all under 40,000. | passed on `d8b3999`: `task ci` (1,761 tests, 77 smoke), `task test:integration` (515), `task test:e2e` (101) |
+| REQ-003 | delivered in block B (`31b4db7`), extended in block C | `ArchidektWorkflowTests` pages a 300-card deck and a 300-operation push under 40,000; block C adds the same paging to the diff, restore preview, folder, and snapshot reads. | passed on `d8b3999`: `task ci` (1,761 tests, 77 smoke), `task test:integration` (515), `task test:e2e` (101) |
+| REQ-004 | delivered in block B (`31b4db7`) | `applyAvailable` and `applyNotice` on both previews (`ArchidektWorkflowTests`); the `_meta` set is pinned in `ToolSurfaceRulesTests` and `FoundationMcpTests`. | passed on `d8b3999`: `task ci` (1,761 tests, 77 smoke), `task test:integration` (515), `task test:e2e` (101) |
+| REQ-005 | delivered in block A (`4066c36`) | Names resolve at add time (`DeckWriteSummaryTests`, `DeckEntryResolverTests`); a token or art card never beats a playable card, and a name shared by two cards is reported as ambiguous (see Risks). | passed on `d8b3999`: `task ci` (1,761 tests, 77 smoke), `task test:integration` (515), `task test:e2e` (101) |
+| REQ-006 | delivered in block B (`615d14e`, `aa473c2`) | `ArchidektEntryComparison` is the one comparison form; `ArchidektEntryComparisonTests`. | passed on `d8b3999`: `task ci` (1,761 tests, 77 smoke), `task test:integration` (515), `task test:e2e` (101) |
+| REQ-007 | delivered in block B (`31b4db7`) | Stateful `FakeArchidekt` and `ArchidektWorkflowTests` in remote and local mode; block C added list, folder, and snapshot routes. | passed on `d8b3999`: `task ci` (1,761 tests, 77 smoke), `task test:integration` (515), `task test:e2e` (101) |
+| REQ-008 | delivered in block A (`4066c36`) | `scryfall_search` description note; live result in Risks. | passed on `d8b3999`: `task ci` (1,761 tests, 77 smoke), `task test:integration` (515), `task test:e2e` (101) |
+| REQ-009 | delivered in block C | `ToolResultBudgetTests` (App test project, in-memory MCP client and server): drives 55 of 86 tools, lists 31 with reasons, and fails on any result, successful or not, over 50,000 characters, a tool in neither list, or a tool that grows with its data and never pages with the large fixtures. There is no known-over-ceiling list. Parent check 2026-10-30: with the page budget removed, the test fails (`local_deck_import_preview` page 0 was 200,335 characters). | passed on `d8b3999`: `task ci` (1,761 tests, 77 smoke), `task test:integration` (515), `task test:e2e` (101) |
+| REQ-010 | delivered in block C | `AddByNameScenarioTests`: pull preview, pull apply, add five cards by name, push preview is all `entry-add` with no conflict and no unresolved card, in four tool calls and no reconcile call. The deck is bound by pulling the fake deck, because the fake has no deck-create route. | passed on `d8b3999`: `task ci` (1,761 tests, 77 smoke), `task test:integration` (515), `task test:e2e` (101) |
+| REQ-011 | documentation delivered in block C | README, `docs/toolsets.md`, `docs/output-control.md`, CHANGELOG `Unreleased`. Parent check 2026-10-29: the `~/.claude.json` mtg-mcp entry has no arguments, and the installed 0.12.0 lists 86 tools with `archidekt_push_apply`. | passed on `d8b3999`: `task ci` (1,761 tests, 77 smoke), `task test:integration` (515), `task test:e2e` (101) |
