@@ -18,6 +18,16 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     private const string DeckId = "42";
 
     /// <summary>
+    /// Holds how many decks and child folders the list routes show.
+    /// </summary>
+    private const int ListedDecks = 120;
+
+    /// <summary>
+    /// Holds how many named snapshots the snapshot list shows.
+    /// </summary>
+    private const int ListedSnapshots = 60;
+
+    /// <summary>
     /// Holds the categories in their stored order.
     /// </summary>
     private readonly List<FakeCategory> categories = [];
@@ -142,6 +152,31 @@ internal sealed class FakeArchidekt : HttpMessageHandler
         if (path == $"api/decks/{DeckId}/")
         {
             return Json(SerializeDeck().ToJsonString());
+        }
+
+        if (path.StartsWith("api/decks/v3/?ownerUsername=", StringComparison.Ordinal))
+        {
+            return Json(SerializeDeckList().ToJsonString());
+        }
+
+        if (path == "api/decks/folderTree/")
+        {
+            return Json(new JsonObject { ["results"] = new JsonArray(SerializeFolder()) }.ToJsonString());
+        }
+
+        if (path.StartsWith("api/decks/folders/", StringComparison.Ordinal))
+        {
+            return Json(new JsonObject { ["folder"] = SerializeFolder() }.ToJsonString());
+        }
+
+        if (path == $"api/decks/{DeckId}/snapshots/")
+        {
+            return Json(SerializeSnapshotList().ToJsonString());
+        }
+
+        if (path.StartsWith("api/decks/snapshots/", StringComparison.Ordinal))
+        {
+            return Json(SerializeSnapshot().ToJsonString());
         }
 
         if (path.StartsWith("api/cards/v2/?name=", StringComparison.Ordinal))
@@ -309,6 +344,109 @@ internal sealed class FakeArchidekt : HttpMessageHandler
             ["private"] = true,
             ["categories"] = categoryArray,
             ["cards"] = shuffledCards,
+        };
+    }
+
+    /// <summary>
+    /// Writes a list of decks the owner has, one of them the fake deck, to show how a long list reads.
+    /// </summary>
+    private JsonObject SerializeDeckList()
+    {
+        JsonArray decks = [];
+        for (int index = 0; index < ListedDecks; index++)
+        {
+            decks.Add(new JsonObject
+            {
+                ["id"] = index == 0 ? 42 : 5000 + index,
+                ["name"] = index == 0 ? name : $"Listed deck {index:000}",
+                ["description"] = "A deck in the owner's list.",
+                ["deckFormat"] = 3,
+                ["private"] = true,
+                ["cardCount"] = 100,
+                ["updatedAt"] = "2026-07-04T12:00:00Z",
+                ["folder"] = new JsonObject { ["id"] = 9, ["name"] = "Tests", ["path"] = "Root/Tests" },
+            });
+        }
+
+        return new JsonObject { ["decks"] = decks };
+    }
+
+    /// <summary>
+    /// Writes one folder that holds the fake deck and many child folders.
+    /// </summary>
+    private JsonObject SerializeFolder()
+    {
+        JsonArray children = [];
+        JsonArray decks = [new JsonObject { ["id"] = 42, ["name"] = name, ["deckFormat"] = 3, ["private"] = true }];
+        for (int index = 0; index < ListedDecks; index++)
+        {
+            children.Add(new JsonObject
+            {
+                ["id"] = 100 + index,
+                ["name"] = $"Child folder {index:000}",
+                ["parent"] = 9,
+                ["children"] = new JsonArray(),
+                ["decks"] = new JsonArray(),
+            });
+            decks.Add(new JsonObject
+            {
+                ["id"] = 5000 + index,
+                ["name"] = $"Foldered deck {index:000}",
+                ["deckFormat"] = 3,
+                ["private"] = true,
+            });
+        }
+
+        return new JsonObject
+        {
+            ["id"] = 9,
+            ["name"] = "Tests",
+            ["private"] = true,
+            ["path"] = "Tests",
+            ["decks"] = decks,
+            ["children"] = children,
+        };
+    }
+
+    /// <summary>
+    /// Writes the named snapshots of the fake deck.
+    /// </summary>
+    private static JsonObject SerializeSnapshotList()
+    {
+        JsonArray rows = [];
+        for (int index = 0; index < ListedSnapshots; index++)
+        {
+            rows.Add(new JsonObject
+            {
+                ["id"] = 77 + index,
+                ["deck"] = 42,
+                ["name"] = $"Snapshot {index:000}",
+                ["description"] = "A named snapshot.",
+                ["createdAt"] = "2026-07-04T12:00:00Z",
+            });
+        }
+
+        return new JsonObject { ["results"] = rows };
+    }
+
+    /// <summary>
+    /// Writes one named snapshot whose saved deck holds one more of every card than the deck now does.
+    /// </summary>
+    private JsonObject SerializeSnapshot()
+    {
+        JsonObject deck = SerializeDeck();
+        foreach (JsonNode? card in deck["cards"]!.AsArray())
+        {
+            card!["quantity"] = card["quantity"]!.GetValue<int>() + 1;
+        }
+
+        return new JsonObject
+        {
+            ["id"] = 77,
+            ["name"] = "Snapshot 000",
+            ["description"] = "A named snapshot.",
+            ["createdAt"] = "2026-07-04T12:00:00Z",
+            ["deck"] = deck,
         };
     }
 

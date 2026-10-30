@@ -21,7 +21,16 @@ internal sealed record ArchidektSnapshotListResult(
 /// Holds one snapshot with its saved deck state for <c>kind</c> get.
 /// </summary>
 internal sealed record ArchidektSnapshotGetResult(
-    [property: JsonPropertyName("snapshot")] RemoteNamedSnapshot Snapshot) : ArchidektSnapshotsResult;
+    [property: JsonPropertyName("snapshot")] ArchidektSnapshotView Snapshot) : ArchidektSnapshotsResult;
+
+/// <summary>
+/// Returns one named snapshot with its metadata and one size-limited page of its saved deck, in the same shape as
+/// <c>archidekt_deck_get</c>. When the deck's <c>nextOffset</c> is set, call again with that <c>offset</c>.
+/// </summary>
+internal sealed record ArchidektSnapshotView(
+    RemoteNamedSnapshotSummary Summary,
+    ArchidektRetrievalEvidence Evidence,
+    ArchidektDeckView Deck);
 
 /// <summary>
 /// Returns one folder result whose <c>kind</c> matches the requested <c>kind</c>: list or get.
@@ -35,13 +44,112 @@ internal abstract record ArchidektFoldersResult;
 /// Holds the whole folder tree for <c>kind</c> list.
 /// </summary>
 internal sealed record ArchidektFolderListResult(
-    [property: JsonPropertyName("folders")] RemoteFolderTree Folders) : ArchidektFoldersResult;
+    [property: JsonPropertyName("folders")] ArchidektFolderTreeView Folders) : ArchidektFoldersResult;
 
 /// <summary>
 /// Holds one folder and its direct contents for <c>kind</c> get.
 /// </summary>
 internal sealed record ArchidektFolderGetResult(
-    [property: JsonPropertyName("folder")] RemoteFolderTree Folder) : ArchidektFoldersResult;
+    [property: JsonPropertyName("folder")] ArchidektFolderTreeView Folder) : ArchidektFoldersResult;
+
+/// <summary>
+/// Returns a folder tree with its folder count and one size-limited page of its folder records. The tree fingerprint
+/// covers the whole tree, whichever page was read. When <see cref="NextOffset"/> is set, call again with that
+/// <c>offset</c>.
+/// </summary>
+internal sealed record ArchidektFolderTreeView(
+    int FolderCount,
+    int Offset,
+    IReadOnlyList<RemoteFolderRecord> Items,
+    ArchidektRetrievalEvidence Evidence,
+    string TreeFingerprint)
+{
+    /// <summary>
+    /// Gets true when folder records were left out to keep the result under the size limit.
+    /// </summary>
+    public bool? Truncated { get; init; }
+
+    /// <summary>
+    /// Gets what to pass to read the folder records that were left out.
+    /// </summary>
+    public string? Narrow { get; init; }
+
+    /// <summary>
+    /// Gets the <c>offset</c> that returns the next page of folder records, or null on the last page.
+    /// </summary>
+    public int? NextOffset { get; init; }
+}
+
+/// <summary>
+/// Returns the three-way differences of one local deck with a leading count and one size-limited page of the rows.
+/// When <see cref="NextDifferenceOffset"/> is set, call again with that <c>differenceOffset</c>.
+/// </summary>
+internal sealed record ArchidektSyncDiffView(
+    Guid LocalDeckId,
+    long LocalRevision,
+    string RemoteDeckId,
+    string RemoteFingerprint,
+    string? BaselineRemoteFingerprint,
+    bool HasConflicts,
+    int DifferenceCount,
+    int DifferenceOffset,
+    IReadOnlyList<ArchidektDifference> Differences)
+{
+    /// <summary>
+    /// Gets true when rows were left out to keep the result under the size limit.
+    /// </summary>
+    public bool? Truncated { get; init; }
+
+    /// <summary>
+    /// Gets what to pass to read the rows that were left out.
+    /// </summary>
+    public string? Narrow { get; init; }
+
+    /// <summary>
+    /// Gets the <c>differenceOffset</c> that returns the next page of differences, or null on the last page.
+    /// </summary>
+    public int? NextDifferenceOffset { get; init; }
+}
+
+/// <summary>
+/// Returns a snapshot restore preview with leading counts and size-limited pages of its operations and differences.
+/// Every guard describes the whole preview, whichever page was read, so the apply tool needs no page.
+/// </summary>
+internal sealed record ArchidektSnapshotRestorePreviewView(
+    string DeckId,
+    string SnapshotId,
+    string SnapshotChecksum,
+    string SnapshotContentFingerprint,
+    string RemoteFingerprint,
+    string PreviewFingerprint,
+    int PredictedProviderRequests,
+    int OperationCount,
+    int DifferenceCount,
+    int OperationOffset,
+    int DifferenceOffset,
+    IReadOnlyList<ArchidektRemoteOperation> Operations,
+    IReadOnlyList<ArchidektDifference> Differences)
+{
+    /// <summary>
+    /// Gets true when rows were left out to keep the result under the size limit.
+    /// </summary>
+    public bool? Truncated { get; init; }
+
+    /// <summary>
+    /// Gets what to pass to read the rows that were left out.
+    /// </summary>
+    public string? Narrow { get; init; }
+
+    /// <summary>
+    /// Gets the <c>operationOffset</c> that returns the next page of operations, or null when none are left.
+    /// </summary>
+    public int? NextOperationOffset { get; init; }
+
+    /// <summary>
+    /// Gets the <c>differenceOffset</c> that returns the next page of differences, or null when none are left.
+    /// </summary>
+    public int? NextDifferenceOffset { get; init; }
+}
 
 /// <summary>
 /// Counts what one Archidekt deck holds, so an agent can size it before reading its entries.

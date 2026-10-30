@@ -576,7 +576,7 @@ public sealed class FoundationMcpTests
             ["archidekt_deck_list"] = ["cursor", "pageSize"],
             ["archidekt_folder_create"] = ["request"],
             ["archidekt_folder_delete"] = ["request"],
-            ["archidekt_folders_get"] = ["folderId", "kind"],
+            ["archidekt_folders_get"] = ["folderId", "kind", "offset"],
             ["archidekt_folder_move_items"] = ["request"],
             ["archidekt_folder_update"] = ["request"],
             ["archidekt_pull_apply"] = ["request"],
@@ -585,11 +585,11 @@ public sealed class FoundationMcpTests
             ["archidekt_push_preview"] = ["differenceOffset", "localDeckId", "operationOffset"],
             ["archidekt_snapshot_create"] = ["request"],
             ["archidekt_snapshot_delete"] = ["request"],
-            ["archidekt_snapshots_get"] = ["deckId", "kind", "snapshotId"],
+            ["archidekt_snapshots_get"] = ["deckId", "kind", "offset", "snapshotId"],
             ["archidekt_snapshot_restore_apply"] = ["request"],
-            ["archidekt_snapshot_restore_preview"] = ["deckId", "snapshotId"],
+            ["archidekt_snapshot_restore_preview"] = ["deckId", "differenceOffset", "operationOffset", "snapshotId"],
             ["archidekt_snapshot_update"] = ["request"],
-            ["archidekt_sync_diff"] = ["localDeckId"],
+            ["archidekt_sync_diff"] = ["differenceOffset", "localDeckId"],
         };
         HashSet<string> reads = [.. ArchidektReadToolNames];
         HashSet<string> destructive =

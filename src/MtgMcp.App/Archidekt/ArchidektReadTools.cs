@@ -87,13 +87,20 @@ internal sealed class ArchidektReadTools
     [McpServerTool(Name = "archidekt_sync_diff", Title = "Compare Local And Archidekt Deck", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
     [Description(
         "Archidekt: returns explicit local, baseline, and fresh-remote differences without selecting a conflict " +
-        "winner." +
+        "winner. The result starts with the difference count; rows come in pages that fit the size limit, so when " +
+        "truncated is true, call again with differenceOffset set to nextDifferenceOffset." +
         UntrustedTextNotes.Archidekt)]
-    internal Task<OperationResult<ArchidektSyncDiff>> DiffAsync(
+    internal async Task<OperationResult<ArchidektSyncDiffView>> DiffAsync(
         [Description("Stable local deck UUID with an Archidekt provider binding.")] Guid localDeckId,
+        [Description("Number of differences to skip; use nextDifferenceOffset from the previous page. Default 0.")]
+        int differenceOffset = 0,
         CancellationToken cancellationToken = default)
     {
-        return coordinator.DiffAsync(localDeckId, cancellationToken);
+        OperationResult<ArchidektSyncDiff> diff = await coordinator
+            .DiffAsync(localDeckId, cancellationToken).ConfigureAwait(false);
+        return diff is OperationSuccess<ArchidektSyncDiff> success
+            ? ArchidektResultPaging.PageDiff(success.Data, differenceOffset)
+            : OperationFailure.Forward<ArchidektSyncDiff, ArchidektSyncDiffView>(diff);
     }
 
     /// <summary>
@@ -193,14 +200,24 @@ internal sealed class ArchidektReadTools
         UseStructuredContent = true)]
     [Description(
         "Archidekt: diffs a fresh named snapshot against the fresh current deck and returns immutable restore " +
-        "guards; performs zero writes." +
+        "guards; performs zero writes. The result starts with operation and difference counts; rows come in pages " +
+        "that fit the size limit and the guards cover the whole preview, so when truncated is true, call again " +
+        "with operationOffset and differenceOffset set to the next values." +
         UntrustedTextNotes.Archidekt)]
-    internal Task<OperationResult<ArchidektSnapshotRestorePreview>> PreviewSnapshotRestoreAsync(
+    internal async Task<OperationResult<ArchidektSnapshotRestorePreviewView>> PreviewSnapshotRestoreAsync(
         [Description("Exact Archidekt deck identifier that would be restored.")] string deckId,
         [Description("Exact Archidekt snapshot identifier whose saved state would be applied.")] string snapshotId,
+        [Description("Number of operations to skip; use nextOperationOffset from the previous page. Default 0.")]
+        int operationOffset = 0,
+        [Description("Number of differences to skip; use nextDifferenceOffset from the previous page. Default 0.")]
+        int differenceOffset = 0,
         CancellationToken cancellationToken = default)
     {
-        return coordinator.Service.PreviewSnapshotRestoreAsync(deckId, snapshotId, cancellationToken);
+        OperationResult<ArchidektSnapshotRestorePreview> preview = await coordinator.Service
+            .PreviewSnapshotRestoreAsync(deckId, snapshotId, cancellationToken).ConfigureAwait(false);
+        return preview is OperationSuccess<ArchidektSnapshotRestorePreview> success
+            ? ArchidektResultPaging.PageRestorePreview(success.Data, operationOffset, differenceOffset)
+            : OperationFailure.Forward<ArchidektSnapshotRestorePreview, ArchidektSnapshotRestorePreviewView>(preview);
     }
 
     /// <summary>
@@ -219,13 +236,16 @@ internal sealed class ArchidektReadTools
         "extensions, and the tree fingerprint; kind get returns one exact folder (folderId is required) with its " +
         "direct child folders and decks and canonical tree evidence. The result has the same kind: list holds the " +
         "folder tree and get holds one folder. Example: " +
-        "{\"kind\":\"get\",\"folderId\":\"12345\"}." +
+        "{\"kind\":\"get\",\"folderId\":\"12345\"}. Folder records come in pages that fit the size limit, with the " +
+        "folder count first; when truncated is true, call again with offset set to nextOffset." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektFoldersResult>> GetFoldersAsync(
         [Description("What to read: list (the whole folder tree) or get (one folder)."), AllowedValues("list", "get")]
         string kind,
         [Description("Only with kind get, and then required: exact Archidekt folder identifier.")]
         string? folderId = null,
+        [Description("Number of folder records to skip; use nextOffset from the previous page. Default 0.")]
+        int offset = 0,
         CancellationToken cancellationToken = default)
     {
         OperationInvalidInput? invalid = KindFields.CheckKind(kind, "list", "get") ?? (kind == "list"
@@ -236,20 +256,23 @@ internal sealed class ArchidektReadTools
             return invalid;
         }
 
-        if (kind == "list")
+        OperationResult<RemoteFolderTree> read = kind == "list"
+            ? await coordinator.Service.ListFoldersAsync(cancellationToken).ConfigureAwait(false)
+            : await coordinator.Service.GetFolderAsync(folderId!, cancellationToken).ConfigureAwait(false);
+        if (read is not OperationSuccess<RemoteFolderTree> success)
         {
-            OperationResult<RemoteFolderTree> list = await coordinator.Service
-                .ListFoldersAsync(cancellationToken).ConfigureAwait(false);
-            return list is OperationSuccess<RemoteFolderTree> listSuccess
-                ? new OperationSuccess<ArchidektFoldersResult>(new ArchidektFolderListResult(listSuccess.Data))
-                : OperationFailure.Forward<RemoteFolderTree, ArchidektFoldersResult>(list);
+            return OperationFailure.Forward<RemoteFolderTree, ArchidektFoldersResult>(read);
         }
 
-        OperationResult<RemoteFolderTree> get = await coordinator.Service
-            .GetFolderAsync(folderId!, cancellationToken).ConfigureAwait(false);
-        return get is OperationSuccess<RemoteFolderTree> getSuccess
-            ? new OperationSuccess<ArchidektFoldersResult>(new ArchidektFolderGetResult(getSuccess.Data))
-            : OperationFailure.Forward<RemoteFolderTree, ArchidektFoldersResult>(get);
+        OperationResult<ArchidektFolderTreeView> page = ArchidektResultPaging.PageFolders(success.Data, offset);
+        if (page is not OperationSuccess<ArchidektFolderTreeView> view)
+        {
+            return OperationFailure.Forward<ArchidektFolderTreeView, ArchidektFoldersResult>(page);
+        }
+
+        return new OperationSuccess<ArchidektFoldersResult>(kind == "list"
+            ? new ArchidektFolderListResult(view.Data)
+            : new ArchidektFolderGetResult(view.Data));
     }
 
     /// <summary>
@@ -267,7 +290,9 @@ internal sealed class ArchidektReadTools
         "Archidekt: reads named snapshots of one remote deck. kind list returns snapshot metadata and a collection " +
         "checksum without claiming list rows contain saved deck state; kind get returns one snapshot (snapshotId is " +
         "required) with its exact identity and checksum, extensions, and complete canonical saved deck state. The " +
-        "result has the same kind. Example: {\"kind\":\"list\",\"deckId\":\"12345\"}." +
+        "result has the same kind. The saved deck of kind get comes in pages that fit the size limit, like " +
+        "archidekt_deck_get: when truncated is true, call again with offset set to nextOffset. " +
+        "Example: {\"kind\":\"list\",\"deckId\":\"12345\"}." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSnapshotsResult>> GetSnapshotsAsync(
         [Description("What to read: list (snapshot metadata) or get (one snapshot with saved deck state)."),
@@ -276,6 +301,8 @@ internal sealed class ArchidektReadTools
         [Description("Exact Archidekt deck identifier that owns the snapshots.")] string deckId,
         [Description("Only with kind get, and then required: exact Archidekt snapshot identifier.")]
         string? snapshotId = null,
+        [Description("Only with kind get: number of saved deck entries to skip; use nextOffset from the previous page. Default 0.")]
+        int offset = 0,
         CancellationToken cancellationToken = default)
     {
         OperationInvalidInput? invalid = KindFields.CheckKind(kind, "list", "get") ?? (kind == "list"
@@ -297,8 +324,14 @@ internal sealed class ArchidektReadTools
 
         OperationResult<RemoteNamedSnapshot> get = await coordinator.Service
             .GetSnapshotAsync(deckId, snapshotId!, cancellationToken).ConfigureAwait(false);
-        return get is OperationSuccess<RemoteNamedSnapshot> getSuccess
-            ? new OperationSuccess<ArchidektSnapshotsResult>(new ArchidektSnapshotGetResult(getSuccess.Data))
-            : OperationFailure.Forward<RemoteNamedSnapshot, ArchidektSnapshotsResult>(get);
+        if (get is not OperationSuccess<RemoteNamedSnapshot> getSuccess)
+        {
+            return OperationFailure.Forward<RemoteNamedSnapshot, ArchidektSnapshotsResult>(get);
+        }
+
+        OperationResult<ArchidektSnapshotView> page = ArchidektResultPaging.PageSnapshot(getSuccess.Data, offset);
+        return page is OperationSuccess<ArchidektSnapshotView> view
+            ? new OperationSuccess<ArchidektSnapshotsResult>(new ArchidektSnapshotGetResult(view.Data))
+            : OperationFailure.Forward<ArchidektSnapshotView, ArchidektSnapshotsResult>(page);
     }
 }

@@ -100,7 +100,7 @@ public sealed class ArchidektWorkflowTests
         {
             ArchidektSyncPreviewView push = Success(await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
             ArchidektSyncPreviewView pull = Success(await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
-            ArchidektSyncDiff diff = Success(await world.Reads.DiffAsync(localDeckId, token));
+            ArchidektSyncDiffView diff = Success(await world.Reads.DiffAsync(localDeckId, cancellationToken: token));
 
             Assert.Empty(push.Operations);
             Assert.Empty(push.Differences);

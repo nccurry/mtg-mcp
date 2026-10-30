@@ -21,7 +21,10 @@ internal static class ArchidektResultPaging
     /// ordered by card name, then relation ID, not by Archidekt's order numbers, so the pages of separate reads line up
     /// even though Archidekt renumbers its order numbers without an edit.
     /// </summary>
-    internal static OperationResult<ArchidektDeckView> PageDeck(RemoteDeckSnapshot deck, int offset)
+    internal static OperationResult<ArchidektDeckView> PageDeck(
+        RemoteDeckSnapshot deck,
+        int offset,
+        string callAgain = "Call archidekt_deck_get again")
     {
         ArgumentNullException.ThrowIfNull(deck);
         if (offset < 0 || (offset > 0 && offset >= deck.Entries.Count))
@@ -83,7 +86,7 @@ internal static class ArchidektResultPaging
             NextOffset = more ? next : null,
             Narrow = more
                 ? $"Entries {offset} to {next - 1} of {deck.Entries.Count} are shown to stay under the size limit. " +
-                    $"Call archidekt_deck_get again with offset {next} for the rest."
+                    $"{callAgain} with offset {next} for the rest."
                 : null,
         });
     }
@@ -159,6 +162,182 @@ internal static class ArchidektResultPaging
                     "for the rest."
                 : null,
         });
+    }
+
+    /// <summary>
+    /// Builds one page of a snapshot: its metadata, then its saved deck in the same pages as a deck read.
+    /// </summary>
+    internal static OperationResult<ArchidektSnapshotView> PageSnapshot(RemoteNamedSnapshot snapshot, int offset)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        OperationResult<ArchidektDeckView> deck = PageDeck(
+            snapshot.Deck,
+            offset,
+            "Call archidekt_snapshots_get again with the same kind, deckId, and snapshotId");
+        return deck is OperationSuccess<ArchidektDeckView> page
+            ? new OperationSuccess<ArchidektSnapshotView>(
+                new ArchidektSnapshotView(snapshot.Summary, snapshot.Evidence, page.Data))
+            : OperationFailure.Forward<ArchidektDeckView, ArchidektSnapshotView>(deck);
+    }
+
+    /// <summary>
+    /// Builds one page of a folder tree: the folder count, then the folder records from <paramref name="offset"/> that
+    /// fit.
+    /// </summary>
+    internal static OperationResult<ArchidektFolderTreeView> PageFolders(RemoteFolderTree tree, int offset)
+    {
+        ArgumentNullException.ThrowIfNull(tree);
+        OperationInvalidInput? invalid = CheckOffset("offset", offset, Math.Max(0, tree.Items.Count - 1));
+        if (invalid is not null)
+        {
+            return invalid;
+        }
+
+        ArchidektFolderTreeView header = new(tree.Items.Count, offset, [], tree.Evidence, tree.TreeFingerprint);
+        int budget = ResultSizeLimit.MaximumBytes - ResultSizeLimit.EnvelopeReserveBytes - ResultSize.Measure(header);
+        int kept = CountWithin(tree.Items, offset, budget, out _);
+        kept = Math.Max(kept, tree.Items.Count > offset ? 1 : 0);
+        int next = offset + kept;
+        bool more = next < tree.Items.Count;
+        return new OperationSuccess<ArchidektFolderTreeView>(header with
+        {
+            Items = [.. tree.Items.Skip(offset).Take(kept)],
+            Truncated = more ? true : null,
+            NextOffset = more ? next : null,
+            Narrow = more
+                ? $"Folders {offset} to {next - 1} of {tree.Items.Count} are shown to stay under the size limit. " +
+                    $"Call archidekt_folders_get again with offset {next} for the rest."
+                : null,
+        });
+    }
+
+    /// <summary>
+    /// Builds one page of the differences between a local deck, its baseline, and the remote deck.
+    /// </summary>
+    internal static OperationResult<ArchidektSyncDiffView> PageDiff(ArchidektSyncDiff diff, int differenceOffset)
+    {
+        ArgumentNullException.ThrowIfNull(diff);
+        OperationInvalidInput? invalid = CheckOffset("differenceOffset", differenceOffset, diff.Differences.Count);
+        if (invalid is not null)
+        {
+            return invalid;
+        }
+
+        ArchidektSyncDiffView header = new(
+            diff.LocalDeckId,
+            diff.LocalRevision,
+            diff.RemoteDeckId,
+            diff.RemoteFingerprint,
+            diff.BaselineRemoteFingerprint,
+            diff.HasConflicts,
+            diff.Differences.Count,
+            differenceOffset,
+            []);
+        int budget = ResultSizeLimit.MaximumBytes - ResultSizeLimit.EnvelopeReserveBytes - ResultSize.Measure(header);
+        int kept = CountWithin(diff.Differences, differenceOffset, budget, out _);
+        kept = Math.Max(kept, diff.Differences.Count > differenceOffset ? 1 : 0);
+        int next = differenceOffset + kept;
+        bool more = next < diff.Differences.Count;
+        return new OperationSuccess<ArchidektSyncDiffView>(header with
+        {
+            Differences = [.. diff.Differences.Skip(differenceOffset).Take(kept)],
+            Truncated = more ? true : null,
+            NextDifferenceOffset = more ? next : null,
+            Narrow = more
+                ? $"Differences {differenceOffset} to {next - 1} of {diff.Differences.Count} are shown to stay under " +
+                    $"the size limit. Call archidekt_sync_diff again with differenceOffset {next} for the rest."
+                : null,
+        });
+    }
+
+    /// <summary>
+    /// Builds one page of a snapshot restore preview: counts and guards, then the operations and the differences that
+    /// fit, starting at the given offsets.
+    /// </summary>
+    internal static OperationResult<ArchidektSnapshotRestorePreviewView> PageRestorePreview(
+        ArchidektSnapshotRestorePreview preview,
+        int operationOffset,
+        int differenceOffset)
+    {
+        ArgumentNullException.ThrowIfNull(preview);
+        OperationInvalidInput? invalid = CheckOffset("operationOffset", operationOffset, preview.Operations.Count) ??
+            CheckOffset("differenceOffset", differenceOffset, preview.Differences.Count);
+        if (invalid is not null)
+        {
+            return invalid;
+        }
+
+        ArchidektSnapshotRestorePreviewView header = new(
+            preview.DeckId,
+            preview.SnapshotId,
+            preview.SnapshotChecksum,
+            preview.SnapshotContentFingerprint,
+            preview.RemoteFingerprint,
+            preview.PreviewFingerprint,
+            preview.PredictedProviderRequests,
+            preview.Operations.Count,
+            preview.Differences.Count,
+            operationOffset,
+            differenceOffset,
+            [],
+            []);
+        int budget = ResultSizeLimit.MaximumBytes - ResultSizeLimit.EnvelopeReserveBytes - ResultSize.Measure(header);
+        int keptOperations = CountWithin(preview.Operations, operationOffset, budget, out int used);
+        int keptDifferences = CountWithin(preview.Differences, differenceOffset, budget - used, out _);
+
+        // A page that fits no row must still make progress, through the operations first.
+        if (keptOperations == 0 && keptDifferences == 0)
+        {
+            if (preview.Operations.Count > operationOffset)
+            {
+                keptOperations = 1;
+            }
+            else if (preview.Differences.Count > differenceOffset)
+            {
+                keptDifferences = 1;
+            }
+        }
+
+        int nextOperation = operationOffset + keptOperations;
+        int nextDifference = differenceOffset + keptDifferences;
+        bool moreOperations = nextOperation < preview.Operations.Count;
+        bool moreDifferences = nextDifference < preview.Differences.Count;
+        bool more = moreOperations || moreDifferences;
+        return new OperationSuccess<ArchidektSnapshotRestorePreviewView>(header with
+        {
+            Operations = [.. preview.Operations.Skip(operationOffset).Take(keptOperations)],
+            Differences = [.. preview.Differences.Skip(differenceOffset).Take(keptDifferences)],
+            Truncated = more ? true : null,
+            NextOperationOffset = moreOperations ? nextOperation : null,
+            NextDifferenceOffset = moreDifferences ? nextDifference : null,
+            Narrow = more
+                ? "Rows were left out to stay under the size limit; the counts and every guard cover the whole " +
+                    $"preview. Call again with operationOffset {nextOperation} and differenceOffset {nextDifference} " +
+                    "for the rest."
+                : null,
+        });
+    }
+
+    /// <summary>
+    /// Counts how many rows from <paramref name="offset"/> fit the byte budget, and how many bytes they take.
+    /// </summary>
+    private static int CountWithin<T>(IReadOnlyList<T> rows, int offset, int budget, out int used)
+    {
+        used = 0;
+        int kept = 0;
+        for (int index = offset; index < rows.Count; index++)
+        {
+            int size = ResultSize.Measure(rows[index]) + 1;
+            if (used + size > budget)
+            {
+                break;
+            }
+
+            used += size;
+            kept++;
+        }
+
+        return kept;
     }
 
     /// <summary>
