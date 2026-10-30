@@ -14,7 +14,7 @@ data” instead.
 
 | Packet | Outcome |
 | --- | --- |
-| [agent-feedback-fixes](agent-feedback-fixes/README.md) | Fixed the problems agents reported with 0.12.0: deck write tools return summaries, every large result pages under 40,000 UTF-8 bytes, previews say when apply is unavailable, category order no longer shows false differences, names resolve at add time, and an offline test holds every tool under the size ceiling. Merged 2026-10-30; not yet released. |
+| [agent-feedback-fixes](agent-feedback-fixes/README.md) | Fixed the problems agents reported with 0.12.0: deck write tools return summaries, every large result pages under 40,000 UTF-8 bytes, previews say when apply is unavailable, category order no longer shows false differences, names resolve at add time, and an offline test holds every tool under the size ceiling. Released as 0.13.0 on 2026-10-30. |
 | [focused-agent-tool-surface](focused-agent-tool-surface/README.md) | Focused the default tool surface (merged, renamed, and default-on toolsets), added card list tools, Commander rule facts, castability, caller-ruled simulation, and MCP prompts, and fixed protocol, Archidekt sync, schema, and input bugs; released as 0.12.0 on 2026-10-29 (0.11.0 never published). EVAL-002 deferred. |
 | [deck-mana-on-curve-simulation](deck-mana-on-curve-simulation/README.md) | Added one read-only, fact-backed deck mana and on-curve estimate with caller land rules, repeatable sampling, clear limits, broad validation, and a Release benchmark baseline. |
 | [evidence-first-deckbuilding-evolution](evidence-first-deckbuilding-evolution/README.md) | Completed ownership cleanup, the current toolchain update, Commander Spellbook evidence, official-tag repair, source decisions, and the bounded on-curve estimate. |

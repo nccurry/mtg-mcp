@@ -11,7 +11,7 @@
 - State: delivered. Audit pass 1 (14 specialists) and pass 2 (14) found problems;
   both were repaired, and pass 3 (correctness, performance, test quality) passed.
   The parent made the pass 3 follow-ups (`be6a389`).
-- Next action and blocker: none. A release (0.13.0) is the owner's call.
+- Next action and blocker: none. Released as 0.13.0 on 2026-10-30.
 - Resume check: `git log --oneline -3 origin/main` shows the merge.
 
 The worktrees and branches (`aff/a-decks`, `aff/b-archidekt`, `aff/integ`,

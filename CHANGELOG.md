@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.13.0 - 2026-10-30
 
 Agents using `0.12.0` in Claude Code reported five problems: deck tool results too large to read, a push they could
 not send, false category-order differences in push previews, an extra reconcile step after adding cards by name, and

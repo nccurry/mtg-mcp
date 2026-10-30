@@ -225,7 +225,7 @@ public sealed class FoundationMcpTests
             McpCredentials.None,
             TestContext.Current.CancellationToken).ConfigureAwait(false);
         string expectedVersion = Environment.GetEnvironmentVariable("MTGMCP_E2E_VERSION")
-            ?? "0.12.0";
+            ?? "0.13.0";
 
         Assert.Equal("io.github.nccurry/mtg-mcp", session.Client.ServerInfo.Name);
         Assert.Equal("mtg-mcp", session.Client.ServerInfo.Title);
