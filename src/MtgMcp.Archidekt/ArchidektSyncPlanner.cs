@@ -772,6 +772,19 @@ public static class ArchidektSyncPlanner
     }
 
     /// <summary>
+    /// Reports whether a provider row is the printing the target names. A target that names no printing (a card
+    /// added by name) accepts the printing Archidekt chose, so that choice never shows as a difference.
+    /// </summary>
+    private static bool PrintingEqual(RemoteDeckEntry current, RemoteDeckEntry target)
+    {
+        return (target.PrintingId is null || current.PrintingId == target.PrintingId) &&
+            (string.IsNullOrWhiteSpace(target.SetCode) ||
+                string.Equals(current.SetCode, target.SetCode, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrWhiteSpace(target.CollectorNumber) ||
+                string.Equals(current.CollectorNumber, target.CollectorNumber, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Reports whether one provider relation already has the requested content. A category named in another case counts as
     /// the same only when it resolves to exactly one category of the deck (see <see cref="Resolve"/>).
     /// </summary>
@@ -798,9 +811,7 @@ public static class ArchidektSyncPlanner
         return left.Quantity == right.Quantity &&
             string.Equals(left.ProviderCardId, right.ProviderCardId, StringComparison.Ordinal) &&
             string.Equals(left.CardName, right.CardName, StringComparison.Ordinal) &&
-            left.PrintingId == right.PrintingId &&
-            string.Equals(left.SetCode, right.SetCode, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(left.CollectorNumber, right.CollectorNumber, StringComparison.OrdinalIgnoreCase) &&
+            PrintingEqual(left, right) &&
             string.Equals(left.Language, right.Language, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(left.Finish, right.Finish, StringComparison.Ordinal) &&
             string.Equals(left.Zone, right.Zone, StringComparison.Ordinal) &&

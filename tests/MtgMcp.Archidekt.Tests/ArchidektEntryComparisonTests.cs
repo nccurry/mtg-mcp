@@ -113,6 +113,32 @@ public sealed class ArchidektEntryComparisonTests
     }
 
     /// <summary>
+    /// Verifies a target that names no printing (a card added by name) accepts the printing Archidekt chose, while a
+    /// target that names a printing still plans an update when Archidekt has another.
+    /// </summary>
+    [Fact]
+    public void Target_WithoutAPrinting_AcceptsAnyPrinting_ButANamedPrintingMustMatch()
+    {
+        RemoteDeckSnapshot remote = Parse(BaseDeck);
+        RemoteDeckEntry bolt = remote.Entries.Single(value => value.ProviderRelationId == "101");
+        RemoteDeckSnapshot With(RemoteDeckEntry entry)
+        {
+            return remote with
+            {
+                Entries = [.. remote.Entries.Select(value => value.ProviderRelationId == "101" ? entry : value)],
+            };
+        }
+
+        RemoteDeckSnapshot unnamed = With(bolt with { PrintingId = null, SetCode = null, CollectorNumber = null, OracleId = null });
+        RemoteDeckSnapshot otherPrinting = With(bolt with { PrintingId = Guid.NewGuid() });
+        RemoteDeckSnapshot otherSet = With(bolt with { PrintingId = null, SetCode = "xyz" });
+
+        Assert.Empty(ArchidektSyncPlanner.PlanRemoteApply(remote, unnamed).PlannedOperations);
+        Assert.Single(ArchidektSyncPlanner.PlanRemoteApply(remote, otherPrinting).PlannedOperations);
+        Assert.Single(ArchidektSyncPlanner.PlanRemoteApply(remote, otherSet).PlannedOperations);
+    }
+
+    /// <summary>
     /// Verifies the fingerprints still tell two different decks apart.
     /// </summary>
     [Fact]
