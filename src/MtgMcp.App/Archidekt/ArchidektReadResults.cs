@@ -141,12 +141,14 @@ internal sealed record ArchidektSnapshotRestorePreviewView(
     public string? Narrow { get; init; }
 
     /// <summary>
-    /// Gets the <c>operationOffset</c> that returns the next page of operations, or null on the last page. When the operations ended but the differences did not, it is the number of operations.
+    /// Gets the <c>operationOffset</c> that returns the next page of operations, or null on the last page. When the
+    /// operations ended but the differences did not, it is the number of operations.
     /// </summary>
     public int? NextOperationOffset { get; init; }
 
     /// <summary>
-    /// Gets the <c>differenceOffset</c> that returns the next page of differences, or null on the last page. When the differences ended but the operations did not, it is the number of differences.
+    /// Gets the <c>differenceOffset</c> that returns the next page of differences, or null on the last page. When the
+    /// differences ended but the operations did not, it is the number of differences.
     /// </summary>
     public int? NextDifferenceOffset { get; init; }
 }
@@ -162,8 +164,8 @@ internal sealed record ArchidektDeckSummary(
 
 /// <summary>
 /// Returns one deck with a leading summary and one size-limited page of its entries. The categories and the unknown
-/// provider fields come with the first page (offset 0) only. When <see cref="NextOffset"/> is set, call again with
-/// that offset for the following entries.
+/// provider fields, and the description, come with the first page (offset 0) only. When <see cref="NextOffset"/> is
+/// set, call again with that offset for the following entries.
 /// </summary>
 internal sealed record ArchidektDeckView(
     ArchidektDeckSummary Summary,
@@ -201,6 +203,22 @@ internal sealed record ArchidektDeckView(
     /// Gets true when the deck's unknown provider fields were too large to include.
     /// </summary>
     public bool? ExtensionsOmitted { get; init; }
+
+    /// <summary>
+    /// Gets true when the name was cut to the length every page may repeat.
+    /// </summary>
+    public bool? NameTruncated { get; init; }
+
+    /// <summary>
+    /// Gets true when <c>description</c> is not the whole description: it is cut on the first page and empty on the
+    /// pages after it.
+    /// </summary>
+    public bool? DescriptionTruncated { get; init; }
+
+    /// <summary>
+    /// Gets the length of the whole description in UTF-16 code units when <see cref="DescriptionTruncated"/> is true.
+    /// </summary>
+    public int? DescriptionLength { get; init; }
 }
 
 /// <summary>
@@ -248,12 +266,14 @@ internal sealed record ArchidektSyncPreviewView(
     public string? Narrow { get; init; }
 
     /// <summary>
-    /// Gets the <c>operationOffset</c> that returns the next page of operations, or null on the last page. When the operations ended but the differences did not, it is the number of operations.
+    /// Gets the <c>operationOffset</c> that returns the next page of operations, or null on the last page. When the
+    /// operations ended but the differences did not, it is the number of operations.
     /// </summary>
     public int? NextOperationOffset { get; init; }
 
     /// <summary>
-    /// Gets the <c>differenceOffset</c> that returns the next page of differences, or null on the last page. When the differences ended but the operations did not, it is the number of differences.
+    /// Gets the <c>differenceOffset</c> that returns the next page of differences, or null on the last page. When the
+    /// differences ended but the operations did not, it is the number of differences.
     /// </summary>
     public int? NextDifferenceOffset { get; init; }
 }

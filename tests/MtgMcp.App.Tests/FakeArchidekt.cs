@@ -63,6 +63,11 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     private string name = "Fake deck";
 
     /// <summary>
+    /// Gets or sets the description the fake deck reports.
+    /// </summary>
+    internal string Description { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets the methods and paths of every request, in order.
     /// </summary>
     internal List<string> Requests { get; } = [];
@@ -351,7 +356,7 @@ internal sealed class FakeArchidekt : HttpMessageHandler
         {
             ["id"] = int.Parse(DeckId, System.Globalization.CultureInfo.InvariantCulture),
             ["name"] = name,
-            ["description"] = string.Empty,
+            ["description"] = Description,
             ["deckFormat"] = 3,
             ["private"] = true,
             ["categories"] = categoryArray,

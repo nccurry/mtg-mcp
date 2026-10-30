@@ -151,8 +151,12 @@ internal sealed class DeckCardViewCoordinator
         List<DeckEntryView> all = [.. deck.Entries.Select(DeckEntryView.From)];
         if (cursor is null && pageSize is null)
         {
-            List<int> sizes = [.. all.Select(entry => EntryBytes(entry, deck.CategoryAssignments))];
-            if (ResultSizeLimit.CountFitting(sizes, HeaderBytes(deck)) == all.Count)
+            ResultPageSlice whole = ResultPage.Take(
+                all,
+                0,
+                ResultSize.Measure(ToView(deck, [], [])),
+                entry => EntryBytes(entry, deck.CategoryAssignments));
+            if (!whole.More)
             {
                 return new OperationSuccess<DeckDocumentView>(ToView(deck, all, deck.CategoryAssignments));
             }
@@ -314,19 +318,22 @@ internal sealed class DeckCardViewCoordinator
         IReadOnlyList<string>? limits,
         string narrowHint)
     {
-        List<int> sizes = [.. entries.Select(entry => EntryBytes(entry, deck.CategoryAssignments))];
-        int keep = ResultSizeLimit.CountFitting(sizes, HeaderBytes(deck));
-
-        // A page must always advance, or a caller following nextCursor would loop on the same entries.
-        keep = Math.Max(keep, Math.Min(1, entries.Count));
+        ResultPageSlice slice = ResultPage.Take(
+            entries,
+            0,
+            ResultSize.Measure(PageHeader(deck, offset)),
+            entry => EntryBytes(entry, deck.CategoryAssignments));
+        int keep = slice.Count;
         bool truncated = keep < entries.Count;
         List<DeckEntryView> kept = entries.GetRange(0, keep);
         HashSet<Guid> keptIds = [.. kept.Select(entry => entry.EntryId)];
         List<DeckCategoryAssignment> assignments =
             [.. deck.CategoryAssignments.Where(assignment => keptIds.Contains(assignment.EntryId))];
         int next = offset + keep;
-        return new OperationSuccess<DeckDocumentView>(ToView(deck, kept, assignments) with
+        return new OperationSuccess<DeckDocumentView>(PageHeader(deck, offset) with
         {
+            Entries = kept,
+            CategoryAssignments = assignments,
             TotalEntries = deck.Entries.Count,
             NextCursor = next < deck.Entries.Count ? EncodeCursor(fingerprint, deck.Revision, next) : null,
             Limits = limits,
@@ -362,7 +369,7 @@ internal sealed class DeckCardViewCoordinator
     /// </summary>
     private static int EntryBytes(DeckEntryView entry, IReadOnlyList<DeckCategoryAssignment> assignments)
     {
-        int total = ResultSize.Measure(entry) + 1;
+        int total = ResultSize.Measure(entry);
         foreach (DeckCategoryAssignment assignment in assignments)
         {
             if (assignment.EntryId == entry.EntryId)
@@ -375,12 +382,22 @@ internal sealed class DeckCardViewCoordinator
     }
 
     /// <summary>
-    /// Measures the serialized size of the deck's parts that every page repeats: its details, categories, and
-    /// provider bindings.
+    /// Builds the deck view that every page repeats, without entries or assignments: the details, categories, and
+    /// provider bindings. The name is cut to a fixed length, and the description is cut on the first page and left
+    /// out of the pages after it, so a long one cannot push every page over the size limit.
     /// </summary>
-    private static int HeaderBytes(DeckDocument deck)
+    private static DeckDocumentView PageHeader(DeckDocument deck, int offset)
     {
-        return ResultSize.Measure(ToView(deck, [], []));
+        ShownText name = ResultText.Name(deck.Name);
+        ShownText description = ResultText.Description(deck.Description, offset == 0);
+        return ToView(deck, [], []) with
+        {
+            Name = name.Text,
+            Description = description.Text,
+            NameTruncated = name.TruncatedOrNull,
+            DescriptionTruncated = description.TruncatedOrNull,
+            DescriptionLength = description.LengthIfTruncated,
+        };
     }
 
     /// <summary>

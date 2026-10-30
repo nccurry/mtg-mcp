@@ -345,6 +345,41 @@ public sealed class ArchidektWorkflowTests
     }
 
     /// <summary>
+    /// Verifies a deck with a 60,000-character description shows the description cut on the first page and empty on
+    /// every later page, with its whole length beside it, so no page passes the size limit.
+    /// </summary>
+    [Fact]
+    public async Task DeckGet_With60000CharacterDescription_CutsItOnTheFirstPageAndOmitsItAfter()
+    {
+        FakeArchidekt fake = CreateLargeDeck(300);
+        fake.Description = new string('d', 60_000);
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        List<ArchidektDeckView> pages = [];
+        int offset = 0;
+
+        while (true)
+        {
+            OperationResult<ArchidektDeckView> result = await world.Reads.GetDeckAsync("42", offset, token);
+            Assert.True(JsonLength(result) < MaximumResultCharacters, $"page {pages.Count} is too large");
+            ArchidektDeckView page = Success(result);
+            pages.Add(page);
+            if (page.NextOffset is not int next)
+            {
+                break;
+            }
+
+            offset = next;
+        }
+
+        Assert.True(pages.Count > 1);
+        Assert.Equal(ResultText.MaximumDescriptionBytes, pages[0].Description.Length);
+        Assert.All(pages, page => Assert.True(page.DescriptionTruncated));
+        Assert.All(pages, page => Assert.Equal(60_000, page.DescriptionLength));
+        Assert.All(pages.Skip(1), page => Assert.Equal(string.Empty, page.Description));
+    }
+
+    /// <summary>
     /// Verifies an offset outside the deck is refused, and a deck whose unknown fields are huge still fits.
     /// </summary>
     [Fact]

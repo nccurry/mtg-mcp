@@ -26,10 +26,12 @@ internal static class ArchidektResultPaging
         string callAgain = "Call archidekt_deck_get again")
     {
         ArgumentNullException.ThrowIfNull(deck);
-        OperationInvalidInput? invalid = ResultPage.CheckOffset("offset", offset, deck.Entries.Count, "entries");
-        if (invalid is not null)
+        if (ResultPage.CheckPage<ArchidektDeckView>(
+            null,
+            null,
+            new PageList("offset", offset, deck.Entries.Count, "entries")) is { } refused)
         {
-            return invalid;
+            return refused;
         }
 
         Dictionary<string, int> cardsByZone = new(StringComparer.Ordinal);
@@ -42,6 +44,8 @@ internal static class ArchidektResultPaging
         bool omitExtensions = first &&
             deck.Extensions.Count > 0 &&
             ResultSize.Measure(deck.Extensions) > MaximumExtensionBytes;
+        ShownText name = ResultText.Name(deck.Name);
+        ShownText description = ResultText.Description(deck.Description, first);
         ArchidektDeckView header = new(
             new ArchidektDeckSummary(
                 deck.Entries.Count,
@@ -50,8 +54,8 @@ internal static class ArchidektResultPaging
                 cardsByZone),
             deck.RemoteId,
             deck.RemoteUri,
-            deck.Name,
-            deck.Description,
+            name.Text,
+            description.Text,
             deck.Format,
             deck.Visibility,
             deck.ParentFolderId,
@@ -66,6 +70,9 @@ internal static class ArchidektResultPaging
                 : new Dictionary<string, System.Text.Json.JsonElement>())
         {
             ExtensionsOmitted = omitExtensions ? true : null,
+            NameTruncated = name.TruncatedOrNull,
+            DescriptionTruncated = description.TruncatedOrNull,
+            DescriptionLength = description.LengthIfTruncated,
         };
         List<RemoteDeckEntry> ordered = [.. deck.Entries];
         ordered.Sort(static (left, right) =>
@@ -100,13 +107,15 @@ internal static class ArchidektResultPaging
         string? expectedPreviewFingerprint)
     {
         ArgumentNullException.ThrowIfNull(preview);
-        if (CheckPages<ArchidektSyncPreviewView>(
-            preview.PreviewFingerprint,
+        if (ResultPage.CheckPage<ArchidektSyncPreviewView>(
             expectedPreviewFingerprint,
-            operationOffset,
-            preview.Operations.Count,
-            differenceOffset,
-            preview.Differences.Count) is { } refused)
+            preview.PreviewFingerprint,
+            new PageList("operationOffset", operationOffset, preview.Operations.Count, "operations"),
+            new PageList(
+                "differenceOffset",
+                differenceOffset,
+                preview.Differences.Count,
+                "differences")) is { } refused)
         {
             return refused;
         }
@@ -169,10 +178,12 @@ internal static class ArchidektResultPaging
     internal static OperationResult<ArchidektFolderTreeView> PageFolders(RemoteFolderTree tree, int offset)
     {
         ArgumentNullException.ThrowIfNull(tree);
-        OperationInvalidInput? invalid = ResultPage.CheckOffset("offset", offset, tree.Items.Count, "folders");
-        if (invalid is not null)
+        if (ResultPage.CheckPage<ArchidektFolderTreeView>(
+            null,
+            null,
+            new PageList("offset", offset, tree.Items.Count, "folders")) is { } refused)
         {
-            return invalid;
+            return refused;
         }
 
         ArchidektFolderTreeView header = new(tree.Items.Count, offset, [], tree.Evidence, tree.TreeFingerprint);
@@ -195,14 +206,12 @@ internal static class ArchidektResultPaging
     internal static OperationResult<ArchidektSyncDiffView> PageDiff(ArchidektSyncDiff diff, int differenceOffset)
     {
         ArgumentNullException.ThrowIfNull(diff);
-        OperationInvalidInput? invalid = ResultPage.CheckOffset(
-            "differenceOffset",
-            differenceOffset,
-            diff.Differences.Count,
-            "differences");
-        if (invalid is not null)
+        if (ResultPage.CheckPage<ArchidektSyncDiffView>(
+            null,
+            null,
+            new PageList("differenceOffset", differenceOffset, diff.Differences.Count, "differences")) is { } refused)
         {
-            return invalid;
+            return refused;
         }
 
         ArchidektSyncDiffView header = new(
@@ -240,13 +249,15 @@ internal static class ArchidektResultPaging
         string? expectedPreviewFingerprint)
     {
         ArgumentNullException.ThrowIfNull(preview);
-        if (CheckPages<ArchidektSnapshotRestorePreviewView>(
-                preview.PreviewFingerprint,
-                expectedPreviewFingerprint,
-                operationOffset,
-                preview.Operations.Count,
+        if (ResultPage.CheckPage<ArchidektSnapshotRestorePreviewView>(
+            expectedPreviewFingerprint,
+            preview.PreviewFingerprint,
+            new PageList("operationOffset", operationOffset, preview.Operations.Count, "operations"),
+            new PageList(
+                "differenceOffset",
                 differenceOffset,
-                preview.Differences.Count) is { } refused)
+                preview.Differences.Count,
+                "differences")) is { } refused)
         {
             return refused;
         }
@@ -281,38 +292,6 @@ internal static class ArchidektResultPaging
             NextDifferenceOffset = differences.NextOffsetIf(more),
             Narrow = more ? TwoListNarrow("the counts and every guard", operations, differences) : null,
         });
-    }
-
-    /// <summary>
-    /// Refuses a request whose offsets are outside the operations or differences, or whose preview is not the one the
-    /// earlier pages came from.
-    /// </summary>
-    private static OperationResult<T>? CheckPages<T>(
-        string previewFingerprint,
-        string? expectedPreviewFingerprint,
-        int operationOffset,
-        int operationCount,
-        int differenceOffset,
-        int differenceCount)
-    {
-        OperationInvalidInput? invalid =
-            ResultPage.CheckOffset("operationOffset", operationOffset, operationCount, "operations") ??
-            ResultPage.CheckOffset("differenceOffset", differenceOffset, differenceCount, "differences");
-        if (invalid is not null)
-        {
-            return invalid;
-        }
-
-        OperationConflict? changed = ResultPage.CheckSameResult(
-            expectedPreviewFingerprint,
-            previewFingerprint,
-            operationOffset > 0 || differenceOffset > 0);
-        if (changed is not null)
-        {
-            return changed;
-        }
-
-        return null;
     }
 
     /// <summary>

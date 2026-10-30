@@ -70,10 +70,7 @@ internal sealed class DeckInterchangeReadTools
         [Description("Caller-controlled parsing defaults and explicit opt-ins.")] DeckImportOptions? options = null,
         [Description("Number of proposed entries to skip; use nextOffset from the previous page. Default 0.")]
         int offset = 0,
-        [Description(
-            "When you read a page after the first, pass the fingerprint of the first page; the call is refused if " +
-            "the import changed, so every page comes from the same preview.")]
-        string? expectedPreviewFingerprint = null,
+        [Description(ResultPage.FingerprintHelp)] string? expectedPreviewFingerprint = null,
         CancellationToken cancellationToken = default)
     {
         OperationResult<DeckImportPreview> preview = await service

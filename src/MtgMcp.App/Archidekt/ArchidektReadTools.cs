@@ -24,13 +24,6 @@ internal sealed class ArchidektReadTools
     private readonly OperationMode mode;
 
     /// <summary>
-    /// Describes the optional guard that keeps the pages of one preview together.
-    /// </summary>
-    private const string PreviewFingerprintHelp =
-        "When you read a page after the first, pass the previewFingerprint of the first page; the call is refused " +
-        "if the preview changed, so every page comes from the same preview.";
-
-    /// <summary>
     /// Creates the complete read and preview surface.
     /// </summary>
     internal ArchidektReadTools(ArchidektCoordinator coordinator, OperationMode mode)
@@ -134,7 +127,7 @@ internal sealed class ArchidektReadTools
         int operationOffset = 0,
         [Description("Number of differences to skip; use nextDifferenceOffset from the previous page. Default 0.")]
         int differenceOffset = 0,
-        [Description(PreviewFingerprintHelp)] string? expectedPreviewFingerprint = null,
+        [Description(ResultPage.FingerprintHelp)] string? expectedPreviewFingerprint = null,
         CancellationToken cancellationToken = default)
     {
         OperationResult<ArchidektSyncPreview> preview = await coordinator
@@ -165,7 +158,7 @@ internal sealed class ArchidektReadTools
         int operationOffset = 0,
         [Description("Number of differences to skip; use nextDifferenceOffset from the previous page. Default 0.")]
         int differenceOffset = 0,
-        [Description(PreviewFingerprintHelp)] string? expectedPreviewFingerprint = null,
+        [Description(ResultPage.FingerprintHelp)] string? expectedPreviewFingerprint = null,
         CancellationToken cancellationToken = default)
     {
         OperationResult<ArchidektSyncPreview> preview = await coordinator
@@ -237,7 +230,7 @@ internal sealed class ArchidektReadTools
         int operationOffset = 0,
         [Description("Number of differences to skip; use nextDifferenceOffset from the previous page. Default 0.")]
         int differenceOffset = 0,
-        [Description(PreviewFingerprintHelp)] string? expectedPreviewFingerprint = null,
+        [Description(ResultPage.FingerprintHelp)] string? expectedPreviewFingerprint = null,
         CancellationToken cancellationToken = default)
     {
         OperationResult<ArchidektSnapshotRestorePreview> preview = await coordinator.Service

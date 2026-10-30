@@ -218,6 +218,42 @@ public sealed class DeckCardViewTests
     }
 
     /// <summary>
+    /// Verifies a deck with a 60,000-character description and a long name pages under the size limit: the name is cut
+    /// on every page, and the description is cut on the first page and empty on the pages after it.
+    /// </summary>
+    [Fact]
+    public async Task Get_LongDescriptionAndName_AreCutSoEveryPageStaysUnderTheLimit()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
+        DeckDocument deck = Success(await setup.Store.CreateAsync(
+            new DeckCreateRequest(
+                new string('n', 5_000),
+                Description: new string('d', 60_000),
+                Format: "custom",
+                Entries: [.. Enumerable.Range(0, 300).Select(index => new DeckEntryDraft(1, $"Entry {index:D3}"))]),
+            TestContext.Current.CancellationToken));
+        List<DeckDocumentView> pages = [];
+        string? cursor = null;
+
+        do
+        {
+            OperationResult<DeckDocumentView> result = await setup.Get(deck.DeckId, null, null, cursor, null);
+            Assert.True(Bytes(result) <= 40_000, $"page {pages.Count} has {Bytes(result)} bytes");
+            pages.Add(Success(result));
+            cursor = pages[^1].NextCursor;
+        }
+        while (cursor is not null);
+
+        Assert.True(pages.Count > 1);
+        Assert.All(pages, page => Assert.Equal(ResultText.MaximumNameBytes, page.Name.Length));
+        Assert.All(pages, page => Assert.True(page.NameTruncated));
+        Assert.Equal(ResultText.MaximumDescriptionBytes, pages[0].Description.Length);
+        Assert.Equal(60_000, pages[0].DescriptionLength);
+        Assert.All(pages.Skip(1), page => Assert.Equal(string.Empty, page.Description));
+        Assert.All(pages, page => Assert.True(page.DescriptionTruncated));
+    }
+
+    /// <summary>
     /// Verifies a 300-entry deck stays within 40,000 characters (the hard ceiling is 50,000) for a read with no include
     /// and with every include
     /// combination, and that following nextCursor reaches every entry once, in order.

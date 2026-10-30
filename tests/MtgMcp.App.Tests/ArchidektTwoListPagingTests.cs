@@ -42,7 +42,8 @@ public sealed class ArchidektTwoListPagingTests
         {
             OperationResult<ArchidektSyncPreviewView> result =
                 ArchidektResultPaging.PagePreview(preview, operationOffset, differenceOffset, null, "preview");
-            ArchidektSyncPreviewView page = Assert.IsType<OperationSuccess<ArchidektSyncPreviewView>>(result.Value).Data;
+            ArchidektSyncPreviewView page =
+                Assert.IsType<OperationSuccess<ArchidektSyncPreviewView>>(result.Value).Data;
             paths.AddRange(page.Differences.Select(value => value.Path));
             sequences.AddRange(page.Operations.Select(value => value.Sequence));
             pages++;

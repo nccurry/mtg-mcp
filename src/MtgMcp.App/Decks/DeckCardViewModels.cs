@@ -65,6 +65,28 @@ internal sealed record DeckDocumentView(
     IReadOnlyList<DeckProviderBinding> ProviderBindings)
 {
     /// <summary>
+    /// Gets true when a page shows the name cut to the length every page may repeat.
+    /// </summary>
+    [JsonPropertyName("nameTruncated")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? NameTruncated { get; init; }
+
+    /// <summary>
+    /// Gets true when a page shows only part of the description: it is cut on the first page and empty on the pages
+    /// after it.
+    /// </summary>
+    [JsonPropertyName("descriptionTruncated")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? DescriptionTruncated { get; init; }
+
+    /// <summary>
+    /// Gets the length of the whole description in UTF-16 code units when <see cref="DescriptionTruncated"/> is true.
+    /// </summary>
+    [JsonPropertyName("descriptionLength")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? DescriptionLength { get; init; }
+
+    /// <summary>
     /// Gets the number of entries in the whole deck, set only when the result is a page.
     /// </summary>
     [JsonPropertyName("totalEntries")]

@@ -55,7 +55,24 @@ internal sealed record DeckImportProposalView(
     IReadOnlyList<DeckCategory> Categories,
     IReadOnlyList<DeckCategoryAssignment> CategoryAssignments,
     IReadOnlyList<DeckProviderBinding> ProviderBindings,
-    int SyncBaselineCount);
+    int SyncBaselineCount)
+{
+    /// <summary>
+    /// Gets true when the name was cut to the length every page may repeat.
+    /// </summary>
+    public bool? NameTruncated { get; init; }
+
+    /// <summary>
+    /// Gets true when <c>description</c> is not the whole description: it is cut on the first page and empty on the
+    /// pages after it.
+    /// </summary>
+    public bool? DescriptionTruncated { get; init; }
+
+    /// <summary>
+    /// Gets the length of the whole description in UTF-16 code units when <see cref="DescriptionTruncated"/> is true.
+    /// </summary>
+    public int? DescriptionLength { get; init; }
+}
 
 /// <summary>
 /// Returns one page of a manual import preview. The first page carries the diagnostics, unresolved identities,
@@ -154,13 +171,6 @@ internal sealed record DeckCategoryRulesPreviewView(
 internal static class DeckPreviewPaging
 {
     /// <summary>
-    /// Describes the optional guard that keeps the pages of one preview together.
-    /// </summary>
-    internal const string FingerprintHelp =
-        "When you read a page after the first, pass the previewFingerprint of the first page; the call is refused " +
-        "if the preview changed, so every page comes from the same preview.";
-
-    /// <summary>
     /// Gives the most bytes the first page of an import preview spends on its diagnostics, unresolved identities,
     /// categories, and provider bindings together, so the entries always have room.
     /// </summary>
@@ -238,13 +248,19 @@ internal static class DeckPreviewPaging
         bool first = offset == 0;
         DeckImportProposal? proposal = preview.Proposal;
         int allowance = ImportHeaderListBytes;
-        IReadOnlyList<DeckInterchangeDiagnostic> diagnostics = first ? CutList(preview.Diagnostics, ref allowance) : [];
-        IReadOnlyList<string> unresolved = first ? CutList(preview.UnresolvedIdentities, ref allowance) : [];
+
+        // Categories come first: a caller needs them to read the category assignments of the later pages.
         IReadOnlyList<DeckCategory> categories = first && proposal is not null
-            ? CutList(proposal.Categories, ref allowance)
+            ? ResultPage.CutList(proposal.Categories, ref allowance)
             : [];
         IReadOnlyList<DeckProviderBinding> bindings = first && proposal is not null
-            ? CutList(proposal.ProviderBindings, ref allowance)
+            ? ResultPage.CutList(proposal.ProviderBindings, ref allowance)
+            : [];
+        IReadOnlyList<string> unresolved = first
+            ? ResultPage.CutList(preview.UnresolvedIdentities, ref allowance)
+            : [];
+        IReadOnlyList<DeckInterchangeDiagnostic> diagnostics = first
+            ? ResultPage.CutList(preview.Diagnostics, ref allowance)
             : [];
         bool cut = first &&
             (diagnostics.Count < preview.Diagnostics.Count ||
@@ -252,6 +268,8 @@ internal static class DeckPreviewPaging
                 (proposal is not null &&
                     (categories.Count < proposal.Categories.Count ||
                         bindings.Count < proposal.ProviderBindings.Count)));
+        ShownText name = ResultText.Name(proposal?.Name ?? string.Empty);
+        ShownText description = ResultText.Description(proposal?.Description ?? string.Empty, first);
         DeckImportProposalView? shell = proposal is null
             ? null
             : new DeckImportProposalView(
@@ -259,14 +277,19 @@ internal static class DeckPreviewPaging
                 proposal.SourceRevision,
                 proposal.SourceCreatedAtUtc,
                 proposal.SourceUpdatedAtUtc,
-                proposal.Name,
-                proposal.Description,
+                name.Text,
+                description.Text,
                 proposal.Format,
                 [],
                 categories,
                 [],
                 bindings,
-                proposal.SyncBaselines.Count);
+                proposal.SyncBaselines.Count)
+            {
+                NameTruncated = name.TruncatedOrNull,
+                DescriptionTruncated = description.TruncatedOrNull,
+                DescriptionLength = description.LengthIfTruncated,
+            };
         DeckImportPreviewView header = new(
             preview.FormatId,
             preview.Completeness,
@@ -375,16 +398,6 @@ internal static class DeckPreviewPaging
     }
 
     /// <summary>
-    /// Keeps the leading items of a list that fit the allowance that is left, and spends what they take from it.
-    /// </summary>
-    private static List<T> CutList<T>(IReadOnlyList<T> items, ref int allowance)
-    {
-        int kept = ResultPage.Fit(items, 0, allowance, out int used);
-        allowance -= used;
-        return [.. items.Take(kept)];
-    }
-
-    /// <summary>
     /// Refuses an offset outside the rows, or a later page of a preview that is not the one the earlier pages came
     /// from.
     /// </summary>
@@ -395,22 +408,10 @@ internal static class DeckPreviewPaging
         string? expectedPreviewFingerprint,
         string? previewFingerprint)
     {
-        OperationInvalidInput? invalid = ResultPage.CheckOffset("offset", offset, count, list);
-        if (invalid is not null)
-        {
-            return invalid;
-        }
-
-        OperationConflict? changed = ResultPage.CheckSameResult(
+        return ResultPage.CheckPage<T>(
             expectedPreviewFingerprint,
             previewFingerprint,
-            offset > 0);
-        if (changed is not null)
-        {
-            return changed;
-        }
-
-        return null;
+            new PageList("offset", offset, count, list));
     }
 
     /// <summary>
