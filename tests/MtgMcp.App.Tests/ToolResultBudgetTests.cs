@@ -106,7 +106,8 @@ public sealed class ToolResultBudgetTests
 
         foreach (JsonProperty property in node.EnumerateObject())
         {
-            bool next = property.Name is "nextOffset" or "nextCursor" or "nextOperationOffset" or "nextDifferenceOffset";
+            bool next =
+                property.Name is "nextOffset" or "nextCursor" or "nextOperationOffset" or "nextDifferenceOffset";
             if ((next && property.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number) ||
                 (property.Name == "truncated" && property.Value.ValueKind == JsonValueKind.True) ||
                 ShowsPaging(property.Value))
@@ -132,13 +133,15 @@ public sealed class ToolResultBudgetTests
     private static Dictionary<string, string> BuildNotDriven()
     {
         const string playgroup =
-            "Playgroup HTTP transport takes no injected handler, so no offline fixture can fill it; its list results are " +
+            "Playgroup HTTP transport takes no injected handler, so no offline fixture can fill it; its list " +
+            "results are " +
             "cut by the provider's own page and limit arguments.";
         const string spellbook =
             "Commander Spellbook HTTP transport takes no injected handler, so no offline fixture can fill it; its " +
             "results are cut by the limit and offset arguments.";
         const string archidektWrite =
-            "The fake Archidekt has no route for this write, and the result is one fixed-size outcome that does not grow " +
+            "The fake Archidekt has no route for this write, and the result is one fixed-size outcome that does " +
+            "not grow " +
             "with the size of a deck or a list.";
         Dictionary<string, string> reasons = new(StringComparer.Ordinal);
         foreach (string tool in new[]

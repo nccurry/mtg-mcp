@@ -588,7 +588,8 @@ public sealed class FoundationMcpTests
                     "operationOffset", "remoteDeckId",
                 ],
             ["archidekt_push_apply"] = ["request"],
-            ["archidekt_push_preview"] = ["differenceOffset", "expectedPreviewFingerprint", "localDeckId", "operationOffset"],
+            ["archidekt_push_preview"] =
+                ["differenceOffset", "expectedPreviewFingerprint", "localDeckId", "operationOffset"],
             ["archidekt_snapshot_create"] = ["request"],
             ["archidekt_snapshot_delete"] = ["request"],
             ["archidekt_snapshots_get"] = ["deckId", "kind", "offset", "snapshotId"],

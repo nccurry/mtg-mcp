@@ -147,7 +147,8 @@ public sealed class AddByNameScenarioTests
     {
         CancellationToken token = TestContext.Current.CancellationToken;
         await using ToolBudgetWorld world = await ToolBudgetWorld.CreateAsync(token, remoteDeckSize: 3);
-        string[] added = ["Budget Card 310", "Budget Card 311", "Budget Card 312", "budget card 313", "Budget Card 314"];
+        string[] added =
+            ["Budget Card 310", "Budget Card 311", "Budget Card 312", "budget card 313", "Budget Card 314"];
 
         JsonElement pull = (
             await world.CallAsync("archidekt_pull_preview", new JsonObject { ["remoteDeckId"] = "42" }, token)).Data;

@@ -326,7 +326,8 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
     /// </summary>
     private static JsonObject MakeCard(int index)
     {
-        string[] types = ["Creature — Elf Druid", "Instant", "Sorcery", "Artifact", "Enchantment", "Land", "Creature — Goblin Warrior"];
+        string[] types =
+            ["Creature — Elf Druid", "Instant", "Sorcery", "Artifact", "Enchantment", "Land", "Creature — Goblin Warrior"];
         string[] colors = ["G", "U", "B", "R", "W"];
         string color = colors[index % colors.Length];
         return CardJson.Make(
@@ -339,7 +340,8 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
             usd: (1 + (index % 20)).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
             keywords: ["Flying", "Trample"],
             oracleText: "When this enters, draw a card, then each opponent loses 1 life. " +
-                "Whenever you cast a spell with the same color as this card, put a +1/+1 counter on target creature you control.",
+                "Whenever you cast a spell with the same color as this card, put a +1/+1 counter on target creature " +
+                "you control.",
             power: "2");
     }
 
@@ -367,7 +369,8 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
             {
                 Assert.True(
                     Kind == "success",
-                    $"{Tool} returned {Kind}: {Structured.GetRawText()[..Math.Min(600, Structured.GetRawText().Length)]}");
+                    $"{Tool} returned {Kind}: " +
+                    Structured.GetRawText()[..Math.Min(600, Structured.GetRawText().Length)]);
                 return Structured.GetProperty("data");
             }
         }
@@ -441,7 +444,8 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
                         ["oracle_id"] = CardJson.OracleOf(cards[0]).ToString(),
                         ["source"] = "wotc",
                         ["published_at"] = "2026-01-01",
-                        ["comment"] = $"Budget ruling {index:00}: a long explanation of how this card works with other cards.",
+                        ["comment"] =
+                            $"Budget ruling {index:00}: a long explanation of how this card works with other cards.",
                     });
                 }
 

@@ -233,7 +233,9 @@ internal sealed class FakeArchidekt : HttpMessageHandler
         }
         else if (path.StartsWith("api/decks/category/", StringComparison.Ordinal))
         {
-            int id = int.Parse(path["api/decks/category/".Length..].TrimEnd('/'), System.Globalization.CultureInfo.InvariantCulture);
+            int id = int.Parse(
+                path["api/decks/category/".Length..].TrimEnd('/'),
+                System.Globalization.CultureInfo.InvariantCulture);
             FakeCategory existing = categories.Single(value => value.Id == id);
             if (method == HttpMethod.Delete)
             {

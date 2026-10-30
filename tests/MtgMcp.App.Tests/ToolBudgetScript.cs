@@ -317,7 +317,8 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
                 ["right"] = new JsonObject
                 {
                     ["kind"] = "cards",
-                    ["ids"] = Strings([.. world.Cards.Skip(150).Take(100).Select(card => card["id"]!.GetValue<string>())]),
+                    ["ids"] = Strings(
+                        [.. world.Cards.Skip(150).Take(100).Select(card => card["id"]!.GetValue<string>())]),
                 },
                 ["operation"] = "union",
                 ["responseFormat"] = "full",
@@ -556,7 +557,9 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
             string.Join('\n', names.Select((name, index) => $"1 {name} `Budget Category {index:000}`")));
         await PreviewImportAsync(
             "moxfield-bulk-edit-v1",
-            string.Join('\n', names.Select((name, index) => $"1 {name} #Budget Tag {index % 7} #Second Tag {index % 11}")));
+            string.Join(
+                '\n',
+                names.Select((name, index) => $"1 {name} #Budget Tag {index % 7} #Second Tag {index % 11}")));
         _ = await CallAsync(
             "local_deck_import_create",
             new JsonObject

@@ -98,11 +98,21 @@ public sealed class ToolPagingTests
 
         ToolBudgetWorld.ToolOutcome unknown = await world.CallAsync(
             "local_deck_export_bundle",
-            new JsonObject { ["deckId"] = deck.DeckId.ToString(), ["formatId"] = "generic-text-v1", ["artifact"] = "nope.txt" },
+            new JsonObject
+            {
+                ["deckId"] = deck.DeckId.ToString(),
+                ["formatId"] = "generic-text-v1",
+                ["artifact"] = "nope.txt",
+            },
             token);
         ToolBudgetWorld.ToolOutcome outside = await world.CallAsync(
             "local_deck_export_bundle",
-            new JsonObject { ["deckId"] = deck.DeckId.ToString(), ["formatId"] = "generic-text-v1", ["offset"] = 10_000_000 },
+            new JsonObject
+            {
+                ["deckId"] = deck.DeckId.ToString(),
+                ["formatId"] = "generic-text-v1",
+                ["offset"] = 10_000_000,
+            },
             token);
 
         Assert.Equal("artifact", unknown.Structured.GetProperty("path").GetString());
@@ -123,7 +133,12 @@ public sealed class ToolPagingTests
         List<ToolBudgetWorld.ToolOutcome> pages = await ReadPagesAsync(
             world,
             "local_deck_identity_reconcile_preview",
-            new JsonObject { ["deckId"] = deck.DeckId.ToString(), ["expectedRevision"] = deck.Revision, ["entryIds"] = ids },
+            new JsonObject
+            {
+                ["deckId"] = deck.DeckId.ToString(),
+                ["expectedRevision"] = deck.Revision,
+                ["entryIds"] = ids,
+            },
             "rows",
             token);
 
@@ -461,7 +476,9 @@ public sealed class ToolPagingTests
         return new JsonObject
         {
             ["formatId"] = "generic-text-v1",
-            ["content"] = string.Join('\n', world.Cards.Take(300).Select(card => "1 " + card["name"]!.GetValue<string>())),
+            ["content"] = string.Join(
+                '\n',
+                world.Cards.Take(300).Select(card => "1 " + card["name"]!.GetValue<string>())),
         };
     }
 

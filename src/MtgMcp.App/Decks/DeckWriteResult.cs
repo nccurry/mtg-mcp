@@ -52,48 +52,48 @@ internal sealed record DeckWriteResult(
     public long? PreviousRevision { get; init; }
 
     /// <summary>
-    /// Gets the IDs of entries the write added, or null when none changed or the shared 100-ID budget ran out before this list;
-    /// <see cref="ChangeCounts"/> is always exact.
+    /// Gets the IDs of entries the write added, or null when none changed or the shared 100-ID budget ran out before
+    /// this list; <see cref="ChangeCounts"/> is always exact.
     /// </summary>
     [JsonPropertyName("addedEntryIds")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<Guid>? AddedEntryIds { get; init; }
 
     /// <summary>
-    /// Gets the IDs of entries whose fields or categories the write changed, or null when none changed or the shared 100-ID budget ran out before this list;
-    /// <see cref="ChangeCounts"/> is always exact.
+    /// Gets the IDs of entries whose fields or categories the write changed, or null when none changed or the shared
+    /// 100-ID budget ran out before this list; <see cref="ChangeCounts"/> is always exact.
     /// </summary>
     [JsonPropertyName("updatedEntryIds")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<Guid>? UpdatedEntryIds { get; init; }
 
     /// <summary>
-    /// Gets the IDs of entries the write removed, or null when none changed or the shared 100-ID budget ran out before this list;
-    /// <see cref="ChangeCounts"/> is always exact.
+    /// Gets the IDs of entries the write removed, or null when none changed or the shared 100-ID budget ran out before
+    /// this list; <see cref="ChangeCounts"/> is always exact.
     /// </summary>
     [JsonPropertyName("removedEntryIds")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<Guid>? RemovedEntryIds { get; init; }
 
     /// <summary>
-    /// Gets the IDs of categories the write added, or null when none changed or the shared 100-ID budget ran out before this list;
-    /// <see cref="ChangeCounts"/> is always exact.
+    /// Gets the IDs of categories the write added, or null when none changed or the shared 100-ID budget ran out before
+    /// this list; <see cref="ChangeCounts"/> is always exact.
     /// </summary>
     [JsonPropertyName("addedCategoryIds")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<Guid>? AddedCategoryIds { get; init; }
 
     /// <summary>
-    /// Gets the IDs of categories the write changed, or null when none changed or the shared 100-ID budget ran out before this list;
-    /// <see cref="ChangeCounts"/> is always exact.
+    /// Gets the IDs of categories the write changed, or null when none changed or the shared 100-ID budget ran out
+    /// before this list; <see cref="ChangeCounts"/> is always exact.
     /// </summary>
     [JsonPropertyName("updatedCategoryIds")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<Guid>? UpdatedCategoryIds { get; init; }
 
     /// <summary>
-    /// Gets the IDs of categories the write removed, or null when none changed or the shared 100-ID budget ran out before this list;
-    /// <see cref="ChangeCounts"/> is always exact.
+    /// Gets the IDs of categories the write removed, or null when none changed or the shared 100-ID budget ran out
+    /// before this list; <see cref="ChangeCounts"/> is always exact.
     /// </summary>
     [JsonPropertyName("removedCategoryIds")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
