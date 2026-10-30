@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using ModelContextProtocol.Server;
+using MtgMcp.App.Configuration;
 using MtgMcp.App.Hosting;
 using MtgMcp.Archidekt;
 using MtgMcp.Core.Results;
@@ -18,11 +19,17 @@ internal sealed class ArchidektReadTools
     private readonly ArchidektCoordinator coordinator;
 
     /// <summary>
+    /// Stores the operation mode, so a preview can say whether its apply tool is available.
+    /// </summary>
+    private readonly OperationMode mode;
+
+    /// <summary>
     /// Creates the complete read and preview surface.
     /// </summary>
-    internal ArchidektReadTools(ArchidektCoordinator coordinator)
+    internal ArchidektReadTools(ArchidektCoordinator coordinator, OperationMode mode)
     {
         this.coordinator = coordinator;
+        this.mode = mode;
     }
 
     /// <summary>
@@ -53,18 +60,25 @@ internal sealed class ArchidektReadTools
     }
 
     /// <summary>
-    /// Gets one complete fresh remote deck observation.
+    /// Gets one fresh remote deck observation: a summary and a size-limited page of entries.
     /// </summary>
     [McpServerTool(Name = "archidekt_deck_get", Title = "Get Archidekt Deck", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
     [Description(
-        "Archidekt: gets fresh deck metadata, exact printings, zones, categories, provider IDs, and canonical " +
-        "fingerprints." +
+        "Archidekt: gets fresh deck metadata, a leading summary (entry, card, and category counts, cards by " +
+        "zone), exact printings, zones, categories, provider IDs, and canonical fingerprints. Entries come in " +
+        "pages that fit the size limit; categories and unknown provider fields come with the first page. When " +
+        "truncated is true, call again with offset set to nextOffset." +
         UntrustedTextNotes.Archidekt)]
-    internal Task<OperationResult<RemoteDeckSnapshot>> GetDeckAsync(
+    internal async Task<OperationResult<ArchidektDeckView>> GetDeckAsync(
         [Description("Exact Archidekt deck identifier.")] string deckId,
+        [Description("Number of entries to skip; use nextOffset from the previous page. Default 0.")] int offset = 0,
         CancellationToken cancellationToken = default)
     {
-        return coordinator.Service.GetDeckAsync(deckId, cancellationToken);
+        OperationResult<RemoteDeckSnapshot> read = await coordinator.Service
+            .GetDeckAsync(deckId, cancellationToken).ConfigureAwait(false);
+        return read is OperationSuccess<RemoteDeckSnapshot> success
+            ? ArchidektResultPaging.PageDeck(success.Data, offset)
+            : OperationFailure.Forward<RemoteDeckSnapshot, ArchidektDeckView>(read);
     }
 
     /// <summary>
@@ -88,18 +102,31 @@ internal sealed class ArchidektReadTools
     [McpServerTool(Name = "archidekt_pull_preview", Title = "Preview Archidekt Pull", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
     [Description(
         "Archidekt: previews creating or transactionally replacing a local deck from fresh Archidekt evidence; " +
-        "performs zero writes." +
+        "performs zero writes. The result starts with a summary (operation, difference, and conflict counts) and " +
+        "says whether archidekt_pull_apply is available and which setting enables it. Rows come in pages that fit " +
+        "the size limit; the guards cover the whole preview, so the apply tool needs no page." +
         UntrustedTextNotes.Archidekt)]
-    internal Task<OperationResult<ArchidektSyncPreview>> PreviewPullAsync(
+    internal async Task<OperationResult<ArchidektSyncPreviewView>> PreviewPullAsync(
         [Description("Exact Archidekt deck identifier to read.")] string remoteDeckId,
         [Description("Optional stable local deck UUID to compare; omit to preview local creation.")] Guid? localDeckId = null,
         [Description(
             "Set true to take the Archidekt state over local edits made since the last synchronization (a deck " +
             "stuck as locally changed); the preview lists what would be discarded, and archidekt_pull_apply must " +
             "pass the same value. Needs localDeckId.")] bool discardLocalChanges = false,
+        [Description("Number of operations to skip; use nextOperationOffset from the previous page. Default 0.")]
+        int operationOffset = 0,
+        [Description("Number of differences to skip; use nextDifferenceOffset from the previous page. Default 0.")]
+        int differenceOffset = 0,
         CancellationToken cancellationToken = default)
     {
-        return coordinator.PreviewPullAsync(remoteDeckId, localDeckId, discardLocalChanges, cancellationToken);
+        OperationResult<ArchidektSyncPreview> preview = await coordinator
+            .PreviewPullAsync(remoteDeckId, localDeckId, discardLocalChanges, cancellationToken)
+            .ConfigureAwait(false);
+        return ToView(
+            preview,
+            operationOffset,
+            differenceOffset,
+            ArchidektResultPaging.PullApplyNotice(mode, ReadAuthStatus()));
     }
 
     /// <summary>
@@ -107,13 +134,50 @@ internal sealed class ArchidektReadTools
     /// </summary>
     [McpServerTool(Name = "archidekt_push_preview", Title = "Preview Archidekt Push", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
     [Description(
-        "Archidekt: previews stable primitive Archidekt operations and refuses remote drift; performs zero writes." +
+        "Archidekt: previews stable primitive Archidekt operations and refuses remote drift; performs zero writes. " +
+        "The result starts with a summary (operation counts by kind, difference and conflict counts) and says " +
+        "whether archidekt_push_apply is available and which setting enables it. Rows come in pages that fit the " +
+        "size limit; the guards cover the whole preview, so the apply tool needs no page." +
         UntrustedTextNotes.Archidekt)]
-    internal Task<OperationResult<ArchidektSyncPreview>> PreviewPushAsync(
+    internal async Task<OperationResult<ArchidektSyncPreviewView>> PreviewPushAsync(
         [Description("Stable local deck UUID with an Archidekt provider binding.")] Guid localDeckId,
+        [Description("Number of operations to skip; use nextOperationOffset from the previous page. Default 0.")]
+        int operationOffset = 0,
+        [Description("Number of differences to skip; use nextDifferenceOffset from the previous page. Default 0.")]
+        int differenceOffset = 0,
         CancellationToken cancellationToken = default)
     {
-        return coordinator.PreviewPushAsync(localDeckId, cancellationToken);
+        OperationResult<ArchidektSyncPreview> preview = await coordinator
+            .PreviewPushAsync(localDeckId, cancellationToken).ConfigureAwait(false);
+        return ToView(
+            preview,
+            operationOffset,
+            differenceOffset,
+            ArchidektResultPaging.PushApplyNotice(mode, ReadAuthStatus()));
+    }
+
+    /// <summary>
+    /// Reads the credential state without any provider request.
+    /// </summary>
+    private ArchidektAuthStatus ReadAuthStatus()
+    {
+        return coordinator.Service.GetAuthStatus() is OperationSuccess<ArchidektAuthStatus> status
+            ? status.Data
+            : new ArchidektAuthStatus("unknown", CredentialsConfigured: false, SessionAuthenticated: false, string.Empty);
+    }
+
+    /// <summary>
+    /// Turns a preview result into one page of it, or forwards its failure.
+    /// </summary>
+    private static OperationResult<ArchidektSyncPreviewView> ToView(
+        OperationResult<ArchidektSyncPreview> preview,
+        int operationOffset,
+        int differenceOffset,
+        string? applyNotice)
+    {
+        return preview is OperationSuccess<ArchidektSyncPreview> success
+            ? ArchidektResultPaging.PagePreview(success.Data, operationOffset, differenceOffset, applyNotice)
+            : OperationFailure.Forward<ArchidektSyncPreview, ArchidektSyncPreviewView>(preview);
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MtgMcp.App.Archidekt;
+using MtgMcp.App.Configuration;
 using MtgMcp.App.Hosting;
 using MtgMcp.Archidekt;
 using MtgMcp.Archidekt.Tests;
@@ -175,7 +176,7 @@ public sealed class ArchidektKindToolTests
                 new ArchidektSession(client, ownsHttpClient: true, options),
                 options.MaximumRequestsPerOperation);
             store = new SqliteDeckStore(temporary.Path, "test");
-            Tools = new ArchidektReadTools(new ArchidektCoordinator(service, store));
+            Tools = new ArchidektReadTools(new ArchidektCoordinator(service, store), OperationMode.Remote);
         }
 
         /// <summary>
