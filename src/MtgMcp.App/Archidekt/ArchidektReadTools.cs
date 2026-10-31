@@ -167,14 +167,11 @@ internal sealed class ArchidektReadTools
     {
         OperationResult<ArchidektSyncPreview> preview = await coordinator
             .PreviewPushAsync(localDeckId, cancellationToken).ConfigureAwait(false);
-        string? printingNotice = preview is OperationSuccess<ArchidektSyncPreview> success
-            ? success.Data.ApplyBlockedNotice
-            : null;
         return ToView(
             preview,
             operationOffset,
             differenceOffset,
-            ArchidektApplyAvailability.PushNotice(mode, ReadAuthStatus()) ?? printingNotice,
+            ArchidektApplyAvailability.PushNotice(mode, ReadAuthStatus()),
             expectedPreviewFingerprint);
     }
 

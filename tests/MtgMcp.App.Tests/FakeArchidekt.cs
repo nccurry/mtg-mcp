@@ -127,6 +127,15 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     }
 
     /// <summary>
+    /// Replaces the categories of the one entry for a card, as an edit made on the Archidekt site would; the first
+    /// category is the primary one. It is not counted as a mutation, since no client request made it.
+    /// </summary>
+    internal void SetCategories(string cardName, params string[] categoryNames)
+    {
+        entries.Single(value => catalog[value.CardId].Name == cardName).Categories = [.. categoryNames];
+    }
+
+    /// <summary>
     /// Gets the quantity of a card by name across the deck, or zero when it is not in the deck.
     /// </summary>
     internal int QuantityOf(string cardName)

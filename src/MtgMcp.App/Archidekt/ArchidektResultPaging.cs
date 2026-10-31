@@ -121,6 +121,7 @@ internal static class ArchidektResultPaging
             return refused;
         }
 
+        applyNotice = ArchidektApplyAvailability.WithBlockedNotice(applyNotice, preview.ApplyBlockedNotice);
         ArchidektSyncPreviewView header = new(
             preview.Direction,
             Summarize(preview),
