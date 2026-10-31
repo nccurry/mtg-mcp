@@ -118,7 +118,10 @@ public sealed record RemoteDeckSnapshot(
     public bool IsInDeck(RemoteDeckEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        return ArchidektJsonContract.IsInDeck(entry.CategoryNames, CategoryNames.Index(Categories, value => value.Name));
+        return ArchidektJsonContract.IsInDeck(
+            entry.CategoryNames,
+            entry.PrimaryCategoryName,
+            CategoryNames.Index(Categories, value => value.Name));
     }
 }
 

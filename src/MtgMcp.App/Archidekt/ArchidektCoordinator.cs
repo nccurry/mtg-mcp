@@ -851,16 +851,28 @@ internal sealed class ArchidektSynchronizationContext
             BaselineFingerprint = verified.Data.RemoteFingerprint,
             LastPushedAtUtc = DateTimeOffset.UtcNow,
         };
+        // An entry whose zone an earlier version gave is written with the zone the push sent, so the local deck agrees
+        // with the baseline and with Archidekt.
+        IReadOnlyList<DeckEntry> zoneCorrections = ArchidektLocalMapper.CorrectStaleZones(
+            local.Data,
+            state.Data.Baseline);
+        Dictionary<Guid, DeckEntry> corrected = zoneCorrections.ToDictionary(value => value.EntryId);
+        DeckDocument synchronized = local.Data with
+        {
+            Entries = [.. local.Data.Entries.Select(value => corrected.GetValueOrDefault(value.EntryId, value))],
+        };
         (string baseline, IReadOnlyList<Guid>? unlinkedLocalIds) =
             ArchidektLocalMapper.CreatePushBaseline(
-                local.Data,
+                synchronized,
                 verified.Data,
                 target,
                 verificationMismatch: applied.Data.Outcome == "verification-mismatch");
+        List<DeckChange> baselineChanges = [.. zoneCorrections.Select(value => new UpdateDeckEntryChange(value))];
+        baselineChanges.Add(new UpsertDeckProviderBindingChange(binding, baseline));
         OperationResult<DeckDocument> baselineUpdate = await deckStore.ApplyChangesAsync(
             local.Data.DeckId,
             local.Data.Revision,
-            [new UpsertDeckProviderBindingChange(binding, baseline)],
+            baselineChanges,
             cancellationToken).ConfigureAwait(false);
         if (baselineUpdate is not OperationSuccess<DeckDocument> updated)
         {

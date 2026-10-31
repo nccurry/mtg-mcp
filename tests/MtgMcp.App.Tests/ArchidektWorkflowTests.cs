@@ -305,35 +305,7 @@ public sealed class ArchidektWorkflowTests
     {
         using World world = new(OperationMode.Remote, CreateDeckWithExcludedCategories());
         CancellationToken token = TestContext.Current.CancellationToken;
-        RemoteDeckSnapshot remote = Success(await world.Coordinator.Service.GetDeckAsync("42", token));
-        HashSet<string> excludedRelations = [.. remote.Entries
-            .Where(value => value.Zone == "maybeboard")
-            .Select(value => value.ProviderRelationId)];
-        Assert.Equal(3, excludedRelations.Count);
-
-        // The deck as 0.13.0 stored it: the same rows, but the three excluded-category entries in zone main.
-        RemoteDeckSnapshot earlier = remote with
-        {
-            Entries = [.. remote.Entries.Select(value => excludedRelations.Contains(value.ProviderRelationId)
-                ? value with { Zone = "main" }
-                : value)],
-        };
-        DeckProviderBinding binding = new(
-            Guid.CreateVersion7(),
-            "archidekt",
-            remote.RemoteId,
-            remote.RemoteUri,
-            remote.Evidence.ContractVersion,
-            "earlier-remote-fingerprint",
-            DateTimeOffset.UtcNow,
-            null);
-        DeckCreateRequest create = ArchidektLocalMapper.ToCreateRequest(earlier, binding);
-        string baseline = ArchidektLocalMapper.CreateBaseline(create, earlier);
-        DeckDocument local = Success(await world.Store.CreateSynchronizedAsync(
-            create,
-            new DeckSyncBaseline(binding.BindingId, baseline),
-            token));
-        Assert.Equal(0, local.Entries.Count(value => value.Zone == "maybeboard"));
+        DeckDocument local = await StoreAsStoredByTheEarlierVersionAsync(world);
 
         ArchidektSyncDiffView diff = Success(await world.Reads.DiffAsync(local.DeckId, cancellationToken: token));
         ArchidektSyncPreviewView push = Success(
@@ -370,6 +342,140 @@ public sealed class ArchidektWorkflowTests
         Assert.DoesNotContain(
             after.Categories,
             value => value.Name.Equals("Maybeboard", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Stores the fake deck the way 0.13.0 pulled it: the same rows, but the three entries whose first category is
+    /// excluded from the deck are in zone main, in the local deck and in the baseline.
+    /// </summary>
+    private static async Task<DeckDocument> StoreAsStoredByTheEarlierVersionAsync(World world)
+    {
+        CancellationToken token = TestContext.Current.CancellationToken;
+        RemoteDeckSnapshot remote = Success(await world.Coordinator.Service.GetDeckAsync("42", token));
+        HashSet<string> excludedRelations = [.. remote.Entries
+            .Where(value => value.Zone == "maybeboard")
+            .Select(value => value.ProviderRelationId)];
+        Assert.Equal(3, excludedRelations.Count);
+        RemoteDeckSnapshot earlier = remote with
+        {
+            Entries = [.. remote.Entries.Select(value => excludedRelations.Contains(value.ProviderRelationId)
+                ? value with { Zone = "main" }
+                : value)],
+        };
+        DeckProviderBinding binding = new(
+            Guid.CreateVersion7(),
+            "archidekt",
+            remote.RemoteId,
+            remote.RemoteUri,
+            remote.Evidence.ContractVersion,
+            "earlier-remote-fingerprint",
+            DateTimeOffset.UtcNow,
+            null);
+        DeckCreateRequest create = ArchidektLocalMapper.ToCreateRequest(earlier, binding);
+        string baseline = ArchidektLocalMapper.CreateBaseline(create, earlier);
+        DeckDocument local = Success(await world.Store.CreateSynchronizedAsync(
+            create,
+            new DeckSyncBaseline(binding.BindingId, baseline),
+            token));
+        Assert.Equal(0, local.Entries.Count(value => value.Zone == "maybeboard"));
+        return local;
+    }
+
+    /// <summary>
+    /// Verifies a deck pulled by 0.13.0 survives two pushes: the first push writes the zones Archidekt gives the three
+    /// entries into the local deck, and the second push, after another edit, plans no update for them and is not
+    /// refused as a zone contradiction.
+    /// </summary>
+    [Fact]
+    public async Task DeckPulledByTheEarlierVersion_PushesTwiceWithoutAZoneContradiction()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckWithExcludedCategories());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        DeckDocument local = await StoreAsStoredByTheEarlierVersionAsync(world);
+
+        for (int round = 1; round <= 2; round++)
+        {
+            DeckDocument current = Success(await world.Store.GetAsync(local.DeckId, token));
+            DeckEntry filler = current.Entries.Single(value => value.CardName == "Filler 000");
+            DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+                local.DeckId,
+                current.Revision,
+                [new UpdateDeckEntryChange(filler with { Quantity = round + 1 })],
+                token));
+            ArchidektSyncPreviewView preview = Success(
+                await world.Reads.PreviewPushAsync(local.DeckId, cancellationToken: token));
+
+            Assert.False(preview.HasConflicts);
+            Assert.Equal(
+                ["entry-update:Filler 000"],
+                preview.Operations.Select(value => $"{value.Kind}:{value.Subject}"));
+
+            ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
+                new ArchidektPushApplyRequest(
+                    local.DeckId,
+                    edited.Revision,
+                    preview.RemoteFingerprint,
+                    preview.PreviewFingerprint),
+                token));
+
+            Assert.Equal("applied", applied.Outcome);
+            Assert.Equal(round + 1, world.Fake.QuantityOf("Filler 000"));
+        }
+
+        DeckDocument after = Success(await world.Store.GetAsync(local.DeckId, token));
+        ArchidektSyncPreviewView clean = Success(
+            await world.Reads.PreviewPushAsync(local.DeckId, cancellationToken: token));
+
+        Assert.Equal(3, after.Entries.Count(value => value.Zone == "maybeboard"));
+        Assert.Empty(clean.Operations);
+        Assert.Empty(clean.Differences);
+    }
+
+    /// <summary>
+    /// Verifies a card added locally to a deck pulled by 0.13.0 does not make the three untouched entries show as
+    /// local changes: the pull preview has no conflict, keeps the card, and the pull applies.
+    /// </summary>
+    [Fact]
+    public async Task DeckPulledByTheEarlierVersion_AddingACardThenPulling_KeepsTheCardWithoutAConflict()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckWithExcludedCategories());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        DeckDocument local = await StoreAsStoredByTheEarlierVersionAsync(world);
+        DeckCategory removal = local.Categories.Single(value => value.Name == "Removal");
+        Guid shockId = Guid.NewGuid();
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            local.DeckId,
+            local.Revision,
+            [
+                new AddDeckEntryChange(new DeckEntryDraft(1, "Shock", EntryId: shockId)),
+                new AssignDeckCategoryChange(shockId, removal.CategoryId, true),
+            ],
+            token));
+
+        ArchidektSyncDiffView diff = Success(await world.Reads.DiffAsync(local.DeckId, cancellationToken: token));
+        ArchidektSyncPreviewView pull = Success(
+            await world.Reads.PreviewPullAsync("42", local.DeckId, cancellationToken: token));
+
+        ArchidektDifference row = Assert.Single(
+            diff.Differences,
+            value => value.Path.StartsWith("/entries/", StringComparison.Ordinal));
+        Assert.Equal("local-added", row.State);
+        Assert.False(pull.HasConflicts);
+        Assert.Contains(pull.Operations, value => value.Kind == "local-keep");
+
+        ArchidektApplyResult applied = Success(await world.LocalWrites.ApplyPullAsync(
+            new ArchidektPullApplyRequest(
+                "42",
+                local.DeckId,
+                edited.Revision,
+                pull.RemoteFingerprint,
+                pull.PreviewFingerprint),
+            token));
+        DeckDocument after = Success(await world.Store.GetAsync(local.DeckId, token));
+
+        Assert.Equal("applied", applied.Outcome);
+        Assert.Contains(after.Entries, value => value.CardName == "Shock");
+        Assert.Equal(3, after.Entries.Count(value => value.Zone == "maybeboard"));
     }
 
     /// <summary>

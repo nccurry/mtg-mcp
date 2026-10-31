@@ -828,7 +828,7 @@ public sealed class ArchidektLocalMapperTests
         string[] names = categories.Length == 0 ? [] : categories.Split(',');
         Dictionary<string, RemoteDeckCategory> index = deck.Categories.ToDictionary(value => value.Name);
 
-        Assert.Equal(expectedZone, ArchidektJsonContract.MapZone(names, index));
+        Assert.Equal(expectedZone, ArchidektJsonContract.MapZone(names, primary: null, index));
     }
 
     /// <summary>
@@ -857,9 +857,73 @@ public sealed class ArchidektLocalMapperTests
         RemoteDeckEntry entry = ParseDeck().Entries[0] with
         {
             CategoryNames = categories.Length == 0 ? [] : categories.Split(','),
+            PrimaryCategoryName = null,
         };
 
         Assert.Equal(expected, deck.IsInDeck(entry));
+    }
+
+    /// <summary>
+    /// Verifies a card in two categories whose primary category is the one outside the deck, listed second, is
+    /// refused in zone main, as Archidekt would not count it toward the deck.
+    /// </summary>
+    [Fact]
+    public void FindZoneContradictions_ReadsThePrimaryCategoryFirst()
+    {
+        RemoteDeckSnapshot parsed = ParseDeck();
+        RemoteDeckCategory ramp = parsed.Categories[0] with { Name = "Ramp", IncludedInDeck = true };
+        RemoteDeckCategory considering = parsed.Categories[0] with
+        {
+            ProviderCategoryId = "900",
+            Name = "Considering",
+            IncludedInDeck = false,
+        };
+        RemoteDeckEntry entry = parsed.Entries[0] with
+        {
+            Zone = "main",
+            CategoryNames = ["Ramp", "Considering"],
+            PrimaryCategoryName = "Considering",
+        };
+
+        IReadOnlyList<ArchidektZoneContradiction> found = ArchidektSyncPlanner.FindZoneContradictions(
+            [entry],
+            [ramp, considering]);
+
+        Assert.Equal(["maybeboard"], found.Select(value => value.ExpectedZone));
+    }
+
+    /// <summary>
+    /// Verifies a primary category that is not the first name decides, in the zone and in the deck count: Archidekt
+    /// treats the primary as the first category, so every caller reads the same order.
+    /// </summary>
+    [Theory]
+    [InlineData("Ramp,Considering", "Considering", "maybeboard", false)]
+    [InlineData("Ramp,Considering", "Ramp", "main", true)]
+    [InlineData("Considering,Ramp", "Ramp", "main", true)]
+    [InlineData("Ramp,Considering", null, "main", true)]
+    [InlineData("Ramp,Considering,Sideboard", "Considering", "sideboard", false)]
+    public void MapZoneAndIsInDeck_ReadThePrimaryCategoryFirst(
+        string categories,
+        string? primary,
+        string expectedZone,
+        bool expectedInDeck)
+    {
+        RemoteDeckSnapshot deck = WithCategories("Ramp", "Considering", "Sideboard");
+        deck = deck with
+        {
+            Categories =
+            [
+                deck.Categories[0] with { IncludedInDeck = true },
+                deck.Categories[1] with { IncludedInDeck = false },
+                deck.Categories[2],
+            ],
+        };
+        string[] names = categories.Split(',');
+        Dictionary<string, RemoteDeckCategory> index = deck.Categories.ToDictionary(value => value.Name);
+        RemoteDeckEntry entry = ParseDeck().Entries[0] with { CategoryNames = names, PrimaryCategoryName = primary };
+
+        Assert.Equal(expectedZone, ArchidektJsonContract.MapZone(names, primary, index));
+        Assert.Equal(expectedInDeck, deck.IsInDeck(entry));
     }
 
     /// <summary>

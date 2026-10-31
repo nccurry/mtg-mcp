@@ -68,14 +68,17 @@ public static class ArchidektSyncPlanner
             ArchidektJsonContract.Recompute(remote).Remote,
             ArchidektJsonContract.Recompute(baseline.RemoteSnapshot).Remote,
             StringComparison.Ordinal);
+        // A baseline an earlier version stored may hold a zone the current rule does not give an entry; its rows are
+        // compared with the zones a read gives now, so such a zone is not a difference (a pull still moves the entry).
+        RemoteDeckSnapshot baselineRows = ArchidektJsonContract.WithCurrentZones(baseline.RemoteSnapshot);
         RemoteDeckSnapshot effectiveLocal = localChanged
             ? localProjection
-            : baseline.RemoteSnapshot;
+            : baselineRows;
         RemoteDeckSnapshot effectiveRemote = remoteChanged
             ? remote
-            : baseline.RemoteSnapshot;
+            : baselineRows;
         List<ArchidektDifference> differences = BuildDifferences(
-            baseline.RemoteSnapshot,
+            baselineRows,
             effectiveLocal,
             effectiveRemote,
             localChanged,
@@ -560,7 +563,7 @@ public static class ArchidektSyncPlanner
                 continue;
             }
 
-            string expected = ArchidektJsonContract.MapZone(entry.CategoryNames, byName);
+            string expected = ArchidektJsonContract.MapZone(entry.CategoryNames, entry.PrimaryCategoryName, byName);
             if (!string.Equals(entry.Zone, expected, StringComparison.Ordinal))
             {
                 found.Add(new ArchidektZoneContradiction(entry.CardName, entry.Zone, expected));

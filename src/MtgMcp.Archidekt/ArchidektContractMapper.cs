@@ -365,7 +365,7 @@ internal static class ArchidektJsonContract
                 categoriesById,
                 categoriesByName);
             string? primary = categoryNames.FirstOrDefault();
-            string zone = MapZone(categoryNames, categoriesByName);
+            string zone = MapZone(categoryNames, primary, categoriesByName);
             entries.Add(new RemoteDeckEntry(
                 relationId,
                 providerCardId,
@@ -444,14 +444,17 @@ internal static class ArchidektJsonContract
     }
 
     /// <summary>
-    /// Maps provider category conventions into the format-neutral local zone vocabulary. An entry whose first category
-    /// is not included in the deck is not in the deck, so it maps to the maybeboard.
+    /// Maps provider category conventions into the format-neutral local zone vocabulary. An entry whose primary category
+    /// is not included in the deck is not in the deck, so it maps to the maybeboard. The primary category is looked at
+    /// first, then the other names in their order; a null primary means the first name is the primary.
     /// </summary>
     internal static string MapZone(
         IReadOnlyList<string> names,
+        string? primary,
         IReadOnlyDictionary<string, RemoteDeckCategory> categoriesByName)
     {
-        foreach (string name in names)
+        IReadOnlyList<string> ordered = PrimaryFirst(names, primary);
+        foreach (string name in ordered)
         {
             if (name.Equals("commander", StringComparison.OrdinalIgnoreCase) ||
                 (CategoryNames.TryFind(categoriesByName, name, out RemoteDeckCategory? category) && category.IsPremier))
@@ -470,20 +473,43 @@ internal static class ArchidektJsonContract
             }
         }
 
-        return IsInDeck(names, categoriesByName) ? "main" : "maybeboard";
+        return IsInDeck(ordered, primary, categoriesByName) ? "main" : "maybeboard";
     }
 
     /// <summary>
-    /// Tells whether Archidekt counts an entry toward the deck: only the first (primary) category decides, and an
-    /// entry with no category, or a category with no flag, is in the deck.
+    /// Tells whether Archidekt counts an entry toward the deck: only the primary category decides (the first name when
+    /// the primary is not given), and an entry with no category, or a category with no flag, is in the deck.
     /// </summary>
     internal static bool IsInDeck(
         IReadOnlyList<string> names,
+        string? primary,
         IReadOnlyDictionary<string, RemoteDeckCategory> categoriesByName)
     {
-        return names.Count == 0 ||
-            !CategoryNames.TryFind(categoriesByName, names[0], out RemoteDeckCategory? primary) ||
-            primary.IncludedInDeck != false;
+        IReadOnlyList<string> ordered = PrimaryFirst(names, primary);
+        return ordered.Count == 0 ||
+            !CategoryNames.TryFind(categoriesByName, ordered[0], out RemoteDeckCategory? first) ||
+            first.IncludedInDeck != false;
+    }
+
+    /// <summary>
+    /// Puts the primary category name first and keeps the other names in their order. Archidekt treats the first
+    /// category of an entry as its primary one, so this is the order it sees.
+    /// </summary>
+    private static IReadOnlyList<string> PrimaryFirst(IReadOnlyList<string> names, string? primary)
+    {
+        if (primary is null || names.Count == 0 || string.Equals(names[0], primary, StringComparison.Ordinal))
+        {
+            return names;
+        }
+
+        List<string> ordered = [.. names];
+        if (!ordered.Remove(primary))
+        {
+            return names;
+        }
+
+        ordered.Insert(0, primary);
+        return ordered;
     }
 
     /// <summary>
@@ -738,24 +764,18 @@ internal static class ArchidektJsonContract
     /// <summary>
     /// Gives every entry the zone the current rule derives from its categories. A baseline stored by an earlier version
     /// may hold another zone for an entry (before the first category's flag counted, such an entry was in main), and it
-    /// must still compare equal to the same deck read now. The entry's primary category comes first, as in a read.
+    /// must still compare equal to the same deck read now.
     /// </summary>
-    private static RemoteDeckSnapshot WithCurrentZones(RemoteDeckSnapshot deck)
+    internal static RemoteDeckSnapshot WithCurrentZones(RemoteDeckSnapshot deck)
     {
         Dictionary<string, RemoteDeckCategory> categories = CategoryNames.Index(deck.Categories, value => value.Name);
         return deck with
         {
             Entries =
             [
-                .. deck.Entries.Select(entry =>
+                .. deck.Entries.Select(entry => entry with
                 {
-                    List<string> names = [.. entry.CategoryNames];
-                    if (entry.PrimaryCategoryName is { } primary && names.Remove(primary))
-                    {
-                        names.Insert(0, primary);
-                    }
-
-                    return entry with { Zone = MapZone(names, categories) };
+                    Zone = MapZone(entry.CategoryNames, entry.PrimaryCategoryName, categories),
                 }),
             ],
         };

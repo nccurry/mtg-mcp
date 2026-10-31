@@ -503,7 +503,7 @@ public static class ArchidektLocalMapper
             string zone = baselineRow is not null &&
                 string.Equals(localEntry.Zone, baselineRow.Zone, StringComparison.Ordinal) &&
                 IsStaleZone(baselineRow, baseline.RemoteSnapshot)
-                    ? ArchidektJsonContract.MapZone(names, targetCategoriesByName)
+                    ? ArchidektJsonContract.MapZone(names, primary, targetCategoriesByName)
                     : localEntry.Zone;
 
             entries.Add(new RemoteDeckEntry(
@@ -544,8 +544,33 @@ public static class ArchidektLocalMapper
     {
         return !string.Equals(
             row.Zone,
-            ArchidektJsonContract.MapZone(row.CategoryNames, CategoryNames.Index(snapshot.Categories, value => value.Name)),
+            ArchidektJsonContract.MapZone(
+                row.CategoryNames,
+                row.PrimaryCategoryName,
+                CategoryNames.Index(snapshot.Categories, value => value.Name)),
             StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Lists the local entries whose zone is a zone an earlier version gave (see <see cref="ToRemoteTarget"/>), with the
+    /// zone a read of Archidekt gives them now. A push writes these zones into the local deck, so the local zone then
+    /// agrees with the baseline and with Archidekt and the correction is not needed again.
+    /// </summary>
+    public static IReadOnlyList<DeckEntry> CorrectStaleZones(DeckDocument local, ArchidektSyncBaseline baseline)
+    {
+        ArgumentNullException.ThrowIfNull(local);
+        ArgumentNullException.ThrowIfNull(baseline);
+        RemoteDeckSnapshot target = ToRemoteTarget(local, baseline, baseline.RemoteSnapshot);
+        List<DeckEntry> corrected = [];
+        for (int index = 0; index < local.Entries.Count; index++)
+        {
+            if (!string.Equals(local.Entries[index].Zone, target.Entries[index].Zone, StringComparison.Ordinal))
+            {
+                corrected.Add(local.Entries[index] with { Zone = target.Entries[index].Zone });
+            }
+        }
+
+        return corrected;
     }
 
     /// <summary>
