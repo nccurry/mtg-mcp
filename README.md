@@ -198,7 +198,11 @@ is cut to stay under 40,000 UTF-8 bytes and then sets `truncated`, `narrow`, and
 `nextCursor`. `fields` narrows the card fields; it uses the same names as the
 Scryfall card tools. A deck too large for one result pages the same way even
 without `include`, so read every page (pass `nextCursor` back as `cursor`; `pageSize` sets the page
-length) before you decide what a deck holds.
+length) before you decide what a deck holds. Every page carries deck-wide totals: `entryCount`,
+`cardCount` (counting quantities), and `cardsByZone`. A cut page's `narrow` says it is one page of the deck:
+"This page shows N of M entries; the deck is not missing the rest. Follow nextCursor." Compare the totals
+with the entries you hold before you add a card you think is missing. The summary of
+`local_deck_apply_changes` carries the same totals (`cardsByZone` with the entry count).
 
 The tools that write a deck (`local_deck_apply_changes`, `local_deck_create`,
 `local_deck_import_create`, `local_deck_identity_reconcile_apply`, and
@@ -218,9 +222,11 @@ printing. A double-faced card typed by one face takes Scryfall's full name, such
 `Delver of Secrets // Insectile Aberration`. A name that fits two different cards (two Oracle IDs) is
 not resolved and is listed in `issues` as `ambiguous`, with the count. A name that does not resolve is
 still added, left unresolved, and listed in `issues`, so one typo never fails a batch. When card data is not
-installed, the entries are added as given and one note in `issues` says resolution was skipped
-(run `scryfall_card_data_sync`). Entries added by name therefore need no
-`local_deck_identity_reconcile_*` step before an Archidekt push.
+installed, the entries are added as given and one note in `issues` says resolution was skipped. The note
+says a push to Archidekt does not need card data: a push uses Archidekt's default printing for an entry with
+no printing set (see [Synchronize Archidekt](#synchronize-archidekt)). Run `scryfall_card_data_sync` and then
+`local_deck_identity_reconcile_preview` only to fill in the card identity. Entries added by name therefore
+need no `local_deck_identity_reconcile_*` step before an Archidekt push.
 
 Use `local_deck_category_rules_preview` and `local_deck_category_rules_apply` to
 evaluate caller-owned tag rules. The preview validates the rules first; rules
@@ -314,7 +320,8 @@ SHA-256 of the whole content) and returns one chunk of one artifact's content of
 JSON text; pass `artifact` and `offset` (the previous `chunk.nextOffset`, a count of UTF-16 code units) to read on.
 The chunks joined in order are the exact file. The field-preservation report comes only with the chunk at
 offset 0. The Scryfall card tools cut a page of cards, in any `responseFormat`, to the size limit and return
-`nextCursor` for the rest.
+`nextCursor` for the rest; they also report `returnedCount`, `requestedCount`, and `cutReason` (see
+[Query Scryfall](#query-scryfall)).
 
 ## Query Scryfall
 
@@ -363,6 +370,18 @@ cut to stay under 40,000 UTF-8 bytes and then sets `truncated`, `narrow`, and
 `nextCursor`, so a `standard` or `full` page can hold fewer cards than
 `pageSize`; use `concise` or `fields` to fit more. `includeRaw` was replaced by
 `responseFormat: "full"` on these three tools.
+
+`pageSize` is a maximum. Every page of these three tools, and of `card_lists_compare`, reports
+`returnedCount` (the cards on the page) and `requestedCount` (the cards the page would hold without the size
+limit). A page that was cut also reports `cutReason: "result-size-limit"` and a `narrow` hint with the numbers:
+the kept and requested counts, the average bytes per card on the page, where `nextCursor` continues (no card is
+skipped), and that leaving `oracleText` out of `fields` fits more cards in the concise format. `oracleText`
+is usually the largest field. A cut page with `nextCursor` is still a page of one query, so read on with the
+cursor.
+
+`edhrecRank` (and `order: "edhrec"`) counts how many decks include the card in any slot. It is not a rank of
+how often a card is played as commander, so it cannot answer "which commanders are most played". The server has
+no commander popularity rank and no EDHREC source.
 
 For arbitrary queries, Scryfall remains the source of truth. The cache reuses
 only the exact same request. Card facts and community tags stay separate kinds
@@ -645,8 +664,8 @@ cannot run it in one call; push the change in smaller edits.
 
 Results are cut to fit the client. Claude Code saves a tool result longer than
 50,000 characters to a file and shows the agent only the path, so these tools aim
-for 40,000 UTF-8 bytes and page their rows. `archidekt_deck_get` leads with a summary (entry, card,
-and category counts, cards by zone) and pages entries with `offset` and `nextOffset`;
+for 40,000 UTF-8 bytes and page their rows. `archidekt_deck_get` leads with a summary (see below) and
+pages entries with `offset` and `nextOffset`;
 `archidekt_push_preview` and `archidekt_pull_preview` lead with a summary (operations by kind,
 differences, conflicts) and page with `operationOffset` and `differenceOffset`; the guards and the
 preview fingerprint cover the whole preview, so the apply tool needs no page.
@@ -659,6 +678,33 @@ the later pages `expectedPreviewFingerprint`, the `previewFingerprint` of the fi
 preview that changed in between is refused instead of paged out of line.
 `archidekt_deck_get` leaves out unknown provider fields over 8,000 bytes and sets
 `extensionsOmitted`; they cannot be read through this tool.
+
+`archidekt_deck_get` and `archidekt_snapshots_get` (kind `get`) take:
+
+- `zones`: any of `commander`, `main`, `sideboard`, `maybeboard` (the names `card_list_query` uses). Omit it to read
+  every zone. `offset` and `nextOffset` count the chosen entries, and `shownEntryCount` is how many the zones hold; a
+  bad offset is refused with `invalid-offset` naming that count.
+- `responseFormat`: `concise` (the default) returns `cardName`, `quantity`, `zone`, `categoryNames`, `setCode`,
+  `collectorNumber`, `oracleId`, and `inDeck`. `full` (and `standard`, the same) returns every entry field (provider
+  IDs, `finish`, `language`, `sortOrder`, and the rest) plus `inDeck`. A cut page's `narrow` says to pass
+  `responseFormat: "full"` for every field.
+
+Entries come ordered by zone (commander, main, sideboard, maybeboard), then card name, then relation ID, so pages of
+separate reads line up. `inDeck` is false when the entry's first category is not included in the deck on Archidekt
+(`includedInDeck: false`); Archidekt does not count such an entry toward the deck, and this server reads it into the
+`maybeboard` zone. The leading summary describes the whole deck whatever `zones` asks for: entry, card, and category
+counts, `cardsByZone`, and facts that need no verdict:
+
+- `duplicates`: cards held more than once across commander and main, matched by Oracle ID (by name when there is none).
+  Basic lands and entries that are not in the deck are skipped. The list is capped, and `duplicatesOmitted` counts
+  the groups left out.
+- `repeatsOutsideMain`: cards held more than once inside the sideboard or maybeboard (for example the same card four
+  times in the sideboard), as separate groups, with `repeatsOutsideMainOmitted` when capped.
+- `size`, for a Commander deck only: `format`, `expected` (100), and `mainAndCommander` (the cards in the commander
+  and main zones that are in the deck). It is a fact about the count, not a statement that the deck is right.
+
+No card data is needed for any of this. `archidekt_snapshots_get` with kind `get` returns the saved deck in the same
+shape and takes the same two arguments.
 
 When `archidekt_push_apply` is not available (the mode is below `remote`, or
 credentials are missing), the push preview says so in `applyNotice`, with
@@ -685,7 +731,11 @@ the next push plans only that difference.
 Category names are case-sensitive, as on Archidekt: `Sideboard` and `SIDEBOARD`
 are two categories. A push compares names exactly. Archidekt keeps no card zone
 of its own; it comes from the categories (a category named Commander, Sideboard
-or Maybeboard, or the commander category; otherwise main). A push that would
+or Maybeboard, or the commander category; otherwise main). An entry whose first category has
+`includedInDeck: false` is not in the deck on Archidekt, so it is read into `maybeboard` instead of `main`; a
+category with no flag counts as included. Pulls, deck reads, and the push check all use this one rule. A deck
+pulled by `0.13.0` still reads as unchanged: the next pull shows each such entry's move to `maybeboard` as an
+ordinary change from Archidekt, and a push before that pull plans nothing for it. A push that would
 send a card whose zone differs from that is refused with
 `entry-zone-contradicts-category`, naming the cards.
 
@@ -695,13 +745,63 @@ advances the baseline. Entry order numbers (`sortOrder`) and category rank are
 not compared as remote changes, because Archidekt renumbers them; a local edit
 to them, or to a category color, still counts as a local change.
 
-To take the Archidekt state for a deck that is stuck as locally changed, call
-`archidekt_pull_preview` with `discardLocalChanges` set to true and
-`localDeckId`, then `archidekt_pull_apply` with the same flag in the request.
-The preview lists what would be discarded. Without the flag nothing is
-discarded, and the flag needs an existing local deck (`discard-needs-local-deck`).
-If Archidekt changed too, a push is refused as well, so `discardLocalChanges`
-is the way out; it drops the local edits.
+A push adds a card by name with no card data and no printing set to Archidekt's default printing: the first
+exact-name match in Archidekt's card search. The adapter finds a printing with one search per distinct name,
+and it follows result pages within the 150-request budget. It looks for the entry's printing ID first, then its
+set code and collector number (the set code is Archidekt's `edition.editioncode`; a set code without a collector
+number takes the first printing in that set), and an entry with no printing takes the first listed match,
+narrowed by Oracle ID when the entry has one. `archidekt_push_preview` does the same search, so the preview and the
+apply agree: each add's `summary` names the printing it will use (the form is "Archidekt printing SET NUMBER (default
+of 18; no printing was set)"). A name-only add for a foil or etched entry takes the first listed printing, even when
+that printing lacks the finish. The searches make a preview slower (about two seconds per distinct name).
+When a name has no match in Archidekt, or the lookups would pass the 150-request budget, the preview sets
+`applyAvailable: false` and its `applyNotice` names the cards (or the limit); fix the name or set a printing on the
+entry, then preview again. `archidekt_push_apply` resolves every add before its first write, so a card it
+cannot place refuses the whole push with no writes.
+
+A push removes every Archidekt entry the local deck lacks. A push that removes more than 10 entries, or more than 10
+percent of the Archidekt entries, is refused until `confirmRemovals` (on both `archidekt_push_preview` and
+`archidekt_push_apply`) equals the exact removal count; the preview's `applyNotice` names the count and
+`applyAvailable` is false until then. A local deck that holds only part of the Archidekt deck would otherwise delete
+the rest. Run `archidekt_pull_preview` first when that is not what you mean. A small removal needs no confirmation.
+
+If Archidekt changed since the last sync, `archidekt_push_preview` sets `hasConflicts`, lists no operations, and
+sets `applyAvailable: false` with an `applyNotice` that says `archidekt_push_apply` would refuse the push (the
+count of changed rows; see the differences with `remote-*` states). The mode and credentials notice, when it applies,
+comes first. A push of such a deck would lay the local deck over Archidekt and undo the Archidekt edits, so
+`archidekt_push_apply` returns `push-conflict` with no writes. Run `archidekt_pull_preview` first.
+
+A pull keeps what you added locally. When every local change since the last sync is an added card or category, the
+pull preview is not a conflict. It shows a `local-keep` operation ("Keep N cards added locally since the last sync;
+push them afterwards."), and `archidekt_pull_apply` replaces the rest from Archidekt, then adds the kept cards, their
+categories (created by exact name when missing), and their category assignments. The new baseline leaves the kept
+cards as `local-added`, so the next push adds exactly those. A pull is refused (`pull-conflict`, with the reason in
+the preview's `applyNotice`) when a kept card is a card Archidekt also added, which would leave two entries for the
+card, or when a kept card's categories would put it in another zone. Any other local change (a card changed or
+removed, a category changed) still needs `discardLocalChanges`.
+
+To take the Archidekt state over every local change, call `archidekt_pull_preview` with `discardLocalChanges` set to
+true and `localDeckId`, then `archidekt_pull_apply` with the same flag in the request. The preview says what is
+thrown away: "N cards added, N changed, N removed (categories: N added, N changed, N removed)", and lists the rows
+with `local-*` states in `differences`. Without the flag nothing is discarded, and the flag needs an existing local
+deck (`discard-needs-local-deck`). If Archidekt changed too, a push is refused as well, so `discardLocalChanges` is the
+way out when a pull cannot keep your changes; it drops the local edits, including cards added locally.
+
+How a push reports what happened (`archidekt_push_apply`, field `outcome` and the status of each operation):
+
+- `applied`: every operation was sent and the check afterwards matched.
+- `not-applied`: nothing was applied. An operation that stopped the push before anything was sent is `not-sent`
+  ("Nothing was sent to Archidekt for this operation."), and the operations after it are `not-attempted`. A
+  `429` on a write is `not-sent` (Archidekt did not process it) and is never retried automatically.
+- `partial`: some operations were applied, or one failed after its write was sent (`unknown`: it may or may not
+  have been applied). The rest are `not-sent` or `not-attempted`.
+- `applied-unverified`: the writes were sent, but Archidekt could not be read afterwards (for example it returned
+  `429`). The applied statuses are kept, the local baseline is not updated, and the `notice` says to run
+  `archidekt_pull_preview` before pushing again.
+- `verification-mismatch`: the check after the writes found a difference. It reads once more after about a second
+  (Archidekt can lag behind its own writes), and `differences` lists the rows that still differ (up to 25).
+
+Reads that get a `429` wait for `Retry-After` (at most about 10 seconds) and retry up to twice.
 
 A deck whose synchronization baseline an earlier version recorded did not store
 category colors or ordering, so the server cannot tell whether they changed. When

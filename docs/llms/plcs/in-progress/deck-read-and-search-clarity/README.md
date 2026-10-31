@@ -6,12 +6,17 @@
 - Owner: mtg-mcp (Opus parent session with Sonnet implementation children)
 - Last updated: 2026-10-31, `main` at `f0c0814`
 - Implementation authorized: Yes (owner, 2026-10-31: "Ride with the plan")
-- Selected work and endpoint: phases 0 to 4, merged into `main` on this host,
+- Selected work and endpoint: phases 0 to 7 (and any later phases added from new reports), merged into `main` on this host,
   audited, released together as `0.13.1`, and installed (owner, 2026-10-31:
   "fix everything identified then release 0.13.1, then install it").
-- State: implementation starting.
-- Next action and blocker: phases 0, 1, and 3-4 run in parallel; phase 2
-  follows phase 1. No blocker.
+- State: phases 0 to 7 implemented and merged into `drsc/integ`; docs done
+  (README, CHANGELOG, `docs/output-control.md`, tool text); full audit next.
+  Checks on the final merged commit are pending.
+- Standing instruction (owner, 2026-10-31): other sessions will keep sending
+  mtg-mcp bugs; research each, add it here as a phase, fix it, and ship it in
+  `0.13.1`.
+- Next action and blocker: full audit, then merge to `main`, release, and
+  install. No blocker.
 - Resume check: `git worktree list` matches the table below.
 
 Where the work lives (a worktree lock, not this table, holds a checkout
@@ -22,7 +27,8 @@ against cleanup):
 | `mtg-mcp-wt/deck-read-and-search-clarity/integ` | `drsc/integ` | parent | integration |
 | `mtg-mcp-wt/deck-read-and-search-clarity/p0-protocol` | `drsc/p0-protocol` | Sonnet child | phase 0 |
 | `mtg-mcp-wt/deck-read-and-search-clarity/p1-indeck` | `drsc/p1-indeck` | Sonnet child | phase 1, then phase 2 |
-| `mtg-mcp-wt/deck-read-and-search-clarity/p34-scryfall` | `drsc/p34-scryfall` | Sonnet child | phases 3 and 4 |
+| `mtg-mcp-wt/deck-read-and-search-clarity/p34-scryfall` | `drsc/p34-scryfall` | Sonnet child | phases 3 and 4, merged into integ |
+| `mtg-mcp-wt/deck-read-and-search-clarity/p5-push` | `drsc/p5-push` | Sonnet child | phase 5 |
 
 ## Outcome And Requirements
 
@@ -45,6 +51,27 @@ logs for this project: every session that negotiated protocol `2026-07-28`
 logged "tools/list failed … outputSchema expected object, received boolean";
 sessions on `2025-11-25` did not.
 
+The same session then reported that `archidekt_push_preview` approved 27
+name-only adds (card data not installed) and `archidekt_push_apply` failed on
+the first ("unknown: Archidekt could not resolve the exact requested
+printing"), marking the other 26 not attempted; nothing reached Archidekt.
+
+A third report (2026-10-31, local deck bound to Archidekt deck 27968076):
+after a successful push, the user edited the deck on Archidekt (a new Removal
+category; Assassin's Trophy and Pick Your Poison moved from Sideboard to main
+under Removal) while the agent added 33 entries locally. `archidekt_push_preview`
+reported `conflictCount: 2` (remote-added 1, remote-changed 1, local-added 33)
+but `applyAvailable: true`, and its operations would have deleted the Removal
+category and moved both cards back, although only the remote had changed them
+(baseline equals local). That is a data-loss risk.
+
+A fourth report (2026-10-31, same deck) said a pull dropped every remote entry
+past the first page (172 on Archidekt, 79 locally), causing 17 cards to be
+pushed four times. Research found no sync data loss: the local store held all
+172 entries and 184 cards. `local_deck_get` returned a size-cut first page (79
+entries, `truncated: true`; rows ordered commander, main, maybeboard,
+sideboard), which the agent took for the whole deck and re-added cards from.
+
 Research (2026-10-31) found that problem 2 is mostly a zone-mapping gap, not
 duplicates. Archidekt counts an entry toward the deck only when its first
 category has `includedInDeck`. `MapZone`
@@ -61,6 +88,17 @@ Bloodthirsty Blade is also a real second entry, under Removal.
 | --- | --- | --- |
 | REQ-011 | Every tool publishes an `outputSchema` that is a JSON object with `type: "object"` under every supported protocol version, including `2026-07-28`: `{"type":"object","properties":{"kind":{"type":"string","enum":[…the operation result kinds…]}},"required":["kind"]}`, set once where every tool is created (`ToolRegistration.cs:52`). Each `structuredContent` is the unwrapped result with a top-level `kind`. | Claude Code (protocol `2026-07-28`) lists all tools; E2E lists tools under 2024-11-05, 2025-03-26, 2025-06-18, 2025-11-25, and 2026-07-28 (through `server/discover`) and every `inputSchema` and `outputSchema` is an object with `type: "object"`. |
 | REQ-012 | A tool failure sets `isError: true` under every protocol version. | E2E under each version: `local_deck_get` with an unknown ID has `isError: true` and a top-level `kind`; `scryfall_card_data_status` succeeds with a top-level `kind` that is in the schema's enum. |
+| REQ-013 | Push resolves an add's Archidekt printing in one adapter resolver, from Archidekt's card search: `uid` equals `printingId`; else `edition.editioncode` (falling back to `setCode`) and collector number; else, for an entry without a printing, the first listed exact-name match (filtered by `oracleCard.uid` when an Oracle ID is set). A requested printing not on the first search page is followed through `next` within the request budget. | Fake Archidekt with real result shapes (several printings per name, `edition.editioncode`, `count` and `next`): a name with 18 printings resolves to the first listed; set plus number matches; an Oracle ID filters; a printing on page 2 resolves. |
+| REQ-014 | `archidekt_push_preview` resolves every add without a provider card ID with the same resolver, names the chosen printing in the operation detail, and sets `applyAvailable: false` with a notice naming the cards when a name has no match or the requests would pass the 150-request budget. Apply uses the preview's resolution, so anything the preview approves, apply can resolve. | Workflow test reproducing the report: 27 name-only sideboard adds, no card data, one card with 18 printings: preview shows each chosen printing, apply gives `applied` with clean verification. An unknown name gives `applyAvailable: false` and apply refuses with zero writes. |
+| REQ-015 | Apply resolves every add before its first write; a resolution failure refuses the push with no writes. An operation that failed before anything was sent reports `not-sent` ("Nothing was sent to Archidekt for this operation."), `unknown` is kept for a failure after a write was sent, and a push where nothing was applied reports outcome `not-applied`. | ApplyPlan tests: a lookup failure on the first operation gives `not-sent` and `not-applied`, never `unknown`; a failure during a write still gives `unknown`. |
+| REQ-016 | The add-time notice for entries added without card data no longer says reconcile makes them pushable; it says push picks Archidekt's default printing unless a printing is set. | Message test. |
+| REQ-017 | A push preview whose remote side changed since the last sync (`hasConflicts`) sets `applyAvailable: false`, lists no operations, and its notice says: "archidekt_push_apply would refuse this push: the Archidekt deck changed since the last sync (N rows; see differences with remote-* states). Run archidekt_pull_preview first; a pull keeps cards added locally when those are your only local changes. Then push again." The mode and credentials notice comes first when it applies. | Workflow test with the fake Archidekt reproducing the report (push; remote adds Removal and moves two Sideboard cards to it; local adds 3): push preview has `hasConflicts`, `applyAvailable: false`, the notice, no operations; push apply returns `push-conflict` with no writes. |
+| REQ-018 | A pull keeps local-only additions: when every local change since the last sync is an added entry or category, the pull preview is not a conflict, shows a `local-keep` operation ("Keep N cards added locally since the last sync; push them afterwards."), and apply replaces the rest from Archidekt, then adds the kept entries, their categories (created by exact name when missing), and assignments; the new baseline leaves them `local-added` so the next push adds them. A local add that matches a card the remote also added, or a kept card whose category gives a zone contradiction, is refused. Any other local change still needs `discardLocalChanges`. | Same setup: pull without the flag succeeds; the local deck has the two moved cards in main under Removal plus the 3 local adds; the next push preview is exactly 3 `entry-add`. A local change to a card the remote also changed gives `pull-conflict`; a duplicate add on both sides is refused. |
+| REQ-019 | A pull preview with `discardLocalChanges: true` says what is thrown away: "Replace the local deck with the Archidekt deck. This discards local changes made since the last sync: N cards added, N changed, N removed (categories: …). They are listed in differences with local-* states." | Pull preview test with local adds, changes, and removals checks the counts in the text. |
+| REQ-020 | Every `local_deck_get` page carries deck-wide totals (`entryCount`, `cardCount`, `cardsByZone`), and a cut page's `narrow` says it is one page of the deck ("This page shows N of M entries; the deck is not missing the rest. Follow nextCursor."). `local_deck_apply_changes` summaries carry the same deck-wide counts. | A 172-entry deck (99 sideboard rows): page 1 is cut, carries 172/184 and the zone counts, and following `nextCursor` reaches all 172. |
+| REQ-021 | `archidekt_push_preview` and `archidekt_push_apply` refuse a plan that removes more than 10 entries or more than 10% of the remote entries unless the caller passes `confirmRemovals` equal to the planned removal count; the preview notice names the count. | Push from a local deck missing 93 of 172 rows is refused without `confirmRemovals` and allowed with the exact count; a small removal is unaffected. |
+| REQ-022 | Archidekt 429s: a GET waits for Retry-After (at most about 10 s) and retries up to twice; a write that gets a 429 is `not-sent` (Archidekt did not process it) and the rest are not attempted, never retried automatically; a 429 or failure on the verification read after writes keeps the applied statuses and reports `applied-unverified`. A verification mismatch re-reads once after about 1 s and lists the rows that still differ. | Fake transport tests: 429 then success on a GET; 429 on a write gives `not-sent`; 429 on verification gives `applied-unverified` with statuses kept; a lagging read that settles gives `applied`; a real mismatch lists the differing rows. |
+| REQ-023 | `archidekt_deck_get` also reports repeated cards outside commander and main (for example the same card four times in the sideboard) as their own group list, separate from the Commander duplicate facts. | A deck with 17 cards four times in the sideboard reports 17 repeat groups. |
 | REQ-001 | An Archidekt entry whose first category has `includedInDeck: false` is not in the deck: the zone mapping sends it to `maybeboard` (unless it is a commander, sideboard, or maybeboard entry by the existing rules). The same mapping drives pulls, `archidekt_deck_get`, push planning, and the push zone check (`ArchidektSyncPlanner.cs:515`), so pull and push stay consistent. | Fake Archidekt test copying deck 22959335: the three entries map to `maybeboard`; main plus commander is 100; pull then push preview gives zero operations; a category whose flag is `true` (or missing) still maps to `main`. |
 | REQ-002 | Decks pulled before REQ-001 keep working. A stored baseline or local entry with `main` for such an entry does not produce false differences, a refused push, or a changed fingerprint by itself; the next pull moves the local entry to `maybeboard` as an ordinary pull change. | Upgrade test with a `0.13.0`-shaped baseline and local deck: push preview has no zone contradiction and no operations; pull preview shows the zone move for exactly those entries. |
 | REQ-003 | Each `archidekt_deck_get` entry reports `inDeck` (true when the first category is included, has no flag, or the entry has no category). | Same fixture: the three entries `false`, others `true`. |
@@ -80,6 +118,32 @@ deck search or derived inclusion rates (see Decisions); an
 
 Inspected at `d8b845c` and `86d25fb`.
 
+- Push printing resolution (`ArchidektDeckTransport.SelectExactCard`,
+  `ArchidektDeckTransport.cs:379-423`) accepts a name-only add only when
+  exactly one search result matches the name (Assassin's Trophy returns 18 on
+  Archidekt). Its set and collector-number match reads a top-level `setCode`
+  that real results do not have (the set is `edition.editioncode`), and it
+  reads only the first search page (Sol Ring: 141 results, 25 per page).
+  Reconcile sets only the Oracle ID (`DeckIdentityReconciliation.cs:462-466`),
+  so installing card data would not have helped. `ApplyPlanAsync`
+  (`ArchidektDeckOperations.cs:266-285`) labels any provider error `unknown`,
+  including a failed card lookup before any write. Preview only plans
+  (`ArchidektCoordinator.cs:404-478`) and never checks resolution. The fake
+  Archidekt gives one printing per name with a top-level `setCode`, so tests
+  passed against a shape the real service does not send.
+- `applyAvailable` reflects only mode and credentials
+  (`ArchidektApplyAvailability.cs:17-35`, `ArchidektResultPaging.PagePreview`).
+  The push preview already computes `hasConflicts`
+  (`ArchidektCoordinator.cs:452`), and `ApplyPushAsync` refuses a
+  conflicting push with `push-conflict` before any write (`:513-519`, tested
+  by `ApplyPush_RemoteChangedSinceBaseline_ReturnsPushConflictWithCurrentState`),
+  so the reported push would not have reverted Archidekt; the preview misled.
+  Push planning is two-way: `ToRemoteTarget` lays the whole local deck over
+  the remote (`ArchidektLocalMapper.cs:261-339`) and `PlanRemoteApply`
+  (`ArchidektSyncPlanner.cs:326-452`) never reads the baseline, which is why
+  the listed operations reverted remote edits. A pull with any local change is
+  a conflict (`ArchidektCoordinator.cs:225`), and the discard text has no
+  counts (`:228-234`).
 - Every tool returns `OperationResult<T>`, which has a custom JSON converter,
   so the schema exporter in ModelContextProtocol 2.2.0 gives the open schema
   `true`. The SDK passes it through under `2026-07-28`; under older versions
@@ -152,6 +216,13 @@ Decisions (owner, 2026-10-31):
 
 ## Steps And Verification
 
+6. Phase 6, conflicting pushes and merging pulls (REQ-017 to REQ-019), after
+   phase 5 (same push code).
+7. Phase 7, reading pages safely and sync guards (REQ-020 to REQ-023), on
+   `drsc/integ` after phase 6.
+5. Phase 5, push resolution (REQ-013 to REQ-016), after phase 1 (same
+   Archidekt files; may run alongside phase 2 in its own worktree branched
+   from phase 1).
 0. Phase 0, tools load under every protocol (REQ-011, REQ-012): the shared
    output schema, the protocol E2E theory, unit tests that every registered
    tool has an object schema, and an updated
@@ -178,6 +249,22 @@ are independent of 1 and 2 and may run in parallel worktrees.
 
 ## Risks And Open Questions
 
+- **D-7 (proposed, non-blocking):** a three-way push (push only what the
+  local side changed relative to the baseline, keeping remote-only changes) is
+  deferred. With REQ-017 a conflicting push lists no operations and refuses,
+  and REQ-018 makes pull-then-push keep local additions, so the reported
+  workflow is safe without it.
+- The report counted `remote-changed: 1` for two moved cards; the code would
+  count 2 if both kept their relation IDs. Unresolved without the preview
+  JSON; REQ-017's test asserts the code's count.
+- **D-6 (proposed, non-blocking):** the default printing for a name-only add
+  is Archidekt's first listed search result (its order looked newest first;
+  not verified to match what Archidekt's own site picks). Whether to skip promo
+  collector numbers stays open. Owner may change the rule later.
+- Phase 5 makes the push preview send card searches (one GET per distinct
+  name, about 2 s each with pacing), so a preview with 27 name-only adds takes
+  about a minute, and one push holds about 70 new name-only cards at most.
+
 - **D-5 (owner, 2026-10-31):** every phase ships together as `0.13.1`. The
   `concise` default (D-2) is breaking, which `docs/versioning.md` reserves for
   minor releases; the owner chose the patch number, and the CHANGELOG marks it
@@ -193,6 +280,15 @@ are independent of 1 and 2 and may run in parallel worktrees.
   `maybeboard` entry keeps its Archidekt category (`ArchidektLocalMapper`
   keeps category names); confirm a round trip never adds Archidekt's own
   Maybeboard category to such an entry.
+- Follow-ups found in phases 0 to 7, not fixed in `0.13.1`:
+  - `local_deck_get` and `card_list_query` cut pages carry a generic narrow hint without counts for the card
+    fields (not reported by a user).
+  - A name-only add for a foil or etched entry takes the first listed Archidekt printing even when that printing
+    lacks the finish.
+  - A set code without a collector number takes the first printing in that set.
+  - The ModelContextProtocol SDK still publishes a boolean `outputSchema` under `2026-07-28` for a type with a
+    custom converter. The upstream issue is not filed; the owner decides whether to file it. `0.13.1` works around
+    it with one shared object schema.
 - After Scryfall's 24-hour snapshot lifetime, an old cursor fails as
   `invalid-cursor` (inferred from `ScryfallService.cs:1588`); REQ-009's
   `narrow` should not promise more.
@@ -201,7 +297,26 @@ are independent of 1 and 2 and may run in parallel worktrees.
 
 | Requirement | State | Evidence |
 | --- | --- | --- |
-| REQ-011, REQ-012 | implemented on `drsc/p0-protocol`; Claude Code load check pending | `OperationResultSchema.cs`, `ToolProtocolMcpTests` (15 cases over five protocol versions), `ToolOutputSchemaTests`; built exe shows an object `outputSchema` with a `kind` enum for all 86 tools under legacy and `2026-07-28`, and `isError` on a failure. Earlier evidence: Claude Code MCP logs (2026-10-31T14-59 to 15-11) and a stdio reproduction against installed 0.13.0: `outputSchema` is `true` for all 86 tools under `2026-07-28`; a failure under `2025-11-25` has no `isError`. |
-| REQ-001 to REQ-010 | planned | Research reports of 2026-10-31: one read-only GET of Archidekt deck 22959335, one read-only Scryfall search, four Scryfall rank checks, EDHREC terms, and Archidekt terms with two read-only search GETs. |
-| REQ-001, REQ-002, REQ-003 | implemented on `drsc/p1-indeck` | `MapZone` follows the first category's `includedInDeck`; `Recompute` and `ToRemoteTarget` handle a `0.13.0` baseline; `inDeck` is computed at read time. Tests: `ArchidektWorkflowTests.DeckLikeTheRealDeck_...`, `DeckPulledByTheEarlierVersion_...`, and the `MapZone_`/`IsInDeck_` theories in `ArchidektLocalMapperTests`. |
-| REQ-004 to REQ-008 | implemented on `drsc/p1-indeck` | `ArchidektDeckFacts` (duplicates, size fact), `ArchidektDeckReadOptions` (`zones`, `responseFormat`), `PageDeck` zone ordering, `ArchidektDeckEntryView` (concise) and `ArchidektFullDeckEntryView`. Tests: `ArchidektDeckReadTests`, plus the updated `ArchidektWorkflowTests` and the E2E schema pins. |
+| REQ-001 | implemented; checks on the merged commit pending | `c2e04ed` (`ArchidektContractMapper.MapZone`, `IsInDeck`). `ArchidektWorkflowTests`: `DeckLikeTheRealDeck_ExcludedFirstCategoriesAreMaybeboard_AndPullThenPushIsClean`, `MapZone_FollowsTheFirstCategoryFlag`, `IsInDeck_IsFalseOnlyWhenTheFirstCategoryIsFlaggedOut`. |
+| REQ-002 | implemented; checks on the merged commit pending | `c2e04ed` (fingerprint recompute reads the current zone; `ArchidektSyncPlanner.FindStaleZoneMoves`). `DeckPulledByTheEarlierVersion_ShowsNoFalseDifferenceAndTheNextPullMovesTheEntries`. |
+| REQ-003 | implemented; checks on the merged commit pending | `c2e04ed`. The `inDeck` assertions in `ArchidektWorkflowTests` and `ArchidektDeckReadTests`. |
+| REQ-004 | implemented; checks on the merged commit pending | `0f710cf`. `ArchidektDeckReadTests`: `Summary_HasTheDuplicatesAndTheSizeFact_ForTheWholeDeck`, `Duplicates_AcrossCommanderAndMain_AreGrouped_AndTheListIsCapped`, `Duplicates_WithoutOracleId_FallBackToTheName_AndOnlyCommanderGetsTheSizeFact`. |
+| REQ-005 | implemented; checks on the merged commit pending | `0f710cf`. `ZonesFilter_ShowsTheChosenZones_AndOffsetsCountTheFilteredList`, `UnknownFormatOrZone_IsRefusedWithTheArgument`, `ZonesArgument_PublishesAnEnumOnItsItems`. |
+| REQ-006 | implemented; checks on the merged commit pending | `0f710cf`. `ConciseDefault_CommanderAndMain_FitOnePage`, `ResponseFormat_ChoosesTheEntryFields`, `DescriptionAndNarrow_NameResponseFormatFullAndZones`. |
+| REQ-007 | implemented; checks on the merged commit pending | `0f710cf`. `Entries_AreOrderedByZoneNameAndRelation_AndEveryEntryIsReachedOnce`. |
+| REQ-008 | implemented; checks on the merged commit pending | `0f710cf`. `SnapshotGet_TakesTheSameZonesAndResponseFormat`. |
+| REQ-009 | implemented; checks on the merged commit pending | `1578b82` (`ScryfallCutPageHint`, `ScryfallCardResponses`, `CardListCoordinator`). `ScryfallCardFormatTests`: `Search_CutConcisePage_ReportsItsCountsAndTheCutReason`, `Search_UncutPage_ReportsCountsWithoutCutFields`, `Search_ConciseWithoutOracleText_FillsAPageTheFullTextVersionCuts`, `Collection_CutPage_ReportsItsCountsAndTheCutReason`; `CardListCompareTests`. |
+| REQ-010 | implemented; checks on the merged commit pending | `1578b82`. `EdhrecRank_Descriptions_SayItIsDeckInclusionNotACommanderRank`; the 4,096-character architecture test. |
+| REQ-011 | implemented; checks on the merged commit pending | `4ac23c6` (`OperationResultSchema`, `ToolRegistration`). `ToolOutputSchemaTests`: `EveryRegisteredTool_PublishesTheSharedObjectOutputSchema`, `SharedSchema_ListsEveryOperationResultKind`; E2E `ToolProtocolMcpTests.ToolList_AtEachProtocolVersion_PublishesObjectSchemas`. Claude Code load not re-checked yet. Claude Code MCP logs (2026-10-31T14-59 to 15-11) and a stdio reproduction against installed 0.13.0 showed the fault. |
+| REQ-012 | implemented; checks on the merged commit pending | `4ac23c6`. E2E `ToolCall_UnknownDeck_SetsIsErrorAndReturnsTopLevelKind`, `ToolCall_Success_ReturnsTopLevelKindFromTheSchema`. |
+| REQ-013 | implemented; checks on the merged commit pending | `5d764bf` (`ArchidektPrintingResolver`). `ArchidektPrintingResolverTests`: `NameOnlyEntry_TakesTheFirstListedPrintingAndNamesIt`, `PrintingId_MatchesTheResultUid`, `SetAndCollectorNumber_MatchTheEditionCode`, `OracleId_FiltersTheNameMatches`, `PrintingOnPageTwo_IsFoundThroughTheNextLink`. |
+| REQ-014 | implemented; checks on the merged commit pending | `5d764bf`. `NameOnlySideboardAdds_PushWithArchidektsDefaultPrinting_AndTheNextPreviewIsClean`, `NameWithNoArchidektMatch_BlocksThePushAndSendsNothing`, `PushNeedingMoreRequestsThanTheLimit_IsBlockedAndSendsNothing`. |
+| REQ-015 | implemented; checks on the merged commit pending | `5d764bf`. `ApplyPlan_CardWithNoPrinting_SendsNothingAndIsNotApplied`, `ApplyPlan_SearchFailureBeforeAnyWrite_IsNotSent`, `ApplyPlan_FailureAfterAWriteStarted_IsUnknown`. |
+| REQ-016 | implemented; checks on the merged commit pending | `5d764bf`. `AddByNameScenarioTests`, `DeckWriteSummaryTests`, `DeckEntryResolverTests` (message text). |
+| REQ-017 | implemented; checks on the merged commit pending | `7d40eba`; notice wording fixed in the docs pass. `PushPreview_AfterTheRemoteChanged_OffersNoApplyAndNoOperations`, `PushPreview_AfterTheRemoteChanged_InLocalMode_PutsTheModeNoticeFirst`. Report from a live session (deck 27968076). |
+| REQ-018 | implemented; checks on the merged commit pending | `7d40eba`. `Pull_AfterTheRemoteChanged_KeepsLocalAdditionsAndTheNextPushAddsOnlyThem`, `Pull_WithALocalCategory_KeepsItAndTheNextPushCreatesIt`, `Pull_WithALocalChangeToACardTheRemoteChanged_IsAConflict`, `Pull_WithACardBothSidesAdded_IsRefused`, `Pull_WithAKeptCardWhoseCategoriesGiveAnotherZone_IsRefused`. |
+| REQ-019 | implemented; checks on the merged commit pending | `7d40eba`. `PullPreview_WithDiscard_CountsWhatIsThrownAway`. |
+| REQ-020 | implemented; checks on the merged commit pending | `e51aabf` (`DeckZoneCounts`, `DeckCardViewCoordinator`). `DeckCardViewTests.Get_LargeSideboardDeck_EveryPageCarriesDeckWideTotals`; `DeckWriteSummaryTests`. Fourth report; read-only copy of the local store (deck 01a1929f: 172 entries, 184 cards) and one public GET of deck 27968076. |
+| REQ-021 | implemented; checks on the merged commit pending | `8cf53f4` (`ArchidektRemovalGuard`). `Push_RemovingMostOfTheArchidektDeck_NeedsTheExactRemovalCount`, `Push_RemovingAFewEntriesFromALargeDeck_NeedsNoConfirmation`; E2E expectation in `f773557`. |
+| REQ-022 | implemented; checks on the merged commit pending | `bb5956f`. `ArchidektRateLimitAndVerificationTests`: `Read_WithARateLimitThenSuccess_WaitsAndReturnsTheDeck`, `Write_WithARateLimit_IsNotSentAndNotRetried`, `FinalRead_ThatFailsAfterTheWrites_KeepsTheStatusesAndIsAppliedUnverified`, `FinalRead_ThatLagsThenSettles_IsApplied`, `FinalRead_WithARealDifference_ListsTheRowsThatDiffer`. |
+| REQ-023 | implemented; checks on the merged commit pending | `f990976`. `ArchidektDeckReadTests.Repeats_InTheSideboard_AreListedApartFromTheDuplicates_AndTheListIsCapped`. |

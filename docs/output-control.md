@@ -61,6 +61,39 @@ printings) come from installed card data. When it is not installed they are
 `null` and `limits` says why. The result also names the format it used in
 `responseFormat`.
 
+### Page counts and cut pages
+
+`pageSize` is a maximum. `scryfall_search`, `scryfall_cards_get`, `scryfall_installed_cards_by_tag`, and
+`card_lists_compare` report two counts on every page: `returnedCount` (the cards on the page) and
+`requestedCount` (the cards the page would hold without the size limit). A cut page also sets
+`cutReason: "result-size-limit"` and a `narrow` text with the numbers: the kept and requested counts, the average
+bytes per card on the page, the card where `nextCursor` continues (no card is skipped), and that leaving
+`oracleText` out of `fields` fits more cards in the concise format. An uncut page has no `cutReason`.
+`oracleText` is usually the largest field.
+
+### Archidekt deck reads
+
+`archidekt_deck_get` and `archidekt_snapshots_get` (kind `get`) take `zones` and `responseFormat`.
+
+| `responseFormat` | Entry fields |
+| --- | --- |
+| `concise` (default) | `cardName`, `quantity`, `zone`, `categoryNames`, `setCode`, `collectorNumber`, `oracleId`, `inDeck`. |
+| `full` or `standard` | The concise fields plus every other entry field: `providerRelationId`, `providerCardId`, `printingId`, `language`, `finish`, `primaryCategoryName`, `sortOrder`. |
+
+`zones` (`commander`, `main`, `sideboard`, `maybeboard`) limits the entries; omit it for every zone. Entries are
+ordered by zone in that order, then card name, then relation ID. `offset` and `nextOffset` count the chosen entries,
+`shownEntryCount` says how many there are, and a bad offset is refused with `invalid-offset` naming that count. The
+summary on every page covers the whole deck whatever `zones` asks for (entry, card, and category counts,
+`cardsByZone`, `duplicates`, `repeatsOutsideMain`, and the Commander `size` fact). A cut page's `narrow` says
+which entries are shown, how to read the rest, and to pass `responseFormat: "full"` for every field.
+
+### Local deck pages
+
+Every `local_deck_get` page carries deck-wide totals: `entryCount`, `cardCount`, and `cardsByZone`. A cut page's
+`narrow` says "This page shows N of M entries; the deck is not missing the rest. Follow nextCursor." and then how to
+get smaller pages (a smaller `pageSize`, or fewer `fields` when the page has card data). The
+`local_deck_apply_changes` summary carries the same totals.
+
 ## Historical: `detailLevel`
 
 > Historical reference: these removed legacy short-output aliases are not a
