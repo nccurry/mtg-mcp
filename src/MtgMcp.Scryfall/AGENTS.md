@@ -1,7 +1,7 @@
-# Scryfall Adapter Instructions
+# MtgMcp.Scryfall — Agent Instructions
 
-Root and `src/AGENTS.md` remain authoritative. This file adds defaults for
-`MtgMcp.Scryfall`.
+The root `AGENTS.md` and `src/AGENTS.md` still apply. This file adds rules for
+`src/MtgMcp.Scryfall/`.
 
 ## Provider Boundary
 
@@ -35,8 +35,8 @@ Root and `src/AGENTS.md` remain authoritative. This file adds defaults for
 
 ## Validation
 
-- Keep normal tests offline with fake HTTP, clocks, compressed JSONL, and
-  temporary databases. Mark bounded provider and full-card-data checks `Live`.
+- Build normal tests from fake HTTP, clocks, compressed JSONL, and temporary
+  databases. Mark bounded provider and full-card-data checks `Live`.
 - Test current official contract changes with sanitized fixtures before
   accepting them. Full-card-data acceptance requires an explicit retained data
   directory and must never run as part of ordinary CI.

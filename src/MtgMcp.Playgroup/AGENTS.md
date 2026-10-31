@@ -1,6 +1,7 @@
-# Playgroup Adapter Instructions
+# MtgMcp.Playgroup — Agent Instructions
 
-These instructions apply to changes under `MtgMcp.Playgroup`.
+The root `AGENTS.md` and `src/AGENTS.md` still apply. This file adds rules for
+`src/MtgMcp.Playgroup/`.
 
 ## Provider Boundary
 
@@ -24,7 +25,7 @@ These instructions apply to changes under `MtgMcp.Playgroup`.
 - Never automatically retry an event batch or live-session creation after any
   response or ambiguous transport failure.
 - Keep live tests read-only until the official API documents cleanup for its
-  writes. Normal tests must remain offline and fixture-backed.
+  writes. Keep normal tests fixture-backed.
 
 ## Contract Maintenance
 
