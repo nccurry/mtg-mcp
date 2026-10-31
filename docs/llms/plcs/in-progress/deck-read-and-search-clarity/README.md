@@ -203,3 +203,4 @@ are independent of 1 and 2 and may run in parallel worktrees.
 | --- | --- | --- |
 | REQ-011, REQ-012 | planned | Claude Code MCP logs (2026-10-31T14-59 to 15-11) and a stdio reproduction against installed 0.13.0: `outputSchema` is `true` for all 86 tools under `2026-07-28`; a failure under `2025-11-25` has no `isError`. |
 | REQ-001 to REQ-010 | planned | Research reports of 2026-10-31: one read-only GET of Archidekt deck 22959335, one read-only Scryfall search, four Scryfall rank checks, EDHREC terms, and Archidekt terms with two read-only search GETs. |
+| REQ-001, REQ-002, REQ-003 | implemented on `drsc/p1-indeck` | `MapZone` follows the first category's `includedInDeck`; `Recompute` and `ToRemoteTarget` handle a `0.13.0` baseline; `inDeck` is computed at read time. Tests: `ArchidektWorkflowTests.DeckLikeTheRealDeck_...`, `DeckPulledByTheEarlierVersion_...`, and the `MapZone_`/`IsInDeck_` theories in `ArchidektLocalMapperTests`. |

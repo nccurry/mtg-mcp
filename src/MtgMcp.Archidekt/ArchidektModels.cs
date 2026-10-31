@@ -110,6 +110,16 @@ public sealed record RemoteDeckSnapshot(
     /// </summary>
     public IReadOnlyDictionary<string, JsonElement> Extensions { get; init; } =
         new Dictionary<string, JsonElement>(Extensions, StringComparer.Ordinal);
+
+    /// <summary>
+    /// Tells whether Archidekt counts an entry toward the deck: its first category is included in the deck, or it has
+    /// no category, or the category has no flag. Worked out from the categories, never stored.
+    /// </summary>
+    public bool IsInDeck(RemoteDeckEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return ArchidektJsonContract.IsInDeck(entry.CategoryNames, CategoryNames.Index(Categories, value => value.Name));
+    }
 }
 
 /// <summary>

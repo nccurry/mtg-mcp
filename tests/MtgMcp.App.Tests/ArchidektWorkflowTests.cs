@@ -253,6 +253,126 @@ public sealed class ArchidektWorkflowTests
     }
 
     /// <summary>
+    /// Verifies a deck shaped like the real deck 22959335 reads the way Archidekt counts it: entries whose first
+    /// category is not included in the deck are in the maybeboard, the other main entries and the commander make 100
+    /// cards, a card under an excluded category and also a second entry under an included one stays in the deck, and a
+    /// pull followed by a push preview gives no operation.
+    /// </summary>
+    [Fact]
+    public async Task DeckLikeTheRealDeck_ExcludedFirstCategoriesAreMaybeboard_AndPullThenPushIsClean()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckWithExcludedCategories());
+        CancellationToken token = TestContext.Current.CancellationToken;
+
+        List<ArchidektDeckEntryView> entries = await ReadEveryEntryAsync(world, token);
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        ArchidektSyncPreviewView push = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        ArchidektSyncPreviewView pull = Success(
+            await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
+
+        List<ArchidektDeckEntryView> outOfDeck = [.. entries.Where(value => value.Zone == "maybeboard")];
+        Assert.Equal(
+            ["Bloodthirsty Blade", "Osteomancer Adept", "Revival // Revenge"],
+            outOfDeck.Select(value => value.CardName).Order(StringComparer.Ordinal));
+        Assert.All(outOfDeck, value => Assert.False(value.InDeck));
+        Assert.All(entries.Where(value => value.Zone != "maybeboard"), value => Assert.True(value.InDeck));
+        Assert.Equal(100, entries.Where(value => value.Zone is "main" or "commander").Sum(value => value.Quantity));
+        ArchidektDeckEntryView blade = Assert.Single(
+            entries,
+            value => value.CardName == "Bloodthirsty Blade" && value.Zone == "main");
+        Assert.Equal("Removal", blade.PrimaryCategoryName);
+        Assert.Equal(3, local.Entries.Count(value => value.Zone == "maybeboard"));
+        Assert.Equal(100, local.Entries.Where(value => value.Zone is "main" or "commander").Sum(value => value.Quantity));
+        Assert.Empty(push.Operations);
+        Assert.Empty(push.Differences);
+        Assert.Empty(pull.Differences);
+        Assert.DoesNotContain(
+            local.Categories,
+            value => value.Name.Equals("Maybeboard", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Verifies a deck pulled by 0.13.0 keeps working: its stored baseline and local entries put the three entries
+    /// whose first category is excluded in the main deck, and neither a diff nor a push preview shows a difference, an
+    /// operation or a zone contradiction because of it, while a pull preview shows the move to the maybeboard for
+    /// exactly those entries; after that pull the local deck matches Archidekt, a push preview is clean, and the
+    /// entries did not get the Maybeboard category of Archidekt.
+    /// </summary>
+    [Fact]
+    public async Task DeckPulledByTheEarlierVersion_ShowsNoFalseDifferenceAndTheNextPullMovesTheEntries()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckWithExcludedCategories());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        RemoteDeckSnapshot remote = Success(await world.Coordinator.Service.GetDeckAsync("42", token));
+        HashSet<string> excludedRelations = [.. remote.Entries
+            .Where(value => value.Zone == "maybeboard")
+            .Select(value => value.ProviderRelationId)];
+        Assert.Equal(3, excludedRelations.Count);
+
+        // The deck as 0.13.0 stored it: the same rows, but the three excluded-category entries in zone main.
+        RemoteDeckSnapshot earlier = remote with
+        {
+            Entries = [.. remote.Entries.Select(value => excludedRelations.Contains(value.ProviderRelationId)
+                ? value with { Zone = "main" }
+                : value)],
+        };
+        DeckProviderBinding binding = new(
+            Guid.CreateVersion7(),
+            "archidekt",
+            remote.RemoteId,
+            remote.RemoteUri,
+            remote.Evidence.ContractVersion,
+            "earlier-remote-fingerprint",
+            DateTimeOffset.UtcNow,
+            null);
+        DeckCreateRequest create = ArchidektLocalMapper.ToCreateRequest(earlier, binding);
+        string baseline = ArchidektLocalMapper.CreateBaseline(create, earlier);
+        DeckDocument local = Success(await world.Store.CreateSynchronizedAsync(
+            create,
+            new DeckSyncBaseline(binding.BindingId, baseline),
+            token));
+        Assert.Equal(0, local.Entries.Count(value => value.Zone == "maybeboard"));
+
+        ArchidektSyncDiffView diff = Success(await world.Reads.DiffAsync(local.DeckId, cancellationToken: token));
+        ArchidektSyncPreviewView push = Success(
+            await world.Reads.PreviewPushAsync(local.DeckId, cancellationToken: token));
+        ArchidektSyncPreviewView pull = Success(
+            await world.Reads.PreviewPullAsync("42", local.DeckId, cancellationToken: token));
+
+        Assert.Equal(0, diff.DifferenceCount);
+        Assert.Empty(push.Operations);
+        Assert.Equal(0, push.Summary.DifferenceCount);
+        Assert.False(push.HasConflicts);
+        Assert.Equal(3, pull.Differences.Count);
+        Assert.All(pull.Differences, value => Assert.Equal("remote-changed", value.State));
+        Assert.Equal(
+            ["Bloodthirsty Blade", "Osteomancer Adept", "Revival // Revenge"],
+            pull.Differences
+                .Select(value => JsonNode.Parse(value.RemoteValue!)!["cardName"]!.GetValue<string>())
+                .Order(StringComparer.Ordinal));
+        Assert.All(
+            pull.Differences,
+            value => Assert.Equal("maybeboard", JsonNode.Parse(value.RemoteValue!)!["zone"]!.GetValue<string>()));
+
+        ArchidektApplyResult applied = Success(await world.LocalWrites.ApplyPullAsync(
+            new ArchidektPullApplyRequest("42", local.DeckId, local.Revision, pull.RemoteFingerprint, pull.PreviewFingerprint),
+            token));
+        DeckDocument after = Success(await world.Store.GetAsync(local.DeckId, token));
+        ArchidektSyncPreviewView pushAfter = Success(
+            await world.Reads.PreviewPushAsync(local.DeckId, cancellationToken: token));
+
+        Assert.Equal("applied", applied.Outcome);
+        Assert.Equal(3, after.Entries.Count(value => value.Zone == "maybeboard"));
+        Assert.Empty(pushAfter.Operations);
+        Assert.Empty(pushAfter.Differences);
+        Assert.DoesNotContain(
+            after.Categories,
+            value => value.Name.Equals("Maybeboard", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Verifies the push notice names the mode and the credentials, and the pull notice depends on the mode alone:
     /// a pull reads a public deck without credentials.
     /// </summary>
@@ -892,6 +1012,54 @@ public sealed class ArchidektWorkflowTests
         fake.AddEntry(fake.AddCardToCatalog(504, "Dart"), 1, "Removal");
         fake.AddCardToCatalog(9001, "Shock");
         return fake;
+    }
+
+    /// <summary>
+    /// Creates a deck shaped like the real public deck 22959335: one commander, 98 other main cards, a second entry
+    /// of Bloodthirsty Blade under Removal, and three entries whose first category is not included in the deck
+    /// (Bloodthirsty Blade under Multiplayer, Revival // Revenge under Reanimate then Burn, Osteomancer Adept under
+    /// Reanimate). Counted the way Archidekt counts, the deck has 100 cards.
+    /// </summary>
+    private static FakeArchidekt CreateDeckWithExcludedCategories()
+    {
+        FakeArchidekt fake = new();
+        fake.AddCategory("Commander");
+        fake.AddCategory("Removal");
+        fake.AddCategory("Burn");
+        fake.AddCategory("Multiplayer", includedInDeck: false);
+        fake.AddCategory("Reanimate", includedInDeck: false);
+        fake.AddEntry(fake.AddCardToCatalog(3001, "Test Commander"), 1, "Commander");
+        FakeArchidekt.FakeCard blade = fake.AddCardToCatalog(3002, "Bloodthirsty Blade");
+        fake.AddEntry(blade, 1, "Multiplayer");
+        fake.AddEntry(blade, 1, "Removal");
+        fake.AddEntry(fake.AddCardToCatalog(3003, "Revival // Revenge"), 1, "Reanimate", "Burn");
+        fake.AddEntry(fake.AddCardToCatalog(3004, "Osteomancer Adept"), 1, "Reanimate");
+        for (int index = 0; index < 98; index++)
+        {
+            fake.AddEntry(fake.AddCardToCatalog(3100 + index, $"Filler {index:000}"), 1, "Removal");
+        }
+
+        return fake;
+    }
+
+    /// <summary>
+    /// Reads every page of the deck and returns its entries.
+    /// </summary>
+    private static async Task<List<ArchidektDeckEntryView>> ReadEveryEntryAsync(World world, CancellationToken token)
+    {
+        List<ArchidektDeckEntryView> entries = [];
+        int offset = 0;
+        while (true)
+        {
+            ArchidektDeckView page = Success(await world.Reads.GetDeckAsync("42", offset, token));
+            entries.AddRange(page.Entries);
+            if (page.NextOffset is null)
+            {
+                return entries;
+            }
+
+            offset = page.NextOffset.Value;
+        }
     }
 
     /// <summary>

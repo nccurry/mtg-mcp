@@ -74,7 +74,8 @@ internal static class ArchidektResultPaging
             DescriptionTruncated = description.TruncatedOrNull,
             DescriptionLength = description.LengthIfTruncated,
         };
-        List<RemoteDeckEntry> ordered = [.. deck.Entries];
+        List<ArchidektDeckEntryView> ordered =
+            [.. deck.Entries.Select(value => ArchidektDeckEntryView.From(value, deck.IsInDeck(value)))];
         ordered.Sort(static (left, right) =>
         {
             int byName = StringComparer.OrdinalIgnoreCase.Compare(left.CardName, right.CardName);

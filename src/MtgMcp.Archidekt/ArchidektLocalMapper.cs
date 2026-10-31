@@ -296,6 +296,7 @@ public static class ArchidektLocalMapper
             .ToDictionary(group => group.Key, group => group.ToList());
         Dictionary<string, RemoteDeckEntry> baselineEntries = baseline.RemoteSnapshot.Entries
             .ToDictionary(value => value.ProviderRelationId, StringComparer.Ordinal);
+        Dictionary<string, RemoteDeckCategory> targetCategoriesByName = CategoryNames.Index(categories, value => value.Name);
         List<RemoteDeckEntry> entries = [];
         foreach (DeckEntry localEntry in local.Entries)
         {
@@ -307,6 +308,14 @@ public static class ArchidektLocalMapper
                 localEntry.EntryId,
                 assignments,
                 categoryNames);
+            // A deck pulled by 0.13.0 keeps zone main for an entry whose first category is not included in the deck,
+            // and its baseline row says main too. That is a zone the old rule gave, not a zone the user chose, so it
+            // follows the categories as a read of Archidekt now gives it; a zone the user changed is kept as chosen.
+            string zone = baselineRow is not null &&
+                string.Equals(localEntry.Zone, baselineRow.Zone, StringComparison.Ordinal) &&
+                IsStaleZone(baselineRow, baseline.RemoteSnapshot)
+                    ? ArchidektJsonContract.MapZone(names, targetCategoriesByName)
+                    : localEntry.Zone;
 
             entries.Add(new RemoteDeckEntry(
                 baselineRow?.ProviderRelationId ?? string.Empty,
@@ -319,7 +328,7 @@ public static class ArchidektLocalMapper
                 localEntry.CollectorNumber,
                 localEntry.Language,
                 localEntry.Finish,
-                localEntry.Zone,
+                zone,
                 names,
                 primary,
                 localEntry.SortOrder));
@@ -336,6 +345,18 @@ public static class ArchidektLocalMapper
             ContentFingerprint = contentFingerprint,
             RemoteFingerprint = contentFingerprint,
         };
+    }
+
+    /// <summary>
+    /// Tells whether a stored baseline row has a zone that the current zone rule would not give its categories, which
+    /// is what a deck pulled before entries in categories outside the deck were mapped to the maybeboard looks like.
+    /// </summary>
+    private static bool IsStaleZone(RemoteDeckEntry row, RemoteDeckSnapshot snapshot)
+    {
+        return !string.Equals(
+            row.Zone,
+            ArchidektJsonContract.MapZone(row.CategoryNames, CategoryNames.Index(snapshot.Categories, value => value.Name)),
+            StringComparison.Ordinal);
     }
 
     /// <summary>

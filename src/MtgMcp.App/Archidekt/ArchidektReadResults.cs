@@ -163,6 +163,51 @@ internal sealed record ArchidektDeckSummary(
     IReadOnlyDictionary<string, int> CardsByZone);
 
 /// <summary>
+/// Shows one deck entry as Archidekt holds it, plus whether Archidekt counts it toward the deck.
+/// </summary>
+internal sealed record ArchidektDeckEntryView(
+    string ProviderRelationId,
+    string ProviderCardId,
+    int Quantity,
+    string CardName,
+    Guid? OracleId,
+    Guid? PrintingId,
+    string? SetCode,
+    string? CollectorNumber,
+    string Language,
+    string Finish,
+    string Zone,
+    IReadOnlyList<string> CategoryNames,
+    string? PrimaryCategoryName,
+    int SortOrder,
+    bool InDeck)
+{
+    /// <summary>
+    /// Copies an entry and adds whether its first category puts it in the deck. Nothing is stored for this: it is
+    /// worked out from the deck's categories at read time, so it never changes a fingerprint or a saved snapshot.
+    /// </summary>
+    internal static ArchidektDeckEntryView From(RemoteDeckEntry entry, bool inDeck)
+    {
+        return new ArchidektDeckEntryView(
+            entry.ProviderRelationId,
+            entry.ProviderCardId,
+            entry.Quantity,
+            entry.CardName,
+            entry.OracleId,
+            entry.PrintingId,
+            entry.SetCode,
+            entry.CollectorNumber,
+            entry.Language,
+            entry.Finish,
+            entry.Zone,
+            entry.CategoryNames,
+            entry.PrimaryCategoryName,
+            entry.SortOrder,
+            inDeck);
+    }
+}
+
+/// <summary>
 /// Returns one deck with a leading summary and one size-limited page of its entries. The categories and the unknown
 /// provider fields, and the description, come with the first page (offset 0) only. When <see cref="NextOffset"/> is
 /// set, call again with that offset for the following entries.
@@ -181,7 +226,7 @@ internal sealed record ArchidektDeckView(
     ArchidektRetrievalEvidence Evidence,
     int Offset,
     IReadOnlyList<RemoteDeckCategory> Categories,
-    IReadOnlyList<RemoteDeckEntry> Entries,
+    IReadOnlyList<ArchidektDeckEntryView> Entries,
     IReadOnlyDictionary<string, System.Text.Json.JsonElement> Extensions)
 {
     /// <summary>
