@@ -14,6 +14,26 @@ namespace MtgMcp.App.Archidekt;
 internal sealed class ArchidektReadTools
 {
     /// <summary>
+    /// Describes the zones argument of the tools that read a deck's entries.
+    /// </summary>
+    private const string ZonesDescription =
+        "Optional zones to read: commander, main, sideboard, maybeboard. Omit to read every zone. Offsets count " +
+        "the chosen entries.";
+
+    /// <summary>
+    /// Describes the responseFormat argument of the tools that read a deck's entries.
+    /// </summary>
+    private const string ResponseFormatDescription =
+        "Entry fields: concise (default: card name, quantity, zone, categories, printing, Oracle ID, inDeck), or " +
+        "full or standard (every entry field: provider IDs, finish, language, sort order, and the rest).";
+
+    /// <summary>
+    /// Gets the allowed item values of the list parameters, published in the tool schema.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, IReadOnlyList<string>> ItemChoices { get; } =
+        new Dictionary<string, IReadOnlyList<string>> { ["zones"] = ArchidektDeckReadOptions.ZoneOrder };
+
+    /// <summary>
     /// Provides App-owned local/provider composition.
     /// </summary>
     private readonly ArchidektCoordinator coordinator;
@@ -64,22 +84,38 @@ internal sealed class ArchidektReadTools
     /// </summary>
     [McpServerTool(Name = "archidekt_deck_get", Title = "Get Archidekt Deck", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
     [Description(
-        "Archidekt: gets fresh deck metadata, a leading summary (entry, card, and category counts, cards by " +
-        "zone), exact printings, zones, categories, provider IDs, and canonical fingerprints. Entries come in " +
-        "pages that fit the size limit, ordered by card name; categories and unknown provider fields come with the " +
-        "first page. Each entry has inDeck: false when its first category is not included in the deck (it is then in " +
-        "the maybeboard zone). Unknown provider fields over 8,000 bytes are left out and extensionsOmitted is true; they " +
-        "cannot be read through this tool. When truncated is true, call again with offset set to nextOffset." +
+        "Archidekt: gets fresh deck metadata and entries. Entries hold card name, quantity, zone, categories, " +
+        "printing, Oracle ID, and inDeck; pass responseFormat \"full\" for every field (provider IDs, finish, " +
+        "language, sort order, and the rest). Pass zones (commander, main, sideboard, maybeboard) to read only " +
+        "some; offsets count the chosen entries. The leading summary covers the whole deck whatever the zones: " +
+        "entry, card, and category counts, cards by zone, cards held more than once across commander and main " +
+        "(duplicates, matched by Oracle ID, basic lands and entries not in the deck skipped), and for Commander " +
+        "decks the main and commander card count next to 100. Entries come in pages that fit the size limit, " +
+        "ordered by zone, then card name; categories and unknown provider fields come with the first page. Each " +
+        "entry has inDeck: false when its first category is not included in the deck (it is then in the " +
+        "maybeboard zone). Unknown provider fields over 8,000 bytes are left out and extensionsOmitted is true. " +
+        "When truncated is true, call again with offset set to nextOffset." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektDeckView>> GetDeckAsync(
         [Description("Exact Archidekt deck identifier.")] string deckId,
-        [Description("Number of entries to skip; use nextOffset from the previous page. Default 0.")] int offset = 0,
+        [Description(
+            "Number of entries to skip, counting only the chosen zones; use nextOffset from the previous page. " +
+            "Default 0.")]
+        int offset = 0,
+        [Description(ZonesDescription)] IReadOnlyList<string>? zones = null,
+        [Description(ResponseFormatDescription), ResponseFormatValues] string responseFormat = "concise",
         CancellationToken cancellationToken = default)
     {
+        OperationResult<ArchidektDeckReadOptions> options = ArchidektDeckReadOptions.Parse(zones, responseFormat);
+        if (options is not OperationSuccess<ArchidektDeckReadOptions> chosen)
+        {
+            return OperationFailure.Forward<ArchidektDeckReadOptions, ArchidektDeckView>(options);
+        }
+
         OperationResult<RemoteDeckSnapshot> read = await coordinator.Service
             .GetDeckAsync(deckId, cancellationToken).ConfigureAwait(false);
         return read is OperationSuccess<RemoteDeckSnapshot> success
-            ? ArchidektResultPaging.PageDeck(success.Data, offset)
+            ? ArchidektResultPaging.PageDeck(success.Data, offset, chosen.Data)
             : OperationFailure.Forward<RemoteDeckSnapshot, ArchidektDeckView>(read);
     }
 
@@ -317,7 +353,9 @@ internal sealed class ArchidektReadTools
         "checksum without claiming list rows contain saved deck state; kind get returns one snapshot (snapshotId is " +
         "required) with its exact identity and checksum, extensions, and complete canonical saved deck state. The " +
         "result has the same kind. The saved deck of kind get comes in pages that fit the size limit, like " +
-        "archidekt_deck_get: when truncated is true, call again with offset set to nextOffset. " +
+        "archidekt_deck_get: entries hold the concise fields; pass responseFormat \"full\" for every field and " +
+        "zones (commander, main, sideboard, maybeboard) to read only some; when truncated is true, call again " +
+        "with offset set to nextOffset. " +
         "Example: {\"kind\":\"list\",\"deckId\":\"12345\"}." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSnapshotsResult>> GetSnapshotsAsync(
@@ -331,6 +369,9 @@ internal sealed class ArchidektReadTools
             "Only with kind get: number of saved deck entries to skip; use nextOffset from the previous page. " +
             "Default 0.")]
         int offset = 0,
+        [Description("Only with kind get: " + ZonesDescription)] IReadOnlyList<string>? zones = null,
+        [Description("Only with kind get: " + ResponseFormatDescription), ResponseFormatValues]
+        string responseFormat = "concise",
         CancellationToken cancellationToken = default)
     {
         OperationInvalidInput? invalid = KindFields.CheckKind(kind, "list", "get") ?? (kind == "list"
@@ -339,6 +380,12 @@ internal sealed class ArchidektReadTools
         if (invalid is not null)
         {
             return invalid;
+        }
+
+        OperationResult<ArchidektDeckReadOptions> options = ArchidektDeckReadOptions.Parse(zones, responseFormat);
+        if (options is not OperationSuccess<ArchidektDeckReadOptions> chosen)
+        {
+            return OperationFailure.Forward<ArchidektDeckReadOptions, ArchidektSnapshotsResult>(options);
         }
 
         if (kind == "list")
@@ -357,7 +404,10 @@ internal sealed class ArchidektReadTools
             return OperationFailure.Forward<RemoteNamedSnapshot, ArchidektSnapshotsResult>(get);
         }
 
-        OperationResult<ArchidektSnapshotView> page = ArchidektResultPaging.PageSnapshot(getSuccess.Data, offset);
+        OperationResult<ArchidektSnapshotView> page = ArchidektResultPaging.PageSnapshot(
+            getSuccess.Data,
+            offset,
+            chosen.Data);
         return page is OperationSuccess<ArchidektSnapshotView> view
             ? new OperationSuccess<ArchidektSnapshotsResult>(new ArchidektSnapshotGetResult(view.Data))
             : OperationFailure.Forward<ArchidektSnapshotView, ArchidektSnapshotsResult>(page);

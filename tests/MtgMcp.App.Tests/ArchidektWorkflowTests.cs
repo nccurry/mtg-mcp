@@ -264,7 +264,7 @@ public sealed class ArchidektWorkflowTests
         using World world = new(OperationMode.Remote, CreateDeckWithExcludedCategories());
         CancellationToken token = TestContext.Current.CancellationToken;
 
-        List<ArchidektDeckEntryView> entries = await ReadEveryEntryAsync(world, token);
+        List<ArchidektFullDeckEntryView> entries = await ReadEveryEntryAsync(world, token);
         Guid localDeckId = await world.PullAsync();
         DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
         ArchidektSyncPreviewView push = Success(
@@ -272,14 +272,14 @@ public sealed class ArchidektWorkflowTests
         ArchidektSyncPreviewView pull = Success(
             await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
 
-        List<ArchidektDeckEntryView> outOfDeck = [.. entries.Where(value => value.Zone == "maybeboard")];
+        List<ArchidektFullDeckEntryView> outOfDeck = [.. entries.Where(value => value.Zone == "maybeboard")];
         Assert.Equal(
             ["Bloodthirsty Blade", "Osteomancer Adept", "Revival // Revenge"],
             outOfDeck.Select(value => value.CardName).Order(StringComparer.Ordinal));
         Assert.All(outOfDeck, value => Assert.False(value.InDeck));
         Assert.All(entries.Where(value => value.Zone != "maybeboard"), value => Assert.True(value.InDeck));
         Assert.Equal(100, entries.Where(value => value.Zone is "main" or "commander").Sum(value => value.Quantity));
-        ArchidektDeckEntryView blade = Assert.Single(
+        ArchidektFullDeckEntryView blade = Assert.Single(
             entries,
             value => value.CardName == "Bloodthirsty Blade" && value.Zone == "main");
         Assert.Equal("Removal", blade.PrimaryCategoryName);
@@ -443,7 +443,11 @@ public sealed class ArchidektWorkflowTests
 
         while (true)
         {
-            OperationResult<ArchidektDeckView> result = await world.Reads.GetDeckAsync("42", offset, token);
+            OperationResult<ArchidektDeckView> result = await world.Reads.GetDeckAsync(
+                "42",
+                offset,
+                responseFormat: "full",
+                cancellationToken: token);
             ArchidektDeckView page = Success(result);
             Assert.True(
                 JsonLength(result) < MaximumResultCharacters,
@@ -451,7 +455,7 @@ public sealed class ArchidektWorkflowTests
             Assert.Equal(300, page.Summary.EntryCount);
             Assert.Equal(offset, page.Offset);
             Assert.Equal(offset == 0, page.Categories.Count > 0);
-            relationIds.AddRange(page.Entries.Select(value => value.ProviderRelationId));
+            relationIds.AddRange(page.Entries.Cast<ArchidektFullDeckEntryView>().Select(value => value.ProviderRelationId));
             names.AddRange(page.Entries.Select(value => value.CardName));
             pages++;
             if (page.NextOffset is null)
@@ -489,7 +493,7 @@ public sealed class ArchidektWorkflowTests
 
         while (true)
         {
-            OperationResult<ArchidektDeckView> result = await world.Reads.GetDeckAsync("42", offset, token);
+            OperationResult<ArchidektDeckView> result = await world.Reads.GetDeckAsync("42", offset, cancellationToken: token);
             Assert.True(JsonLength(result) < MaximumResultCharacters, $"page {pages.Count} is too large");
             ArchidektDeckView page = Success(result);
             pages.Add(page);
@@ -641,9 +645,9 @@ public sealed class ArchidektWorkflowTests
         CancellationToken token = TestContext.Current.CancellationToken;
         Guid localDeckId = await world.PullAsync();
 
-        ArchidektDeckView atEnd = Success(await world.Reads.GetDeckAsync("42", 4, token));
-        OperationResult<ArchidektDeckView> pastEnd = await world.Reads.GetDeckAsync("42", 5, token);
-        OperationResult<ArchidektDeckView> negative = await world.Reads.GetDeckAsync("42", -1, token);
+        ArchidektDeckView atEnd = Success(await world.Reads.GetDeckAsync("42", 4, cancellationToken: token));
+        OperationResult<ArchidektDeckView> pastEnd = await world.Reads.GetDeckAsync("42", 5, cancellationToken: token);
+        OperationResult<ArchidektDeckView> negative = await world.Reads.GetDeckAsync("42", -1, cancellationToken: token);
         ArchidektSyncPreviewView previewAtEnd = Success(await world.Reads.PreviewPushAsync(
             localDeckId,
             operationOffset: 0,
@@ -925,7 +929,7 @@ public sealed class ArchidektWorkflowTests
                 "42",
                 "77",
                 offset,
-                token);
+                cancellationToken: token);
             ArchidektSnapshotView snapshot = Assert.IsType<ArchidektSnapshotGetResult>(Success(result)).Snapshot;
             Assert.True(
                 JsonLength(result) < MaximumResultCharacters,
@@ -1043,16 +1047,22 @@ public sealed class ArchidektWorkflowTests
     }
 
     /// <summary>
-    /// Reads every page of the deck and returns its entries.
+    /// Reads every page of the deck in the full format and returns its entries.
     /// </summary>
-    private static async Task<List<ArchidektDeckEntryView>> ReadEveryEntryAsync(World world, CancellationToken token)
+    private static async Task<List<ArchidektFullDeckEntryView>> ReadEveryEntryAsync(
+        World world,
+        CancellationToken token)
     {
-        List<ArchidektDeckEntryView> entries = [];
+        List<ArchidektFullDeckEntryView> entries = [];
         int offset = 0;
         while (true)
         {
-            ArchidektDeckView page = Success(await world.Reads.GetDeckAsync("42", offset, token));
-            entries.AddRange(page.Entries);
+            ArchidektDeckView page = Success(await world.Reads.GetDeckAsync(
+                "42",
+                offset,
+                responseFormat: "full",
+                cancellationToken: token));
+            entries.AddRange(page.Entries.Cast<ArchidektFullDeckEntryView>());
             if (page.NextOffset is null)
             {
                 return entries;

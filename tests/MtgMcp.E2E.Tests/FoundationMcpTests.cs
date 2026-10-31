@@ -574,7 +574,7 @@ public sealed class FoundationMcpTests
             ["archidekt_auth_status"] = [],
             ["archidekt_deck_create"] = ["expectedLocalRevision", "localDeckId", "request"],
             ["archidekt_deck_delete"] = ["request"],
-            ["archidekt_deck_get"] = ["deckId", "offset"],
+            ["archidekt_deck_get"] = ["deckId", "offset", "responseFormat", "zones"],
             ["archidekt_deck_list"] = ["cursor", "pageSize"],
             ["archidekt_folder_create"] = ["request"],
             ["archidekt_folder_delete"] = ["request"],
@@ -592,7 +592,7 @@ public sealed class FoundationMcpTests
                 ["differenceOffset", "expectedPreviewFingerprint", "localDeckId", "operationOffset"],
             ["archidekt_snapshot_create"] = ["request"],
             ["archidekt_snapshot_delete"] = ["request"],
-            ["archidekt_snapshots_get"] = ["deckId", "kind", "offset", "snapshotId"],
+            ["archidekt_snapshots_get"] = ["deckId", "kind", "offset", "responseFormat", "snapshotId", "zones"],
             ["archidekt_snapshot_restore_apply"] = ["request"],
             ["archidekt_snapshot_restore_preview"] =
                 ["deckId", "differenceOffset", "expectedPreviewFingerprint", "operationOffset", "snapshotId"],
