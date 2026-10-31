@@ -16,7 +16,7 @@ public sealed class FoundationHostingTests
     {
         Assert.Equal("io.github.nccurry/mtg-mcp", FoundationServerIdentity.Name);
         Assert.Equal("mtg-mcp", FoundationServerIdentity.Title);
-        Assert.Equal("0.13.0", FoundationServerIdentity.PackageVersion);
+        Assert.Equal("0.13.1", FoundationServerIdentity.PackageVersion);
         Assert.DoesNotContain('+', FoundationServerIdentity.PackageVersion);
     }
 
