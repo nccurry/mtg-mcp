@@ -466,31 +466,42 @@ internal sealed class ArchidektSynchronizationContext
 
     /// <summary>
     /// Holds a push preview with the Archidekt printings chosen for it, so the apply that follows reuses them. A push
-    /// that Archidekt's own changes block plans nothing, so it has no choices. BlockedReasonCode is the reason code of
-    /// the notice that blocks the apply, when one does.
+    /// that Archidekt's own changes block plans nothing, so it has no choices. PlanBlock says why the planned push
+    /// cannot be sent, when it cannot.
     /// </summary>
     private sealed record PushPreviewState(
         ArchidektSyncPreview Preview,
         ArchidektPrintingChoices? Choices,
-        string? BlockedReasonCode = null);
+        ArchidektPushBlock? PlanBlock = null);
 
     /// <summary>
-    /// Previews a push while charging an existing composed-tool request scope. Every new card is matched to an
-    /// Archidekt printing here, and the preview says which one.
+    /// Holds what a push preview and a push apply both read before they search for any card: the local deck, its
+    /// binding, the Archidekt deck, and what differs. Target and Plan are null when Archidekt's own changes block the
+    /// push, since nothing is planned then.
     /// </summary>
-    private async Task<OperationResult<PushPreviewState>> PreviewPushAsync(
+    private sealed record PushInputs(
+        DeckDocument Local,
+        BindingState Binding,
+        RemoteDeckSnapshot Remote,
+        ArchidektSyncDiff Diff,
+        RemoteDeckSnapshot? Target,
+        ArchidektRemotePlan? Plan);
+
+    /// <summary>
+    /// Reads the local deck, its binding, and the Archidekt deck, and plans the push from them without any card
+    /// search. A zone that contradicts a category is refused here.
+    /// </summary>
+    private async Task<OperationResult<PushInputs>> ReadPushInputsAsync(
         Guid localDeckId,
-        int? confirmRemovals,
         ArchidektOperationScope operationScope,
-        CancellationToken cancellationToken,
-        ArchidektPushApplyRequest? applying = null)
+        CancellationToken cancellationToken)
     {
         OperationResult<DeckDocument> localResult = await deckStore.GetAsync(
             localDeckId,
             cancellationToken).ConfigureAwait(false);
         if (localResult is not OperationSuccess<DeckDocument> local)
         {
-            return OperationFailure.Forward<DeckDocument, PushPreviewState>(localResult);
+            return OperationFailure.Forward<DeckDocument, PushInputs>(localResult);
         }
 
         OperationResult<BindingState> stateResult = await LoadBindingStateAsync(
@@ -498,7 +509,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (stateResult is not OperationSuccess<BindingState> state)
         {
-            return OperationFailure.Forward<BindingState, PushPreviewState>(stateResult);
+            return OperationFailure.Forward<BindingState, PushInputs>(stateResult);
         }
 
         OperationResult<RemoteDeckSnapshot> remoteResult = await GetBoundRemoteAsync(
@@ -507,7 +518,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (remoteResult is not OperationSuccess<RemoteDeckSnapshot> remote)
         {
-            return OperationFailure.Forward<RemoteDeckSnapshot, PushPreviewState>(remoteResult);
+            return OperationFailure.Forward<RemoteDeckSnapshot, PushInputs>(remoteResult);
         }
 
         ArchidektSyncDiff diff = ArchidektSyncPlanner.Diff(
@@ -520,9 +531,8 @@ internal sealed class ArchidektSynchronizationContext
             state.Data.Baseline);
         if (HasRemoteChanges(diff))
         {
-            return new OperationSuccess<PushPreviewState>(new PushPreviewState(
-                ConflictingPushPreview(local.Data, remote.Data, diff),
-                Choices: null));
+            return new OperationSuccess<PushInputs>(
+                new PushInputs(local.Data, state.Data, remote.Data, diff, Target: null, Plan: null));
         }
 
         RemoteDeckSnapshot target = ArchidektLocalMapper.ToRemoteTarget(
@@ -539,33 +549,71 @@ internal sealed class ArchidektSynchronizationContext
                 ArchidektSyncNotices.DescribeZoneContradictions(contradictions));
         }
 
-        // The removals of a plan do not depend on the printings of its new cards, so an apply refuses on a changed deck
-        // or too many removals before it spends requests on card searches.
-        string? removalNotice = ArchidektRemovalGuard.Describe(
-            ArchidektRemovalGuard.CountRemovals(plan.PublicOperations),
-            remote.Data.Entries.Count,
-            confirmRemovals);
-        if (applying is not null)
-        {
-            if (local.Data.Revision != applying.ExpectedLocalRevision ||
-                !string.Equals(
-                    remote.Data.RemoteFingerprint,
-                    applying.ExpectedRemoteFingerprint,
-                    StringComparison.Ordinal))
-            {
-                return PushPreviewChanged(local.Data.Revision, remote.Data.RemoteFingerprint);
-            }
+        return new OperationSuccess<PushInputs>(
+            new PushInputs(local.Data, state.Data, remote.Data, diff, target, plan));
+    }
 
-            if (removalNotice is not null)
-            {
-                return new OperationInvalidInput("push-removals-unconfirmed", removalNotice, "confirmRemovals");
-            }
+    /// <summary>
+    /// Tells why the removals of a planned push need confirmation, or returns null when they do not. The removals of a
+    /// plan do not depend on the printings of its new cards, so this needs no card search.
+    /// </summary>
+    private static string? DescribeUnconfirmedRemovals(PushInputs inputs, int? confirmRemovals)
+    {
+        return ArchidektRemovalGuard.Describe(
+            ArchidektRemovalGuard.CountRemovals(inputs.Plan!.PublicOperations),
+            inputs.Remote.Entries.Count,
+            confirmRemovals);
+    }
+
+    /// <summary>
+    /// Previews a push while charging an existing composed-tool request scope. Every new card is matched to an
+    /// Archidekt printing here, and the preview says which one.
+    /// </summary>
+    private async Task<OperationResult<PushPreviewState>> PreviewPushAsync(
+        Guid localDeckId,
+        int? confirmRemovals,
+        ArchidektOperationScope operationScope,
+        CancellationToken cancellationToken)
+    {
+        OperationResult<PushInputs> inputsResult = await ReadPushInputsAsync(
+            localDeckId,
+            operationScope,
+            cancellationToken).ConfigureAwait(false);
+        if (inputsResult is not OperationSuccess<PushInputs> inputs)
+        {
+            return OperationFailure.Forward<PushInputs, PushPreviewState>(inputsResult);
         }
 
+        if (inputs.Data.Target is null)
+        {
+            return new OperationSuccess<PushPreviewState>(new PushPreviewState(
+                ConflictingPushPreview(inputs.Data.Local, inputs.Data.Remote, inputs.Data.Diff),
+                Choices: null));
+        }
+
+        return await SearchPrintingsAndPreviewPushAsync(
+            inputs.Data,
+            DescribeUnconfirmedRemovals(inputs.Data, confirmRemovals),
+            operationScope,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Matches every new card of a planned push to an Archidekt printing and builds the preview. A
+    /// <paramref name="removalNotice"/> is shown as a reason the apply would refuse.
+    /// </summary>
+    private async Task<OperationResult<PushPreviewState>> SearchPrintingsAndPreviewPushAsync(
+        PushInputs inputs,
+        string? removalNotice,
+        ArchidektOperationScope operationScope,
+        CancellationToken cancellationToken)
+    {
+        RemoteDeckSnapshot target = inputs.Target!;
         OperationResult<ArchidektPushPlan> plannedResult = await Service.PlanPushAsync(
-            remote.Data,
+            inputs.Remote,
             target,
             known: null,
+            forPreview: true,
             operationScope,
             cancellationToken).ConfigureAwait(false);
         if (plannedResult is not OperationSuccess<ArchidektPushPlan> planned)
@@ -573,27 +621,28 @@ internal sealed class ArchidektSynchronizationContext
             return OperationFailure.Forward<ArchidektPushPlan, PushPreviewState>(plannedResult);
         }
 
-        string previewFingerprint = PushPreviewFingerprint(local.Data, remote.Data, planned.Data.Plan);
+        string? planNotice = planned.Data.Block?.Notice;
+        string previewFingerprint = PushPreviewFingerprint(inputs.Local, inputs.Remote, planned.Data.Plan);
         return new OperationSuccess<PushPreviewState>(new PushPreviewState(
             new ArchidektSyncPreview(
                 "push",
-                local.Data.DeckId,
-                local.Data.Revision,
-                remote.Data.RemoteId,
-                remote.Data.RemoteFingerprint,
+                inputs.Local.DeckId,
+                inputs.Local.Revision,
+                inputs.Remote.RemoteId,
+                inputs.Remote.RemoteFingerprint,
                 target.ContentFingerprint,
                 previewFingerprint,
                 HasConflicts: false,
-                diff.Differences,
+                inputs.Diff.Differences,
                 planned.Data.Operations,
                 planned.Data.PredictedProviderRequests)
             {
-                ApplyBlockedNotice = removalNotice is not null && planned.Data.BlockedNotice is not null
-                    ? $"{removalNotice} {planned.Data.BlockedNotice}"
-                    : removalNotice ?? planned.Data.BlockedNotice,
+                ApplyBlockedNotice = removalNotice is not null && planNotice is not null
+                    ? $"{removalNotice} {planNotice}"
+                    : removalNotice ?? planNotice,
             },
             planned.Data.Choices,
-            planned.Data.BlockedReasonCode));
+            planned.Data.Block));
     }
 
     /// <summary>
@@ -653,36 +702,57 @@ internal sealed class ArchidektSynchronizationContext
         CancellationToken cancellationToken)
     {
         ArchidektOperationScope operationScope = Service.BeginOperation();
-        OperationResult<PushPreviewState> previewResult = await PreviewPushAsync(
+        OperationResult<PushInputs> inputsResult = await ReadPushInputsAsync(
             request.LocalDeckId,
-            request.ConfirmRemovals,
             operationScope,
-            cancellationToken,
-            applying: request).ConfigureAwait(false);
+            cancellationToken).ConfigureAwait(false);
+        if (inputsResult is not OperationSuccess<PushInputs> inputs)
+        {
+            return OperationFailure.Forward<PushInputs, ArchidektApplyResult>(inputsResult);
+        }
+
+        // These checks need no card search, so a refused apply costs no search requests.
+        if (inputs.Data.Target is null)
+        {
+            return new OperationConflict(
+                "push-conflict",
+                "The Archidekt deck changed since its synchronization baseline.",
+                new ConflictState(inputs.Data.Local.Revision, inputs.Data.Remote.RemoteFingerprint));
+        }
+
+        if (inputs.Data.Local.Revision != request.ExpectedLocalRevision ||
+            !string.Equals(
+                inputs.Data.Remote.RemoteFingerprint,
+                request.ExpectedRemoteFingerprint,
+                StringComparison.Ordinal))
+        {
+            return PushPreviewChanged(inputs.Data.Local.Revision, inputs.Data.Remote.RemoteFingerprint);
+        }
+
+        if (DescribeUnconfirmedRemovals(inputs.Data, request.ConfirmRemovals) is { } removalNotice)
+        {
+            return new OperationInvalidInput("push-removals-unconfirmed", removalNotice, "confirmRemovals");
+        }
+
+        OperationResult<PushPreviewState> previewResult = await SearchPrintingsAndPreviewPushAsync(
+            inputs.Data,
+            removalNotice: null,
+            operationScope,
+            cancellationToken).ConfigureAwait(false);
         if (previewResult is not OperationSuccess<PushPreviewState> previewState)
         {
             return OperationFailure.Forward<PushPreviewState, ArchidektApplyResult>(previewResult);
         }
 
         ArchidektSyncPreview preview = previewState.Data.Preview;
-        if (preview.HasConflicts)
-        {
-            return new OperationConflict(
-                "push-conflict",
-                "The Archidekt deck changed since its synchronization baseline.",
-                new ConflictState(preview.LocalRevision, preview.RemoteFingerprint));
-        }
-
         if (!string.Equals(preview.PreviewFingerprint, request.PreviewFingerprint, StringComparison.Ordinal))
         {
             return PushPreviewChanged(preview.LocalRevision, preview.RemoteFingerprint);
         }
 
-        if (preview.ApplyBlockedNotice is not null)
+        if (previewState.Data.PlanBlock is { } block)
         {
-            return new OperationInvalidInput(
-                previewState.Data.BlockedReasonCode ?? "push-printing-unresolved",
-                preview.ApplyBlockedNotice);
+            return new OperationInvalidInput(block.ReasonCode, block.Notice);
         }
 
         OperationResult<DeckDocument> localResult = await deckStore.GetAsync(
@@ -725,6 +795,7 @@ internal sealed class ArchidektSynchronizationContext
             current.Data,
             unresolvedTarget,
             previewState.Data.Choices,
+            forPreview: false,
             operationScope,
             cancellationToken).ConfigureAwait(false);
         if (plannedResult is not OperationSuccess<ArchidektPushPlan> planned)

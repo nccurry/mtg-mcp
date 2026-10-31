@@ -167,11 +167,12 @@ public sealed class ArchidektRateLimitAndVerificationTests
             current,
             target,
             preview ? null : new ArchidektPrintingChoices(),
+            preview,
             new ArchidektOperationScope(maximum),
             TestContext.Current.CancellationToken);
 
         ArchidektPushPlan plan = Assert.IsType<OperationSuccess<ArchidektPushPlan>>(result.Value).Data;
-        Assert.Equal(blocked, plan.BlockedNotice is not null);
+        Assert.Equal(blocked, plan.Block is not null);
     }
 
     /// <summary>

@@ -161,7 +161,8 @@ internal sealed class ArchidektPrintingResolver
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
-        Dictionary<string, CardSearch> searches = new(StringComparer.OrdinalIgnoreCase);
+        // One search per card name (any letter case) and set, shared by every entry that asks for it.
+        Dictionary<(string Name, string? SetCode), CardSearch> searches = [];
         foreach (RemoteDeckEntry entry in entries)
         {
             if (choices.Find(entry) is not null)
@@ -176,7 +177,7 @@ internal sealed class ArchidektPrintingResolver
             }
 
             string? setCode = ArchidektContract.Optional(entry.SetCode)?.ToLowerInvariant();
-            string searchKey = $"{entry.CardName}|{setCode}";
+            (string, string?) searchKey = (entry.CardName.ToLowerInvariant(), setCode);
             if (!searches.TryGetValue(searchKey, out CardSearch? search))
             {
                 search = new CardSearch(new ArchidektCardSearch(entry.CardName, setCode));

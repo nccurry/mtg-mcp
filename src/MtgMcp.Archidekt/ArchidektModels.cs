@@ -314,16 +314,14 @@ public sealed record ArchidektPushPlan(
     ArchidektRemotePlan Plan,
     IReadOnlyList<ArchidektRemoteOperation> Operations,
     int PredictedProviderRequests,
-    string? BlockedNotice,
-    ArchidektPrintingChoices Choices)
-{
-    /// <summary>
-    /// Gets the reason code of <see cref="BlockedNotice"/>: <c>push-printing-unresolved</c> when a card has no
-    /// Archidekt printing, <c>request-limit-exceeded</c> when the lookups or the push would pass the request limit.
-    /// Null when nothing blocks the push.
-    /// </summary>
-    public string? BlockedReasonCode { get; init; }
-}
+    ArchidektPushBlock? Block,
+    ArchidektPrintingChoices Choices);
+
+/// <summary>
+/// Says why a push cannot be sent, with its reason code: <c>push-printing-unresolved</c> when a card has no Archidekt
+/// printing, <c>request-limit-exceeded</c> when the lookups or the push would pass the request limit.
+/// </summary>
+public sealed record ArchidektPushBlock(string Notice, string ReasonCode);
 
 /// <summary>
 /// Describes one previewed primitive provider operation without exposing transport payloads.

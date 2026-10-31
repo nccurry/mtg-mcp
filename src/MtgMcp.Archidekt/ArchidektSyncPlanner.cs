@@ -413,6 +413,7 @@ public static class ArchidektSyncPlanner
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         Dictionary<string, DeckCategory> newCategories = new(StringComparer.Ordinal);
         Dictionary<Guid, string> renamedCategories = [];
+        Dictionary<string, string> renamedByName = new(StringComparer.Ordinal);
         List<RemoteDeckCategory> shownCategories = [.. remote.Categories];
         for (int index = 0; index < local.Categories.Count; index++)
         {
@@ -431,6 +432,7 @@ public static class ArchidektSyncPlanner
                     remoteCategoriesById.TryGetValue(baselineRow.ProviderCategoryId, out RemoteDeckCategory? renamed))
                 {
                     renamedCategories[category.CategoryId] = renamed.Name;
+                    renamedByName.TryAdd(category.Name, renamed.Name);
                 }
                 else if (newCategories.TryAdd(category.Name, category))
                 {
@@ -442,15 +444,6 @@ public static class ArchidektSyncPlanner
         if (entries.Count == 0 && newCategories.Count == 0)
         {
             return null;
-        }
-
-        Dictionary<string, string> renamedByName = new(StringComparer.Ordinal);
-        foreach (DeckCategory category in local.Categories)
-        {
-            if (renamedCategories.TryGetValue(category.CategoryId, out string? newName))
-            {
-                renamedByName.TryAdd(category.Name, newName);
-            }
         }
 
         List<RemoteDeckEntry> arrivingRows = [.. keptRows.Select(row => row with

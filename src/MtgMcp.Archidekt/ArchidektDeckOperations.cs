@@ -38,6 +38,18 @@ internal sealed class ArchidektDeckOperations
     private const int MaximumRetriesPerRead = 2;
 
     /// <summary>
+    /// Gives the deck reads an apply makes after its plan is made: the read to start, the read to verify, the read
+    /// again when that finds a difference, and a last read.
+    /// </summary>
+    private const int ReadsAfterPlanningInAnApply = 4;
+
+    /// <summary>
+    /// Gives the deck reads left for a preview to count: those of an apply, plus the read the apply makes before it
+    /// plans, which the preview has already made when it counts.
+    /// </summary>
+    private const int ReadsAfterPlanningInAPreview = ReadsAfterPlanningInAnApply + 1;
+
+    /// <summary>
     /// Gives the pause before the check after the writes is repeated when it found a difference.
     /// </summary>
     private static readonly TimeSpan VerificationSettleTime = TimeSpan.FromSeconds(1);
@@ -224,12 +236,14 @@ internal sealed class ArchidektDeckOperations
     /// Plans a push of <paramref name="target"/> onto <paramref name="current"/> and picks the Archidekt printing of
     /// every card it adds, under a caller-owned composed-operation budget. A preview and the apply that follows it
     /// both use this, so what is previewed is what is sent. Searches are skipped for entries that
-    /// <paramref name="known"/> already holds.
+    /// <paramref name="known"/> already holds. <paramref name="forPreview"/> says the plan is for a preview, which
+    /// counts the extra read its apply will make.
     /// </summary>
     internal Task<OperationResult<ArchidektPushPlan>> PlanPushAsync(
         RemoteDeckSnapshot current,
         RemoteDeckSnapshot target,
         ArchidektPrintingChoices? known,
+        bool forPreview,
         ArchidektOperationScope operationScope,
         CancellationToken cancellationToken)
     {
@@ -247,18 +261,14 @@ internal sealed class ArchidektDeckOperations
                     cancellationToken).ConfigureAwait(false);
                 RemoteDeckSnapshot resolved = choices.ApplyTo(target);
                 ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current, resolved);
-                int needed = budget.RequestCount + RequestsAfterPlanning(plan, known is null);
-                (string? notice, string? code) = Blocked(choices, needed, budget.MaximumRequests);
+                int needed = budget.RequestCount + RequestsAfterPlanning(plan, forPreview);
                 return new ArchidektPushPlan(
                     resolved,
                     plan,
                     DescribeOperations(plan, choices),
                     plan.PredictedProviderRequests + choices.SearchRequests,
-                    notice,
-                    choices)
-                {
-                    BlockedReasonCode = code,
-                };
+                    Blocked(choices, needed, budget.MaximumRequests),
+                    choices);
             });
     }
 
@@ -270,7 +280,7 @@ internal sealed class ArchidektDeckOperations
     /// </summary>
     private static int RequestsAfterPlanning(ArchidektRemotePlan plan, bool planningForAPreview)
     {
-        int reads = planningForAPreview ? 5 : 4;
+        int reads = planningForAPreview ? ReadsAfterPlanningInAPreview : ReadsAfterPlanningInAnApply;
         return plan.PredictedProviderRequests - 1 + reads + (reads * MaximumRetriesPerRead);
     }
 
@@ -316,16 +326,16 @@ internal sealed class ArchidektDeckOperations
     }
 
     /// <summary>
-    /// Explains why a push could not be sent, with its reason code, or returns nulls when it can.
+    /// Explains why a push could not be sent, with its reason code, or returns null when it can.
     /// </summary>
-    private static (string? Notice, string? Code) Blocked(
+    private static ArchidektPushBlock? Blocked(
         ArchidektPrintingChoices choices,
         int neededRequests,
         int maximumRequests)
     {
         if (choices.StoppedAtRequestLimit)
         {
-            return (
+            return new ArchidektPushBlock(
                 "archidekt_push_apply would send nothing: looking up printings on Archidekt reached the limit of " +
                     $"{maximumRequests} provider requests for one operation. Push fewer new cards at a time.",
                 RequestLimitReasonCode);
@@ -337,7 +347,7 @@ internal sealed class ArchidektDeckOperations
             string more = choices.UnresolvedCardNames.Count > 10
                 ? $" and {choices.UnresolvedCardNames.Count - 10} more"
                 : string.Empty;
-            return (
+            return new ArchidektPushBlock(
                 "archidekt_push_apply would send nothing: Archidekt has no printing for " +
                     $"{string.Join(", ", shown)}{more}. Fix the card name or set a printing on the entry, then " +
                     "preview again.",
@@ -345,11 +355,11 @@ internal sealed class ArchidektDeckOperations
         }
 
         return neededRequests > maximumRequests
-            ? (
+            ? new ArchidektPushBlock(
                 $"archidekt_push_apply would send nothing: this push needs about {neededRequests} provider " +
                     $"requests, over the limit of {maximumRequests} for one operation. Push fewer changes at a time.",
                 RequestLimitReasonCode)
-            : (null, null);
+            : null;
     }
 
     /// <summary>
@@ -449,7 +459,8 @@ internal sealed class ArchidektDeckOperations
                     cancellationToken).ConfigureAwait(false);
                 statuses.Add(Status(operation.Public, "applied", "Archidekt accepted the operation."));
             }
-            catch (ArchidektProviderException exception) when (exception.ReasonCode == "provider-rate-limited")
+            catch (ArchidektProviderException exception)
+                when (exception.ReasonCode == "provider-rate-limited")
             {
                 statuses.Add(Status(operation.Public, "not-sent", $"{NotSentMessage} {exception.Message}"));
                 AddNotAttempted(statuses, plan, index + 1);

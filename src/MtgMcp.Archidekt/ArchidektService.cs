@@ -176,10 +176,11 @@ public sealed class ArchidektService : IDisposable
         RemoteDeckSnapshot current,
         RemoteDeckSnapshot target,
         ArchidektPrintingChoices? known,
+        bool forPreview,
         ArchidektOperationScope operationScope,
         CancellationToken cancellationToken)
     {
-        return decks.PlanPushAsync(current, target, known, operationScope, cancellationToken);
+        return decks.PlanPushAsync(current, target, known, forPreview, operationScope, cancellationToken);
     }
 
     /// <inheritdoc cref="ArchidektFolderOperations.ListAsync"/>
