@@ -6,12 +6,12 @@
 - Owner: mtg-mcp (Opus parent session with Sonnet implementation children)
 - Last updated: 2026-10-31, `main` at `f0c0814`
 - Implementation authorized: Yes (owner, 2026-10-31: "Ride with the plan")
-- Selected work and endpoint: phases 0 to 4, merged into `main` on this host,
+- Selected work and endpoint: phases 0 to 5, merged into `main` on this host,
   audited, released together as `0.13.1`, and installed (owner, 2026-10-31:
   "fix everything identified then release 0.13.1, then install it").
 - State: implementation starting.
-- Next action and blocker: phases 0, 1, and 3-4 run in parallel; phase 2
-  follows phase 1. No blocker.
+- Next action and blocker: phases 0, 1, and 3-4 run in parallel; phases 2
+  and 5 follow phase 1. No blocker.
 - Resume check: `git worktree list` matches the table below.
 
 Where the work lives (a worktree lock, not this table, holds a checkout
@@ -45,6 +45,11 @@ logs for this project: every session that negotiated protocol `2026-07-28`
 logged "tools/list failed … outputSchema expected object, received boolean";
 sessions on `2025-11-25` did not.
 
+The same session then reported that `archidekt_push_preview` approved 27
+name-only adds (card data not installed) and `archidekt_push_apply` failed on
+the first ("unknown: Archidekt could not resolve the exact requested
+printing"), marking the other 26 not attempted; nothing reached Archidekt.
+
 Research (2026-10-31) found that problem 2 is mostly a zone-mapping gap, not
 duplicates. Archidekt counts an entry toward the deck only when its first
 category has `includedInDeck`. `MapZone`
@@ -61,6 +66,10 @@ Bloodthirsty Blade is also a real second entry, under Removal.
 | --- | --- | --- |
 | REQ-011 | Every tool publishes an `outputSchema` that is a JSON object with `type: "object"` under every supported protocol version, including `2026-07-28`: `{"type":"object","properties":{"kind":{"type":"string","enum":[…the operation result kinds…]}},"required":["kind"]}`, set once where every tool is created (`ToolRegistration.cs:52`). Each `structuredContent` is the unwrapped result with a top-level `kind`. | Claude Code (protocol `2026-07-28`) lists all tools; E2E lists tools under 2024-11-05, 2025-03-26, 2025-06-18, 2025-11-25, and 2026-07-28 (through `server/discover`) and every `inputSchema` and `outputSchema` is an object with `type: "object"`. |
 | REQ-012 | A tool failure sets `isError: true` under every protocol version. | E2E under each version: `local_deck_get` with an unknown ID has `isError: true` and a top-level `kind`; `scryfall_card_data_status` succeeds with a top-level `kind` that is in the schema's enum. |
+| REQ-013 | Push resolves an add's Archidekt printing in one adapter resolver, from Archidekt's card search: `uid` equals `printingId`; else `edition.editioncode` (falling back to `setCode`) and collector number; else, for an entry without a printing, the first listed exact-name match (filtered by `oracleCard.uid` when an Oracle ID is set). A requested printing not on the first search page is followed through `next` within the request budget. | Fake Archidekt with real result shapes (several printings per name, `edition.editioncode`, `count` and `next`): a name with 18 printings resolves to the first listed; set plus number matches; an Oracle ID filters; a printing on page 2 resolves. |
+| REQ-014 | `archidekt_push_preview` resolves every add without a provider card ID with the same resolver, names the chosen printing in the operation detail, and sets `applyAvailable: false` with a notice naming the cards when a name has no match or the requests would pass the 150-request budget. Apply uses the preview's resolution, so anything the preview approves, apply can resolve. | Workflow test reproducing the report: 27 name-only sideboard adds, no card data, one card with 18 printings: preview shows each chosen printing, apply gives `applied` with clean verification. An unknown name gives `applyAvailable: false` and apply refuses with zero writes. |
+| REQ-015 | Apply resolves every add before its first write; a resolution failure refuses the push with no writes. An operation that failed before anything was sent reports `not-sent` ("Nothing was sent to Archidekt for this operation."), `unknown` is kept for a failure after a write was sent, and a push where nothing was applied reports outcome `not-applied`. | ApplyPlan tests: a lookup failure on the first operation gives `not-sent` and `not-applied`, never `unknown`; a failure during a write still gives `unknown`. |
+| REQ-016 | The add-time notice for entries added without card data no longer says reconcile makes them pushable; it says push picks Archidekt's default printing unless a printing is set. | Message test. |
 | REQ-001 | An Archidekt entry whose first category has `includedInDeck: false` is not in the deck: the zone mapping sends it to `maybeboard` (unless it is a commander, sideboard, or maybeboard entry by the existing rules). The same mapping drives pulls, `archidekt_deck_get`, push planning, and the push zone check (`ArchidektSyncPlanner.cs:515`), so pull and push stay consistent. | Fake Archidekt test copying deck 22959335: the three entries map to `maybeboard`; main plus commander is 100; pull then push preview gives zero operations; a category whose flag is `true` (or missing) still maps to `main`. |
 | REQ-002 | Decks pulled before REQ-001 keep working. A stored baseline or local entry with `main` for such an entry does not produce false differences, a refused push, or a changed fingerprint by itself; the next pull moves the local entry to `maybeboard` as an ordinary pull change. | Upgrade test with a `0.13.0`-shaped baseline and local deck: push preview has no zone contradiction and no operations; pull preview shows the zone move for exactly those entries. |
 | REQ-003 | Each `archidekt_deck_get` entry reports `inDeck` (true when the first category is included, has no flag, or the entry has no category). | Same fixture: the three entries `false`, others `true`. |
@@ -80,6 +89,19 @@ deck search or derived inclusion rates (see Decisions); an
 
 Inspected at `d8b845c` and `86d25fb`.
 
+- Push printing resolution (`ArchidektDeckTransport.SelectExactCard`,
+  `ArchidektDeckTransport.cs:379-423`) accepts a name-only add only when
+  exactly one search result matches the name (Assassin's Trophy returns 18 on
+  Archidekt). Its set and collector-number match reads a top-level `setCode`
+  that real results do not have (the set is `edition.editioncode`), and it
+  reads only the first search page (Sol Ring: 141 results, 25 per page).
+  Reconcile sets only the Oracle ID (`DeckIdentityReconciliation.cs:462-466`),
+  so installing card data would not have helped. `ApplyPlanAsync`
+  (`ArchidektDeckOperations.cs:266-285`) labels any provider error `unknown`,
+  including a failed card lookup before any write. Preview only plans
+  (`ArchidektCoordinator.cs:404-478`) and never checks resolution. The fake
+  Archidekt gives one printing per name with a top-level `setCode`, so tests
+  passed against a shape the real service does not send.
 - Every tool returns `OperationResult<T>`, which has a custom JSON converter,
   so the schema exporter in ModelContextProtocol 2.2.0 gives the open schema
   `true`. The SDK passes it through under `2026-07-28`; under older versions
@@ -152,6 +174,9 @@ Decisions (owner, 2026-10-31):
 
 ## Steps And Verification
 
+5. Phase 5, push resolution (REQ-013 to REQ-016), after phase 1 (same
+   Archidekt files; may run alongside phase 2 in its own worktree branched
+   from phase 1).
 0. Phase 0, tools load under every protocol (REQ-011, REQ-012): the shared
    output schema, the protocol E2E theory, unit tests that every registered
    tool has an object schema, and an updated
@@ -178,6 +203,14 @@ are independent of 1 and 2 and may run in parallel worktrees.
 
 ## Risks And Open Questions
 
+- **D-6 (proposed, non-blocking):** the default printing for a name-only add
+  is Archidekt's first listed search result (its order looked newest first;
+  not verified to match what Archidekt's own site picks). Whether to skip promo
+  collector numbers stays open. Owner may change the rule later.
+- Phase 5 makes the push preview send card searches (one GET per distinct
+  name, about 2 s each with pacing), so a preview with 27 name-only adds takes
+  about a minute, and one push holds about 70 new name-only cards at most.
+
 - **D-5 (owner, 2026-10-31):** every phase ships together as `0.13.1`. The
   `concise` default (D-2) is breaking, which `docs/versioning.md` reserves for
   minor releases; the owner chose the patch number, and the CHANGELOG marks it
@@ -201,5 +234,6 @@ are independent of 1 and 2 and may run in parallel worktrees.
 
 | Requirement | State | Evidence |
 | --- | --- | --- |
+| REQ-013 to REQ-016 | planned | Report from a live session (deck 27968076, 27 adds) and two read-only Archidekt card searches: Assassin's Trophy 18 results, Sol Ring 141 with paging, set code under `edition.editioncode`. |
 | REQ-011, REQ-012 | planned | Claude Code MCP logs (2026-10-31T14-59 to 15-11) and a stdio reproduction against installed 0.13.0: `outputSchema` is `true` for all 86 tools under `2026-07-28`; a failure under `2025-11-25` has no `isError`. |
 | REQ-001 to REQ-010 | planned | Research reports of 2026-10-31: one read-only GET of Archidekt deck 22959335, one read-only Scryfall search, four Scryfall rank checks, EDHREC terms, and Archidekt terms with two read-only search GETs. |
