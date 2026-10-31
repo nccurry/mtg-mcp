@@ -190,7 +190,7 @@ internal sealed class CardListCoordinator
                 ? combined.Unmatched.Count - unmatched.Count
                 : null,
         };
-        int keep = CountFitting([.. shaped.Data.Views.Select(view => (object)view)], header);
+        (int keep, int averageBytes) = CountFitting([.. shaped.Data.Views.Select(view => (object)view)], header);
         int next = position.Data.Offset + keep;
         string? nextCursor = next < combined.Entries.Count
             ? CardListCursors.Encode(fingerprint, next, [.. combined.Sources.Select(source => source.Marker)])
@@ -201,7 +201,17 @@ internal sealed class CardListCoordinator
             Page = new ScryfallPage<ScryfallCardView>([.. shaped.Data.Views.Take(keep)], combined.Entries.Count,
                 nextCursor),
             Truncated = truncated ? true : null,
-            Narrow = truncated ? ScryfallFormattedResponse.NarrowHint : null,
+            Narrow = truncated
+                ? ScryfallCutPageHint.Build(
+                    keep,
+                    shaped.Data.Views.Count,
+                    position.Data.Offset,
+                    combined.Entries.Count,
+                    averageBytes)
+                : null,
+            ReturnedCount = keep,
+            RequestedCount = shaped.Data.Views.Count,
+            CutReason = truncated ? ScryfallCutPageHint.ResultSizeLimit : null,
         });
     }
 
@@ -392,12 +402,15 @@ internal sealed class CardListCoordinator
     }
 
     /// <summary>
-    /// Counts how many leading cards of a page fit under the size limit next to the rest of the result.
+    /// Counts how many leading cards of a page fit under the size limit next to the rest of the result, and the
+    /// average size in bytes of the cards that fit.
     /// </summary>
-    private static int CountFitting(IReadOnlyList<object> views, CardListsCompareResult header)
+    private static (int Keep, int AverageBytes) CountFitting(IReadOnlyList<object> views, CardListsCompareResult header)
     {
         List<int> sizes = [.. views.Select(view => ResultSize.Measure(view) + 1)];
-        return ResultSizeLimit.CountFitting(sizes, ResultSize.Measure(header));
+        int keep = ResultSizeLimit.CountFitting(sizes, ResultSize.Measure(header));
+        int average = keep == 0 ? 0 : (int)Math.Ceiling(sizes.Take(keep).Sum() / (double)keep);
+        return (keep, average);
     }
 
     /// <summary>
