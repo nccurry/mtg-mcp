@@ -6,16 +6,16 @@
 - Owner: mtg-mcp (Opus parent session with Sonnet implementation children)
 - Last updated: 2026-10-31, `main` at `f0c0814`
 - Implementation authorized: Yes (owner, 2026-10-31: "Ride with the plan")
-- Selected work and endpoint: phases 0 to 6 (and any later phases added from new reports), merged into `main` on this host,
+- Selected work and endpoint: phases 0 to 7 (and any later phases added from new reports), merged into `main` on this host,
   audited, released together as `0.13.1`, and installed (owner, 2026-10-31:
   "fix everything identified then release 0.13.1, then install it").
-- State: phases 0, 1, 3, and 4 merged into `drsc/integ`; phases 2 and 5
-  in progress; phase 6 in research.
+- State: phases 0 to 6 merged into `drsc/integ` (combined `task ci` and
+  `task test:e2e` passed after phase 5); phase 7 in progress.
 - Standing instruction (owner, 2026-10-31): other sessions will keep sending
   mtg-mcp bugs; research each, add it here as a phase, fix it, and ship it in
   `0.13.1`.
-- Next action and blocker: finish phases 2 and 5; phase 6 follows phase 5
-  (same push code). No blocker.
+- Next action and blocker: finish phase 7; then docs, full audit, merge to
+  `main`, release, and install. No blocker.
 - Resume check: `git worktree list` matches the table below.
 
 Where the work lives (a worktree lock, not this table, holds a checkout
@@ -64,6 +64,13 @@ but `applyAvailable: true`, and its operations would have deleted the Removal
 category and moved both cards back, although only the remote had changed them
 (baseline equals local). That is a data-loss risk.
 
+A fourth report (2026-10-31, same deck) said a pull dropped every remote entry
+past the first page (172 on Archidekt, 79 locally), causing 17 cards to be
+pushed four times. Research found no sync data loss: the local store held all
+172 entries and 184 cards. `local_deck_get` returned a size-cut first page (79
+entries, `truncated: true`; rows ordered commander, main, maybeboard,
+sideboard), which the agent took for the whole deck and re-added cards from.
+
 Research (2026-10-31) found that problem 2 is mostly a zone-mapping gap, not
 duplicates. Archidekt counts an entry toward the deck only when its first
 category has `includedInDeck`. `MapZone`
@@ -87,6 +94,10 @@ Bloodthirsty Blade is also a real second entry, under Removal.
 | REQ-017 | A push preview whose remote side changed since the last sync (`hasConflicts`) sets `applyAvailable: false`, lists no operations, and its notice says: "archidekt_push_apply would refuse this push: the Archidekt deck changed since the last sync (N rows; see differences with remote-* states). Run archidekt_pull_preview first; cards added locally are kept. Then push again." The mode and credentials notice comes first when it applies. | Workflow test with the fake Archidekt reproducing the report (push; remote adds Removal and moves two Sideboard cards to it; local adds 3): push preview has `hasConflicts`, `applyAvailable: false`, the notice, no operations; push apply returns `push-conflict` with no writes. |
 | REQ-018 | A pull keeps local-only additions: when every local change since the last sync is an added entry or category, the pull preview is not a conflict, shows a `local-keep` operation ("Keep N cards added locally since the last sync; push them afterwards."), and apply replaces the rest from Archidekt, then adds the kept entries, their categories (created by exact name when missing), and assignments; the new baseline leaves them `local-added` so the next push adds them. A local add that matches a card the remote also added, or a kept card whose category gives a zone contradiction, is refused. Any other local change still needs `discardLocalChanges`. | Same setup: pull without the flag succeeds; the local deck has the two moved cards in main under Removal plus the 3 local adds; the next push preview is exactly 3 `entry-add`. A local change to a card the remote also changed gives `pull-conflict`; a duplicate add on both sides is refused. |
 | REQ-019 | A pull preview with `discardLocalChanges: true` says what is thrown away: "Replace the local deck with the Archidekt deck. This discards local changes made since the last sync: N cards added, N changed, N removed (categories: …). They are listed in differences with local-* states." | Pull preview test with local adds, changes, and removals checks the counts in the text. |
+| REQ-020 | Every `local_deck_get` page carries deck-wide totals (`entryCount`, `cardCount`, `cardsByZone`), and a cut page's `narrow` says it is one page of the deck ("This page shows N of M entries; the deck is not missing the rest. Follow nextCursor."). `local_deck_apply_changes` summaries carry the same deck-wide counts. | A 172-entry deck (99 sideboard rows): page 1 is cut, carries 172/184 and the zone counts, and following `nextCursor` reaches all 172. |
+| REQ-021 | `archidekt_push_preview` and `archidekt_push_apply` refuse a plan that removes more than 10 entries or more than 10% of the remote entries unless the caller passes `confirmRemovals` equal to the planned removal count; the preview notice names the count. | Push from a local deck missing 93 of 172 rows is refused without `confirmRemovals` and allowed with the exact count; a small removal is unaffected. |
+| REQ-022 | Archidekt 429s: a GET waits for Retry-After (at most about 10 s) and retries up to twice; a write that gets a 429 is `not-sent` (Archidekt did not process it) and the rest are not attempted, never retried automatically; a 429 or failure on the verification read after writes keeps the applied statuses and reports `applied-unverified`. A verification mismatch re-reads once after about 1 s and lists the rows that still differ. | Fake transport tests: 429 then success on a GET; 429 on a write gives `not-sent`; 429 on verification gives `applied-unverified` with statuses kept; a lagging read that settles gives `applied`; a real mismatch lists the differing rows. |
+| REQ-023 | `archidekt_deck_get` also reports repeated cards outside commander and main (for example the same card four times in the sideboard) as their own group list, separate from the Commander duplicate facts. | A deck with 17 cards four times in the sideboard reports 17 repeat groups. |
 | REQ-001 | An Archidekt entry whose first category has `includedInDeck: false` is not in the deck: the zone mapping sends it to `maybeboard` (unless it is a commander, sideboard, or maybeboard entry by the existing rules). The same mapping drives pulls, `archidekt_deck_get`, push planning, and the push zone check (`ArchidektSyncPlanner.cs:515`), so pull and push stay consistent. | Fake Archidekt test copying deck 22959335: the three entries map to `maybeboard`; main plus commander is 100; pull then push preview gives zero operations; a category whose flag is `true` (or missing) still maps to `main`. |
 | REQ-002 | Decks pulled before REQ-001 keep working. A stored baseline or local entry with `main` for such an entry does not produce false differences, a refused push, or a changed fingerprint by itself; the next pull moves the local entry to `maybeboard` as an ordinary pull change. | Upgrade test with a `0.13.0`-shaped baseline and local deck: push preview has no zone contradiction and no operations; pull preview shows the zone move for exactly those entries. |
 | REQ-003 | Each `archidekt_deck_get` entry reports `inDeck` (true when the first category is included, has no flag, or the entry has no category). | Same fixture: the three entries `false`, others `true`. |
@@ -206,6 +217,8 @@ Decisions (owner, 2026-10-31):
 
 6. Phase 6, conflicting pushes and merging pulls (REQ-017 to REQ-019), after
    phase 5 (same push code).
+7. Phase 7, reading pages safely and sync guards (REQ-020 to REQ-023), on
+   `drsc/integ` after phase 6.
 5. Phase 5, push resolution (REQ-013 to REQ-016), after phase 1 (same
    Archidekt files; may run alongside phase 2 in its own worktree branched
    from phase 1).
@@ -274,7 +287,8 @@ are independent of 1 and 2 and may run in parallel worktrees.
 
 | Requirement | State | Evidence |
 | --- | --- | --- |
-| REQ-017 to REQ-019 | planned | Report from a live session (deck 27968076); research by reading code (no live calls). |
+| REQ-020 to REQ-023 | planned | Fourth report; read-only copy of the local store (deck 01a1929f: 172 entries, 184 cards) and one public GET of deck 27968076 (172 relations, 184 cards, no paging, 17 names four times in the sideboard). |
+| REQ-017 to REQ-019 | implemented | Report from a live session (deck 27968076); research by reading code (no live calls). |
 | REQ-013 to REQ-016 | planned | Report from a live session (deck 27968076, 27 adds) and two read-only Archidekt card searches: Assassin's Trophy 18 results, Sol Ring 141 with paging, set code under `edition.editioncode`. |
 | REQ-011, REQ-012 | planned | Claude Code MCP logs (2026-10-31T14-59 to 15-11) and a stdio reproduction against installed 0.13.0: `outputSchema` is `true` for all 86 tools under `2026-07-28`; a failure under `2025-11-25` has no `isError`. |
 | REQ-001 to REQ-010 | planned | Research reports of 2026-10-31: one read-only GET of Archidekt deck 22959335, one read-only Scryfall search, four Scryfall rank checks, EDHREC terms, and Archidekt terms with two read-only search GETs. |
