@@ -162,7 +162,11 @@ internal sealed class ScryfallCardFormatter
         return new ScryfallFormattedCards(
             [.. views.Take(keep)],
             keep < views.Count,
-            Limits([.. cards.Take(keep)], facts));
+            Limits([.. cards.Take(keep)], facts))
+        {
+            RequestedCount = views.Count,
+            AverageBytes = keep == 0 ? 0 : (int)Math.Ceiling(sizes.Take(keep).Sum() / (double)keep),
+        };
     }
 
     /// <summary>
@@ -234,7 +238,23 @@ internal sealed class ScryfallCardFormatter
 internal sealed record ScryfallFormattedCards(
     IReadOnlyList<ScryfallCardView?> Views,
     bool Truncated,
-    IReadOnlyList<string>? Limits);
+    IReadOnlyList<string>? Limits)
+{
+    /// <summary>
+    /// Gets how many items the page held before it was cut.
+    /// </summary>
+    internal int RequestedCount { get; init; } = Views.Count;
+
+    /// <summary>
+    /// Gets the zero-based position of the page's first item in the whole result.
+    /// </summary>
+    internal int PageStart { get; init; }
+
+    /// <summary>
+    /// Gets the average size in bytes of the kept items, or zero when the page was not measured.
+    /// </summary>
+    internal int AverageBytes { get; init; }
+}
 
 /// <summary>
 /// Shapes the cards of a page and decides how many leading items fit the result size limit.

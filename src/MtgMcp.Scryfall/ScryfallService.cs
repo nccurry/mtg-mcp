@@ -933,6 +933,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                 items.Select(row => (object?)(row with { Card = null })).ToArray(),
                 cardDataGenerationId,
                 cancellationToken).ConfigureAwait(false);
+            formatted = formatted with { PageStart = state.Offset };
             items = items[..formatted.Views.Count];
         }
 
@@ -1399,6 +1400,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                 [.. assignments.Select(value => (object?)value)],
                 success.Data.GenerationId,
                 cancellationToken).ConfigureAwait(false);
+            formatted = formatted with { PageStart = offset };
             cards = cards.GetRange(0, formatted.Views.Count);
             assignments = assignments.GetRange(0, formatted.Views.Count);
         }
@@ -1606,6 +1608,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                 [.. items.Select(_ => (object?)null)],
                 null,
                 cancellationToken).ConfigureAwait(false);
+            formatted = formatted with { PageStart = offset };
             items = items.GetRange(0, formatted.Views.Count);
         }
 

@@ -47,6 +47,31 @@ public abstract record ScryfallFormattedResponse
     [JsonPropertyOrder(103)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Narrow { get; init; }
+
+    /// <summary>
+    /// Gets how many cards the page holds, or null for a result that is not a page.
+    /// </summary>
+    [JsonPropertyName("returnedCount")]
+    [JsonPropertyOrder(104)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ReturnedCount { get; init; }
+
+    /// <summary>
+    /// Gets how many cards the page would hold without the result size limit, or null for a result that is not a
+    /// page.
+    /// </summary>
+    [JsonPropertyName("requestedCount")]
+    [JsonPropertyOrder(105)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? RequestedCount { get; init; }
+
+    /// <summary>
+    /// Gets why the page holds fewer cards than requested, or null when it was not cut.
+    /// </summary>
+    [JsonPropertyName("cutReason")]
+    [JsonPropertyOrder(106)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CutReason { get; init; }
 }
 
 /// <summary>
@@ -174,7 +199,10 @@ internal sealed class ScryfallCardResponseOperations
                 ResponseFormat = format.Data.Name,
                 Limits = formatted.Limits,
                 Truncated = formatted.Truncated ? true : null,
-                Narrow = formatted.Truncated ? ScryfallFormattedResponse.NarrowHint : null,
+                Narrow = formatted.Truncated ? CutPageHint(formatted, page.TotalCount) : null,
+                ReturnedCount = formatted.Views.Count,
+                RequestedCount = formatted.RequestedCount,
+                CutReason = formatted.Truncated ? ScryfallCutPageHint.ResultSizeLimit : null,
             });
     }
 
@@ -284,7 +312,10 @@ internal sealed class ScryfallCardResponseOperations
                 ResponseFormat = format.Data.Name,
                 Limits = formatted.Limits,
                 Truncated = formatted.Truncated ? true : null,
-                Narrow = formatted.Truncated ? ScryfallFormattedResponse.NarrowHint : null,
+                Narrow = formatted.Truncated ? CutPageHint(formatted, page.TotalCount) : null,
+                ReturnedCount = formatted.Views.Count,
+                RequestedCount = formatted.RequestedCount,
+                CutReason = formatted.Truncated ? ScryfallCutPageHint.ResultSizeLimit : null,
             });
     }
 
@@ -347,6 +378,8 @@ internal sealed class ScryfallCardResponseOperations
                     null)
                 {
                     ResponseFormat = responseFormat ?? "standard",
+                    ReturnedCount = 1,
+                    RequestedCount = 1,
                 });
         }
 
@@ -365,6 +398,8 @@ internal sealed class ScryfallCardResponseOperations
             {
                 ResponseFormat = card.ResponseFormat,
                 Limits = card.Limits,
+                ReturnedCount = 1,
+                RequestedCount = 1,
             });
     }
 
@@ -412,8 +447,24 @@ internal sealed class ScryfallCardResponseOperations
                 ResponseFormat = format.Data.Name,
                 Limits = formatted.Limits,
                 Truncated = formatted.Truncated ? true : null,
-                Narrow = formatted.Truncated ? ScryfallFormattedResponse.NarrowHint : null,
+                Narrow = formatted.Truncated ? CutPageHint(formatted, page.TotalCount) : null,
+                ReturnedCount = formatted.Views.Count,
+                RequestedCount = formatted.RequestedCount,
+                CutReason = formatted.Truncated ? ScryfallCutPageHint.ResultSizeLimit : null,
             });
+    }
+
+    /// <summary>
+    /// Builds the note for a cut page from the counts the item counter recorded.
+    /// </summary>
+    private static string CutPageHint(ScryfallFormattedCards formatted, int totalCount)
+    {
+        return ScryfallCutPageHint.Build(
+            formatted.Views.Count,
+            formatted.RequestedCount,
+            formatted.PageStart,
+            totalCount,
+            formatted.AverageBytes);
     }
 
     /// <summary>

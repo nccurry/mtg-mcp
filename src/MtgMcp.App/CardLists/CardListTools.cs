@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Decks;
 using MtgMcp.App.Hosting;
+using MtgMcp.App.Scryfall;
 using MtgMcp.Core.Results;
 using MtgMcp.Scryfall;
 
@@ -136,7 +137,8 @@ internal sealed class CardListTools
         "symmetric-difference) to two card lists given by reference, so large lists never pass through the " +
         "conversation. Use it for \"search results that are not in my deck\" or \"cards in both decks\". " +
         "matchBy oracle (default) treats printings of one card as the same card. Results are ordered by name and " +
-        "paged; send the same request with cursor to read the next page. " + SourceNote +
+        "paged; send the same request with cursor to read the next page. A page cut to the result size limit " +
+        "sets truncated, cutReason, and narrow with the counts. " + SourceNote +
         UntrustedTextNotes.CardListEntries +
         DeckToolExamples.ExamplePrefix + "minimal): " + CardListToolExamples.CompareMinimal +
         DeckToolExamples.ExamplePrefix + "nested): " + CardListToolExamples.CompareNested +
@@ -159,11 +161,14 @@ internal sealed class CardListTools
         string responseFormat = "standard",
         [Description(
             "Only with responseFormat concise: the fields to return instead of the default set. scryfallId, " +
-            "oracleId, and name are always returned.")]
+            "oracleId, and name are always returned. oracleText is usually the largest field, so leaving it out fits " +
+            "more cards in a page.")]
         IReadOnlyList<string>? fields = null,
         [Description("Opaque cursor from nextCursor of a previous call with the same request.")]
         string? cursor = null,
-        [Description("Cards per page, from 1 through 100, or through 25 for full. Use 100 for Archidekt sources.")]
+        [Description(
+            "Most cards per page, from 1 through 100, or through 25 for full. A page may hold fewer when it " +
+            "reaches the result size limit. Use 100 for Archidekt sources.")]
         int pageSize = CardListCoordinator.DefaultPageSize,
         CancellationToken cancellationToken = default)
     {
@@ -203,7 +208,8 @@ internal sealed class CardListTools
         "for the group field; it is not the same as a real value written none. rows adds a sorted, paged table of " +
         "cards. Fields: name, manaValue, " +
         "typeLine, cardTypes, subtypes, supertypes, colors, colorIdentity, keywords, tags, rarity, set, power, " +
-        "toughness, loyalty, priceUsd and other price columns, cheapestPriceUsd, edhrecRank, gameChanger, " +
+        "toughness, loyalty, priceUsd and other price columns, cheapestPriceUsd, edhrecRank (" +
+        ScryfallReadTools.EdhrecRankMeaning + "), gameChanger, " +
         "producedMana, oracleText (contains only), legalIn, bannedIn, games, reserved, layout, and for deck sources " +
         "zone, category, and quantity. " + SourceNote + UntrustedTextNotes.CardListEntries +
         DeckToolExamples.ExamplePrefix + "curve): " + CardListToolExamples.QueryMinimal +

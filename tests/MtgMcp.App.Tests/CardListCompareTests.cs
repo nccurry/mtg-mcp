@@ -688,7 +688,21 @@ public sealed class CardListCompareTests
             if (page.Page.NextCursor is not null)
             {
                 Assert.True(page.Truncated);
-                Assert.NotNull(page.Narrow);
+                Assert.Equal("result-size-limit", page.CutReason);
+                Assert.Equal(page.Page.Items.Count, page.ReturnedCount);
+                Assert.Equal(Math.Min(100, 100 - seen.Count + page.Page.Items.Count), page.RequestedCount);
+                Assert.Contains($"{page.ReturnedCount} of the {page.RequestedCount} cards requested", page.Narrow);
+                Assert.Contains(
+                    $"continues at card {seen.Count + 1} of 100",
+                    page.Narrow,
+                    StringComparison.Ordinal);
+                Assert.Contains("bytes per card", page.Narrow, StringComparison.Ordinal);
+            }
+            else
+            {
+                Assert.Null(page.CutReason);
+                Assert.Null(page.Narrow);
+                Assert.Equal(page.ReturnedCount, page.RequestedCount);
             }
 
             cursor = page.Page.NextCursor;
