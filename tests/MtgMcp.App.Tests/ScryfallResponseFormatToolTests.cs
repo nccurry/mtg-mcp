@@ -114,12 +114,11 @@ public sealed class ScryfallResponseFormatToolTests
     }
 
     /// <summary>
-    /// Pins that the card tools publish the same open output schema as every other tool that returns an operation
-    /// result: the result type has its own converter, so its schema is not generated. The card view union adds no
-    /// new gap.
+    /// Pins that the card tools publish the same shared output schema as every other tool that returns an operation
+    /// result: the result type has its own converter, so its schema is not generated but set once for all tools.
     /// </summary>
     [Fact]
-    public void CardTools_OutputSchema_IsTheSameOpenSchemaAsOtherTools()
+    public void CardTools_OutputSchema_IsTheSameSharedSchemaAsOtherTools()
     {
         using RegisteredToolSet registered = new(OperationMode.Remote);
         Dictionary<string, McpServerTool> tools = registered.Tools
@@ -127,7 +126,7 @@ public sealed class ScryfallResponseFormatToolTests
 
         string unchanged = tools["local_deck_list"].ProtocolTool.OutputSchema!.Value.GetRawText();
 
-        Assert.Equal("true", unchanged);
+        Assert.Equal(OperationResultSchema.Schema.GetRawText(), unchanged);
         foreach (string name in FormatTools)
         {
             Assert.Equal(unchanged, tools[name].ProtocolTool.OutputSchema!.Value.GetRawText());
