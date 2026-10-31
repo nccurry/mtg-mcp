@@ -6,12 +6,16 @@
 - Owner: mtg-mcp (Opus parent session with Sonnet implementation children)
 - Last updated: 2026-10-31, `main` at `f0c0814`
 - Implementation authorized: Yes (owner, 2026-10-31: "Ride with the plan")
-- Selected work and endpoint: phases 0 to 5, merged into `main` on this host,
+- Selected work and endpoint: phases 0 to 6 (and any later phases added from new reports), merged into `main` on this host,
   audited, released together as `0.13.1`, and installed (owner, 2026-10-31:
   "fix everything identified then release 0.13.1, then install it").
-- State: implementation starting.
-- Next action and blocker: phases 0, 1, and 3-4 run in parallel; phases 2
-  and 5 follow phase 1. No blocker.
+- State: phases 0, 1, 3, and 4 merged into `drsc/integ`; phases 2 and 5
+  in progress; phase 6 in research.
+- Standing instruction (owner, 2026-10-31): other sessions will keep sending
+  mtg-mcp bugs; research each, add it here as a phase, fix it, and ship it in
+  `0.13.1`.
+- Next action and blocker: finish phases 2 and 5; phase 6 follows phase 5
+  (same push code). No blocker.
 - Resume check: `git worktree list` matches the table below.
 
 Where the work lives (a worktree lock, not this table, holds a checkout
@@ -22,7 +26,8 @@ against cleanup):
 | `mtg-mcp-wt/deck-read-and-search-clarity/integ` | `drsc/integ` | parent | integration |
 | `mtg-mcp-wt/deck-read-and-search-clarity/p0-protocol` | `drsc/p0-protocol` | Sonnet child | phase 0 |
 | `mtg-mcp-wt/deck-read-and-search-clarity/p1-indeck` | `drsc/p1-indeck` | Sonnet child | phase 1, then phase 2 |
-| `mtg-mcp-wt/deck-read-and-search-clarity/p34-scryfall` | `drsc/p34-scryfall` | Sonnet child | phases 3 and 4 |
+| `mtg-mcp-wt/deck-read-and-search-clarity/p34-scryfall` | `drsc/p34-scryfall` | Sonnet child | phases 3 and 4, merged into integ |
+| `mtg-mcp-wt/deck-read-and-search-clarity/p5-push` | `drsc/p5-push` | Sonnet child | phase 5 |
 
 ## Outcome And Requirements
 
@@ -50,6 +55,15 @@ name-only adds (card data not installed) and `archidekt_push_apply` failed on
 the first ("unknown: Archidekt could not resolve the exact requested
 printing"), marking the other 26 not attempted; nothing reached Archidekt.
 
+A third report (2026-10-31, local deck bound to Archidekt deck 27968076):
+after a successful push, the user edited the deck on Archidekt (a new Removal
+category; Assassin's Trophy and Pick Your Poison moved from Sideboard to main
+under Removal) while the agent added 33 entries locally. `archidekt_push_preview`
+reported `conflictCount: 2` (remote-added 1, remote-changed 1, local-added 33)
+but `applyAvailable: true`, and its operations would have deleted the Removal
+category and moved both cards back, although only the remote had changed them
+(baseline equals local). That is a data-loss risk.
+
 Research (2026-10-31) found that problem 2 is mostly a zone-mapping gap, not
 duplicates. Archidekt counts an entry toward the deck only when its first
 category has `includedInDeck`. `MapZone`
@@ -70,6 +84,8 @@ Bloodthirsty Blade is also a real second entry, under Removal.
 | REQ-014 | `archidekt_push_preview` resolves every add without a provider card ID with the same resolver, names the chosen printing in the operation detail, and sets `applyAvailable: false` with a notice naming the cards when a name has no match or the requests would pass the 150-request budget. Apply uses the preview's resolution, so anything the preview approves, apply can resolve. | Workflow test reproducing the report: 27 name-only sideboard adds, no card data, one card with 18 printings: preview shows each chosen printing, apply gives `applied` with clean verification. An unknown name gives `applyAvailable: false` and apply refuses with zero writes. |
 | REQ-015 | Apply resolves every add before its first write; a resolution failure refuses the push with no writes. An operation that failed before anything was sent reports `not-sent` ("Nothing was sent to Archidekt for this operation."), `unknown` is kept for a failure after a write was sent, and a push where nothing was applied reports outcome `not-applied`. | ApplyPlan tests: a lookup failure on the first operation gives `not-sent` and `not-applied`, never `unknown`; a failure during a write still gives `unknown`. |
 | REQ-016 | The add-time notice for entries added without card data no longer says reconcile makes them pushable; it says push picks Archidekt's default printing unless a printing is set. | Message test. |
+| REQ-017 | A push never sends an operation whose only source is a change made on Archidekt: it changes only what the local side changed relative to the baseline, never deletes a category the remote added, and refuses apply when local and remote changed the same thing. A preview with conflicts or unpulled remote changes sets `applyAvailable: false` and tells the agent to pull first. | Workflow test reproducing the report with the fake Archidekt: remote adds a category and moves two cards, local adds 33 entries; push preview has no category-delete or entry-update for those, and either pushes only the 33 adds or refuses with "pull first"; apply never reverts the remote edits. (Design pending research.) |
+| REQ-018 | A pull can keep local-only additions instead of discarding them, and a pull preview with `discardLocalChanges: true` says plainly which local changes will be thrown away. | Design and acceptance pending research. |
 | REQ-001 | An Archidekt entry whose first category has `includedInDeck: false` is not in the deck: the zone mapping sends it to `maybeboard` (unless it is a commander, sideboard, or maybeboard entry by the existing rules). The same mapping drives pulls, `archidekt_deck_get`, push planning, and the push zone check (`ArchidektSyncPlanner.cs:515`), so pull and push stay consistent. | Fake Archidekt test copying deck 22959335: the three entries map to `maybeboard`; main plus commander is 100; pull then push preview gives zero operations; a category whose flag is `true` (or missing) still maps to `main`. |
 | REQ-002 | Decks pulled before REQ-001 keep working. A stored baseline or local entry with `main` for such an entry does not produce false differences, a refused push, or a changed fingerprint by itself; the next pull moves the local entry to `maybeboard` as an ordinary pull change. | Upgrade test with a `0.13.0`-shaped baseline and local deck: push preview has no zone contradiction and no operations; pull preview shows the zone move for exactly those entries. |
 | REQ-003 | Each `archidekt_deck_get` entry reports `inDeck` (true when the first category is included, has no flag, or the entry has no category). | Same fixture: the three entries `false`, others `true`. |
@@ -174,6 +190,8 @@ Decisions (owner, 2026-10-31):
 
 ## Steps And Verification
 
+6. Phase 6, push never reverts remote edits (REQ-017, REQ-018), after phase 5
+   (same push code). Design pending research.
 5. Phase 5, push resolution (REQ-013 to REQ-016), after phase 1 (same
    Archidekt files; may run alongside phase 2 in its own worktree branched
    from phase 1).
@@ -234,6 +252,7 @@ are independent of 1 and 2 and may run in parallel worktrees.
 
 | Requirement | State | Evidence |
 | --- | --- | --- |
+| REQ-017, REQ-018 | planned; research running | Report from a live session (deck 27968076). |
 | REQ-013 to REQ-016 | planned | Report from a live session (deck 27968076, 27 adds) and two read-only Archidekt card searches: Assassin's Trophy 18 results, Sol Ring 141 with paging, set code under `edition.editioncode`. |
 | REQ-011, REQ-012 | planned | Claude Code MCP logs (2026-10-31T14-59 to 15-11) and a stdio reproduction against installed 0.13.0: `outputSchema` is `true` for all 86 tools under `2026-07-28`; a failure under `2025-11-25` has no `isError`. |
 | REQ-001 to REQ-010 | planned | Research reports of 2026-10-31: one read-only GET of Archidekt deck 22959335, one read-only Scryfall search, four Scryfall rank checks, EDHREC terms, and Archidekt terms with two read-only search GETs. |
