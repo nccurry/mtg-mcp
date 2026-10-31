@@ -11,6 +11,21 @@ namespace MtgMcp.Archidekt;
 internal sealed class ArchidektSession : IDisposable
 {
     /// <summary>
+    /// Gives the most retries a read gets after a rate-limit response.
+    /// </summary>
+    private const int MaximumRateLimitRetries = 2;
+
+    /// <summary>
+    /// Gives the longest a read waits before retrying after a rate-limit response.
+    /// </summary>
+    private static readonly TimeSpan MaximumRateLimitWait = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Gives the wait before a retry when a rate-limit response names no usable wait.
+    /// </summary>
+    private static readonly TimeSpan DefaultRateLimitWait = TimeSpan.FromSeconds(2);
+
+    /// <summary>
     /// Sends provider requests through an injected or owned HTTP client.
     /// </summary>
     private readonly HttpClient httpClient;
@@ -29,6 +44,11 @@ internal sealed class ArchidektSession : IDisposable
     /// Applies one shared account pacing timeline to every provider request.
     /// </summary>
     private readonly ArchidektRequestPacer pacer;
+
+    /// <summary>
+    /// Waits between retries without blocking a thread; tests replace it so they do not sleep.
+    /// </summary>
+    private readonly Func<TimeSpan, CancellationToken, Task> delay;
 
     /// <summary>
     /// Serializes login and one-time 401 refresh behavior.
@@ -55,8 +75,10 @@ internal sealed class ArchidektSession : IDisposable
         HttpClient httpClient,
         bool ownsHttpClient,
         ArchidektOptions options,
-        ArchidektRequestPacer? pacer = null)
+        ArchidektRequestPacer? pacer = null,
+        Func<TimeSpan, CancellationToken, Task>? delay = null)
     {
+        this.delay = delay ?? Task.Delay;
         this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         this.ownsHttpClient = ownsHttpClient;
         ArgumentNullException.ThrowIfNull(options);
@@ -93,6 +115,14 @@ internal sealed class ArchidektSession : IDisposable
         }
 
         return loaded.Username!;
+    }
+
+    /// <summary>
+    /// Waits for a short pause between provider calls, such as before reading a deck again.
+    /// </summary>
+    internal Task PauseAsync(TimeSpan duration, CancellationToken cancellationToken)
+    {
+        return delay(duration, cancellationToken);
     }
 
     /// <summary>
@@ -135,6 +165,7 @@ internal sealed class ArchidektSession : IDisposable
 
         bool refreshed = false;
         int transientAttempt = 0;
+        int rateLimitAttempt = 0;
         while (true)
         {
             await pacer.WaitForPermitAsync(budget, cancellationToken).ConfigureAwait(false);
@@ -155,12 +186,21 @@ internal sealed class ArchidektSession : IDisposable
                 transientAttempt < 2)
             {
                 transientAttempt++;
-                await Task.Delay(TimeSpan.FromSeconds(transientAttempt), cancellationToken)
+                await delay(TimeSpan.FromSeconds(transientAttempt), cancellationToken)
                     .ConfigureAwait(false);
                 continue;
             }
 
-            await ThrowForFailureAsync(response, cancellationToken).ConfigureAwait(false);
+            if ((int)response.StatusCode == 429 && idempotentRead && rateLimitAttempt < MaximumRateLimitRetries)
+            {
+                // The pacer records the full request only when the read finally fails.
+                rateLimitAttempt++;
+                await delay(RateLimitWait(response.Headers.RetryAfter), cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            await ThrowForFailureAsync(response, idempotentRead && rateLimitAttempt > 0, cancellationToken)
+                .ConfigureAwait(false);
             string json = response.Content is null
                 ? "{}"
                 : await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -178,6 +218,18 @@ internal sealed class ArchidektSession : IDisposable
         {
             httpClient.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Reads how long a rate-limit response asks for, at most ten seconds, or two seconds when it asks for nothing
+    /// usable.
+    /// </summary>
+    private static TimeSpan RateLimitWait(RetryConditionHeaderValue? retryAfter)
+    {
+        TimeSpan? requested = retryAfter?.Delta ?? (retryAfter?.Date is { } date ? date - DateTimeOffset.UtcNow : null);
+        return requested is { } value && value > TimeSpan.Zero
+            ? (value > MaximumRateLimitWait ? MaximumRateLimitWait : value)
+            : DefaultRateLimitWait;
     }
 
     /// <summary>
@@ -235,6 +287,7 @@ internal sealed class ArchidektSession : IDisposable
     /// </summary>
     private async Task ThrowForFailureAsync(
         HttpResponseMessage response,
+        bool retriedRead,
         CancellationToken cancellationToken)
     {
         if (response.IsSuccessStatusCode)
@@ -249,7 +302,9 @@ internal sealed class ArchidektSession : IDisposable
             throw new ArchidektProviderException(
                 ArchidektFailureKind.Unavailable,
                 "provider-rate-limited",
-                "Archidekt rate-limited the operation; no automatic retry was attempted.");
+                retriedRead
+                    ? $"Archidekt rate-limited the read, and it still refused after {MaximumRateLimitRetries} retries."
+                    : "Archidekt rate-limited the operation; no automatic retry was attempted.");
         }
 
         throw response.StatusCode switch
@@ -319,7 +374,7 @@ internal sealed class ArchidektSession : IDisposable
                 includeToken: false);
             using HttpResponseMessage response = await SendHttpAsync(request, cancellationToken)
                 .ConfigureAwait(false);
-            await ThrowForFailureAsync(response, cancellationToken).ConfigureAwait(false);
+            await ThrowForFailureAsync(response, retriedRead: false, cancellationToken).ConfigureAwait(false);
             string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             using JsonDocument document = ParseJson(json);
             token = ReadToken(document.RootElement)

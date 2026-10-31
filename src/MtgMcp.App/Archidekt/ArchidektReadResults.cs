@@ -154,16 +154,136 @@ internal sealed record ArchidektSnapshotRestorePreviewView(
 }
 
 /// <summary>
-/// Counts what one Archidekt deck holds, so an agent can size it before reading its entries.
+/// Counts what one Archidekt deck holds, so an agent can size it before reading its entries. Every count covers the
+/// whole deck, whichever zones the read asked for.
 /// </summary>
 internal sealed record ArchidektDeckSummary(
     int EntryCount,
     int CardCount,
     int CategoryCount,
-    IReadOnlyDictionary<string, int> CardsByZone);
+    IReadOnlyDictionary<string, int> CardsByZone,
+    IReadOnlyList<ArchidektDuplicateGroup> Duplicates,
+    IReadOnlyList<ArchidektDuplicateGroup> RepeatsOutsideMain)
+{
+    /// <summary>
+    /// Gets how many groups <see cref="RepeatsOutsideMain"/> leaves out to keep the result small, or null when it
+    /// lists all.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? RepeatsOutsideMainOmitted { get; init; }
+
+    /// <summary>
+    /// Gets how many duplicate groups the list leaves out to keep the result small, or null when it lists all.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? DuplicatesOmitted { get; init; }
+
+    /// <summary>
+    /// Gets the deck size of a Commander deck, or null for any other format.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ArchidektDeckSizeFact? Size { get; init; }
+}
 
 /// <summary>
-/// Returns one deck with a leading summary and one size-limited page of its entries. The categories and the unknown
+/// Names one card that is held more than once: across the commander and main zones (counting only entries that are in
+/// the deck), or inside one sideboard or maybeboard zone.
+/// </summary>
+internal sealed record ArchidektDuplicateGroup(
+    string CardName,
+    Guid? OracleId,
+    int Copies,
+    IReadOnlyList<string> Zones);
+
+/// <summary>
+/// States the size of a Commander deck next to the size the format expects. It is a fact, not a verdict.
+/// </summary>
+internal sealed record ArchidektDeckSizeFact(string Format, int Expected, int MainAndCommander);
+
+/// <summary>
+/// Shows the entry fields that the concise format returns: what an agent needs to read a deck. The full format adds
+/// the rest in <see cref="ArchidektFullDeckEntryView"/>.
+/// </summary>
+[JsonDerivedType(typeof(ArchidektFullDeckEntryView))]
+internal record ArchidektDeckEntryView(
+    string CardName,
+    int Quantity,
+    string Zone,
+    IReadOnlyList<string> CategoryNames,
+    string? SetCode,
+    string? CollectorNumber,
+    Guid? OracleId,
+    bool InDeck)
+{
+    /// <summary>
+    /// Copies the concise fields of an entry and adds whether its first category puts it in the deck. Nothing is
+    /// stored for this: it is worked out from the deck's categories at read time, so it never changes a fingerprint
+    /// or a saved snapshot.
+    /// </summary>
+    internal static ArchidektDeckEntryView From(RemoteDeckEntry entry, bool inDeck)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return new ArchidektDeckEntryView(
+            entry.CardName,
+            entry.Quantity,
+            entry.Zone,
+            entry.CategoryNames,
+            entry.SetCode,
+            entry.CollectorNumber,
+            entry.OracleId,
+            inDeck);
+    }
+}
+
+/// <summary>
+/// Shows one deck entry with every field Archidekt gives it, plus whether Archidekt counts it toward the deck.
+/// </summary>
+internal sealed record ArchidektFullDeckEntryView(
+    string CardName,
+    int Quantity,
+    string Zone,
+    IReadOnlyList<string> CategoryNames,
+    string? SetCode,
+    string? CollectorNumber,
+    Guid? OracleId,
+    bool InDeck,
+    string ProviderRelationId,
+    string ProviderCardId,
+    Guid? PrintingId,
+    string Language,
+    string Finish,
+    string? PrimaryCategoryName,
+    int SortOrder)
+    : ArchidektDeckEntryView(CardName, Quantity, Zone, CategoryNames, SetCode, CollectorNumber, OracleId, InDeck)
+{
+    /// <summary>
+    /// Copies every field of an entry and adds whether its first category puts it in the deck.
+    /// </summary>
+    internal static ArchidektFullDeckEntryView FullFrom(RemoteDeckEntry entry, bool inDeck)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return new ArchidektFullDeckEntryView(
+            entry.CardName,
+            entry.Quantity,
+            entry.Zone,
+            entry.CategoryNames,
+            entry.SetCode,
+            entry.CollectorNumber,
+            entry.OracleId,
+            inDeck,
+            entry.ProviderRelationId,
+            entry.ProviderCardId,
+            entry.PrintingId,
+            entry.Language,
+            entry.Finish,
+            entry.PrimaryCategoryName,
+            entry.SortOrder);
+    }
+}
+
+/// <summary>
+/// Returns one deck with a leading summary and one size-limited page of its entries, from the zones the read asked
+/// for (<see cref="ShownEntryCount"/> counts them; the summary counts the whole deck). The categories and the unknown
 /// provider fields, and the description, come with the first page (offset 0) only. When <see cref="NextOffset"/> is
 /// set, call again with that offset for the following entries.
 /// </summary>
@@ -180,8 +300,9 @@ internal sealed record ArchidektDeckView(
     string RemoteFingerprint,
     ArchidektRetrievalEvidence Evidence,
     int Offset,
+    int ShownEntryCount,
     IReadOnlyList<RemoteDeckCategory> Categories,
-    IReadOnlyList<RemoteDeckEntry> Entries,
+    IReadOnlyList<ArchidektDeckEntryView> Entries,
     IReadOnlyDictionary<string, System.Text.Json.JsonElement> Extensions)
 {
     /// <summary>

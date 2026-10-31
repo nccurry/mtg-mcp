@@ -71,9 +71,10 @@ internal sealed class ArchidektCoordinator
     /// <summary>Previews one local-to-remote synchronization.</summary>
     internal Task<OperationResult<ArchidektSyncPreview>> PreviewPushAsync(
         Guid localDeckId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? confirmRemovals = null)
     {
-        return push.PreviewAsync(localDeckId, cancellationToken);
+        return push.PreviewAsync(localDeckId, cancellationToken, confirmRemovals);
     }
 
     /// <summary>Applies one unchanged local-to-remote preview.</summary>
@@ -157,9 +158,10 @@ internal sealed class ArchidektPushWorkflow
     /// <summary>Previews one local-to-remote synchronization.</summary>
     internal Task<OperationResult<ArchidektSyncPreview>> PreviewAsync(
         Guid localDeckId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? confirmRemovals = null)
     {
-        return context.PreviewPushAsync(localDeckId, cancellationToken);
+        return context.PreviewPushAsync(localDeckId, cancellationToken, confirmRemovals);
     }
 
     /// <summary>Applies one unchanged local-to-remote preview.</summary>

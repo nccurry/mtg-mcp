@@ -16,28 +16,39 @@ internal static class ArchidektResultPaging
     private const int MaximumExtensionBytes = 8_000;
 
     /// <summary>
-    /// Builds one page of a deck: a summary, then the entries from <paramref name="offset"/> that fit. Entries are
-    /// ordered by card name, then relation ID, not by Archidekt's order numbers, so the pages of separate reads line up
-    /// even though Archidekt renumbers its order numbers without an edit.
+    /// Builds one page of a deck: a summary of the whole deck, then the entries of the chosen zones from
+    /// <paramref name="offset"/> that fit. Entries are ordered by zone, then card name, then relation ID, not by
+    /// Archidekt's order numbers, so the pages of separate reads line up even though Archidekt renumbers its order
+    /// numbers without an edit. The offset counts the chosen entries, not the whole deck.
     /// </summary>
     internal static OperationResult<ArchidektDeckView> PageDeck(
         RemoteDeckSnapshot deck,
         int offset,
+        ArchidektDeckReadOptions? options = null,
         string callAgain = "Call archidekt_deck_get again")
     {
         ArgumentNullException.ThrowIfNull(deck);
-        if (ResultPage.CheckPage<ArchidektDeckView>(
-            null,
-            null,
-            new PageList("offset", offset, deck.Entries.Count, "entries")) is { } refused)
+        options ??= ArchidektDeckReadOptions.Default;
+        List<RemoteDeckEntry> chosen = [.. deck.Entries.Where(value => options.Shows(value.Zone))];
+        chosen.Sort(static (left, right) =>
+        {
+            int byZone = ArchidektDeckReadOptions.ZoneRank(left.Zone)
+                .CompareTo(ArchidektDeckReadOptions.ZoneRank(right.Zone));
+            if (byZone != 0)
+            {
+                return byZone;
+            }
+
+            int byName = StringComparer.OrdinalIgnoreCase.Compare(left.CardName, right.CardName);
+            return byName != 0
+                ? byName
+                : StringComparer.Ordinal.Compare(left.ProviderRelationId, right.ProviderRelationId);
+        });
+        string entryLabel = options.Zones.Count == 0 ? "entries" : "entries in those zones";
+        PageList page = new("offset", offset, chosen.Count, entryLabel);
+        if (ResultPage.CheckPage<ArchidektDeckView>(null, null, page) is { } refused)
         {
             return refused;
-        }
-
-        Dictionary<string, int> cardsByZone = new(StringComparer.Ordinal);
-        foreach (RemoteDeckEntry entry in deck.Entries)
-        {
-            cardsByZone[entry.Zone] = cardsByZone.GetValueOrDefault(entry.Zone) + entry.Quantity;
         }
 
         bool first = offset == 0;
@@ -47,11 +58,7 @@ internal static class ArchidektResultPaging
         ShownText name = ResultText.Name(deck.Name);
         ShownText description = ResultText.Description(deck.Description, first);
         ArchidektDeckView header = new(
-            new ArchidektDeckSummary(
-                deck.Entries.Count,
-                deck.Entries.Sum(value => value.Quantity),
-                deck.Categories.Count,
-                cardsByZone),
+            ArchidektDeckFacts.Summarize(deck),
             deck.RemoteId,
             deck.RemoteUri,
             name.Text,
@@ -63,6 +70,7 @@ internal static class ArchidektResultPaging
             deck.RemoteFingerprint,
             deck.Evidence,
             offset,
+            chosen.Count,
             first ? deck.Categories : [],
             [],
             first && !omitExtensions
@@ -74,25 +82,44 @@ internal static class ArchidektResultPaging
             DescriptionTruncated = description.TruncatedOrNull,
             DescriptionLength = description.LengthIfTruncated,
         };
-        List<RemoteDeckEntry> ordered = [.. deck.Entries];
-        ordered.Sort(static (left, right) =>
-        {
-            int byName = StringComparer.OrdinalIgnoreCase.Compare(left.CardName, right.CardName);
-            return byName != 0
-                ? byName
-                : StringComparer.Ordinal.Compare(left.ProviderRelationId, right.ProviderRelationId);
-        });
+        List<ArchidektDeckEntryView> ordered =
+        [
+            .. chosen.Select(value => options.Full
+                ? ArchidektFullDeckEntryView.FullFrom(value, deck.IsInDeck(value))
+                : ArchidektDeckEntryView.From(value, deck.IsInDeck(value))),
+        ];
         ResultPageSlice slice = ResultPage.Take(ordered, offset, ResultSize.Measure(header));
         return new OperationSuccess<ArchidektDeckView>(header with
         {
             Entries = slice.Rows(ordered),
             Truncated = slice.More ? true : null,
             NextOffset = slice.NextOffset,
-            Narrow = slice.More
-                ? $"Entries {offset} to {slice.Next - 1} of {deck.Entries.Count} are shown to stay under the size " +
-                    $"limit. {callAgain} with offset {slice.Next} for the rest."
-                : null,
+            Narrow = slice.More ? DeckNarrow(options, offset, slice, callAgain) : null,
         });
+    }
+
+    /// <summary>
+    /// Says how to read the entries a deck page left out, and how to read fewer or more fields per entry.
+    /// </summary>
+    private static string DeckNarrow(
+        ArchidektDeckReadOptions options,
+        int offset,
+        ResultPageSlice slice,
+        string callAgain)
+    {
+        string zones = options.Zones.Count == 0
+            ? string.Empty
+            : $" (zones {string.Join(", ", options.Zones)})";
+        string repeat = options.Zones.Count == 0
+            ? string.Empty
+            : $", the same zones ({string.Join(", ", options.Zones)})";
+        string fields = options.Full
+            ? "Every field is already shown."
+            : "These entries hold the fields card name, quantity, zone, categories, printing, Oracle ID, and inDeck; " +
+                "pass responseFormat \"full\" for every field.";
+        return $"Entries {offset + 1} to {slice.Next} of {slice.Total}{zones} are shown to stay under the size " +
+            $"limit. {callAgain} with offset {slice.Next}{repeat} for the rest. Pass zones (commander, main, " +
+            $"sideboard, maybeboard) to read fewer entries; offsets count the chosen entries. {fields}";
     }
 
     /// <summary>
@@ -120,6 +147,7 @@ internal static class ArchidektResultPaging
             return refused;
         }
 
+        applyNotice = ArchidektApplyAvailability.WithBlockedNotice(applyNotice, preview.ApplyBlockedNotice);
         ArchidektSyncPreviewView header = new(
             preview.Direction,
             Summarize(preview),
@@ -158,12 +186,16 @@ internal static class ArchidektResultPaging
     /// <summary>
     /// Builds one page of a snapshot: its metadata, then its saved deck in the same pages as a deck read.
     /// </summary>
-    internal static OperationResult<ArchidektSnapshotView> PageSnapshot(RemoteNamedSnapshot snapshot, int offset)
+    internal static OperationResult<ArchidektSnapshotView> PageSnapshot(
+        RemoteNamedSnapshot snapshot,
+        int offset,
+        ArchidektDeckReadOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         OperationResult<ArchidektDeckView> deck = PageDeck(
             snapshot.Deck,
             offset,
+            options,
             "Call archidekt_snapshots_get again with the same kind, deckId, and snapshotId");
         return deck is OperationSuccess<ArchidektDeckView> page
             ? new OperationSuccess<ArchidektSnapshotView>(

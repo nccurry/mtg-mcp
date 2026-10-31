@@ -769,6 +769,9 @@ public sealed class ScryfallCardFormatTests
             Assert.True(Bytes(page) <= ResultSizeLimit.MaximumBytes);
             Assert.Equal(page.Page.Items.Count, page.Assignments.Count);
             Assert.Equal(page.Page.NextCursor is not null, page.Truncated == true);
+            Assert.Equal(page.Page.Items.Count, page.ReturnedCount);
+            Assert.Equal(Math.Min(100, 100 - names.Count), page.RequestedCount);
+            Assert.Equal(page.Truncated == true ? ScryfallCutPageHint.ResultSizeLimit : null, page.CutReason);
             names.AddRange(page.Page.Items.Select(Name));
             cursor = page.Page.NextCursor;
             pages++;
@@ -1210,6 +1213,177 @@ public sealed class ScryfallCardFormatTests
                 RemoveEvidence(item);
             }
         }
+    }
+
+    /// <summary>
+    /// Verifies a cut concise page reports how many cards it holds of those requested, the cut reason, and a hint with
+    /// the numbers, and that following nextCursor visits every card once with the requested count of each page.
+    /// </summary>
+    [Fact]
+    public async Task Search_CutConcisePage_ReportsItsCountsAndTheCutReason()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        using ScryfallService service = CreateService(temporary.Path, LongTextProvider(100));
+        CancellationToken token = TestContext.Current.CancellationToken;
+        string[] fields = ["name", "colorIdentity", "manaValue", "oracleText", "edhrecRank", "set"];
+
+        ScryfallSearchResponse first = RequireSuccess(await service.SearchAsync(
+            "t:creature",
+            pageSize: 100,
+            responseFormat: "concise",
+            fields: fields,
+            cancellationToken: token));
+
+        Assert.True(first.Truncated);
+        Assert.Equal(first.Page.Items.Count, first.ReturnedCount);
+        Assert.True(first.ReturnedCount < 100);
+        Assert.Equal(100, first.RequestedCount);
+        Assert.Equal("result-size-limit", first.CutReason);
+        Assert.Contains($"{first.ReturnedCount} of the 100 cards requested", first.Narrow);
+        Assert.Contains($"continues at card {first.ReturnedCount + 1} of 100", first.Narrow);
+        Assert.Contains("bytes per card", first.Narrow);
+        Assert.Contains("leaving oracleText out of fields", first.Narrow);
+        Assert.DoesNotContain("24", first.Narrow);
+
+        HashSet<string> names = [];
+        ScryfallSearchResponse page = first;
+        int offset = 0;
+        while (true)
+        {
+            Assert.Equal(Math.Min(100, 100 - offset), page.RequestedCount);
+            foreach (ScryfallCardView item in page.Page.Items)
+            {
+                Assert.True(names.Add(Name(item)), "A card was repeated.");
+            }
+
+            offset += page.Page.Items.Count;
+            if (page.Page.NextCursor is null)
+            {
+                break;
+            }
+
+            page = RequireSuccess(await service.SearchAsync(
+                "t:creature",
+                cursor: page.Page.NextCursor,
+                pageSize: 100,
+                responseFormat: "concise",
+                fields: fields,
+                cancellationToken: token));
+        }
+
+        Assert.Equal(100, names.Count);
+        Assert.Null(page.CutReason);
+        Assert.Equal(page.Page.Items.Count, page.RequestedCount);
+    }
+
+    /// <summary>
+    /// Verifies a page that fits reports equal counts and carries neither a cut reason nor a narrow hint.
+    /// </summary>
+    [Fact]
+    public async Task Search_UncutPage_ReportsCountsWithoutCutFields()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        using ScryfallService service = CreateService(temporary.Path, LongTextProvider(10));
+        CancellationToken token = TestContext.Current.CancellationToken;
+
+        ScryfallSearchResponse page = RequireSuccess(await service.SearchAsync(
+            "t:creature",
+            pageSize: 100,
+            responseFormat: "concise",
+            cancellationToken: token));
+        JsonElement written = JsonSerializer.SerializeToElement(page, ResultOptions);
+
+        Assert.Equal(10, page.ReturnedCount);
+        Assert.Equal(10, page.RequestedCount);
+        Assert.Null(page.CutReason);
+        Assert.Null(page.Narrow);
+        Assert.False(written.TryGetProperty("cutReason", out _));
+        Assert.False(written.TryGetProperty("narrow", out _));
+        Assert.False(written.TryGetProperty("truncated", out _));
+        Assert.Equal(10, written.GetProperty("returnedCount").GetInt32());
+        Assert.Equal(10, written.GetProperty("requestedCount").GetInt32());
+    }
+
+    /// <summary>
+    /// Verifies that leaving oracleText out of the fields fits a page that the same request with oracleText cuts.
+    /// </summary>
+    [Fact]
+    public async Task Search_ConciseWithoutOracleText_FillsAPageTheFullTextVersionCuts()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        using ScryfallService service = CreateService(temporary.Path, LongTextProvider(100));
+        CancellationToken token = TestContext.Current.CancellationToken;
+
+        ScryfallSearchResponse withText = RequireSuccess(await service.SearchAsync(
+            "t:creature",
+            pageSize: 100,
+            responseFormat: "concise",
+            fields: ["name", "colorIdentity", "manaValue", "oracleText", "edhrecRank", "set"],
+            cancellationToken: token));
+        ScryfallSearchResponse withoutText = RequireSuccess(await service.SearchAsync(
+            "t:creature",
+            pageSize: 100,
+            responseFormat: "concise",
+            fields: ["name", "colorIdentity", "manaValue", "edhrecRank", "set"],
+            cancellationToken: token));
+
+        Assert.True(withText.ReturnedCount < 100);
+        Assert.Equal(100, withoutText.ReturnedCount);
+        Assert.Equal(100, withoutText.RequestedCount);
+        Assert.Null(withoutText.CutReason);
+        Assert.Null(withoutText.Page.NextCursor);
+    }
+
+    /// <summary>
+    /// Verifies a cut collection page reports its counts and cut reason like a search page.
+    /// </summary>
+    [Fact]
+    public async Task Collection_CutPage_ReportsItsCountsAndTheCutReason()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        using ScryfallService service = CreateService(temporary.Path, LongTextProvider(100));
+        CancellationToken token = TestContext.Current.CancellationToken;
+        List<ScryfallCardLookup> lookups =
+            [.. Enumerable.Range(0, 100).Select(index => new ScryfallCardLookup("scryfall-id", VariantId(index)))];
+
+        ScryfallCollectionResponse first = RequireSuccess(await service.GetCollectionAsync(
+            lookups,
+            "default",
+            null,
+            100,
+            "concise",
+            ["name", "oracleText"],
+            token));
+
+        Assert.True(first.Truncated);
+        Assert.Equal(first.Page.Items.Count, first.ReturnedCount);
+        Assert.Equal(100, first.RequestedCount);
+        Assert.Equal("result-size-limit", first.CutReason);
+        Assert.Contains($"continues at card {first.ReturnedCount + 1} of 100", first.Narrow);
+    }
+
+    /// <summary>
+    /// Builds a fake provider whose search and collection answers hold generated variants with 350 characters of
+    /// oracle text, so a full page of them is over the size limit and a page without the text is not.
+    /// </summary>
+    private static RecordingHandler LongTextProvider(int count)
+    {
+        return ScryfallTestFixture.Provider(intercept: request =>
+        {
+            string path = request.RequestUri!.AbsolutePath;
+            if (path is not ("/cards/search" or "/cards/collection"))
+            {
+                return null;
+            }
+
+            JsonArray data = [.. Enumerable.Range(0, count).Select(index =>
+            {
+                JsonObject card = Variant(index);
+                card["oracle_text"] = new string('x', 350);
+                return (JsonNode?)card;
+            })];
+            return ListResponse(data, path == "/cards/search");
+        });
     }
 
     /// <summary>

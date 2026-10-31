@@ -38,12 +38,15 @@ public sealed record ArchidektPullApplyRequest(
 
 /// <summary>
 /// Carries every immutable guard required to apply a push preview.
+/// ConfirmRemovals must equal the number of Archidekt entries the push removes when that is more than 10 entries, or
+/// 3 or more entries that are more than 10 percent of the Archidekt entries; it is ignored otherwise.
 /// </summary>
 public sealed record ArchidektPushApplyRequest(
     Guid LocalDeckId,
     long ExpectedLocalRevision,
     string ExpectedRemoteFingerprint,
-    string PreviewFingerprint);
+    string PreviewFingerprint,
+    int? ConfirmRemovals = null);
 
 /// <summary>
 /// Describes one exact folder creation without name-based inference.

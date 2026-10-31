@@ -75,7 +75,8 @@ internal sealed class ArchidektRemoteWriteTools
     [McpMeta(ToolMetadata.RequiresUserInteractionKey, JsonValue = "true")]
     [Description(
         "Archidekt: refetches local and remote state, verifies preview guards, executes stable primitive operations, " +
-        "and verifies final content." +
+        "and verifies final content. A push that removes more than 10 Archidekt entries, or 3 or more entries that " +
+        "are more than 10 percent of them, is refused unless request.confirmRemovals equals the removal count." +
         UntrustedTextNotes.Archidekt)]
     internal Task<OperationResult<ArchidektApplyResult>> ApplyPushAsync(
         [Description("Preview-, revision-, and remote-fingerprint-guarded push application request.")]

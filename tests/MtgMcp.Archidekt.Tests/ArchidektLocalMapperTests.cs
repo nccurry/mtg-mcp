@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MtgMcp.Core.Decks;
 
 namespace MtgMcp.Archidekt.Tests;
@@ -178,6 +179,33 @@ public sealed class ArchidektLocalMapperTests
             plan.PublicOperations.Select(value => value.Kind));
         Assert.Equal(8, plan.PredictedProviderRequests);
         Assert.Equal(64, plan.PlanFingerprint.Length);
+    }
+
+    /// <summary>
+    /// Verifies the category deletions and the plan fingerprint do not depend on the order Archidekt lists the
+    /// categories in.
+    /// </summary>
+    [Fact]
+    public void PlanRemoteApply_CategoriesListedInAnotherOrder_GiveTheSamePlanFingerprint()
+    {
+        RemoteDeckSnapshot start = ParseDeck();
+        RemoteDeckCategory kept = start.Categories[0];
+        RemoteDeckCategory zeta = new("901", "Zeta", true, false, false, 8);
+        RemoteDeckCategory alpha = new("902", "Alpha", true, false, false, 9);
+        RemoteDeckSnapshot target = start with { Categories = [kept] };
+
+        ArchidektRemotePlan forward = ArchidektSyncPlanner.PlanRemoteApply(
+            start with { Categories = [kept, zeta, alpha] },
+            target);
+        ArchidektRemotePlan reversed = ArchidektSyncPlanner.PlanRemoteApply(
+            start with { Categories = [alpha, zeta, kept] },
+            target);
+
+        Assert.Equal(["Alpha", "Zeta"], forward.PublicOperations.Select(value => value.Subject));
+        Assert.Equal(
+            forward.PublicOperations.Select(value => value.Subject),
+            reversed.PublicOperations.Select(value => value.Subject));
+        Assert.Equal(forward.PlanFingerprint, reversed.PlanFingerprint);
     }
 
     /// <summary>
@@ -757,7 +785,10 @@ public sealed class ArchidektLocalMapperTests
     [Theory]
     [InlineData("sideboard", "Sideboard", true, null)]
     [InlineData("sideboard", "Sideboard", null, null)]
-    [InlineData("main", "Out", false, null)]
+    [InlineData("main", "Out", false, "maybeboard")]
+    [InlineData("maybeboard", "Out", false, null)]
+    [InlineData("main", "Out", true, null)]
+    [InlineData("main", "Out", null, null)]
     [InlineData("main", "Sideboard", true, "sideboard")]
     [InlineData("main", "Sideboard", false, "sideboard")]
     [InlineData("maybeboard", "Sideboard", false, "sideboard")]
@@ -790,6 +821,177 @@ public sealed class ArchidektLocalMapperTests
             target);
 
         Assert.Equal(expectedZone is null ? [] : [expectedZone], found.Select(value => value.ExpectedZone));
+    }
+
+    /// <summary>
+    /// Verifies only the first category decides whether an entry is in the deck, and that the commander, sideboard and
+    /// maybeboard rules come before it: an entry with no category, or a category with no flag, is in the deck.
+    /// </summary>
+    [Theory]
+    [InlineData("Multiplayer", "maybeboard")]
+    [InlineData("Removal", "main")]
+    [InlineData("Multiplayer,Removal", "maybeboard")]
+    [InlineData("Removal,Multiplayer", "main")]
+    [InlineData("Unflagged", "main")]
+    [InlineData("Unknown", "main")]
+    [InlineData("", "main")]
+    [InlineData("Multiplayer,Sideboard", "sideboard")]
+    [InlineData("Multiplayer,Commander", "commander")]
+    [InlineData("Multiplayer,Maybeboard", "maybeboard")]
+    public void MapZone_FollowsTheFirstCategoryFlag(string categories, string expectedZone)
+    {
+        RemoteDeckSnapshot deck = WithCategories("Multiplayer", "Removal", "Sideboard", "Commander", "Maybeboard");
+        deck = deck with
+        {
+            Categories =
+            [
+                deck.Categories[0] with { IncludedInDeck = false },
+                deck.Categories[1] with { IncludedInDeck = true },
+                deck.Categories[2],
+                deck.Categories[3] with { IncludedInDeck = true },
+                deck.Categories[4],
+                new RemoteDeckCategory("200", "Unflagged", null, true, false, 9),
+            ],
+        };
+        string[] names = categories.Length == 0 ? [] : categories.Split(',');
+        Dictionary<string, RemoteDeckCategory> index = deck.Categories.ToDictionary(value => value.Name);
+
+        Assert.Equal(expectedZone, ArchidektJsonContract.MapZone(names, primary: null, index));
+    }
+
+    /// <summary>
+    /// Verifies a deck says an entry is in the deck unless its first category is flagged out: no category, a category
+    /// the deck does not list, a category with no flag, and an included category all count as in the deck.
+    /// </summary>
+    [Theory]
+    [InlineData("Multiplayer", false)]
+    [InlineData("Multiplayer,Removal", false)]
+    [InlineData("Removal,Multiplayer", true)]
+    [InlineData("Unflagged", true)]
+    [InlineData("Unknown", true)]
+    [InlineData("", true)]
+    public void IsInDeck_IsFalseOnlyWhenTheFirstCategoryIsFlaggedOut(string categories, bool expected)
+    {
+        RemoteDeckSnapshot deck = WithCategories("Multiplayer", "Removal");
+        deck = deck with
+        {
+            Categories =
+            [
+                deck.Categories[0] with { IncludedInDeck = false },
+                deck.Categories[1] with { IncludedInDeck = true },
+                new RemoteDeckCategory("200", "Unflagged", null, true, false, 9),
+            ],
+        };
+        RemoteDeckEntry entry = ParseDeck().Entries[0] with
+        {
+            CategoryNames = categories.Length == 0 ? [] : categories.Split(','),
+            PrimaryCategoryName = null,
+        };
+
+        Assert.Equal(expected, deck.IsInDeck(entry));
+    }
+
+    /// <summary>
+    /// Verifies the one card reader takes the set from the edition code first, as a deck relation and a search result
+    /// both carry it, uses a top-level set code only when there is no edition code, and refuses a card with no ID or
+    /// no oracle name.
+    /// </summary>
+    [Theory]
+    [InlineData(
+        """
+        {"id":5,"uid":"11111111-1111-1111-1111-111111111111","setCode":"top","collectorNumber":"7",
+        "edition":{"editioncode":"ed"},"oracleCard":{"name":"Card","uid":"22222222-2222-2222-2222-222222222222"}}
+        """,
+        "ed")]
+    [InlineData("""{"id":5,"setCode":"top","oracleCard":{"name":"Card"}}""", "top")]
+    [InlineData("""{"id":5,"oracleCard":{"name":"Card"}}""", null)]
+    public void ReadPrinting_TakesTheEditionCodeBeforeATopLevelSetCode(string json, string? expectedSet)
+    {
+        using JsonDocument document = JsonDocument.Parse(json);
+
+        ArchidektCardPrinting? printing = ArchidektJsonContract.ReadPrinting(document.RootElement);
+
+        Assert.NotNull(printing);
+        Assert.Equal(expectedSet, printing.SetCode);
+        Assert.Equal("5", printing.ProviderCardId);
+        Assert.Equal("Card", printing.CardName);
+    }
+
+    /// <summary>
+    /// Verifies a card with no ID, no oracle card, or no oracle name is not read.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"oracleCard":{"name":"Card"}}""")]
+    [InlineData("""{"id":5}""")]
+    [InlineData("""{"id":5,"oracleCard":{"uid":"22222222-2222-2222-2222-222222222222"}}""")]
+    public void ReadPrinting_RefusesACardWithoutAnIdOrAName(string json)
+    {
+        using JsonDocument document = JsonDocument.Parse(json);
+
+        Assert.Null(ArchidektJsonContract.ReadPrinting(document.RootElement));
+    }
+
+    /// <summary>
+    /// Verifies a card in two categories whose primary category is the one outside the deck, listed second, is
+    /// refused in zone main, as Archidekt would not count it toward the deck.
+    /// </summary>
+    [Fact]
+    public void FindZoneContradictions_ReadsThePrimaryCategoryFirst()
+    {
+        RemoteDeckSnapshot parsed = ParseDeck();
+        RemoteDeckCategory ramp = parsed.Categories[0] with { Name = "Ramp", IncludedInDeck = true };
+        RemoteDeckCategory considering = parsed.Categories[0] with
+        {
+            ProviderCategoryId = "900",
+            Name = "Considering",
+            IncludedInDeck = false,
+        };
+        RemoteDeckEntry entry = parsed.Entries[0] with
+        {
+            Zone = "main",
+            CategoryNames = ["Ramp", "Considering"],
+            PrimaryCategoryName = "Considering",
+        };
+
+        IReadOnlyList<ArchidektZoneContradiction> found = ArchidektSyncPlanner.FindZoneContradictions(
+            [entry],
+            [ramp, considering]);
+
+        Assert.Equal(["maybeboard"], found.Select(value => value.ExpectedZone));
+    }
+
+    /// <summary>
+    /// Verifies a primary category that is not the first name decides, in the zone and in the deck count: Archidekt
+    /// treats the primary as the first category, so every caller reads the same order.
+    /// </summary>
+    [Theory]
+    [InlineData("Ramp,Considering", "Considering", "maybeboard", false)]
+    [InlineData("Ramp,Considering", "Ramp", "main", true)]
+    [InlineData("Considering,Ramp", "Ramp", "main", true)]
+    [InlineData("Ramp,Considering", null, "main", true)]
+    [InlineData("Ramp,Considering,Sideboard", "Considering", "sideboard", false)]
+    public void MapZoneAndIsInDeck_ReadThePrimaryCategoryFirst(
+        string categories,
+        string? primary,
+        string expectedZone,
+        bool expectedInDeck)
+    {
+        RemoteDeckSnapshot deck = WithCategories("Ramp", "Considering", "Sideboard");
+        deck = deck with
+        {
+            Categories =
+            [
+                deck.Categories[0] with { IncludedInDeck = true },
+                deck.Categories[1] with { IncludedInDeck = false },
+                deck.Categories[2],
+            ],
+        };
+        string[] names = categories.Split(',');
+        Dictionary<string, RemoteDeckCategory> index = deck.Categories.ToDictionary(value => value.Name);
+        RemoteDeckEntry entry = ParseDeck().Entries[0] with { CategoryNames = names, PrimaryCategoryName = primary };
+
+        Assert.Equal(expectedZone, ArchidektJsonContract.MapZone(names, primary, index));
+        Assert.Equal(expectedInDeck, deck.IsInDeck(entry));
     }
 
     /// <summary>

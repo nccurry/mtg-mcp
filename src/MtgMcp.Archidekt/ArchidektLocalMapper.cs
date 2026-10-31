@@ -73,13 +73,28 @@ public static class ArchidektLocalMapper
     }
 
     /// <summary>
-    /// Builds one transactional replacement change list while retaining the selected local deck identity.
+    /// Computes the fingerprint of the fields no row shows over the local rows the baseline links to Archidekt rows, so
+    /// an added entry or category does not count as an edit of those fields.
+    /// </summary>
+    internal static string LinkedInvisibleFingerprint(DeckDocument local, ArchidektSyncBaseline baseline)
+    {
+        return InvisibleFingerprint(
+            local.Entries.Where(value => baseline.EntryRelations.ContainsKey(value.EntryId))
+                .Select(value => (value.EntryId, value.SortOrder)),
+            local.Categories.Where(value => baseline.CategoryRelations.ContainsKey(value.CategoryId))
+                .Select(value => (value.CategoryId, value.Color, value.SortOrder)));
+    }
+
+    /// <summary>
+    /// Builds one transactional replacement change list while retaining the selected local deck identity. A
+    /// <paramref name="keep"/> brings the locally added entries and categories back after the replacement.
     /// </summary>
     public static IReadOnlyList<DeckChange> BuildPullChanges(
         DeckDocument local,
         RemoteDeckSnapshot remote,
         DeckProviderBinding binding,
-        string canonicalBaseline)
+        string canonicalBaseline,
+        ArchidektPullKeep? keep = null)
     {
         ArgumentNullException.ThrowIfNull(local);
         DeckCreateRequest target = ToCreateRequest(remote, binding, local.DeckId);
@@ -116,8 +131,84 @@ public static class ArchidektLocalMapper
                 assignment.IsPrimary));
         }
 
+        if (keep is not null)
+        {
+            AddKeptChanges(changes, local, target, keep);
+        }
+
         changes.Add(new UpsertDeckProviderBindingChange(binding, canonicalBaseline));
         return changes;
+    }
+
+    /// <summary>
+    /// Adds the changes that bring the locally added entries and categories back after the replacement. A category
+    /// Archidekt has keeps the Archidekt row, also when Archidekt renamed it; a category it lacks is created again by
+    /// its name.
+    /// </summary>
+    private static void AddKeptChanges(
+        List<DeckChange> changes,
+        DeckDocument local,
+        DeckCreateRequest target,
+        ArchidektPullKeep keep)
+    {
+        Dictionary<string, Guid> remoteCategoryIds = new(StringComparer.Ordinal);
+        foreach (DeckCategoryDraft category in target.Categories ?? [])
+        {
+            // Archidekt may return two categories of one name; the first one is the one kept cards join.
+            remoteCategoryIds.TryAdd(category.Name, category.CategoryId ?? Guid.Empty);
+        }
+
+        Dictionary<string, Guid> keptCategoryIds = new(StringComparer.Ordinal);
+        foreach (DeckCategory category in keep.Categories)
+        {
+            keptCategoryIds[category.Name] = category.CategoryId;
+            changes.Add(new AddDeckCategoryChange(new DeckCategoryDraft(
+                category.Name,
+                category.Color,
+                category.SortOrder,
+                category.CategoryId)));
+        }
+
+        foreach (DeckEntry entry in keep.Entries)
+        {
+            changes.Add(new AddDeckEntryChange(new DeckEntryDraft(
+                entry.Quantity,
+                entry.CardName,
+                entry.OracleId,
+                entry.PrintingId,
+                entry.SetCode,
+                entry.CollectorNumber,
+                entry.Language,
+                entry.Finish,
+                entry.Zone,
+                entry.SortOrder,
+                entry.EntryId)));
+        }
+
+        Dictionary<Guid, string> localCategoryNames = local.Categories.ToDictionary(
+            value => value.CategoryId,
+            value => value.Name);
+        foreach (DeckEntry entry in keep.Entries)
+        {
+            HashSet<Guid> assigned = [];
+            foreach (DeckCategoryAssignment assignment in local.CategoryAssignments.Where(
+                value => value.EntryId == entry.EntryId))
+            {
+                if (!localCategoryNames.TryGetValue(assignment.CategoryId, out string? localName))
+                {
+                    continue;
+                }
+
+                // A category Archidekt renamed is found by its new name.
+                string name = keep.RenamedCategories.GetValueOrDefault(assignment.CategoryId, localName);
+                if ((CategoryNames.TryFind(remoteCategoryIds, name, out Guid categoryId) ||
+                        keptCategoryIds.TryGetValue(name, out categoryId)) &&
+                    assigned.Add(categoryId))
+                {
+                    changes.Add(new AssignDeckCategoryChange(entry.EntryId, categoryId, assignment.IsPrimary));
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -296,6 +387,8 @@ public static class ArchidektLocalMapper
             .ToDictionary(group => group.Key, group => group.ToList());
         Dictionary<string, RemoteDeckEntry> baselineEntries = baseline.RemoteSnapshot.Entries
             .ToDictionary(value => value.ProviderRelationId, StringComparer.Ordinal);
+        Dictionary<string, RemoteDeckCategory> targetCategoriesByName =
+            CategoryNames.Index(categories, value => value.Name);
         List<RemoteDeckEntry> entries = [];
         foreach (DeckEntry localEntry in local.Entries)
         {
@@ -307,6 +400,14 @@ public static class ArchidektLocalMapper
                 localEntry.EntryId,
                 assignments,
                 categoryNames);
+            // A deck pulled by 0.13.0 keeps zone main for an entry whose first category is not included in the deck,
+            // and its baseline row says main too. That is a zone the old rule gave, not a zone the user chose, so it
+            // follows the categories as a read of Archidekt now gives it; a zone the user changed is kept as chosen.
+            string zone = baselineRow is not null &&
+                string.Equals(localEntry.Zone, baselineRow.Zone, StringComparison.Ordinal) &&
+                IsStaleZone(baselineRow, baseline.RemoteSnapshot)
+                    ? ArchidektJsonContract.MapZone(names, primary, targetCategoriesByName)
+                    : localEntry.Zone;
 
             entries.Add(new RemoteDeckEntry(
                 baselineRow?.ProviderRelationId ?? string.Empty,
@@ -319,7 +420,7 @@ public static class ArchidektLocalMapper
                 localEntry.CollectorNumber,
                 localEntry.Language,
                 localEntry.Finish,
-                localEntry.Zone,
+                zone,
                 names,
                 primary,
                 localEntry.SortOrder));
@@ -339,9 +440,46 @@ public static class ArchidektLocalMapper
     }
 
     /// <summary>
+    /// Tells whether a stored baseline row has a zone that the current zone rule would not give its categories, which
+    /// is what a deck pulled before entries in categories outside the deck were mapped to the maybeboard looks like.
+    /// </summary>
+    private static bool IsStaleZone(RemoteDeckEntry row, RemoteDeckSnapshot snapshot)
+    {
+        return !string.Equals(
+            row.Zone,
+            ArchidektJsonContract.MapZone(
+                row.CategoryNames,
+                row.PrimaryCategoryName,
+                CategoryNames.Index(snapshot.Categories, value => value.Name)),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Lists the local entries whose zone is a zone an earlier version gave (see <see cref="ToRemoteTarget"/>), with
+    /// the zone a read of Archidekt gives them now. A push writes these zones into the local deck, so the local zone
+    /// then agrees with the baseline and with Archidekt and the correction is not needed again.
+    /// </summary>
+    public static IReadOnlyList<DeckEntry> CorrectStaleZones(DeckDocument local, ArchidektSyncBaseline baseline)
+    {
+        ArgumentNullException.ThrowIfNull(local);
+        ArgumentNullException.ThrowIfNull(baseline);
+        RemoteDeckSnapshot target = ToRemoteTarget(local, baseline, baseline.RemoteSnapshot);
+        List<DeckEntry> corrected = [];
+        for (int index = 0; index < local.Entries.Count; index++)
+        {
+            if (!string.Equals(local.Entries[index].Zone, target.Entries[index].Zone, StringComparison.Ordinal))
+            {
+                corrected.Add(local.Entries[index] with { Zone = target.Entries[index].Zone });
+            }
+        }
+
+        return corrected;
+    }
+
+    /// <summary>
     /// Finds the baseline provider row a local row is linked to, or null when the baseline has no link for it.
     /// </summary>
-    private static TRow? FindBaselineRow<TRow>(
+    internal static TRow? FindBaselineRow<TRow>(
         Guid localId,
         IReadOnlyDictionary<Guid, string> links,
         Dictionary<string, TRow> rowsByProviderId)

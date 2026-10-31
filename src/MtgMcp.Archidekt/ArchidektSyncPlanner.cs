@@ -8,6 +8,11 @@ namespace MtgMcp.Archidekt;
 public static class ArchidektSyncPlanner
 {
     /// <summary>
+    /// Names the planned operation that removes one card relation from the Archidekt deck.
+    /// </summary>
+    public const string EntryRemoveKind = "entry-remove";
+
+    /// <summary>
     /// Computes the three-way comparison for a stored local deck, using the local fingerprints of that deck: the full
     /// one, the one for fields no row shows, and the two orders an earlier version recorded.
     /// </summary>
@@ -68,14 +73,17 @@ public static class ArchidektSyncPlanner
             ArchidektJsonContract.Recompute(remote).Remote,
             ArchidektJsonContract.Recompute(baseline.RemoteSnapshot).Remote,
             StringComparison.Ordinal);
+        // A baseline an earlier version stored may hold a zone the current rule does not give an entry; its rows are
+        // compared with the zones a read gives now, so such a zone is not a difference (a pull still moves the entry).
+        RemoteDeckSnapshot baselineRows = ArchidektJsonContract.WithCurrentZones(baseline.RemoteSnapshot);
         RemoteDeckSnapshot effectiveLocal = localChanged
             ? localProjection
-            : baseline.RemoteSnapshot;
+            : baselineRows;
         RemoteDeckSnapshot effectiveRemote = remoteChanged
             ? remote
-            : baseline.RemoteSnapshot;
+            : baselineRows;
         List<ArchidektDifference> differences = BuildDifferences(
-            baseline.RemoteSnapshot,
+            baselineRows,
             effectiveLocal,
             effectiveRemote,
             localChanged,
@@ -221,6 +229,37 @@ public static class ArchidektSyncPlanner
     }
 
     /// <summary>
+    /// Lists the entries a pull will move because the baseline holds a zone that the current rule no longer gives
+    /// them (a deck pulled before an entry in a category outside the deck was mapped to the maybeboard). The comparison
+    /// of the two fingerprints ignores such a zone, so a push shows no difference for it; a pull still changes it, so
+    /// the pull preview lists it as an ordinary change from Archidekt.
+    /// </summary>
+    public static IReadOnlyList<ArchidektDifference> FindStaleZoneMoves(
+        RemoteDeckSnapshot baseline,
+        RemoteDeckSnapshot remote)
+    {
+        ArgumentNullException.ThrowIfNull(baseline);
+        ArgumentNullException.ThrowIfNull(remote);
+        IReadOnlyDictionary<string, RemoteDeckEntry> remoteRows = KeyEntries(remote.Entries);
+        List<ArchidektDifference> moves = [];
+        foreach ((string key, RemoteDeckEntry baselineRow) in KeyEntries(baseline.Entries))
+        {
+            if (remoteRows.TryGetValue(key, out RemoteDeckEntry? remoteRow) &&
+                !string.Equals(baselineRow.Zone, remoteRow.Zone, StringComparison.Ordinal))
+            {
+                moves.Add(new ArchidektDifference(
+                    $"/entries/{EscapePathSegment(key)}",
+                    ArchidektDifferenceStates.RemoteChanged,
+                    SerializeEntity(new Dictionary<string, RemoteDeckEntry> { [key] = baselineRow }, key),
+                    LocalValue: null,
+                    SerializeEntity(new Dictionary<string, RemoteDeckEntry> { [key] = remoteRow }, key)));
+            }
+        }
+
+        return moves;
+    }
+
+    /// <summary>
     /// Serializes one normalized entity for model-readable before/after evidence.
     /// </summary>
     private static string? SerializeEntity<T>(IReadOnlyDictionary<string, T> values, string key)
@@ -320,6 +359,145 @@ public static class ArchidektSyncPlanner
     }
 
     /// <summary>
+    /// Finds what a pull can keep of the local deck. Every local change since the last sync must be a card entry or a
+    /// category added locally, and the fields no row shows (order numbers, category colors and ranks) must be as the
+    /// baseline recorded them; the pull replaces everything else from Archidekt, so any other change is not kept.
+    /// </summary>
+    /// <returns>
+    /// Null when the local deck has a change a pull cannot keep. Otherwise the added entries and categories, with the
+    /// duplicates and zone contradictions that would stop the pull.
+    /// </returns>
+    public static ArchidektPullKeep? PlanPullKeep(
+        DeckDocument local,
+        ArchidektSyncBaseline baseline,
+        RemoteDeckSnapshot remote,
+        ArchidektSyncDiff diff)
+    {
+        ArgumentNullException.ThrowIfNull(local);
+        ArgumentNullException.ThrowIfNull(baseline);
+        ArgumentNullException.ThrowIfNull(remote);
+        ArgumentNullException.ThrowIfNull(diff);
+        if (baseline.LocalInvisibleFingerprint is null ||
+            !diff.Differences.Where(ArchidektDifferenceStates.IsLocalChange).All(IsKeepableChange) ||
+            !string.Equals(
+                ArchidektLocalMapper.LinkedInvisibleFingerprint(local, baseline),
+                baseline.LocalInvisibleFingerprint,
+                StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        Dictionary<string, RemoteDeckEntry> baselineEntries = baseline.RemoteSnapshot.Entries
+            .ToDictionary(value => value.ProviderRelationId, StringComparer.Ordinal);
+        Dictionary<string, RemoteDeckCategory> baselineCategories = baseline.RemoteSnapshot.Categories
+            .ToDictionary(value => value.ProviderCategoryId, StringComparer.Ordinal);
+        RemoteDeckSnapshot target = ArchidektLocalMapper.ToRemoteTarget(local, baseline, remote);
+        List<DeckEntry> entries = [];
+        List<RemoteDeckEntry> keptRows = [];
+        for (int index = 0; index < local.Entries.Count; index++)
+        {
+            if (ArchidektLocalMapper.FindBaselineRow(
+                local.Entries[index].EntryId,
+                baseline.EntryRelations,
+                baselineEntries) is null)
+            {
+                entries.Add(local.Entries[index]);
+                keptRows.Add(target.Entries[index]);
+            }
+        }
+
+        Dictionary<string, RemoteDeckCategory> remoteCategories =
+            CategoryNames.Index(remote.Categories, value => value.Name);
+        Dictionary<string, RemoteDeckCategory> remoteCategoriesById = remote.Categories
+            .GroupBy(value => value.ProviderCategoryId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        Dictionary<string, DeckCategory> newCategories = new(StringComparer.Ordinal);
+        Dictionary<Guid, string> renamedCategories = [];
+        Dictionary<string, string> renamedByName = new(StringComparer.Ordinal);
+        List<RemoteDeckCategory> shownCategories = [.. remote.Categories];
+        for (int index = 0; index < local.Categories.Count; index++)
+        {
+            DeckCategory category = local.Categories[index];
+            RemoteDeckCategory? baselineRow = ArchidektLocalMapper.FindBaselineRow(
+                category.CategoryId,
+                baseline.CategoryRelations,
+                baselineCategories);
+            bool used = keptRows.Exists(value => value.CategoryNames.Contains(category.Name, StringComparer.Ordinal));
+            if ((baselineRow is null || used) &&
+                !CategoryNames.TryFind(remoteCategories, category.Name, out _))
+            {
+                // A category Archidekt renamed is still the same category: the kept cards follow it to its new name
+                // instead of creating the old name again, which would reuse the category's ID.
+                if (baselineRow is not null &&
+                    remoteCategoriesById.TryGetValue(baselineRow.ProviderCategoryId, out RemoteDeckCategory? renamed))
+                {
+                    renamedCategories[category.CategoryId] = renamed.Name;
+                    renamedByName.TryAdd(category.Name, renamed.Name);
+                }
+                else if (newCategories.TryAdd(category.Name, category))
+                {
+                    shownCategories.Add(target.Categories[index]);
+                }
+            }
+        }
+
+        if (entries.Count == 0 && newCategories.Count == 0)
+        {
+            return null;
+        }
+
+        List<RemoteDeckEntry> arrivingRows = [.. keptRows.Select(row => row with
+        {
+            CategoryNames = [.. row.CategoryNames.Select(name => renamedByName.GetValueOrDefault(name, name))],
+            PrimaryCategoryName = row.PrimaryCategoryName is { } primary
+                ? renamedByName.GetValueOrDefault(primary, primary)
+                : null,
+        })];
+        HashSet<string> baselineRelationIds = baseline.RemoteSnapshot.Entries
+            .Select(value => value.ProviderRelationId)
+            .ToHashSet(StringComparer.Ordinal);
+        List<RemoteDeckEntry> remoteAdded = [.. remote.Entries.Where(
+            value => !baselineRelationIds.Contains(value.ProviderRelationId))];
+        List<string> duplicates = [.. entries
+            .Where(kept => remoteAdded.Exists(added => SameCard(kept, added)))
+            .Select(kept => kept.CardName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
+        return new ArchidektPullKeep(
+            entries,
+            [.. newCategories.Values],
+            duplicates,
+            FindZoneContradictions(arrivingRows, shownCategories),
+            renamedCategories);
+    }
+
+    /// <summary>
+    /// Tells whether a local change is an entry or category added locally, which a pull keeps. The row for the fields
+    /// no row shows is accepted here; the caller checks that those fields did not change.
+    /// </summary>
+    private static bool IsKeepableChange(ArchidektDifference difference)
+    {
+        if (difference.State == ArchidektDifferenceStates.LocalChanged)
+        {
+            return difference.Path == "/localOnly/content";
+        }
+
+        return difference.State == ArchidektDifferenceStates.LocalAdded &&
+            (difference.Path.StartsWith("/entries/", StringComparison.Ordinal) ||
+                difference.Path.StartsWith("/categories/", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Tells whether a locally added entry is the same card as an entry Archidekt added: the same printing, the same
+    /// Oracle card, or the same name.
+    /// </summary>
+    private static bool SameCard(DeckEntry kept, RemoteDeckEntry added)
+    {
+        return (kept.PrintingId is not null && kept.PrintingId == added.PrintingId) ||
+            (kept.OracleId is not null && kept.OracleId == added.OracleId) ||
+            string.Equals(kept.CardName, added.CardName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Plans remote operations in metadata, categories, additions/updates, removals, and verification order. Category
     /// names are compared exactly, because Archidekt allows two categories that differ only by case.
     /// </summary>
@@ -377,7 +555,10 @@ public static class ArchidektSyncPlanner
             }
         }
 
-        foreach (RemoteDeckCategory currentCategory in current.Categories)
+        // Removals follow a fixed order, so the plan does not change when Archidekt returns rows in another order.
+        IEnumerable<RemoteDeckCategory> categoriesToCheck =
+            current.Categories.OrderBy(value => value.Name, StringComparer.Ordinal);
+        foreach (RemoteDeckCategory currentCategory in categoriesToCheck)
         {
             if (!FindCategory(targetCategories, currentCategories, currentCategory.Name, lenientNames, out _))
             {
@@ -425,12 +606,18 @@ public static class ArchidektSyncPlanner
             }
         }
 
-        foreach (RemoteDeckEntry currentEntry in current.Entries)
+        IEnumerable<RemoteDeckEntry> entriesToCheck =
+            current.Entries.OrderBy(value => value.ProviderRelationId, StringComparer.Ordinal);
+        foreach (RemoteDeckEntry currentEntry in entriesToCheck)
         {
             if (!retainedRelations.Contains(currentEntry.ProviderRelationId))
             {
                 planned.Add(new ArchidektPlannedOperation(
-                    new ArchidektRemoteOperation(sequence++, "entry-remove", currentEntry.CardName, "Remove one exact card relation."),
+                    new ArchidektRemoteOperation(
+                        sequence++,
+                        EntryRemoveKind,
+                        currentEntry.CardName,
+                        "Remove one exact card relation."),
                     TargetCategory: null,
                     CurrentCategory: null,
                     TargetEntry: null,
@@ -502,17 +689,34 @@ public static class ArchidektSyncPlanner
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(target);
-        Dictionary<string, RemoteDeckCategory> categories = CategoryNames.Index(target.Categories, value => value.Name);
+        return FindZoneContradictions(
+            plan.PlannedOperations
+                .Where(operation => operation.Public.Kind is "entry-add" or "entry-update")
+                .Select(operation => operation.TargetEntry),
+            target.Categories);
+    }
+
+    /// <summary>
+    /// Finds entries whose zone is not the zone their category names give them among the given categories, by the
+    /// same rule as <see cref="FindZoneContradictions(ArchidektRemotePlan, RemoteDeckSnapshot)"/>. A null entry is
+    /// skipped.
+    /// </summary>
+    public static IReadOnlyList<ArchidektZoneContradiction> FindZoneContradictions(
+        IEnumerable<RemoteDeckEntry?> entries,
+        IReadOnlyList<RemoteDeckCategory> categories)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        ArgumentNullException.ThrowIfNull(categories);
+        Dictionary<string, RemoteDeckCategory> byName = CategoryNames.Index(categories, value => value.Name);
         List<ArchidektZoneContradiction> found = [];
-        foreach (ArchidektPlannedOperation operation in plan.PlannedOperations)
+        foreach (RemoteDeckEntry? entry in entries)
         {
-            RemoteDeckEntry? entry = operation.TargetEntry;
-            if (entry is null || operation.Public.Kind is not ("entry-add" or "entry-update"))
+            if (entry is null)
             {
                 continue;
             }
 
-            string expected = ArchidektJsonContract.MapZone(entry.CategoryNames, categories);
+            string expected = ArchidektJsonContract.MapZone(entry.CategoryNames, entry.PrimaryCategoryName, byName);
             if (!string.Equals(entry.Zone, expected, StringComparison.Ordinal))
             {
                 found.Add(new ArchidektZoneContradiction(entry.CardName, entry.Zone, expected));
@@ -861,3 +1065,21 @@ public sealed record ArchidektPlannedOperation(
 /// Names one entry whose zone differs from the zone its categories give it.
 /// </summary>
 public sealed record ArchidektZoneContradiction(string CardName, string Zone, string ExpectedZone);
+
+/// <summary>
+/// Holds what a pull keeps of the local deck: the entries and categories added locally since the last sync, and what
+/// would stop the pull from keeping them.
+/// </summary>
+/// <param name="Entries">The local entries with no Archidekt row in the baseline.</param>
+/// <param name="Categories">The local categories to create again, because Archidekt has no category of that
+/// name.</param>
+/// <param name="DuplicateCardNames">The kept cards that Archidekt also added since the last sync.</param>
+/// <param name="ZoneContradictions">The kept cards whose zone is not the zone their categories give them.</param>
+/// <param name="RenamedCategories">The local categories Archidekt renamed, by local category ID, with the new name the
+/// kept cards move to.</param>
+public sealed record ArchidektPullKeep(
+    IReadOnlyList<DeckEntry> Entries,
+    IReadOnlyList<DeckCategory> Categories,
+    IReadOnlyList<string> DuplicateCardNames,
+    IReadOnlyList<ArchidektZoneContradiction> ZoneContradictions,
+    IReadOnlyDictionary<Guid, string> RenamedCategories);

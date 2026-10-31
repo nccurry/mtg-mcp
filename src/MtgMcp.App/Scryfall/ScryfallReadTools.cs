@@ -32,9 +32,18 @@ internal sealed class ScryfallReadTools
         "Only with responseFormat concise: the fields to return instead of the default set. scryfallId, oracleId, " +
         "and name are always included. Names: scryfallId, oracleId, name, manaCost, manaValue, typeLine, colors, " +
         "colorIdentity, producedMana, keywords, oracleText, power, toughness, loyalty, legalities (formats the " +
-        "card is legal in), prices.usd, cheapestPriceUsd, rarity, set, tags, gameChanger, edhrecRank. Extra names " +
+        "card is legal in), prices.usd, cheapestPriceUsd, rarity, set, tags, gameChanger, edhrecRank. oracleText " +
+        "is usually the largest field, so leaving it out fits more cards in a page. edhrecRank " + EdhrecRankMeaning +
+        ". Extra names " +
         "not in the default set: prices.usdFoil, prices.usdEtched, prices.eur, prices.eurFoil, prices.tix, " +
         "legalitiesAll (every format with its status), games, reserved, layout.";
+
+    /// <summary>
+    /// Says what edhrecRank counts, for every description that names it.
+    /// </summary>
+    internal const string EdhrecRankMeaning =
+        "counts how many decks include the card in any slot; it is not a rank of how often a card is played as " +
+        "commander";
 
     /// <summary>
     /// Stores the unified provider and local evidence boundary.
@@ -74,13 +83,18 @@ internal sealed class ScryfallReadTools
         "printings, as in not:reprint year=2024. With unique cards each card appears once, as a printing that " +
         "meets every condition; unique prints lists every matching printing. " +
         "Use responseFormat concise for broad queries: it returns only the fields an agent needs to compare cards. " +
-        "Every format is cut to the result size limit, with truncated, narrow, and nextCursor for the rest, so a " +
-        "standard or full page can hold fewer cards than pageSize; use concise or fields to fit more.")]
+        "pageSize is a maximum: every format is cut to the result size limit, so a page can hold fewer cards. " +
+        "A cut page sets truncated, cutReason, and narrow with the counts, and nextCursor continues without " +
+        "skipping a card. oracleText is usually the largest field; with responseFormat concise, leave it out of " +
+        "fields to fit more. " +
+        "With order edhrec, results follow edhrecRank, which " + EdhrecRankMeaning + ".")]
     internal Task<OperationResult<ScryfallSearchResponse>> SearchAsync(
         [Description("Official Scryfall search expression evaluated by Scryfall, not by mtg-mcp.")] string query,
         [Description("Scryfall uniqueness mode: cards, art, or prints."), AllowedValues("cards", "art", "prints")]
         string unique = "cards",
-        [Description("Official Scryfall result order name."),
+        [Description(
+            "Official Scryfall result order name. edhrec orders by edhrecRank, which counts deck inclusion in any " +
+            "slot, not how often a card is played as commander."),
          AllowedValues(
              "name", "set", "released", "rarity", "color", "usd", "tix", "eur", "cmc", "power",
              "toughness", "edhrec", "penny", "artist", "review")]
@@ -95,7 +109,9 @@ internal sealed class ScryfallReadTools
         [Description(ResponseFormatDescription), ResponseFormatValues] string responseFormat = "standard",
         [Description(FieldsDescription)] IReadOnlyList<string>? fields = null,
         [Description("Opaque cursor for this immutable result.")] string? cursor = null,
-        [Description("Items to return, from 1 through 100, or through 25 when responseFormat is full.")]
+        [Description(
+            "Most items to return, from 1 through 100, or through 25 when responseFormat is full. A page may hold " +
+            "fewer when it reaches the result size limit.")]
         int pageSize = 25,
         CancellationToken cancellationToken = default)
     {
@@ -122,9 +138,10 @@ internal sealed class ScryfallReadTools
         "75 identifiers. A single lookup of kind fuzzy-name returns one row; fuzzy names cannot be mixed with " +
         "other lookups. Pass one lookup to read one card. Example: " +
         "{\"lookups\":[{\"kind\":\"exact-name\",\"value\":\"Sol Ring\"}],\"responseFormat\":\"concise\"}. " +
-        "Every response format is cut to the result size limit, with truncated, narrow, and nextCursor for the " +
-        "rest, so a standard or full page can hold fewer cards than pageSize; use concise or fields to fit " +
-        "more.")]
+        "pageSize is a maximum: every response format is cut to the result size limit, so a page can hold fewer " +
+        "rows. A cut page sets truncated, cutReason, and narrow with the counts, and nextCursor continues " +
+        "without skipping a row. oracleText is usually the largest field; with responseFormat concise, leave it out " +
+        "of fields to fit more.")]
     internal Task<OperationResult<ScryfallCollectionResponse>> GetCardsAsync(
         [Description(
             "One through 150 card lookups, each {kind, value} (or setCode and collectorNumber for a printing); " +
@@ -137,7 +154,9 @@ internal sealed class ScryfallReadTools
         string freshnessPolicy = "default",
         [Description("Opaque continuation cursor bound to the complete ordered request and exact evidence.")]
         string? cursor = null,
-        [Description("Rows to return, from 1 through 100, or through 25 when responseFormat is full.")]
+        [Description(
+            "Most rows to return, from 1 through 100, or through 25 when responseFormat is full. A page may hold " +
+            "fewer when it reaches the result size limit.")]
         int pageSize = 25,
         [Description(ResponseFormatDescription), ResponseFormatValues] string responseFormat = "standard",
         [Description(FieldsDescription)] IReadOnlyList<string>? fields = null,
@@ -237,9 +256,10 @@ internal sealed class ScryfallReadTools
         "Installed Scryfall card data: returns cards assigned to one installed tag with direct or explicitly " +
         "requested descendant " +
         "evidence; it does not map tags to deck categories. To filter cards by tag together with type, " +
-        "color, mana value, or format, use scryfall_search with otag: instead. Every response format is cut to " +
-        "the result size limit, with truncated, narrow, and nextCursor for the rest, so a standard or full page " +
-        "can hold fewer cards than pageSize; use concise or fields to fit more.")]
+        "color, mana value, or format, use scryfall_search with otag: instead. pageSize is a maximum: every " +
+        "response format is cut to the result size limit, so a page can hold fewer cards. A cut page sets " +
+        "truncated, cutReason, and narrow with the counts, and nextCursor continues without skipping a card. " +
+        "oracleText is usually the largest field; with responseFormat concise, leave it out of fields to fit more.")]
     internal Task<OperationResult<ScryfallCardsByTagResponse>> GetCardsByTagAsync(
         [Description("Exact community tag identity returned by scryfall_tags_search.")] string tagIdentity,
         [Description("Required tag kind: oracle or art."), TagKindValues]
@@ -249,7 +269,9 @@ internal sealed class ScryfallReadTools
         [Description(ResponseFormatDescription), ResponseFormatValues] string responseFormat = "standard",
         [Description(FieldsDescription)] IReadOnlyList<string>? fields = null,
         [Description("Opaque cursor bound to the installed card-data generation and tag expression.")] string? cursor = null,
-        [Description("Cards to return, from 1 through 100, or through 25 when responseFormat is full.")]
+        [Description(
+            "Most cards to return, from 1 through 100, or through 25 when responseFormat is full. A page may hold " +
+            "fewer when it reaches the result size limit.")]
         int pageSize = 25,
         CancellationToken cancellationToken = default)
     {

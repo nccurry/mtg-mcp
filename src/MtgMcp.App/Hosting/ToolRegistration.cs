@@ -52,6 +52,7 @@ internal static class ToolRegistration
         McpServerTool tool = McpServerTool.Create(method, target, new McpServerToolCreateOptions
         {
             SerializerOptions = ToolCallPolicy.SerializerOptions,
+            OutputSchema = OperationResultSchema.ReturnsOperationResult(method) ? OperationResultSchema.Schema : null,
             SchemaCreateOptions = new AIJsonSchemaCreateOptions
             {
                 TransformSchemaNode = (_, schema) => Describe(schema),

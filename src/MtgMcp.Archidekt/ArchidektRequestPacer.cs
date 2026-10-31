@@ -9,11 +9,6 @@ namespace MtgMcp.Archidekt;
 internal sealed class ArchidektOperationBudget
 {
     /// <summary>
-    /// Stores the maximum request starts permitted for this operation.
-    /// </summary>
-    private readonly int maximumRequests;
-
-    /// <summary>
     /// Stores the number of request starts already reserved.
     /// </summary>
     private int requestCount;
@@ -24,8 +19,13 @@ internal sealed class ArchidektOperationBudget
     internal ArchidektOperationBudget(int maximumRequests)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumRequests);
-        this.maximumRequests = maximumRequests;
+        MaximumRequests = maximumRequests;
     }
+
+    /// <summary>
+    /// Gets the most request starts this operation may use.
+    /// </summary>
+    internal int MaximumRequests { get; }
 
     /// <summary>
     /// Gets the number of request starts already consumed.
@@ -37,7 +37,7 @@ internal sealed class ArchidektOperationBudget
     /// </summary>
     internal void EnsureRequestBound(int predictedRequests)
     {
-        if (predictedRequests > maximumRequests)
+        if (predictedRequests > MaximumRequests)
         {
             throw new ArchidektProviderException(
                 ArchidektFailureKind.InvalidInput,
@@ -52,7 +52,7 @@ internal sealed class ArchidektOperationBudget
     internal void Reserve()
     {
         int value = Interlocked.Increment(ref requestCount);
-        if (value > maximumRequests)
+        if (value > MaximumRequests)
         {
             Interlocked.Decrement(ref requestCount);
             throw new ArchidektProviderException(

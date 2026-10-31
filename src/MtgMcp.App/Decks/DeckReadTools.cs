@@ -88,7 +88,7 @@ internal sealed class DeckReadTools
         "card data, in pages of entries. Each entry then carries cardData: found, not-installed (run " +
         "scryfall_card_data_sync), or unresolved (no exact Scryfall identity, or not in the installed data). " +
         "A deck too large for one result is also returned in pages: truncated is true with a narrow hint, and " +
-        "nextCursor reads the rest.")]
+        "nextCursor reads the rest. Every page carries the whole deck's entryCount, cardCount, and cardsByZone.")]
     internal Task<OperationResult<DeckDocumentView>> GetAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description(

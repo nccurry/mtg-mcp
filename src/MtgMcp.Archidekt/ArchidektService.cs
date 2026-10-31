@@ -171,6 +171,18 @@ public sealed class ArchidektService : IDisposable
             cancellationToken);
     }
 
+    /// <inheritdoc cref="ArchidektDeckOperations.PlanPushAsync"/>
+    public Task<OperationResult<ArchidektPushPlan>> PlanPushAsync(
+        RemoteDeckSnapshot current,
+        RemoteDeckSnapshot target,
+        ArchidektPrintingChoices? known,
+        bool forPreview,
+        ArchidektOperationScope operationScope,
+        CancellationToken cancellationToken)
+    {
+        return decks.PlanPushAsync(current, target, known, forPreview, operationScope, cancellationToken);
+    }
+
     /// <inheritdoc cref="ArchidektFolderOperations.ListAsync"/>
     public Task<OperationResult<RemoteFolderTree>> ListFoldersAsync(CancellationToken cancellationToken)
     {

@@ -411,9 +411,8 @@ public sealed class CardListAndRuleToolsMcpTests
     }
 
     /// <summary>
-    /// Checks that the tool publishes an output schema and that the result data is a JSON object. The server publishes
-    /// the open schema (<c>true</c>) for result unions, so when a schema describes properties, every top-level name
-    /// of the data must be one of them.
+    /// Checks that the tool publishes an object output schema and that the result data is a JSON object. The shared
+    /// schema describes only the result kind, so the data itself is not checked against it here.
     /// </summary>
     private static async Task AssertDataMatchesSchemaAsync(McpProcessSession session, string toolName, JsonElement data)
     {
@@ -421,13 +420,8 @@ public sealed class CardListAndRuleToolsMcpTests
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
         McpClientTool tool = tools.Single(candidate => candidate.Name == toolName);
         JsonElement schema = Assert.IsType<JsonElement>(tool.ProtocolTool.OutputSchema);
+        Assert.Equal(JsonValueKind.Object, schema.ValueKind);
         Assert.Equal(JsonValueKind.Object, data.ValueKind);
-        if (schema.ValueKind == JsonValueKind.Object && schema.TryGetProperty("properties", out JsonElement properties))
-        {
-            foreach (JsonProperty property in data.EnumerateObject())
-            {
-                Assert.True(properties.TryGetProperty(property.Name, out _), property.Name);
-            }
-        }
+        Assert.Equal("object", schema.GetProperty("type").GetString());
     }
 }

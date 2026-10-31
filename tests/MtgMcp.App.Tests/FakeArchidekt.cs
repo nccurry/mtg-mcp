@@ -28,6 +28,11 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     private const int ListedDecks = 120;
 
     /// <summary>
+    /// Holds how many card search results one page holds.
+    /// </summary>
+    private const int SearchPageSize = 25;
+
+    /// <summary>
     /// Holds how many named snapshots the snapshot list shows.
     /// </summary>
     private const int ListedSnapshots = 60;
@@ -53,6 +58,11 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     private int reads;
 
     /// <summary>
+    /// Counts the deck reads made after the first write.
+    /// </summary>
+    private int readsAfterWrites;
+
+    /// <summary>
     /// Holds the next id for a new category.
     /// </summary>
     private int nextCategoryId = 100;
@@ -71,6 +81,18 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     /// Gets or sets the description the fake deck reports.
     /// </summary>
     internal string Description { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets how many deck reads still succeed after the first write; every later deck read answers 503, so
+    /// Archidekt looks unavailable. Null lets every read succeed.
+    /// </summary>
+    internal int? DeckReadsThatSucceedAfterWrites { get; set; }
+
+    /// <summary>
+    /// Gets or sets an action that runs before the fake answers a read, with the request path; a test uses it to
+    /// change something between two steps of a tool call.
+    /// </summary>
+    internal Action<string>? BeforeRead { get; set; }
 
     /// <summary>
     /// Gets the methods and paths of every request, in order.
@@ -105,11 +127,20 @@ internal sealed class FakeArchidekt : HttpMessageHandler
             cardId,
             cardName,
             printingId ?? new Guid(cardId, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1),
-            oracleId ?? new Guid(cardId, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2),
+            oracleId ?? OracleIdOf(cardName),
             setCode,
             collectorNumber ?? cardId.ToString(System.Globalization.CultureInfo.InvariantCulture));
         catalog[cardId] = card;
         return card;
+    }
+
+    /// <summary>
+    /// Gives every printing of a card name the same Oracle ID, as Scryfall does.
+    /// </summary>
+    private static Guid OracleIdOf(string cardName)
+    {
+        byte[] hash = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(cardName.ToLowerInvariant()));
+        return new Guid(hash.AsSpan(0, 16));
     }
 
     /// <summary>
@@ -122,11 +153,45 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     }
 
     /// <summary>
+    /// Replaces the categories of the one entry for a card, as an edit made on the Archidekt site would; the first
+    /// category is the primary one. It is not counted as a mutation, since no client request made it.
+    /// </summary>
+    internal void SetCategories(string cardName, params string[] categoryNames)
+    {
+        entries.Single(value => catalog[value.CardId].Name == cardName).Categories = [.. categoryNames];
+    }
+
+    /// <summary>
+    /// Renames a category, with every entry that uses it, as an edit made on the Archidekt site would. The category
+    /// keeps its id. A given <paramref name="includedInDeck"/> also changes whether the category counts toward the
+    /// deck. It is not counted as a mutation, since no client request made it.
+    /// </summary>
+    internal void RenameCategory(string categoryName, string newName, bool? includedInDeck = null)
+    {
+        FakeCategory category = categories.Single(value => value.Name == categoryName);
+        category.Name = newName;
+        category.IncludedInDeck = includedInDeck ?? category.IncludedInDeck;
+        foreach (FakeEntry entry in entries)
+        {
+            entry.Categories = [.. entry.Categories.Select(value => value == categoryName ? newName : value)];
+        }
+    }
+
+    /// <summary>
     /// Gets the quantity of a card by name across the deck, or zero when it is not in the deck.
     /// </summary>
     internal int QuantityOf(string cardName)
     {
         return entries.Where(value => catalog[value.CardId].Name == cardName).Sum(value => value.Quantity);
+    }
+
+    /// <summary>
+    /// Gets the Archidekt card id of the one entry for a card by name, as the deck read shows it.
+    /// </summary>
+    internal string CardIdOf(string cardName)
+    {
+        return entries.Single(value => catalog[value.CardId].Name == cardName).CardId
+            .ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -154,6 +219,16 @@ internal sealed class FakeArchidekt : HttpMessageHandler
 
         if (request.Method == HttpMethod.Get)
         {
+            BeforeRead?.Invoke(path);
+            if (path == $"api/decks/{DeckId}/" && Mutations > 0 && DeckReadsThatSucceedAfterWrites is { } allowed &&
+                readsAfterWrites++ >= allowed)
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+                {
+                    Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+                });
+            }
+
             return Task.FromResult(Read(path));
         }
 
@@ -199,29 +274,69 @@ internal sealed class FakeArchidekt : HttpMessageHandler
 
         if (path.StartsWith("api/cards/v2/?name=", StringComparison.Ordinal))
         {
-            // Matches the full name or the front face, as the recorded Archidekt search does for a double-faced card.
-            string wanted = Uri.UnescapeDataString(path["api/cards/v2/?name=".Length..].Split('&')[0]);
-            JsonArray results = [];
-            foreach (FakeCard card in catalog.Values.Where(value => value.Name == wanted ||
-                value.Name.StartsWith(wanted + " // ", StringComparison.Ordinal)))
-            {
-                results.Add(new JsonObject
-                {
-                    ["id"] = card.Id,
-                    ["uid"] = card.PrintingId.ToString("D"),
-                    ["setCode"] = card.SetCode,
-                    ["collectorNumber"] = card.CollectorNumber,
-                    ["oracleCard"] = new JsonObject { ["name"] = card.Name },
-                });
-            }
-
-            return Json(new JsonObject { ["results"] = results }.ToJsonString());
+            return SearchCards(path);
         }
 
         return new HttpResponseMessage(HttpStatusCode.NotFound)
         {
             Content = new StringContent("{}", Encoding.UTF8, "application/json"),
         };
+    }
+
+    /// <summary>
+    /// Answers one card search the way the real service does: results of 25 per page in <c>results</c>, the number of
+    /// matches in <c>count</c>, and an absolute <c>next</c> link while more pages follow. A result names its set in
+    /// <c>edition.editioncode</c> and has no top-level set code. Read-only queries on 2026-10-31 showed that
+    /// <c>name=</c> matches any card whose name contains the text (<c>name=Shock</c> gave 71 results, among them
+    /// Aftershock and Barbed Shocker), that <c>exact=true</c> keeps only the card with that name
+    /// (<c>name=Shock&amp;exact=true</c> gave 36, all "Shock"), and that <c>edition=&lt;set code&gt;</c> keeps only
+    /// that set (<c>name=Forest&amp;edition=dmu</c> gave 6 of the 955 printings of Forest). The same service returns
+    /// count 18 for Assassin's Trophy and 141 with a next link for Sol Ring.
+    /// </summary>
+    private HttpResponseMessage SearchCards(string path)
+    {
+        Dictionary<string, string> query = path["api/cards/v2/?".Length..]
+            .Split('&')
+            .Select(value => value.Split('=', 2))
+            .ToDictionary(value => value[0], value => Uri.UnescapeDataString(value[1]), StringComparer.Ordinal);
+        string wanted = query["name"];
+        bool exact = query.TryGetValue("exact", out string? exactText) && exactText == "true";
+        query.TryGetValue("edition", out string? edition);
+        int page = query.TryGetValue("page", out string? pageText)
+            ? int.Parse(pageText, System.Globalization.CultureInfo.InvariantCulture)
+            : 1;
+        List<FakeCard> matches = [.. catalog.Values.Where(value =>
+            (exact
+                ? string.Equals(value.Name, wanted, StringComparison.OrdinalIgnoreCase)
+                : value.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase)) &&
+            (edition is null || string.Equals(value.SetCode, edition, StringComparison.OrdinalIgnoreCase)))];
+        JsonArray results = [];
+        foreach (FakeCard card in matches.Skip((page - 1) * SearchPageSize).Take(SearchPageSize))
+        {
+            results.Add(new JsonObject
+            {
+                ["id"] = card.Id,
+                ["uid"] = card.PrintingId.ToString("D"),
+                ["collectorNumber"] = card.CollectorNumber,
+                ["edition"] = new JsonObject { ["editioncode"] = card.SetCode },
+                ["oracleCard"] = new JsonObject { ["name"] = card.Name, ["uid"] = card.OracleId.ToString("D") },
+            });
+        }
+
+        JsonNode next = page * SearchPageSize < matches.Count
+            ? JsonValue.Create(
+                $"https://archidekt.com/api/cards/v2/?name={Uri.EscapeDataString(wanted)}" +
+                (exact ? "&exact=true" : string.Empty) +
+                (edition is null ? string.Empty : $"&edition={Uri.EscapeDataString(edition)}") +
+                $"&page={page + 1}&pageSize=25")!
+            : null!;
+        return Json(new JsonObject
+        {
+            ["count"] = matches.Count,
+            ["next"] = next,
+            ["previous"] = null,
+            ["results"] = results,
+        }.ToJsonString());
     }
 
     /// <summary>

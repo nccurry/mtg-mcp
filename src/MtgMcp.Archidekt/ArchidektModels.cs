@@ -50,6 +50,17 @@ public sealed record RemoteDeckCategory(
     int SortOrder);
 
 /// <summary>
+/// Holds one Archidekt printing as a deck relation or a card search result shows it.
+/// </summary>
+internal sealed record ArchidektCardPrinting(
+    string ProviderCardId,
+    string CardName,
+    Guid? OracleId,
+    Guid? PrintingId,
+    string? SetCode,
+    string? CollectorNumber);
+
+/// <summary>
 /// Preserves one independently addressable card relation from an Archidekt deck.
 /// </summary>
 public sealed record RemoteDeckEntry(
@@ -110,6 +121,19 @@ public sealed record RemoteDeckSnapshot(
     /// </summary>
     public IReadOnlyDictionary<string, JsonElement> Extensions { get; init; } =
         new Dictionary<string, JsonElement>(Extensions, StringComparer.Ordinal);
+
+    /// <summary>
+    /// Tells whether Archidekt counts an entry toward the deck: its first category is included in the deck, or it has
+    /// no category, or the category has no flag. Worked out from the categories, never stored.
+    /// </summary>
+    public bool IsInDeck(RemoteDeckEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return ArchidektJsonContract.IsInDeck(
+            entry.CategoryNames,
+            entry.PrimaryCategoryName,
+            CategoryNames.Index(Categories, value => value.Name));
+    }
 }
 
 /// <summary>
@@ -263,6 +287,12 @@ public sealed record ArchidektSyncPreview(
     int PredictedProviderRequests)
 {
     /// <summary>
+    /// Gets the reason the apply tool would refuse this preview, such as a card with no Archidekt printing or a change
+    /// on the other side; null when it would not.
+    /// </summary>
+    public string? ApplyBlockedNotice { get; init; }
+
+    /// <summary>
     /// Gets immutable path differences.
     /// </summary>
     public IReadOnlyList<ArchidektDifference> Differences { get; init; } =
@@ -274,6 +304,24 @@ public sealed record ArchidektSyncPreview(
     public IReadOnlyList<ArchidektRemoteOperation> Operations { get; init; } =
         Array.AsReadOnly(Operations.ToArray());
 }
+
+/// <summary>
+/// Carries a push plan whose new cards have Archidekt printings, the operations as shown to the caller, and the
+/// printings chosen so a later apply does not search again.
+/// </summary>
+public sealed record ArchidektPushPlan(
+    RemoteDeckSnapshot Target,
+    ArchidektRemotePlan Plan,
+    IReadOnlyList<ArchidektRemoteOperation> Operations,
+    int PredictedProviderRequests,
+    ArchidektPushBlock? Block,
+    ArchidektPrintingChoices Choices);
+
+/// <summary>
+/// Says why a push cannot be sent, with its reason code: <c>push-printing-unresolved</c> when a card has no Archidekt
+/// printing, <c>request-limit-exceeded</c> when the lookups or the push would pass the request limit.
+/// </summary>
+public sealed record ArchidektPushBlock(string Notice, string ReasonCode);
 
 /// <summary>
 /// Describes one previewed primitive provider operation without exposing transport payloads.
@@ -306,6 +354,14 @@ public sealed record ArchidektApplyResult(
     IReadOnlyList<ArchidektOperationStatus> Operations)
 {
     /// <summary>
+    /// Tells what to do when the writes were sent but the deck could not be read afterwards.
+    /// </summary>
+    public const string UnverifiedNotice =
+        "The operations were sent, but Archidekt could not be read afterwards, so the result is not verified and " +
+        "the local baseline was not updated. Run archidekt_pull_preview to see the Archidekt deck before pushing " +
+        "again.";
+
+    /// <summary>
     /// Gets immutable operation statuses in attempted order.
     /// </summary>
     public IReadOnlyList<ArchidektOperationStatus> Operations { get; init; } =
@@ -317,7 +373,26 @@ public sealed record ArchidektApplyResult(
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<Guid>? UnlinkedLocalIds { get; init; }
+
+    /// <summary>
+    /// Gets a sentence about the outcome that the operation statuses do not say, such as why the final read failed;
+    /// omitted when there is nothing to add.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Notice { get; init; }
+
+    /// <summary>
+    /// Gets the rows that still differ from the pushed deck when the check after the writes found a difference;
+    /// omitted otherwise. Only the first rows are listed.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ArchidektVerificationDifference>? Differences { get; init; }
 }
+
+/// <summary>
+/// Names one row of the Archidekt deck that still differed from the pushed deck after the writes.
+/// </summary>
+public sealed record ArchidektVerificationDifference(string Kind, string Subject, string Summary);
 
 /// <summary>
 /// Reports one typed folder move result after verification.

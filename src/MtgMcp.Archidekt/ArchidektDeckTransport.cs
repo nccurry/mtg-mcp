@@ -1,6 +1,5 @@
 using System.Text;
 using System.Text.Json;
-using MtgMcp.Core.Decks;
 
 namespace MtgMcp.Archidekt;
 
@@ -20,6 +19,14 @@ internal sealed class ArchidektDeckTransport
     internal ArchidektDeckTransport(ArchidektSession session)
     {
         this.session = session ?? throw new ArgumentNullException(nameof(session));
+    }
+
+    /// <summary>
+    /// Waits for a short pause between provider calls.
+    /// </summary>
+    internal Task PauseAsync(TimeSpan duration, CancellationToken cancellationToken)
+    {
+        return session.PauseAsync(duration, cancellationToken);
     }
 
     /// <summary>
@@ -249,45 +256,72 @@ internal sealed class ArchidektDeckTransport
     }
 
     /// <summary>
-    /// Resolves one exact Archidekt printing ID for a new relation without fuzzy fallback.
+    /// Reads one page of Archidekt's public card search. The first page is requested from the search; a later page
+    /// is requested with the query of the previous page's <c>next</c> link, so no other address is ever followed.
     /// </summary>
-    internal async Task<string> ResolveCardIdAsync(
-        RemoteDeckEntry entry,
+    internal async Task<ArchidektCardSearchPage> SearchCardsAsync(
+        ArchidektCardSearch search,
+        string? nextQuery,
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
-        string path = $"api/cards/v2/?name={Uri.EscapeDataString(entry.CardName)}&pageSize=25";
+        ArgumentNullException.ThrowIfNull(search);
+        string path = nextQuery is null
+            ? $"api/cards/v2/{search.FirstQuery()}"
+            : $"api/cards/v2/{nextQuery}";
         ArchidektSession.ProviderResponse response = await session.SendAsync(
             HttpMethod.Get,
             path,
             payload: null,
-            requiresAuthentication: true,
+            requiresAuthentication: false,
             idempotentRead: true,
             budget,
             cancellationToken).ConfigureAwait(false);
         using JsonDocument document = ArchidektSession.ParseJson(response.Json);
-        List<JsonElement> candidates = [];
         JsonElement root = document.RootElement;
         JsonElement collection = root.ValueKind == JsonValueKind.Array
             ? root
-            : root.TryGetProperty("results", out JsonElement results)
+            : root.ValueKind == JsonValueKind.Object && root.TryGetProperty("results", out JsonElement results)
                 ? results
                 : default;
+        List<ArchidektCardPrinting> candidates = [];
+        int returned = 0;
         if (collection.ValueKind == JsonValueKind.Array)
         {
-            candidates.AddRange(collection.EnumerateArray());
+            foreach (JsonElement candidate in collection.EnumerateArray())
+            {
+                returned++;
+                if (ArchidektJsonContract.ReadPrinting(candidate) is { } printing)
+                {
+                    candidates.Add(printing);
+                }
+            }
         }
 
-        JsonElement? match = SelectExactCard(candidates, entry);
-        if (match is null || !ArchidektProviderId.TryRead(match.Value, "id", out string? cardId))
-        {
-            throw new ArchidektProviderException(
-                ArchidektFailureKind.Unsupported,
-                "printing-resolution-unavailable",
-                "Archidekt could not resolve the exact requested printing.");
-        }
+        int? count = root.ValueKind == JsonValueKind.Object &&
+            root.TryGetProperty("count", out JsonElement countElement) &&
+            countElement.ValueKind == JsonValueKind.Number &&
+            countElement.TryGetInt32(out int total)
+            ? total
+            : null;
+        string? next = root.ValueKind == JsonValueKind.Object &&
+            root.TryGetProperty("next", out JsonElement nextElement) &&
+            nextElement.ValueKind == JsonValueKind.String
+            ? SearchNextQuery(nextElement.GetString())
+            : null;
+        return new ArchidektCardSearchPage(candidates, returned, count, next);
+    }
 
-        return cardId!;
+    /// <summary>
+    /// Takes the query of a <c>next</c> link, and only when the link points at the card search route.
+    /// </summary>
+    private static string? SearchNextQuery(string? link)
+    {
+        return Uri.TryCreate(new Uri("https://archidekt.com/"), link, out Uri? uri) &&
+            uri.AbsolutePath == "/api/cards/v2/" &&
+            uri.Query.Length > 1
+            ? uri.Query
+            : null;
     }
 
     /// <summary>
@@ -372,53 +406,4 @@ internal sealed class ArchidektDeckTransport
     /// Carries a local page offset and immutable source checksum inside the opaque continuation.
     /// </summary>
     private sealed record DeckListCursor(int Offset, string Checksum);
-
-    /// <summary>
-    /// Selects one exact name and printing match from a bounded provider card search.
-    /// </summary>
-    private static JsonElement? SelectExactCard(
-        IReadOnlyList<JsonElement> candidates,
-        RemoteDeckEntry entry)
-    {
-        List<JsonElement> nameMatches = [];
-        foreach (JsonElement candidate in candidates)
-        {
-            string? name = candidate.TryGetProperty("oracleCard", out JsonElement oracle) &&
-                oracle.ValueKind == JsonValueKind.Object &&
-                oracle.TryGetProperty("name", out JsonElement nameElement)
-                ? nameElement.GetString()
-                : null;
-            if (!CardNames.Match(name, entry.CardName))
-            {
-                continue;
-            }
-
-            if (entry.PrintingId is not null &&
-                candidate.TryGetProperty("uid", out JsonElement uid) &&
-                Guid.TryParse(uid.GetString(), out Guid candidateId) &&
-                candidateId == entry.PrintingId)
-            {
-                return candidate;
-            }
-
-            string? setCode = candidate.TryGetProperty("setCode", out JsonElement set)
-                ? set.GetString()
-                : null;
-            string? collectorNumber = candidate.TryGetProperty("collectorNumber", out JsonElement collector)
-                ? collector.GetString()
-                : null;
-            if (entry.SetCode is not null && entry.CollectorNumber is not null &&
-                string.Equals(setCode, entry.SetCode, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(collectorNumber, entry.CollectorNumber, StringComparison.OrdinalIgnoreCase))
-            {
-                return candidate;
-            }
-
-            nameMatches.Add(candidate);
-        }
-
-        return entry.PrintingId is null && entry.SetCode is null && nameMatches.Count == 1
-            ? nameMatches[0]
-            : null;
-    }
 }

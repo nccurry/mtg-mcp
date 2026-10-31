@@ -64,6 +64,8 @@ public sealed class DeckWriteSummaryTests
         Assert.Equal(deck.Revision + 1, summary.Revision);
         Assert.Equal(deck.Revision, summary.PreviousRevision);
         Assert.Equal(299, summary.EntryCount);
+        Assert.Equal(299, summary.CardCount);
+        Assert.Equal(new Dictionary<string, int> { ["main"] = 299 }, summary.CardsByZone);
         Assert.Equal([target.EntryId], summary.UpdatedEntryIds);
         Assert.Equal([deck.Entries[8].EntryId], summary.RemovedEntryIds);
         Assert.Equal([categoryId], summary.AddedCategoryIds);
@@ -189,6 +191,7 @@ public sealed class DeckWriteSummaryTests
         DeckWriteIssue note = Assert.Single(summary.Issues!);
         Assert.Equal(DeckWriteIssue.Skipped, note.Kind);
         Assert.Contains("not installed", note.Message, StringComparison.Ordinal);
+        Assert.Contains("default printing", note.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

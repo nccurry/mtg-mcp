@@ -1,5 +1,123 @@
 # Changelog
 
+## 0.13.1 - 2026-10-31
+
+Agents using `0.13.0` reported four problems while building and syncing Commander decks, and a fifth report found that
+Claude Code loaded none of the tools. Archidekt deck reads were too long and hid the real deck inside 347 maybeboard
+cards; a deck read as 103 cards without a warning; Scryfall searches were cut to 87 of 100 cards with no numbers to
+plan with; a push approved 27 name-only adds and then failed on the first; a push preview offered to undo edits made
+on Archidekt; and a size-cut first page of `local_deck_get` was taken for the whole deck. Claude Code under protocol
+`2026-07-28` rejected the tool list because every tool published `outputSchema: true`, which that version does not
+allow. Every change marked **Breaking** below was taken in a patch release with the owner's approval.
+
+### Breaking
+
+- **Breaking:** `archidekt_deck_get` and `archidekt_snapshots_get` (kind `get`) return the `concise` entry set by
+  default: `cardName`, `quantity`, `zone`, `categoryNames`, `setCode`, `collectorNumber`, `oracleId`, and the new
+  `inDeck`. Pass `responseFormat: "full"` (or `standard`, the same) to get every entry field as in `0.13.0`, plus
+  `inDeck`. The first lines of the description and every cut page's `narrow` say so.
+- **Breaking:** on protocol versions before `2026-07-28`, a tool result is no longer wrapped in `{"result": ...}`.
+  The `structuredContent` and the `outputSchema` are the result object itself, with a top-level `kind`, as they
+  already were under `2026-07-28`. A client that read `result.kind` on an older protocol must read `kind`.
+- **Breaking:** `archidekt_deck_get` and `archidekt_snapshots_get` order entries by zone (commander, main, sideboard,
+  maybeboard), then card name, then relation ID. In `0.13.0` they were ordered by name across every zone.
+- **Breaking:** an `archidekt_push_apply` operation that stopped the push before anything was sent now reports
+  `not-sent` ("Nothing was sent to Archidekt for this operation."), not `unknown`, and the operations after it report
+  `not-attempted` with the text "Not sent: an earlier operation stopped the push." `unknown` is kept for a failure
+  after a write was sent. A push where nothing was applied reports the outcome `not-applied`.
+- **Breaking:** `archidekt_push_preview` for a deck that changed on Archidekt since the last sync lists no operations,
+  sets `applyAvailable: false`, and says so in `applyNotice`. In `0.13.0` it listed operations that would have undone
+  the Archidekt edits and set `applyAvailable: true`. Run `archidekt_pull_preview` first.
+- **Breaking:** `archidekt_pull_preview` and `archidekt_pull_apply` no longer treat a local deck as conflicting when
+  every change since the last sync is an added card or category. The pull keeps those additions (a `local-keep`
+  operation) and replaces everything else from Archidekt. Any other local change still needs `discardLocalChanges`.
+- **Breaking:** an Archidekt entry whose first category is not included in the deck (`includedInDeck: false`) is read
+  into the `maybeboard` zone, not `main`. Decks pulled by `0.13.0` keep working (no false differences and no refused
+  push); the next pull moves those entries to `maybeboard` as an ordinary change from Archidekt.
+- **Breaking:** the `narrow` text of a cut `local_deck_get` page changed (it now says the page is a part of the deck),
+  and so did the `narrow` text of a cut Scryfall card page.
+
+### Fixed
+
+- Claude Code (protocol `2026-07-28`) lists all tools. Every tool publishes one object `outputSchema`
+  (`{"type":"object","properties":{"kind":{"type":"string","enum":[...]}},"required":["kind"]}`) set where the tools
+  are created. A tool failure sets `isError: true` under every protocol version; before, a failure on an older
+  protocol had no `isError` because the `result` wrapper hid `kind`. E2E tests now list tools under `2024-11-05`,
+  `2025-03-26`, `2025-06-18`, `2025-11-25`, and `2026-07-28`.
+- `archidekt_push_preview` and `archidekt_push_apply` resolve an added card's Archidekt printing from Archidekt's card
+  search: by printing ID, then by set code (`edition.editioncode`) and collector number; a card with no printing
+  takes the first listed exact-name match (filtered by Oracle ID when there is one). The search asks for an exact name
+  (`exact=true`; a plain name search also lists longer names, so Shock listed Aftershock), searches within the entry's
+  set when it has one (`edition=`, so a printing of Forest, which has 955, is found), and follows the next pages within
+  the request limit, at most 12 per search. A printing ID that Archidekt does not list stays unresolved and blocks the
+  push; it never takes the first printing instead. Before, a name that matched more than one printing (Assassin's
+  Trophy has 18) could not be added, and the set match read a field that Archidekt does not send.
+- The push preview names the printing it chose for each add, and sets `applyAvailable: false` with the card names
+  when a name has no match or the lookups would pass the 150-request limit. The apply resolves every add before its
+  first write, so a push that cannot place a card sends nothing.
+- The notice that a card was added without card data no longer says that reconcile makes it pushable. It says a push
+  uses Archidekt's default printing unless a printing is set.
+- Archidekt reads that get a `429` wait for `Retry-After` (at most about 10 seconds) and retry up to twice. A write that
+  gets a `429` is reported `not-sent` and is never retried; the rest are `not-attempted`. If the read after the writes
+  fails, the applied statuses are kept and the outcome is `applied-unverified` with a notice to pull before pushing
+  again.
+- A push verification that finds a difference reads once more after about a second, so Archidekt lagging behind its own
+  writes no longer reports `verification-mismatch`. A real mismatch lists the rows that still differ (up to 25) in
+  `differences`.
+- The push zone check follows `includedInDeck`, so a deck with entries under an excluded category pulls and pushes with
+  no false `entry-zone-contradicts-category`.
+- `local_deck_get` and the deck write summaries now carry deck-wide totals, so a size-cut page is easy to tell from the
+  whole deck. A cut first page was taken for the whole deck, and the agent re-added cards it thought were missing.
+- `archidekt_push_apply` checks the local and Archidekt decks against the preview, and the removal confirmation, before
+  it searches for any printing, so a refused apply spends no search requests. It also refuses (`push-preview-changed`,
+  nothing sent) when the local deck changed while the printings were looked up, instead of recording the change as
+  synchronized. A push blocked by the request limit reports `request-limit-exceeded`, not `push-printing-unresolved`.
+- A deck pulled by `0.13.0` can be pushed again and again: a push writes the zone Archidekt gives each entry whose
+  category is outside the deck into the local deck, and a card added locally before the next pull no longer makes those
+  entries read as local changes that refuse the pull.
+- A pull that keeps cards added locally follows a category Archidekt renamed: the kept card moves to the new name,
+  where it used to fail on a duplicate category after the preview said it was fine.
+- The request budget of a push counts every read the apply makes, including the read that repeats the check and
+  retries after a rate limit. If the request limit ends the check after the writes, the applied statuses are kept and
+  the outcome is `applied-unverified`.
+- The category that decides the zone of a card is its primary category, read the same way by pulls, deck reads, the
+  push check, and the verification, so a card whose primary category is outside the deck is no longer read in another
+  zone by one of them.
+
+### Added
+
+- `archidekt_deck_get` entries report `inDeck` (false when the first category is not included in the deck). The
+  summary covers the whole deck whatever the filter: `duplicates` (cards held more than once across commander and
+  main, matched by Oracle ID, basic lands and entries not in the deck skipped, capped with `duplicatesOmitted`),
+  `repeatsOutsideMain` (cards held more than once inside the sideboard or maybeboard, with `repeatsOutsideMainOmitted`
+  when capped), and for Commander decks `size` (`format`, `expected: 100`, `mainAndCommander`). These are facts, not a
+  verdict.
+- `archidekt_deck_get` and `archidekt_snapshots_get` take `zones` (`commander`, `main`, `sideboard`, `maybeboard`) and
+  `responseFormat`. The result reports `shownEntryCount`, and offsets count the chosen entries. A bad offset is refused
+  with `invalid-offset` naming the chosen count.
+- `local_deck_get` pages carry `entryCount`, `cardCount`, and `cardsByZone` for the whole deck, and a cut page's `narrow`
+  says "This page shows N of M entries; the deck is not missing the rest. Follow nextCursor." The summary of every
+  tool that writes a deck also carries `cardsByZone`.
+- `scryfall_search`, `scryfall_cards_get`, `scryfall_installed_cards_by_tag`, and `card_lists_compare` report
+  `returnedCount` and `requestedCount` on every page and `cutReason: "result-size-limit"` on a cut page. The `narrow`
+  text gives the kept and requested counts, the average bytes per card, where `nextCursor` continues, and that leaving
+  `oracleText` out of `fields` fits more cards.
+- A pull preview with `discardLocalChanges` counts what it throws away ("N cards added, N changed, N removed
+  (categories: ...)").
+- `archidekt_push_preview` and `archidekt_push_apply` take `confirmRemovals`. A push that removes more than 10 Archidekt
+  entries, or 3 or more entries that are more than 10 percent of them, is not available until `confirmRemovals`
+  equals the removal count (removing one or two entries never needs it); the preview notice names the count, and the
+  apply refuses with `push-removals-unconfirmed` otherwise.
+
+### Changed
+
+- Tool descriptions say `pageSize` is a maximum, `oracleText` is usually the largest field, and `edhrecRank` counts how
+  many decks include the card in any slot, so it is not a rank of how often a card is played as commander (also for
+  `order: "edhrec"`). The server has no commander popularity rank.
+- The `archidekt_pull_preview` and `archidekt_pull_apply` descriptions and the `discardLocalChanges` parameter describe
+  the merging pull. The conflicting-push notice says a pull keeps cards added locally when those are your only local
+  changes.
+
 ## 0.13.0 - 2026-10-30
 
 Agents using `0.12.0` in Claude Code reported five problems: deck tool results too large to read, a push they could

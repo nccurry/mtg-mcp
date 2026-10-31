@@ -8,6 +8,53 @@ namespace MtgMcp.Archidekt;
 internal sealed class ArchidektDeckOperations
 {
     /// <summary>
+    /// Says that no request reached Archidekt for an operation.
+    /// </summary>
+    private const string NotSentMessage = "Nothing was sent to Archidekt for this operation.";
+
+    /// <summary>
+    /// Says that an operation was never started because an earlier one stopped the push.
+    /// </summary>
+    private const string NotAttemptedMessage = "Not sent: an earlier operation stopped the push.";
+
+    /// <summary>
+    /// Gives the most differing rows an apply result lists.
+    /// </summary>
+    private const int MaximumListedDifferences = 25;
+
+    /// <summary>
+    /// Gives the reason code of the failure that says an operation has used all its provider requests.
+    /// </summary>
+    private const string RequestLimitReasonCode = "request-limit-exceeded";
+
+    /// <summary>
+    /// Gives the reason code of a push that cannot be sent because a card has no Archidekt printing.
+    /// </summary>
+    private const string PrintingUnresolvedReasonCode = "push-printing-unresolved";
+
+    /// <summary>
+    /// Gives how many times a read may be tried again after a rate-limit response; the budget keeps room for them.
+    /// </summary>
+    private const int MaximumRetriesPerRead = 2;
+
+    /// <summary>
+    /// Gives the deck reads an apply makes after its plan is made: the read to start, the read to verify, the read
+    /// again when that finds a difference, and a last read.
+    /// </summary>
+    private const int ReadsAfterPlanningInAnApply = 4;
+
+    /// <summary>
+    /// Gives the deck reads left for a preview to count: those of an apply, plus the read the apply makes before it
+    /// plans, which the preview has already made when it counts.
+    /// </summary>
+    private const int ReadsAfterPlanningInAPreview = ReadsAfterPlanningInAnApply + 1;
+
+    /// <summary>
+    /// Gives the pause before the check after the writes is repeated when it found a difference.
+    /// </summary>
+    private static readonly TimeSpan VerificationSettleTime = TimeSpan.FromSeconds(1);
+
+    /// <summary>
     /// Provides deck provider routes for this workflow owner.
     /// </summary>
     private readonly ArchidektDeckTransport transport;
@@ -18,6 +65,11 @@ internal sealed class ArchidektDeckOperations
     private readonly int maximumRequestsPerOperation;
 
     /// <summary>
+    /// Chooses the Archidekt printing for each card a push adds.
+    /// </summary>
+    private readonly ArchidektPrintingResolver printings;
+
+    /// <summary>
     /// Creates deck workflows over one deck provider route owner.
     /// </summary>
     internal ArchidektDeckOperations(
@@ -25,6 +77,7 @@ internal sealed class ArchidektDeckOperations
         int maximumRequestsPerOperation)
     {
         this.transport = transport ?? throw new ArgumentNullException(nameof(transport));
+        printings = new ArchidektPrintingResolver(transport);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumRequestsPerOperation);
         this.maximumRequestsPerOperation = maximumRequestsPerOperation;
     }
@@ -180,6 +233,136 @@ internal sealed class ArchidektDeckOperations
     }
 
     /// <summary>
+    /// Plans a push of <paramref name="target"/> onto <paramref name="current"/> and picks the Archidekt printing of
+    /// every card it adds, under a caller-owned composed-operation budget. A preview and the apply that follows it
+    /// both use this, so what is previewed is what is sent. Searches are skipped for entries that
+    /// <paramref name="known"/> already holds. <paramref name="forPreview"/> says the plan is for a preview, which
+    /// counts the extra read its apply will make.
+    /// </summary>
+    internal Task<OperationResult<ArchidektPushPlan>> PlanPushAsync(
+        RemoteDeckSnapshot current,
+        RemoteDeckSnapshot target,
+        ArchidektPrintingChoices? known,
+        bool forPreview,
+        ArchidektOperationScope operationScope,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(operationScope);
+        return ArchidektOperationResults.ExecuteAsync(
+            operationScope.Budget,
+            async budget =>
+            {
+                ArchidektPrintingChoices choices = known ?? new ArchidektPrintingChoices();
+                ArchidektRemotePlan initial = ArchidektSyncPlanner.PlanRemoteApply(current, target);
+                await printings.ResolveAsync(
+                    NewCardsWithoutProviderId(initial),
+                    choices,
+                    budget,
+                    cancellationToken).ConfigureAwait(false);
+                RemoteDeckSnapshot resolved = choices.ApplyTo(target);
+                ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current, resolved);
+                int needed = budget.RequestCount + RequestsAfterPlanning(plan, forPreview);
+                return new ArchidektPushPlan(
+                    resolved,
+                    plan,
+                    DescribeOperations(plan, choices),
+                    plan.PredictedProviderRequests + choices.SearchRequests,
+                    Blocked(choices, needed, budget.MaximumRequests),
+                    choices);
+            });
+    }
+
+    /// <summary>
+    /// Counts the requests an apply makes after its plan is made. The plan's own count holds one request per operation
+    /// and one read. The apply also reads the deck to start (a preview adds the read the apply makes before that),
+    /// reads it to verify, reads it again when that finds a difference, and reads it a last time; room is left for each
+    /// read to be tried again after a rate-limit response.
+    /// </summary>
+    private static int RequestsAfterPlanning(ArchidektRemotePlan plan, bool planningForAPreview)
+    {
+        int reads = planningForAPreview ? ReadsAfterPlanningInAPreview : ReadsAfterPlanningInAnApply;
+        return plan.PredictedProviderRequests - 1 + reads + (reads * MaximumRetriesPerRead);
+    }
+
+    /// <summary>
+    /// Lists the entries a plan adds that carry no Archidekt card ID yet.
+    /// </summary>
+    private static IEnumerable<RemoteDeckEntry> NewCardsWithoutProviderId(ArchidektRemotePlan plan)
+    {
+        return plan.PlannedOperations
+            .Where(value => value.Public.Kind == "entry-add" &&
+                string.IsNullOrWhiteSpace(value.TargetEntry?.ProviderCardId))
+            .Select(value => value.TargetEntry!);
+    }
+
+    /// <summary>
+    /// Names the chosen printing in each add operation, or says that none was found.
+    /// </summary>
+    private static IReadOnlyList<ArchidektRemoteOperation> DescribeOperations(
+        ArchidektRemotePlan plan,
+        ArchidektPrintingChoices choices)
+    {
+        List<ArchidektRemoteOperation> described = [];
+        foreach (ArchidektPlannedOperation operation in plan.PlannedOperations)
+        {
+            ArchidektRemoteOperation shown = operation.Public;
+            RemoteDeckEntry? entry = operation.TargetEntry;
+            if (shown.Kind == "entry-add" && entry is not null && string.IsNullOrWhiteSpace(entry.ProviderCardId))
+            {
+                string detail = choices.UnresolvedCardNames.Contains(entry.CardName, StringComparer.OrdinalIgnoreCase)
+                    ? "Archidekt printing not found, so this add cannot be sent."
+                    : "Archidekt printing not looked up.";
+                shown = shown with { Summary = $"{shown.Summary.TrimEnd('.')}: {detail}" };
+            }
+            else if (shown.Kind == "entry-add" && entry is not null && choices.Find(entry) is { } choice)
+            {
+                shown = shown with { Summary = $"{shown.Summary.TrimEnd('.')}: {choice.Description}" };
+            }
+
+            described.Add(shown);
+        }
+
+        return described;
+    }
+
+    /// <summary>
+    /// Explains why a push could not be sent, with its reason code, or returns null when it can.
+    /// </summary>
+    private static ArchidektPushBlock? Blocked(
+        ArchidektPrintingChoices choices,
+        int neededRequests,
+        int maximumRequests)
+    {
+        if (choices.StoppedAtRequestLimit)
+        {
+            return new ArchidektPushBlock(
+                "archidekt_push_apply would send nothing: looking up printings on Archidekt reached the limit of " +
+                    $"{maximumRequests} provider requests for one operation. Push fewer new cards at a time.",
+                RequestLimitReasonCode);
+        }
+
+        if (choices.UnresolvedCardNames.Count > 0)
+        {
+            IEnumerable<string> shown = choices.UnresolvedCardNames.Take(10).Select(value => $"'{value}'");
+            string more = choices.UnresolvedCardNames.Count > 10
+                ? $" and {choices.UnresolvedCardNames.Count - 10} more"
+                : string.Empty;
+            return new ArchidektPushBlock(
+                "archidekt_push_apply would send nothing: Archidekt has no printing for " +
+                    $"{string.Join(", ", shown)}{more}. Fix the card name or set a printing on the entry, then " +
+                    "preview again.",
+                PrintingUnresolvedReasonCode);
+        }
+
+        return neededRequests > maximumRequests
+            ? new ArchidektPushBlock(
+                $"archidekt_push_apply would send nothing: this push needs about {neededRequests} provider " +
+                    $"requests, over the limit of {maximumRequests} for one operation. Push fewer changes at a time.",
+                RequestLimitReasonCode)
+            : null;
+    }
+
+    /// <summary>
     /// Applies one caller-previewed remote target under an operation-local budget.
     /// </summary>
     internal Task<OperationResult<ArchidektApplyResult>> ApplyTargetAsync(
@@ -237,7 +420,9 @@ internal sealed class ArchidektDeckOperations
     }
 
     /// <summary>
-    /// Executes one exact update plan in stable order and reports partial or unknown state without retries.
+    /// Executes one exact update plan in stable order. Every new card is matched to an Archidekt printing before the
+    /// first write, so a card that cannot be placed stops the push with nothing sent. After that, a failure is
+    /// reported as unknown, because the write may have reached Archidekt, and the rest are reported as not sent.
     /// </summary>
     internal async Task<ArchidektApplyResult> ApplyPlanAsync(
         RemoteDeckSnapshot current,
@@ -247,8 +432,19 @@ internal sealed class ArchidektDeckOperations
         CancellationToken cancellationToken)
     {
         budget.EnsureRequestBound(budget.RequestCount + plan.PredictedProviderRequests);
+        ArchidektPrintingChoices choices = new();
+        ArchidektApplyResult? refused = await ResolveBeforeWritingAsync(
+            current.RemoteId,
+            plan,
+            choices,
+            budget,
+            cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+        {
+            return refused;
+        }
+
         List<ArchidektOperationStatus> statuses = [];
-        Dictionary<string, string> resolvedCards = new(StringComparer.Ordinal);
         for (int index = 0; index < plan.PlannedOperations.Count; index++)
         {
             ArchidektPlannedOperation operation = plan.PlannedOperations[index];
@@ -258,23 +454,31 @@ internal sealed class ArchidektDeckOperations
                     current.RemoteId,
                     target,
                     operation,
-                    resolvedCards,
+                    choices,
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 statuses.Add(Status(operation.Public, "applied", "Archidekt accepted the operation."));
             }
             catch (ArchidektProviderException exception)
+                when (exception.ReasonCode is "provider-rate-limited" or RequestLimitReasonCode)
+            {
+                // The rate limit answered, or the request limit stopped the request before it was sent (a sign-in
+                // again after a 401 can use the last request), so this write did not reach Archidekt.
+                statuses.Add(Status(operation.Public, "not-sent", $"{NotSentMessage} {exception.Message}"));
+                AddNotAttempted(statuses, plan, index + 1);
+                return new ArchidektApplyResult(
+                    statuses.Any(value => value.Status == "applied") ? "partial" : "not-applied",
+                    LocalDeckId: null,
+                    LocalRevision: null,
+                    current.RemoteId,
+                    FinalRemoteFingerprint: null,
+                    statuses);
+            }
+            catch (ArchidektProviderException exception)
                 when (exception.Kind is ArchidektFailureKind.Unavailable or ArchidektFailureKind.Unsupported)
             {
                 statuses.Add(Status(operation.Public, "unknown", exception.Message));
-                for (int remaining = index + 1; remaining < plan.PlannedOperations.Count; remaining++)
-                {
-                    statuses.Add(Status(
-                        plan.PlannedOperations[remaining].Public,
-                        "not-attempted",
-                        "A prior provider operation did not complete safely."));
-                }
-
+                AddNotAttempted(statuses, plan, index + 1);
                 return new ArchidektApplyResult(
                     "partial",
                     LocalDeckId: null,
@@ -285,12 +489,36 @@ internal sealed class ArchidektDeckOperations
             }
         }
 
-        RemoteDeckSnapshot verified = await transport.GetAsync(
+        RemoteDeckSnapshot? verified = await ReadForVerificationAsync(
             current.RemoteId,
-            requireAuthentication: true,
             budget,
             cancellationToken).ConfigureAwait(false);
-        ArchidektRemotePlan residual = ArchidektSyncPlanner.PlanRemoteVerification(verified, target);
+        ArchidektRemotePlan? residual = verified is null
+            ? null
+            : ArchidektSyncPlanner.PlanRemoteVerification(verified, target);
+        if (residual is { PlannedOperations.Count: > 0 })
+        {
+            // Archidekt can lag behind its own writes, so one more read decides whether the difference is real.
+            await transport.PauseAsync(VerificationSettleTime, cancellationToken).ConfigureAwait(false);
+            verified = await ReadForVerificationAsync(current.RemoteId, budget, cancellationToken)
+                .ConfigureAwait(false);
+            residual = verified is null ? null : ArchidektSyncPlanner.PlanRemoteVerification(verified, target);
+        }
+
+        if (verified is null || residual is null)
+        {
+            return new ArchidektApplyResult(
+                "applied-unverified",
+                LocalDeckId: null,
+                LocalRevision: null,
+                current.RemoteId,
+                FinalRemoteFingerprint: null,
+                statuses)
+            {
+                Notice = ArchidektApplyResult.UnverifiedNotice,
+            };
+        }
+
         if (residual.PlannedOperations.Count > 0)
         {
             return new ArchidektApplyResult(
@@ -299,7 +527,20 @@ internal sealed class ArchidektDeckOperations
                 LocalRevision: null,
                 current.RemoteId,
                 verified.RemoteFingerprint,
-                statuses);
+                statuses)
+            {
+                Differences =
+                [
+                    .. residual.PlannedOperations
+                        .Take(MaximumListedDifferences)
+                        .Select(value => new ArchidektVerificationDifference(
+                            value.Public.Kind,
+                            value.Public.Subject,
+                            value.Public.Summary)),
+                ],
+                Notice = $"{residual.PlannedOperations.Count} rows of the Archidekt deck still differ from the " +
+                    "pushed deck after a second read.",
+            };
         }
 
         return new ArchidektApplyResult(
@@ -309,6 +550,103 @@ internal sealed class ArchidektDeckOperations
             current.RemoteId,
             verified.RemoteFingerprint,
             statuses);
+    }
+
+    /// <summary>
+    /// Reads the deck again after the writes, or returns null when Archidekt cannot answer or the operation has no
+    /// requests left, so the statuses of the writes that were sent are kept instead of lost.
+    /// </summary>
+    private async Task<RemoteDeckSnapshot?> ReadForVerificationAsync(
+        string deckId,
+        ArchidektOperationBudget budget,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await transport.GetAsync(
+                deckId,
+                requireAuthentication: true,
+                budget,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (ArchidektProviderException exception)
+            when (exception.Kind is ArchidektFailureKind.Unavailable or ArchidektFailureKind.Unsupported ||
+                exception.ReasonCode == RequestLimitReasonCode)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Matches every new card of the plan to an Archidekt printing. Returns a result that says nothing was sent when a
+    /// card cannot be matched or the search fails, or null when every card has a printing.
+    /// </summary>
+    private async Task<ArchidektApplyResult?> ResolveBeforeWritingAsync(
+        string deckId,
+        ArchidektRemotePlan plan,
+        ArchidektPrintingChoices choices,
+        ArchidektOperationBudget budget,
+        CancellationToken cancellationToken)
+    {
+        List<RemoteDeckEntry> unresolvedAdds = [.. NewCardsWithoutProviderId(plan)];
+        if (unresolvedAdds.Count == 0)
+        {
+            return null;
+        }
+
+        string? failure = null;
+        try
+        {
+            await printings.ResolveAsync(unresolvedAdds, choices, budget, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ArchidektProviderException exception)
+            when (exception.Kind is ArchidektFailureKind.Unavailable or ArchidektFailureKind.Unsupported)
+        {
+            failure = exception.Message;
+        }
+
+        if (failure is null && choices.UnresolvedCardNames.Count == 0)
+        {
+            return null;
+        }
+
+        int failedIndex = plan.PlannedOperations
+            .Select((value, index) => (value, index))
+            .First(pair => pair.value.Public.Kind == "entry-add" &&
+                string.IsNullOrWhiteSpace(pair.value.TargetEntry?.ProviderCardId) &&
+                (failure is not null || choices.Find(pair.value.TargetEntry!) is null))
+            .index;
+        string reason = failure ?? $"Archidekt has no printing for '{choices.UnresolvedCardNames[0]}'.";
+        List<ArchidektOperationStatus> statuses = [];
+        for (int index = 0; index < plan.PlannedOperations.Count; index++)
+        {
+            ArchidektRemoteOperation shown = plan.PlannedOperations[index].Public;
+            statuses.Add(index == failedIndex
+                ? Status(shown, "not-sent", $"{NotSentMessage} {reason}")
+                : Status(shown, "not-attempted", NotAttemptedMessage));
+        }
+
+        return new ArchidektApplyResult(
+            "not-applied",
+            LocalDeckId: null,
+            LocalRevision: null,
+            deckId,
+            FinalRemoteFingerprint: null,
+            statuses);
+    }
+
+    /// <summary>
+    /// Adds a not-attempted status for every operation from <paramref name="firstIndex"/> on.
+    /// </summary>
+    private static void AddNotAttempted(
+        List<ArchidektOperationStatus> statuses,
+        ArchidektRemotePlan plan,
+        int firstIndex)
+    {
+        for (int remaining = firstIndex; remaining < plan.PlannedOperations.Count; remaining++)
+        {
+            statuses.Add(Status(plan.PlannedOperations[remaining].Public, "not-attempted", NotAttemptedMessage));
+        }
     }
 
     /// <summary>
@@ -348,7 +686,7 @@ internal sealed class ArchidektDeckOperations
         string deckId,
         RemoteDeckSnapshot target,
         ArchidektPlannedOperation operation,
-        IDictionary<string, string> resolvedCards,
+        ArchidektPrintingChoices choices,
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
@@ -394,7 +732,7 @@ internal sealed class ArchidektDeckOperations
                 await ExecuteCardOperationAsync(
                     deckId,
                     operation,
-                    resolvedCards,
+                    choices,
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 break;
@@ -407,12 +745,13 @@ internal sealed class ArchidektDeckOperations
     }
 
     /// <summary>
-    /// Resolves and sends one exact single-card add, modify, or remove operation.
+    /// Sends one exact single-card add, modify, or remove operation. A new card uses the printing chosen before the
+    /// first write.
     /// </summary>
     private async Task ExecuteCardOperationAsync(
         string deckId,
         ArchidektPlannedOperation operation,
-        IDictionary<string, string> resolvedCards,
+        ArchidektPrintingChoices choices,
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
@@ -420,15 +759,8 @@ internal sealed class ArchidektDeckOperations
         string providerCardId = entry.ProviderCardId;
         if (operation.Public.Kind == "entry-add" && string.IsNullOrWhiteSpace(providerCardId))
         {
-            string key = $"{entry.PrintingId}:{entry.SetCode}:{entry.CollectorNumber}:{entry.CardName}";
-            if (!resolvedCards.TryGetValue(key, out providerCardId!))
-            {
-                providerCardId = await transport.ResolveCardIdAsync(
-                    entry,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                resolvedCards[key] = providerCardId;
-            }
+            providerCardId = choices.Find(entry)?.ProviderCardId
+                ?? throw new InvalidOperationException("A new card reached the write step without a chosen printing.");
         }
 
         string action = operation.Public.Kind switch

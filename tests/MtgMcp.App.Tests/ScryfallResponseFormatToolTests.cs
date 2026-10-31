@@ -91,8 +91,45 @@ public sealed class ScryfallResponseFormatToolTests
         {
             string description = tools[name].ProtocolTool.Description!;
             Assert.Contains("result size limit", description, StringComparison.Ordinal);
-            Assert.Contains("fewer cards than pageSize", description, StringComparison.Ordinal);
+            Assert.Contains("pageSize is a maximum", description, StringComparison.Ordinal);
+            Assert.Contains("cutReason", description, StringComparison.Ordinal);
             Assert.Contains("nextCursor", description, StringComparison.Ordinal);
+            Assert.Contains("oracleText is usually the largest field", description, StringComparison.Ordinal);
+            Assert.True(description.Length <= 4_096, $"{name} is {description.Length} characters");
+            JsonElement pageSize = tools[name].ProtocolTool.InputSchema.GetProperty("properties")
+                .GetProperty("pageSize");
+            Assert.Contains(
+                "fewer when it reaches the result size limit",
+                pageSize.GetProperty("description").GetString(),
+                StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Verifies every description that names edhrecRank says it counts deck inclusion in any slot and is not a
+    /// commander rank, and that the search order edhrec says the same.
+    /// </summary>
+    [Fact]
+    public void EdhrecRank_Descriptions_SayItIsDeckInclusionNotACommanderRank()
+    {
+        using RegisteredToolSet registered = new(OperationMode.Remote);
+        Dictionary<string, McpServerTool> tools = registered.Tools
+            .ToDictionary(tool => tool.ProtocolTool.Name, StringComparer.Ordinal);
+        const string Meaning = "counts how many decks include the card in any slot; it is not a rank of how often a " +
+            "card is played as commander";
+
+        string search = tools["scryfall_search"].ProtocolTool.Description!;
+        JsonElement properties = tools["scryfall_search"].ProtocolTool.InputSchema.GetProperty("properties");
+        string fields = properties.GetProperty("fields").GetProperty("description").GetString()!;
+        string order = properties.GetProperty("order").GetProperty("description").GetString()!;
+
+        Assert.Contains(Meaning, search, StringComparison.Ordinal);
+        Assert.Contains(Meaning, fields, StringComparison.Ordinal);
+        Assert.Contains("deck inclusion in any slot", order, StringComparison.Ordinal);
+        Assert.Contains(Meaning, tools["card_list_query"].ProtocolTool.Description!, StringComparison.Ordinal);
+        foreach (McpServerTool tool in registered.Tools)
+        {
+            Assert.True(tool.ProtocolTool.Description!.Length <= 4_096, tool.ProtocolTool.Name);
         }
     }
 
@@ -114,12 +151,11 @@ public sealed class ScryfallResponseFormatToolTests
     }
 
     /// <summary>
-    /// Pins that the card tools publish the same open output schema as every other tool that returns an operation
-    /// result: the result type has its own converter, so its schema is not generated. The card view union adds no
-    /// new gap.
+    /// Pins that the card tools publish the same shared output schema as every other tool that returns an operation
+    /// result: the result type has its own converter, so its schema is not generated but set once for all tools.
     /// </summary>
     [Fact]
-    public void CardTools_OutputSchema_IsTheSameOpenSchemaAsOtherTools()
+    public void CardTools_OutputSchema_IsTheSameSharedSchemaAsOtherTools()
     {
         using RegisteredToolSet registered = new(OperationMode.Remote);
         Dictionary<string, McpServerTool> tools = registered.Tools
@@ -127,7 +163,7 @@ public sealed class ScryfallResponseFormatToolTests
 
         string unchanged = tools["local_deck_list"].ProtocolTool.OutputSchema!.Value.GetRawText();
 
-        Assert.Equal("true", unchanged);
+        Assert.Equal(OperationResultSchema.Schema.GetRawText(), unchanged);
         foreach (string name in FormatTools)
         {
             Assert.Equal(unchanged, tools[name].ProtocolTool.OutputSchema!.Value.GetRawText());

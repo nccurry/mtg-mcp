@@ -358,23 +358,25 @@ internal static class ArchidektJsonContract
             string relationId = GetId(relation, "deckRelationId")
                 ?? GetId(relation, "id")
                 ?? throw Unsupported("Archidekt card relation identity is missing.");
-            string providerCardId = RequireId(card, "id", "Archidekt printing identity is missing.");
-            string cardName = RequireText(oracle, "name", "Archidekt card name is missing.");
+            ArchidektCardPrinting printing = ReadPrinting(card) ?? throw Unsupported(
+                GetId(card, "id") is null
+                    ? "Archidekt printing identity is missing."
+                    : "Archidekt card name is missing.");
             List<string> categoryNames = MapCategoryNames(
                 relation,
                 categoriesById,
                 categoriesByName);
             string? primary = categoryNames.FirstOrDefault();
-            string zone = MapZone(categoryNames, categoriesByName);
+            string zone = MapZone(categoryNames, primary, categoriesByName);
             entries.Add(new RemoteDeckEntry(
                 relationId,
-                providerCardId,
+                printing.ProviderCardId,
                 Math.Max(1, GetInt32(relation, "quantity") ?? 1),
-                cardName,
-                ParseGuid(GetString(oracle, "uid")),
-                ParseGuid(GetString(card, "uid")),
-                GetString(card, "setCode") ?? GetNestedString(card, "edition", "editioncode"),
-                GetString(card, "collectorNumber"),
+                printing.CardName,
+                printing.OracleId,
+                printing.PrintingId,
+                printing.SetCode,
+                printing.CollectorNumber,
                 GetString(relation, "language") ?? GetString(card, "language") ?? "en",
                 MapFinish(GetString(relation, "modifier")),
                 zone,
@@ -398,6 +400,32 @@ internal static class ArchidektJsonContract
                 : StringComparer.Ordinal.Compare(left.ProviderRelationId, right.ProviderRelationId);
         });
         return entries;
+    }
+
+    /// <summary>
+    /// Reads the card of a deck relation or of a card search result, which have the same shape: the Archidekt card ID,
+    /// the Scryfall printing ID (<c>uid</c>), the set code (<c>edition.editioncode</c>, which is what Archidekt sends;
+    /// a top-level <c>setCode</c> is used only when there is none), the collector number, and the oracle card with
+    /// its name and Oracle ID. Returns null when the card has no ID or no oracle name.
+    /// </summary>
+    internal static ArchidektCardPrinting? ReadPrinting(JsonElement card)
+    {
+        if (card.ValueKind != JsonValueKind.Object ||
+            !card.TryGetProperty("oracleCard", out JsonElement oracle) ||
+            oracle.ValueKind != JsonValueKind.Object ||
+            GetId(card, "id") is not { } providerCardId ||
+            ArchidektContract.Optional(GetString(oracle, "name")) is not { } cardName)
+        {
+            return null;
+        }
+
+        return new ArchidektCardPrinting(
+            providerCardId,
+            cardName,
+            ParseGuid(GetString(oracle, "uid")),
+            ParseGuid(GetString(card, "uid")),
+            GetNestedString(card, "edition", "editioncode") ?? GetString(card, "setCode"),
+            GetString(card, "collectorNumber"));
     }
 
     /// <summary>
@@ -444,13 +472,17 @@ internal static class ArchidektJsonContract
     }
 
     /// <summary>
-    /// Maps provider category conventions into the format-neutral local zone vocabulary.
+    /// Maps provider category conventions into the format-neutral local zone vocabulary. An entry whose primary
+    /// category is not included in the deck is not in the deck, so it maps to the maybeboard. The primary category is
+    /// looked at first, then the other names in their order; a null primary means the first name is the primary.
     /// </summary>
     internal static string MapZone(
         IReadOnlyList<string> names,
+        string? primary,
         IReadOnlyDictionary<string, RemoteDeckCategory> categoriesByName)
     {
-        foreach (string name in names)
+        IReadOnlyList<string> ordered = PrimaryFirst(names, primary);
+        foreach (string name in ordered)
         {
             if (name.Equals("commander", StringComparison.OrdinalIgnoreCase) ||
                 (CategoryNames.TryFind(categoriesByName, name, out RemoteDeckCategory? category) && category.IsPremier))
@@ -469,7 +501,43 @@ internal static class ArchidektJsonContract
             }
         }
 
-        return "main";
+        return IsInDeck(ordered, primary, categoriesByName) ? "main" : "maybeboard";
+    }
+
+    /// <summary>
+    /// Tells whether Archidekt counts an entry toward the deck: only the primary category decides (the first name when
+    /// the primary is not given), and an entry with no category, or a category with no flag, is in the deck.
+    /// </summary>
+    internal static bool IsInDeck(
+        IReadOnlyList<string> names,
+        string? primary,
+        IReadOnlyDictionary<string, RemoteDeckCategory> categoriesByName)
+    {
+        IReadOnlyList<string> ordered = PrimaryFirst(names, primary);
+        return ordered.Count == 0 ||
+            !CategoryNames.TryFind(categoriesByName, ordered[0], out RemoteDeckCategory? first) ||
+            first.IncludedInDeck != false;
+    }
+
+    /// <summary>
+    /// Puts the primary category name first and keeps the other names in their order. Archidekt treats the first
+    /// category of an entry as its primary one, so this is the order it sees.
+    /// </summary>
+    private static IReadOnlyList<string> PrimaryFirst(IReadOnlyList<string> names, string? primary)
+    {
+        if (primary is null || names.Count == 0 || string.Equals(names[0], primary, StringComparison.Ordinal))
+        {
+            return names;
+        }
+
+        List<string> ordered = [.. names];
+        if (!ordered.Remove(primary))
+        {
+            return names;
+        }
+
+        ordered.Insert(0, primary);
+        return ordered;
     }
 
     /// <summary>
@@ -709,6 +777,7 @@ internal static class ArchidektJsonContract
     internal static (string Content, string Remote) Recompute(RemoteDeckSnapshot deck)
     {
         ArgumentNullException.ThrowIfNull(deck);
+        deck = WithCurrentZones(deck);
         string content = FingerprintContent(
             deck.Name,
             deck.Description,
@@ -718,6 +787,26 @@ internal static class ArchidektJsonContract
             deck.Categories,
             deck.Entries);
         return (content, RemoteFingerprintOf(deck.RemoteId, content, deck.Categories, deck.Entries, deck.Extensions));
+    }
+
+    /// <summary>
+    /// Gives every entry the zone the current rule derives from its categories. A baseline stored by an earlier version
+    /// may hold another zone for an entry (before the first category's flag counted, such an entry was in main), and it
+    /// must still compare equal to the same deck read now.
+    /// </summary>
+    internal static RemoteDeckSnapshot WithCurrentZones(RemoteDeckSnapshot deck)
+    {
+        Dictionary<string, RemoteDeckCategory> categories = CategoryNames.Index(deck.Categories, value => value.Name);
+        return deck with
+        {
+            Entries =
+            [
+                .. deck.Entries.Select(entry => entry with
+                {
+                    Zone = MapZone(entry.CategoryNames, entry.PrimaryCategoryName, categories),
+                }),
+            ],
+        };
     }
 
     /// <summary>

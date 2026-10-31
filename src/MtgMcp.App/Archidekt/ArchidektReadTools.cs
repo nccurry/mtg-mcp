@@ -14,6 +14,26 @@ namespace MtgMcp.App.Archidekt;
 internal sealed class ArchidektReadTools
 {
     /// <summary>
+    /// Describes the zones argument of the tools that read a deck's entries.
+    /// </summary>
+    private const string ZonesDescription =
+        "Optional zones to read: commander, main, sideboard, maybeboard. Omit to read every zone. Offsets count " +
+        "the chosen entries.";
+
+    /// <summary>
+    /// Describes the responseFormat argument of the tools that read a deck's entries.
+    /// </summary>
+    private const string ResponseFormatDescription =
+        "Entry fields: concise (default: card name, quantity, zone, categories, printing, Oracle ID, inDeck), or " +
+        "full or standard (every entry field: provider IDs, finish, language, sort order, and the rest).";
+
+    /// <summary>
+    /// Gets the allowed item values of the list parameters, published in the tool schema.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, IReadOnlyList<string>> ItemChoices { get; } =
+        new Dictionary<string, IReadOnlyList<string>> { ["zones"] = ArchidektDeckReadOptions.ZoneOrder };
+
+    /// <summary>
     /// Provides App-owned local/provider composition.
     /// </summary>
     private readonly ArchidektCoordinator coordinator;
@@ -64,21 +84,39 @@ internal sealed class ArchidektReadTools
     /// </summary>
     [McpServerTool(Name = "archidekt_deck_get", Title = "Get Archidekt Deck", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
     [Description(
-        "Archidekt: gets fresh deck metadata, a leading summary (entry, card, and category counts, cards by " +
-        "zone), exact printings, zones, categories, provider IDs, and canonical fingerprints. Entries come in " +
-        "pages that fit the size limit, ordered by card name; categories and unknown provider fields come with the " +
-        "first page. Unknown provider fields over 8,000 bytes are left out and extensionsOmitted is true; they " +
-        "cannot be read through this tool. When truncated is true, call again with offset set to nextOffset." +
+        "Archidekt: gets fresh deck metadata and entries. Entries hold card name, quantity, zone, categories, " +
+        "printing, Oracle ID, and inDeck; pass responseFormat \"full\" for every field (provider IDs, finish, " +
+        "language, sort order, and the rest). Pass zones (commander, main, sideboard, maybeboard) to read only " +
+        "some; offsets count the chosen entries. The leading summary covers the whole deck whatever the zones: " +
+        "entry, card, and category counts, cards by zone, cards held more than once across commander and main " +
+        "(duplicates, matched by Oracle ID, basic lands and entries not in the deck skipped), cards held more " +
+        "than once inside the sideboard or maybeboard (repeatsOutsideMain), and, for Commander decks, a size " +
+        "fact (mainAndCommander, the cards in commander and main, beside expected: 100). Entries come in pages " +
+        "that fit the size limit, ordered by zone, then card name; categories and unknown provider fields come " +
+        "with the first page. Each entry has inDeck: false when its first category is not included in the deck " +
+        "(it is then in the maybeboard zone). Unknown provider fields over 8,000 bytes are left out and " +
+        "extensionsOmitted is true. When truncated is true, call again with offset set to nextOffset." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektDeckView>> GetDeckAsync(
         [Description("Exact Archidekt deck identifier.")] string deckId,
-        [Description("Number of entries to skip; use nextOffset from the previous page. Default 0.")] int offset = 0,
+        [Description(
+            "Number of entries to skip, counting only the chosen zones; use nextOffset from the previous page. " +
+            "Default 0.")]
+        int offset = 0,
+        [Description(ZonesDescription)] IReadOnlyList<string>? zones = null,
+        [Description(ResponseFormatDescription), ResponseFormatValues] string responseFormat = "concise",
         CancellationToken cancellationToken = default)
     {
+        OperationResult<ArchidektDeckReadOptions> options = ArchidektDeckReadOptions.Parse(zones, responseFormat);
+        if (options is not OperationSuccess<ArchidektDeckReadOptions> chosen)
+        {
+            return OperationFailure.Forward<ArchidektDeckReadOptions, ArchidektDeckView>(options);
+        }
+
         OperationResult<RemoteDeckSnapshot> read = await coordinator.Service
             .GetDeckAsync(deckId, cancellationToken).ConfigureAwait(false);
         return read is OperationSuccess<RemoteDeckSnapshot> success
-            ? ArchidektResultPaging.PageDeck(success.Data, offset)
+            ? ArchidektResultPaging.PageDeck(success.Data, offset, chosen.Data)
             : OperationFailure.Forward<RemoteDeckSnapshot, ArchidektDeckView>(read);
     }
 
@@ -112,18 +150,22 @@ internal sealed class ArchidektReadTools
         "Archidekt: previews creating or transactionally replacing a local deck from fresh Archidekt evidence; " +
         "performs zero writes. The result starts with a summary (operation, difference, and conflict counts) and " +
         "says whether archidekt_pull_apply is available and, if not, what to ask the user to change. A public deck " +
-        "needs no credentials; a private deck needs Archidekt credentials (see archidekt_auth_status). Rows come in " +
-        "pages that fit the size limit; the guards cover the whole preview, so the apply tool needs no page. On " +
-        "later pages pass expectedPreviewFingerprint, the previewFingerprint of the first page." +
+        "needs no credentials; a private deck needs Archidekt credentials (see archidekt_auth_status). A pull keeps " +
+        "cards and categories added locally since the last sync (a local-keep operation; the next push adds them) " +
+        "and replaces everything else from Archidekt; any other local change is a conflict that needs " +
+        "discardLocalChanges. Rows come in pages that fit the size limit; the guards cover the whole preview, so " +
+        "the apply tool needs no page. On later pages pass expectedPreviewFingerprint, the previewFingerprint of " +
+        "the first page." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSyncPreviewView>> PreviewPullAsync(
         [Description("Exact Archidekt deck identifier to read.")] string remoteDeckId,
         [Description("Optional stable local deck UUID to compare; omit to preview local creation.")]
         Guid? localDeckId = null,
         [Description(
-            "Set true to take the Archidekt state over local edits made since the last synchronization (a deck " +
-            "stuck as locally changed); the preview lists what would be discarded, and archidekt_pull_apply must " +
-            "pass the same value. Needs localDeckId.")] bool discardLocalChanges = false,
+            "Set true to take the Archidekt state over every local edit made since the last synchronization, " +
+            "including edits a pull cannot keep (anything other than added cards and categories) and cards added " +
+            "locally. The preview counts what would be discarded, and archidekt_pull_apply must pass the same " +
+            "value. Needs localDeckId.")] bool discardLocalChanges = false,
         [Description("Number of operations to skip; use nextOperationOffset from the previous page. Default 0.")]
         int operationOffset = 0,
         [Description("Number of differences to skip; use nextDifferenceOffset from the previous page. Default 0.")]
@@ -149,9 +191,13 @@ internal sealed class ArchidektReadTools
     [Description(
         "Archidekt: previews stable primitive Archidekt operations and refuses remote drift; performs zero writes. " +
         "The result starts with a summary (operation counts by kind, difference and conflict counts) and says " +
-        "whether archidekt_push_apply is available and, if not, what to ask the user to change. Rows come in pages " +
-        "that fit the size limit; the guards cover the whole preview, so the apply tool needs no page. On later " +
-        "pages pass expectedPreviewFingerprint, the previewFingerprint of the first page." +
+        "whether archidekt_push_apply is available and, if not, what to ask the user to change. Rows come in " +
+        "pages that fit the size limit; the guards cover the whole preview, so the apply tool needs no page. A " +
+        "new card with no printing set gets Archidekt's first listed printing of that name; each add names the " +
+        "printing it will use, and applyAvailable is false, with the card names, when Archidekt has no match. On " +
+        "later pages pass expectedPreviewFingerprint, the previewFingerprint of the first page. A push that " +
+        "removes more than 10 Archidekt entries, or 3 or more entries that are more than 10 percent of them, is " +
+        "not available until confirmRemovals equals the removal count." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSyncPreviewView>> PreviewPushAsync(
         [Description("Stable local deck UUID with an Archidekt provider binding.")] Guid localDeckId,
@@ -160,10 +206,14 @@ internal sealed class ArchidektReadTools
         [Description("Number of differences to skip; use nextDifferenceOffset from the previous page. Default 0.")]
         int differenceOffset = 0,
         [Description(ResultPage.FingerprintHelp)] string? expectedPreviewFingerprint = null,
+        [Description(
+            "Number of Archidekt entries the push removes, to allow a large removal (more than 10 entries or 10 " +
+            "percent). Use the count the preview names; pass the same value to archidekt_push_apply.")]
+        int? confirmRemovals = null,
         CancellationToken cancellationToken = default)
     {
         OperationResult<ArchidektSyncPreview> preview = await coordinator
-            .PreviewPushAsync(localDeckId, cancellationToken).ConfigureAwait(false);
+            .PreviewPushAsync(localDeckId, cancellationToken, confirmRemovals).ConfigureAwait(false);
         return ToView(
             preview,
             operationOffset,
@@ -316,7 +366,9 @@ internal sealed class ArchidektReadTools
         "checksum without claiming list rows contain saved deck state; kind get returns one snapshot (snapshotId is " +
         "required) with its exact identity and checksum, extensions, and complete canonical saved deck state. The " +
         "result has the same kind. The saved deck of kind get comes in pages that fit the size limit, like " +
-        "archidekt_deck_get: when truncated is true, call again with offset set to nextOffset. " +
+        "archidekt_deck_get: entries hold the concise fields; pass responseFormat \"full\" for every field and " +
+        "zones (commander, main, sideboard, maybeboard) to read only some; when truncated is true, call again " +
+        "with offset set to nextOffset. " +
         "Example: {\"kind\":\"list\",\"deckId\":\"12345\"}." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSnapshotsResult>> GetSnapshotsAsync(
@@ -330,6 +382,9 @@ internal sealed class ArchidektReadTools
             "Only with kind get: number of saved deck entries to skip; use nextOffset from the previous page. " +
             "Default 0.")]
         int offset = 0,
+        [Description("Only with kind get: " + ZonesDescription)] IReadOnlyList<string>? zones = null,
+        [Description("Only with kind get: " + ResponseFormatDescription), ResponseFormatValues]
+        string responseFormat = "concise",
         CancellationToken cancellationToken = default)
     {
         OperationInvalidInput? invalid = KindFields.CheckKind(kind, "list", "get") ?? (kind == "list"
@@ -338,6 +393,12 @@ internal sealed class ArchidektReadTools
         if (invalid is not null)
         {
             return invalid;
+        }
+
+        OperationResult<ArchidektDeckReadOptions> options = ArchidektDeckReadOptions.Parse(zones, responseFormat);
+        if (options is not OperationSuccess<ArchidektDeckReadOptions> chosen)
+        {
+            return OperationFailure.Forward<ArchidektDeckReadOptions, ArchidektSnapshotsResult>(options);
         }
 
         if (kind == "list")
@@ -356,7 +417,10 @@ internal sealed class ArchidektReadTools
             return OperationFailure.Forward<RemoteNamedSnapshot, ArchidektSnapshotsResult>(get);
         }
 
-        OperationResult<ArchidektSnapshotView> page = ArchidektResultPaging.PageSnapshot(getSuccess.Data, offset);
+        OperationResult<ArchidektSnapshotView> page = ArchidektResultPaging.PageSnapshot(
+            getSuccess.Data,
+            offset,
+            chosen.Data);
         return page is OperationSuccess<ArchidektSnapshotView> view
             ? new OperationSuccess<ArchidektSnapshotsResult>(new ArchidektSnapshotGetResult(view.Data))
             : OperationFailure.Forward<ArchidektSnapshotView, ArchidektSnapshotsResult>(page);
