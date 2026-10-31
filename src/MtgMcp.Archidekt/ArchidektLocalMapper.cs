@@ -142,8 +142,8 @@ public static class ArchidektLocalMapper
 
     /// <summary>
     /// Adds the changes that bring the locally added entries and categories back after the replacement. A category
-    /// Archidekt has keeps the Archidekt row, also when Archidekt renamed it; a category it lacks is created again by its
-    /// name.
+    /// Archidekt has keeps the Archidekt row, also when Archidekt renamed it; a category it lacks is created again by
+    /// its name.
     /// </summary>
     private static void AddKeptChanges(
         List<DeckChange> changes,
@@ -382,7 +382,8 @@ public static class ArchidektLocalMapper
             .ToDictionary(group => group.Key, group => group.ToList());
         Dictionary<string, RemoteDeckEntry> baselineEntries = baseline.RemoteSnapshot.Entries
             .ToDictionary(value => value.ProviderRelationId, StringComparer.Ordinal);
-        Dictionary<string, RemoteDeckCategory> targetCategoriesByName = CategoryNames.Index(categories, value => value.Name);
+        Dictionary<string, RemoteDeckCategory> targetCategoriesByName =
+            CategoryNames.Index(categories, value => value.Name);
         List<RemoteDeckEntry> entries = [];
         foreach (DeckEntry localEntry in local.Entries)
         {
@@ -449,9 +450,9 @@ public static class ArchidektLocalMapper
     }
 
     /// <summary>
-    /// Lists the local entries whose zone is a zone an earlier version gave (see <see cref="ToRemoteTarget"/>), with the
-    /// zone a read of Archidekt gives them now. A push writes these zones into the local deck, so the local zone then
-    /// agrees with the baseline and with Archidekt and the correction is not needed again.
+    /// Lists the local entries whose zone is a zone an earlier version gave (see <see cref="ToRemoteTarget"/>), with
+    /// the zone a read of Archidekt gives them now. A push writes these zones into the local deck, so the local zone
+    /// then agrees with the baseline and with Archidekt and the correction is not needed again.
     /// </summary>
     public static IReadOnlyList<DeckEntry> CorrectStaleZones(DeckDocument local, ArchidektSyncBaseline baseline)
     {

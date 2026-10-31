@@ -139,7 +139,8 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     /// </summary>
     private static Guid OracleIdOf(string cardName)
     {
-        return new Guid(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(cardName.ToLowerInvariant())).AsSpan(0, 16));
+        byte[] hash = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(cardName.ToLowerInvariant()));
+        return new Guid(hash.AsSpan(0, 16));
     }
 
     /// <summary>
@@ -298,7 +299,9 @@ internal sealed class FakeArchidekt : HttpMessageHandler
         string wanted = query["name"];
         bool exact = query.TryGetValue("exact", out string? exactText) && exactText == "true";
         query.TryGetValue("edition", out string? edition);
-        int page = query.TryGetValue("page", out string? pageText) ? int.Parse(pageText, System.Globalization.CultureInfo.InvariantCulture) : 1;
+        int page = query.TryGetValue("page", out string? pageText)
+            ? int.Parse(pageText, System.Globalization.CultureInfo.InvariantCulture)
+            : 1;
         List<FakeCard> matches = [.. catalog.Values.Where(value =>
             (exact
                 ? string.Equals(value.Name, wanted, StringComparison.OrdinalIgnoreCase)

@@ -201,8 +201,8 @@ without `include`, so read every page (pass `nextCursor` back as `cursor`; `page
 length) before you decide what a deck holds. Every page carries deck-wide totals: `entryCount`,
 `cardCount` (counting quantities), and `cardsByZone`. A cut page's `narrow` says it is one page of the deck:
 "This page shows N of M entries; the deck is not missing the rest. Follow nextCursor." Compare the totals
-with the entries you hold before you add a card you think is missing. The summary of
-`local_deck_apply_changes` carries the same totals (`cardsByZone` with the entry count).
+with the entries you hold before you add a card you think is missing. The summary of every tool that writes a deck
+carries the same totals (`cardsByZone` with the entry count).
 
 The tools that write a deck (`local_deck_apply_changes`, `local_deck_create`,
 `local_deck_import_create`, `local_deck_identity_reconcile_apply`, and
@@ -725,19 +725,20 @@ lists it in `unlinkedLocalIds`; the next push removes and re-adds that row
 instead of duplicating it. If the verification finds a difference
 (`verification-mismatch`), the baseline still records the verified remote state
 and links created entries, but the local deck is not marked synchronized: what
-Archidekt did not take stays visible as a local change, a pull conflicts, and
-the next push plans only that difference.
+Archidekt did not take stays visible as a local change: a pull keeps leftover additions and conflicts on any other
+leftover change, and the next push plans only that difference.
 
 Category names are case-sensitive, as on Archidekt: `Sideboard` and `SIDEBOARD`
 are two categories. A push compares names exactly. Archidekt keeps no card zone
 of its own; it comes from the categories (a category named Commander, Sideboard
-or Maybeboard, or the commander category; otherwise main). An entry whose first category has
+or Maybeboard, or the commander category; otherwise main). An entry whose primary (first) category has
 `includedInDeck: false` is not in the deck on Archidekt, so it is read into `maybeboard` instead of `main`; a
-category with no flag counts as included. Pulls, deck reads, and the push check all use this one rule. A deck
-pulled by `0.13.0` still reads as unchanged: the next pull shows each such entry's move to `maybeboard` as an
-ordinary change from Archidekt, and a push before that pull plans nothing for it. A push that would
-send a card whose zone differs from that is refused with
-`entry-zone-contradicts-category`, naming the cards.
+category with no flag counts as included. Pulls, deck reads, and the push check all use this one rule, and all
+look at the primary category first. A deck pulled by `0.13.0` still reads as unchanged: the next pull shows each
+such entry's move to `maybeboard` as an ordinary change from Archidekt, a push before that pull plans nothing for
+it and writes the zone `maybeboard` into those local entries, and a card added locally before the pull does not
+make those entries show as local changes. A push that would send a card whose zone differs from that is refused
+with `entry-zone-contradicts-category`, naming the cards.
 
 A difference where the local deck and Archidekt changed the same field to the
 same value is `converged`: no conflict, no operation, and the next apply
@@ -745,25 +746,34 @@ advances the baseline. Entry order numbers (`sortOrder`) and category rank are
 not compared as remote changes, because Archidekt renumbers them; a local edit
 to them, or to a category color, still counts as a local change.
 
-A push adds a card by name with no card data and no printing set to Archidekt's default printing: the first
-exact-name match in Archidekt's card search. The adapter finds a printing with one search per distinct name,
-and it follows result pages within the 150-request budget. It looks for the entry's printing ID first, then its
-set code and collector number (the set code is Archidekt's `edition.editioncode`; a set code without a collector
-number takes the first printing in that set), and an entry with no printing takes the first listed match,
-narrowed by Oracle ID when the entry has one. `archidekt_push_preview` does the same search, so the preview and the
-apply agree: each add's `summary` names the printing it will use (the form is "Archidekt printing SET NUMBER (default
-of 18; no printing was set)"). A name-only add for a foil or etched entry takes the first listed printing, even when
-that printing lacks the finish. The searches make a preview slower (about two seconds per distinct name).
-When a name has no match in Archidekt, or the lookups would pass the 150-request budget, the preview sets
-`applyAvailable: false` and its `applyNotice` names the cards (or the limit); fix the name or set a printing on the
-entry, then preview again. `archidekt_push_apply` resolves every add before its first write, so a card it
-cannot place refuses the whole push with no writes.
+A push adds a card by name with no card data and no printing set to Archidekt's first listed printing of that
+name: the first exact-name match in Archidekt's card search. The adapter finds a printing with one search per
+distinct name and set, asks Archidekt for an exact name match (a plain name search also lists longer names that
+contain it, such as Aftershock for Shock), and follows result pages within the 150-request budget, at most 12
+pages (300 printings) for one search. An entry with a set code is searched within that set (Archidekt's
+`edition` filter), so a printing of a card with hundreds of printings, such as a basic land, is found. It looks
+for the entry's printing ID first, then its set code and collector number (the set code is Archidekt's
+`edition.editioncode`; a set code without a collector number takes the first printing in that set), and an
+entry with no printing takes the first listed match, narrowed by Oracle ID when the entry has one. An entry that
+names a printing ID that Archidekt does not list stays unresolved; it never takes the first printing instead.
+`archidekt_push_preview` does the same search, so the preview and the apply agree: each add's `summary` names
+the printing it will use (the form is "Archidekt printing SET NUMBER (first of 18 Archidekt printings of this
+name; no printing was set)"). A name-only add for a foil or etched entry takes the first listed printing, even
+when that printing lacks the finish. The searches make a preview slower (about two seconds per distinct name).
+When a name has no match in Archidekt, when an entry's own printing (its printing ID or set code) is not on
+Archidekt, or when the lookups would pass the 150-request budget, the preview sets `applyAvailable: false` and
+its `applyNotice` names the cards (or the limit); fix the name, or clear or correct the printing on the entry,
+then preview again. `archidekt_push_apply` resolves every add before its first write, so a card it cannot place
+refuses the whole push with no writes.
 
-A push removes every Archidekt entry the local deck lacks. A push that removes more than 10 entries, or more than 10
-percent of the Archidekt entries, is refused until `confirmRemovals` (on both `archidekt_push_preview` and
-`archidekt_push_apply`) equals the exact removal count; the preview's `applyNotice` names the count and
-`applyAvailable` is false until then. A local deck that holds only part of the Archidekt deck would otherwise delete
-the rest. Run `archidekt_pull_preview` first when that is not what you mean. A small removal needs no confirmation.
+A push removes every Archidekt entry the local deck lacks. A push that removes more than 10 entries, or 3 or more
+entries that are more than 10 percent of the Archidekt entries, is refused until `confirmRemovals` (on both
+`archidekt_push_preview` and `archidekt_push_apply`) equals the exact removal count; the preview's `applyNotice`
+names the count and `applyAvailable` is false until then. A local deck that holds only part of the Archidekt deck
+would otherwise delete the rest. Run `archidekt_pull_preview` first when that is not what you mean. Removing one or
+two entries needs no confirmation, even from a small deck, and neither does removing up to 10 entries that are no
+more than a tenth of the deck. The apply checks this, and that the local and Archidekt decks are the ones
+previewed, before it searches for any printing, so a refused apply spends no search requests.
 
 If Archidekt changed since the last sync, `archidekt_push_preview` sets `hasConflicts`, lists no operations, and
 sets `applyAvailable: false` with an `applyNotice` that says `archidekt_push_apply` would refuse the push (the
@@ -774,7 +784,8 @@ comes first. A push of such a deck would lay the local deck over Archidekt and u
 A pull keeps what you added locally. When every local change since the last sync is an added card or category, the
 pull preview is not a conflict. It shows a `local-keep` operation ("Keep N cards added locally since the last sync;
 push them afterwards."), and `archidekt_pull_apply` replaces the rest from Archidekt, then adds the kept cards, their
-categories (created by exact name when missing), and their category assignments. The new baseline leaves the kept
+categories (created by exact name when missing; a card in a category Archidekt renamed moves to the new
+name), and their category assignments. The new baseline leaves the kept
 cards as `local-added`, so the next push adds exactly those. A pull is refused (`pull-conflict`, with the reason in
 the preview's `applyNotice`) when a kept card is a card Archidekt also added, which would leave two entries for the
 card, or when a kept card's categories would put it in another zone. Any other local change (a card changed or

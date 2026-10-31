@@ -44,11 +44,9 @@ internal static class ArchidektResultPaging
                 ? byName
                 : StringComparer.Ordinal.Compare(left.ProviderRelationId, right.ProviderRelationId);
         });
-        if (ResultPage.CheckPage<ArchidektDeckView>(
-            null,
-            null,
-            new PageList("offset", offset, chosen.Count, options.Zones.Count == 0 ? "entries" : "entries in those zones"))
-            is { } refused)
+        string entryLabel = options.Zones.Count == 0 ? "entries" : "entries in those zones";
+        PageList page = new("offset", offset, chosen.Count, entryLabel);
+        if (ResultPage.CheckPage<ArchidektDeckView>(null, null, page) is { } refused)
         {
             return refused;
         }
@@ -119,7 +117,7 @@ internal static class ArchidektResultPaging
             ? "Every field is already shown."
             : "These entries hold the fields card name, quantity, zone, categories, printing, Oracle ID, and inDeck; " +
                 "pass responseFormat \"full\" for every field.";
-        return $"Entries {offset} to {slice.Next - 1} of {slice.Total}{zones} are shown to stay under the size " +
+        return $"Entries {offset + 1} to {slice.Next} of {slice.Total}{zones} are shown to stay under the size " +
             $"limit. {callAgain} with offset {slice.Next}{repeat} for the rest. Pass zones (commander, main, " +
             $"sideboard, maybeboard) to read fewer entries; offsets count the chosen entries. {fields}";
     }

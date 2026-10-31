@@ -870,7 +870,12 @@ public sealed class ArchidektLocalMapperTests
     /// no oracle name.
     /// </summary>
     [Theory]
-    [InlineData("""{"id":5,"uid":"11111111-1111-1111-1111-111111111111","setCode":"top","collectorNumber":"7","edition":{"editioncode":"ed"},"oracleCard":{"name":"Card","uid":"22222222-2222-2222-2222-222222222222"}}""", "ed")]
+    [InlineData(
+        """
+        {"id":5,"uid":"11111111-1111-1111-1111-111111111111","setCode":"top","collectorNumber":"7",
+        "edition":{"editioncode":"ed"},"oracleCard":{"name":"Card","uid":"22222222-2222-2222-2222-222222222222"}}
+        """,
+        "ed")]
     [InlineData("""{"id":5,"setCode":"top","oracleCard":{"name":"Card"}}""", "top")]
     [InlineData("""{"id":5,"oracleCard":{"name":"Card"}}""", null)]
     public void ReadPrinting_TakesTheEditionCodeBeforeATopLevelSetCode(string json, string? expectedSet)

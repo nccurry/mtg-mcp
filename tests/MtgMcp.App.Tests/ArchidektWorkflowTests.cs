@@ -285,7 +285,9 @@ public sealed class ArchidektWorkflowTests
             value => value.CardName == "Bloodthirsty Blade" && value.Zone == "main");
         Assert.Equal("Removal", blade.PrimaryCategoryName);
         Assert.Equal(3, local.Entries.Count(value => value.Zone == "maybeboard"));
-        Assert.Equal(100, local.Entries.Where(value => value.Zone is "main" or "commander").Sum(value => value.Quantity));
+        Assert.Equal(
+            100,
+            local.Entries.Where(value => value.Zone is "main" or "commander").Sum(value => value.Quantity));
         Assert.Empty(push.Operations);
         Assert.Empty(push.Differences);
         Assert.Empty(pull.Differences);
@@ -330,7 +332,12 @@ public sealed class ArchidektWorkflowTests
             value => Assert.Equal("maybeboard", JsonNode.Parse(value.RemoteValue!)!["zone"]!.GetValue<string>()));
 
         ArchidektApplyResult applied = Success(await world.LocalWrites.ApplyPullAsync(
-            new ArchidektPullApplyRequest("42", local.DeckId, local.Revision, pull.RemoteFingerprint, pull.PreviewFingerprint),
+            new ArchidektPullApplyRequest(
+                "42",
+                local.DeckId,
+                local.Revision,
+                pull.RemoteFingerprint,
+                pull.PreviewFingerprint),
             token));
         DeckDocument after = Success(await world.Store.GetAsync(local.DeckId, token));
         ArchidektSyncPreviewView pushAfter = Success(
@@ -562,7 +569,8 @@ public sealed class ArchidektWorkflowTests
             Assert.Equal(300, page.Summary.EntryCount);
             Assert.Equal(offset, page.Offset);
             Assert.Equal(offset == 0, page.Categories.Count > 0);
-            relationIds.AddRange(page.Entries.Cast<ArchidektFullDeckEntryView>().Select(value => value.ProviderRelationId));
+            relationIds.AddRange(
+                page.Entries.Cast<ArchidektFullDeckEntryView>().Select(value => value.ProviderRelationId));
             names.AddRange(page.Entries.Select(value => value.CardName));
             pages++;
             if (page.NextOffset is null)
@@ -574,6 +582,11 @@ public sealed class ArchidektWorkflowTests
 
             Assert.True(page.Truncated);
             Assert.Contains("offset", page.Narrow, StringComparison.Ordinal);
+            Assert.Contains(
+                $"Entries {offset + 1} to {page.NextOffset} of 300 are shown",
+                page.Narrow,
+                StringComparison.Ordinal);
+            Assert.Contains($"with offset {page.NextOffset} for the rest", page.Narrow, StringComparison.Ordinal);
             offset = page.NextOffset.Value;
         }
 
@@ -600,7 +613,10 @@ public sealed class ArchidektWorkflowTests
 
         while (true)
         {
-            OperationResult<ArchidektDeckView> result = await world.Reads.GetDeckAsync("42", offset, cancellationToken: token);
+            OperationResult<ArchidektDeckView> result = await world.Reads.GetDeckAsync(
+                "42",
+                offset,
+                cancellationToken: token);
             Assert.True(JsonLength(result) < MaximumResultCharacters, $"page {pages.Count} is too large");
             ArchidektDeckView page = Success(result);
             pages.Add(page);
@@ -754,7 +770,10 @@ public sealed class ArchidektWorkflowTests
 
         ArchidektDeckView atEnd = Success(await world.Reads.GetDeckAsync("42", 4, cancellationToken: token));
         OperationResult<ArchidektDeckView> pastEnd = await world.Reads.GetDeckAsync("42", 5, cancellationToken: token);
-        OperationResult<ArchidektDeckView> negative = await world.Reads.GetDeckAsync("42", -1, cancellationToken: token);
+        OperationResult<ArchidektDeckView> negative = await world.Reads.GetDeckAsync(
+            "42",
+            -1,
+            cancellationToken: token);
         ArchidektSyncPreviewView previewAtEnd = Success(await world.Reads.PreviewPushAsync(
             localDeckId,
             operationOffset: 0,
@@ -1135,7 +1154,8 @@ public sealed class ArchidektWorkflowTests
         Assert.Null(preview.ApplyNotice);
         Assert.Equal(27, preview.Summary.OperationCount);
         Assert.Equal(
-            "Add one exact card relation: Archidekt printing soc 294 (first of 18 Archidekt printings of this name; no printing was set).",
+            "Add one exact card relation: Archidekt printing soc 294 (first of 18 Archidekt printings of this name; " +
+            "no printing was set).",
             preview.Operations.Single(value => value.Subject == "Assassin's Trophy").Summary);
         Assert.All(
             preview.Operations,
@@ -1405,9 +1425,9 @@ public sealed class ArchidektWorkflowTests
                 .Order(StringComparer.Ordinal));
         Assert.Equal(3, preview.Differences.Count(value => value.State == "local-added"));
         Assert.Equal(
-            "archidekt_push_apply would refuse this push: the Archidekt deck changed since the last sync (3 rows; see " +
-            "differences with remote-* states). Run archidekt_pull_preview first; a pull keeps cards added locally " +
-            "when those are your only local changes. Then push again.",
+            "archidekt_push_apply would refuse this push: the Archidekt deck changed since the last sync (3 rows; " +
+            "see differences with remote-* states). Run archidekt_pull_preview first; a pull keeps cards added " +
+            "locally when those are your only local changes. Then push again.",
             preview.ApplyNotice);
 
         OperationResult<ArchidektApplyResult> refused = await world.Writes.ApplyPushAsync(
@@ -1477,6 +1497,9 @@ public sealed class ArchidektWorkflowTests
         Assert.Equal(
             "Keep 3 cards added locally since the last sync; push them afterwards.",
             pullPreview.Operations.Single(value => value.Kind == "local-keep").Summary);
+        Assert.Equal(
+            "Replace the local deck with the Archidekt deck, except the cards added locally (see local-keep).",
+            pullPreview.Operations.Single(value => value.Kind == "local-deck-replace").Summary);
 
         ArchidektApplyResult applied = Success(await world.LocalWrites.ApplyPullAsync(
             new ArchidektPullApplyRequest(
@@ -2013,7 +2036,7 @@ public sealed class ArchidektWorkflowTests
             localDeckId,
             confirmRemovals: 12,
             cancellationToken: token));
-        int searchesBefore = world.Fake.Requests.Count(value => value.Contains("api/cards/v2/", StringComparison.Ordinal));
+        int searchesBefore = CountSearches(world.Fake);
 
         OperationResult<ArchidektApplyResult> refused = await world.Writes.ApplyPushAsync(
             new ArchidektPushApplyRequest(
@@ -2025,9 +2048,7 @@ public sealed class ArchidektWorkflowTests
 
         Assert.Equal("push-removals-unconfirmed", Assert.IsType<OperationInvalidInput>(refused.Value).ReasonCode);
         Assert.True(searchesBefore > 0);
-        Assert.Equal(
-            searchesBefore,
-            world.Fake.Requests.Count(value => value.Contains("api/cards/v2/", StringComparison.Ordinal)));
+        Assert.Equal(searchesBefore, CountSearches(world.Fake));
         Assert.Equal(0, world.Fake.Mutations);
     }
 
@@ -2188,6 +2209,14 @@ public sealed class ArchidektWorkflowTests
         return [.. deck.CategoryAssignments
             .Where(value => value.EntryId == entry.EntryId)
             .Select(value => deck.Categories.Single(category => category.CategoryId == value.CategoryId).Name)];
+    }
+
+    /// <summary>
+    /// Counts the card search requests the fake has answered.
+    /// </summary>
+    private static int CountSearches(FakeArchidekt fake)
+    {
+        return fake.Requests.Count(value => value.Contains("api/cards/v2/", StringComparison.Ordinal));
     }
 
     /// <summary>

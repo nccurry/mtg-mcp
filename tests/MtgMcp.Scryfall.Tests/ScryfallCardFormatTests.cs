@@ -769,6 +769,9 @@ public sealed class ScryfallCardFormatTests
             Assert.True(Bytes(page) <= ResultSizeLimit.MaximumBytes);
             Assert.Equal(page.Page.Items.Count, page.Assignments.Count);
             Assert.Equal(page.Page.NextCursor is not null, page.Truncated == true);
+            Assert.Equal(page.Page.Items.Count, page.ReturnedCount);
+            Assert.Equal(Math.Min(100, 100 - names.Count), page.RequestedCount);
+            Assert.Equal(page.Truncated == true ? ScryfallCutPageHint.ResultSizeLimit : null, page.CutReason);
             names.AddRange(page.Page.Items.Select(Name));
             cursor = page.Page.NextCursor;
             pages++;

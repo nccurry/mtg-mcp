@@ -472,9 +472,9 @@ internal static class ArchidektJsonContract
     }
 
     /// <summary>
-    /// Maps provider category conventions into the format-neutral local zone vocabulary. An entry whose primary category
-    /// is not included in the deck is not in the deck, so it maps to the maybeboard. The primary category is looked at
-    /// first, then the other names in their order; a null primary means the first name is the primary.
+    /// Maps provider category conventions into the format-neutral local zone vocabulary. An entry whose primary
+    /// category is not included in the deck is not in the deck, so it maps to the maybeboard. The primary category is
+    /// looked at first, then the other names in their order; a null primary means the first name is the primary.
     /// </summary>
     internal static string MapZone(
         IReadOnlyList<string> names,

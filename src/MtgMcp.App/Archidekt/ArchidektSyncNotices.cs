@@ -26,7 +26,9 @@ internal static class ArchidektSyncNotices
     /// Explains why a pull cannot go ahead over the local changes since the last sync, or returns null when it can.
     /// A pull keeps cards and categories added locally; anything else needs <c>discardLocalChanges</c>.
     /// </summary>
-    internal static string? DescribePullConflict(ArchidektPullKeep? keep, IReadOnlyList<ArchidektDifference> differences)
+    internal static string? DescribePullConflict(
+        ArchidektPullKeep? keep,
+        IReadOnlyList<ArchidektDifference> differences)
     {
         if (keep is null)
         {

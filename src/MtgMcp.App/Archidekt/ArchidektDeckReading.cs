@@ -25,7 +25,9 @@ internal sealed record ArchidektDeckReadOptions(IReadOnlyList<string> Zones, boo
     /// Checks the zone names and the response format a caller passed and builds the options, or refuses with the name
     /// of the argument at fault.
     /// </summary>
-    internal static OperationResult<ArchidektDeckReadOptions> Parse(IReadOnlyList<string>? zones, string? responseFormat)
+    internal static OperationResult<ArchidektDeckReadOptions> Parse(
+        IReadOnlyList<string>? zones,
+        string? responseFormat)
     {
         bool full;
         switch (responseFormat?.Trim().ToLowerInvariant())
@@ -106,8 +108,8 @@ internal static class ArchidektDeckFacts
     private const int CommanderDeckSize = 100;
 
     /// <summary>
-    /// Builds the summary of a deck: counts, duplicates of the commander and main zones, repeats in the other zones, and
-    /// the size fact.
+    /// Builds the summary of a deck: counts, duplicates of the commander and main zones, repeats in the other zones,
+    /// and the size fact.
     /// </summary>
     internal static ArchidektDeckSummary Summarize(RemoteDeckSnapshot deck)
     {

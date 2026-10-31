@@ -267,7 +267,13 @@ public sealed class ArchidektRateLimitAndVerificationTests
                 Categories =
                 [
                     .. target.Categories,
-                    new RemoteDeckCategory(string.Empty, "Extra", IncludedInDeck: true, IncludedInPrice: true, IsPremier: false, SortOrder: 5),
+                    new RemoteDeckCategory(
+                        string.Empty,
+                        "Extra",
+                        IncludedInDeck: true,
+                        IncludedInPrice: true,
+                        IsPremier: false,
+                        SortOrder: 5),
                 ],
             };
         }

@@ -501,7 +501,8 @@ public sealed class ArchidektDeckReadTests
     /// </summary>
     private static List<string> FieldNames(OperationResult<ArchidektDeckView> result, string array)
     {
-        using JsonDocument document = JsonDocument.Parse(JsonSerializer.Serialize(result, ToolCallPolicy.SerializerOptions));
+        using JsonDocument document = JsonDocument.Parse(
+            JsonSerializer.Serialize(result, ToolCallPolicy.SerializerOptions));
         JsonElement root = document.RootElement.TryGetProperty("data", out JsonElement data)
             ? data
             : document.RootElement;

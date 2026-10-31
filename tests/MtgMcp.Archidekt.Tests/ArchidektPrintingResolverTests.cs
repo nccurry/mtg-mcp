@@ -33,7 +33,8 @@ public sealed class ArchidektPrintingResolverTests
         ArchidektPrintingChoices choices = await ResolveAsync(handler, Entry("Assassin's Trophy"));
 
         Assert.Empty(choices.UnresolvedCardNames);
-        ArchidektPrintingChoice choice = Assert.IsType<ArchidektPrintingChoice>(choices.Find(Entry("Assassin's Trophy")));
+        ArchidektPrintingChoice choice = Assert.IsType<ArchidektPrintingChoice>(
+            choices.Find(Entry("Assassin's Trophy")));
         Assert.Equal("151025", choice.ProviderCardId);
         Assert.Equal(
             "Archidekt printing soc 294 (first of 4 Archidekt printings of this name; no printing was set).",
@@ -89,7 +90,11 @@ public sealed class ArchidektPrintingResolverTests
         handler.Add(
             HttpMethod.Get,
             "api/cards/v2/?name=Island&exact=true&edition=dmu&pageSize=25",
-            """{"count":1,"next":null,"results":[{"id":501,"uid":"33333333-3333-3333-3333-333333333333","setCode":"dmu","collectorNumber":"278","oracleCard":{"name":"Island","uid":"44444444-4444-4444-4444-444444444444"}}]}""");
+            """
+            {"count":1,"next":null,"results":[{"id":501,"uid":"33333333-3333-3333-3333-333333333333",
+            "setCode":"dmu","collectorNumber":"278",
+            "oracleCard":{"name":"Island","uid":"44444444-4444-4444-4444-444444444444"}}]}
+            """);
         RemoteDeckEntry entry = Entry("Island") with { SetCode = "DMU", CollectorNumber = "278" };
 
         ArchidektPrintingChoices choices = await ResolveAsync(handler, entry);
@@ -110,9 +115,9 @@ public sealed class ArchidektPrintingResolverTests
             Page(
                 2,
                 null,
-                Result(1, "10000000-0000-0000-0000-000000000001", "aaa", "1", "Name", "00000000-0000-0000-0000-00000000000a"),
-                Result(2, "10000000-0000-0000-0000-000000000002", "bbb", "2", "Name", "00000000-0000-0000-0000-00000000000b")));
-        RemoteDeckEntry entry = Entry("Name") with { OracleId = Guid.Parse("00000000-0000-0000-0000-00000000000b") };
+                Result(1, Uid(1), "aaa", "1", "Name", OracleOf(1)),
+                Result(2, Uid(2), "bbb", "2", "Name", OracleOf(2))));
+        RemoteDeckEntry entry = Entry("Name") with { OracleId = Guid.Parse(OracleOf(2)) };
 
         ArchidektPrintingChoices choices = await ResolveAsync(handler, entry);
 
@@ -133,14 +138,14 @@ public sealed class ArchidektPrintingResolverTests
             Page(
                 2,
                 "https://archidekt.com/api/cards/v2/?name=Sol%20Ring&exact=true&edition=c21&page=2&pageSize=25",
-                Result(1, "10000000-0000-0000-0000-000000000001", "cmd", "1", "Sol Ring", TrophyOracle)));
+                Result(1, Uid(1), "cmd", "1", "Sol Ring", TrophyOracle)));
         handler.Add(
             HttpMethod.Get,
             "api/cards/v2/?name=Sol%20Ring&exact=true&edition=c21&page=2&pageSize=25",
             Page(
                 2,
                 null,
-                Result(2, "10000000-0000-0000-0000-000000000002", "c21", "263", "Sol Ring", TrophyOracle)));
+                Result(2, Uid(2), "c21", "263", "Sol Ring", TrophyOracle)));
         RemoteDeckEntry entry = Entry("Sol Ring") with { SetCode = "c21", CollectorNumber = "263" };
 
         ArchidektPrintingChoices choices = await ResolveAsync(handler, entry);
@@ -182,14 +187,14 @@ public sealed class ArchidektPrintingResolverTests
             Page(
                 2,
                 "https://archidekt.com/api/cards/v2/?name=Sol%20Ring&exact=true&edition=c21&page=2&pageSize=25",
-                Result(1, "10000000-0000-0000-0000-000000000001", "c21", "263", "Sol Ring", TrophyOracle)));
+                Result(1, Uid(1), "c21", "263", "Sol Ring", TrophyOracle)));
         handler.Add(
             HttpMethod.Get,
             "api/cards/v2/?name=Sol%20Ring&exact=true&edition=c21&page=2&pageSize=25",
-            Page(2, null, Result(2, "10000000-0000-0000-0000-000000000002", "c21", "264", "Sol Ring", TrophyOracle)));
+            Page(2, null, Result(2, Uid(2), "c21", "264", "Sol Ring", TrophyOracle)));
         RemoteDeckEntry entry = Entry("Sol Ring") with
         {
-            PrintingId = Guid.Parse("10000000-0000-0000-0000-000000000002"),
+            PrintingId = Guid.Parse(Uid(2)),
             SetCode = "c21",
             CollectorNumber = "263",
         };
@@ -211,7 +216,10 @@ public sealed class ArchidektPrintingResolverTests
         handler.Add(HttpMethod.Get, "api/cards/v2/?name=Forest&exact=true&pageSize=25", EndlessPage(1));
         for (int page = 2; page <= 14; page++)
         {
-            handler.Add(HttpMethod.Get, $"api/cards/v2/?name=Forest&exact=true&page={page}&pageSize=25", EndlessPage(page));
+            handler.Add(
+                HttpMethod.Get,
+                $"api/cards/v2/?name=Forest&exact=true&page={page}&pageSize=25",
+                EndlessPage(page));
         }
 
         RemoteDeckEntry entry = Entry("Forest") with { PrintingId = Guid.NewGuid() };
@@ -236,7 +244,11 @@ public sealed class ArchidektPrintingResolverTests
         ArchidektPrintingChoices choices = new();
         RemoteDeckEntry entry = Entry("Forest") with { PrintingId = Guid.NewGuid() };
 
-        await resolver.ResolveAsync([entry], choices, new ArchidektOperationBudget(1), TestContext.Current.CancellationToken);
+        await resolver.ResolveAsync(
+            [entry],
+            choices,
+            new ArchidektOperationBudget(1),
+            TestContext.Current.CancellationToken);
 
         Assert.True(choices.StoppedAtRequestLimit);
         Assert.Equal(["Forest"], choices.UnresolvedCardNames);
@@ -257,9 +269,9 @@ public sealed class ArchidektPrintingResolverTests
             Page(
                 3,
                 null,
-                Result(1, "10000000-0000-0000-0000-000000000001", "m10", "1", "Shock Troops", "00000000-0000-0000-0000-00000000000a"),
-                Result(2, "10000000-0000-0000-0000-000000000002", "m10", "2", "Shock", "00000000-0000-0000-0000-00000000000b"),
-                Result(3, "10000000-0000-0000-0000-000000000003", "m11", "3", "Shock", "00000000-0000-0000-0000-00000000000b")));
+                Result(1, Uid(1), "m10", "1", "Shock Troops", OracleOf(1)),
+                Result(2, Uid(2), "m10", "2", "Shock", OracleOf(2)),
+                Result(3, Uid(3), "m11", "3", "Shock", OracleOf(2))));
         RemoteDeckEntry entry = Entry("Shock");
 
         ArchidektPrintingChoices choices = await ResolveAsync(handler, entry);
@@ -285,8 +297,8 @@ public sealed class ArchidektPrintingResolverTests
             Page(
                 2,
                 null,
-                Result(274, "10000000-0000-0000-0000-000000000274", "dmu", "274", "Forest", "00000000-0000-0000-0000-0000000f0001"),
-                Result(275, "10000000-0000-0000-0000-000000000275", "dmu", "275", "Forest", "00000000-0000-0000-0000-0000000f0001")));
+                Result(274, Uid(274), "dmu", "274", "Forest", OracleOf(6)),
+                Result(275, Uid(275), "dmu", "275", "Forest", OracleOf(6))));
         RemoteDeckEntry entry = Entry("Forest") with { SetCode = "DMU", CollectorNumber = "275" };
 
         ArchidektPrintingChoices choices = await ResolveAsync(handler, entry);
@@ -310,8 +322,8 @@ public sealed class ArchidektPrintingResolverTests
             Page(
                 2,
                 null,
-                Result(1, "10000000-0000-0000-0000-000000000001", "isd", "51", "Delver of Secrets // Insectile Aberration", "00000000-0000-0000-0000-00000000000d"),
-                Result(2, "10000000-0000-0000-0000-000000000002", "isd", "52", "Delver of Secrets Fan Card", "00000000-0000-0000-0000-00000000000e")));
+                Result(1, Uid(1), "isd", "51", "Delver of Secrets // Insectile Aberration", OracleOf(4)),
+                Result(2, Uid(2), "isd", "52", "Delver of Secrets Fan Card", OracleOf(5))));
         RemoteDeckEntry entry = Entry("Delver of Secrets");
 
         ArchidektPrintingChoices choices = await ResolveAsync(handler, entry);
@@ -331,7 +343,11 @@ public sealed class ArchidektPrintingResolverTests
         handler.Add(
             HttpMethod.Get,
             "api/cards/v2/?name=Island&exact=true&edition=dmu&pageSize=25",
-            """{"count":1,"next":null,"results":[{"id":501,"uid":"33333333-3333-3333-3333-333333333333","setCode":"xxx","collectorNumber":"278","edition":{"editioncode":"dmu"},"oracleCard":{"name":"Island","uid":"44444444-4444-4444-4444-444444444444"}}]}""");
+            """
+            {"count":1,"next":null,"results":[{"id":501,"uid":"33333333-3333-3333-3333-333333333333",
+            "setCode":"xxx","collectorNumber":"278","edition":{"editioncode":"dmu"},
+            "oracleCard":{"name":"Island","uid":"44444444-4444-4444-4444-444444444444"}}]}
+            """);
         RemoteDeckEntry entry = Entry("Island") with { SetCode = "dmu", CollectorNumber = "278" };
 
         ArchidektPrintingChoices choices = await ResolveAsync(handler, entry);
@@ -352,7 +368,7 @@ public sealed class ArchidektPrintingResolverTests
             Page(
                 2,
                 "https://example.invalid/steal?x=1",
-                Result(1, "10000000-0000-0000-0000-000000000001", "cmd", "1", "Sol Ring", TrophyOracle)));
+                Result(1, Uid(1), "cmd", "1", "Sol Ring", TrophyOracle)));
         RemoteDeckEntry entry = Entry("Sol Ring") with { SetCode = "c21", CollectorNumber = "263" };
 
         ArchidektPrintingChoices choices = await ResolveAsync(handler, entry);
@@ -385,7 +401,9 @@ public sealed class ArchidektPrintingResolverTests
 
         Assert.Equal("151025", choices.Find(first)!.ProviderCardId);
         Assert.Equal("150200", choices.Find(second)!.ProviderCardId);
-        Assert.Equal(["Assassin's Trophy", "Nonexistent Card"], choices.UnresolvedCardNames.Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["Assassin's Trophy", "Nonexistent Card"],
+            choices.UnresolvedCardNames.Order(StringComparer.Ordinal));
         Assert.Equal(
             [
                 TrophyRoute,
@@ -437,7 +455,10 @@ public sealed class ArchidektPrintingResolverTests
         Assert.Equal("not-attempted", result.Operations[0].Status);
         Assert.Equal("Not sent: an earlier operation stopped the push.", result.Operations[0].Message);
         Assert.Equal("not-sent", result.Operations[1].Status);
-        Assert.StartsWith("Nothing was sent to Archidekt for this operation.", result.Operations[1].Message, StringComparison.Ordinal);
+        Assert.StartsWith(
+            "Nothing was sent to Archidekt for this operation.",
+            result.Operations[1].Message,
+            StringComparison.Ordinal);
         Assert.DoesNotContain(handler.Requests, value => value.Method != HttpMethod.Get);
     }
 
@@ -574,6 +595,22 @@ public sealed class ArchidektPrintingResolverTests
     }
 
     /// <summary>
+    /// Builds the Scryfall printing ID the tests give to result number <paramref name="number"/>.
+    /// </summary>
+    private static string Uid(int number)
+    {
+        return $"10000000-0000-0000-0000-{number:D12}";
+    }
+
+    /// <summary>
+    /// Builds the Oracle ID the tests give to card number <paramref name="number"/>.
+    /// </summary>
+    private static string OracleOf(int number)
+    {
+        return $"00000000-0000-0000-0000-{number:D12}";
+    }
+
+    /// <summary>
     /// Builds a page of Forest results for other printings than the test asks for, with a next link to the page after.
     /// </summary>
     private static string EndlessPage(int page)
@@ -587,7 +624,7 @@ public sealed class ArchidektPrintingResolverTests
                 "dmu",
                 page.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 "Forest",
-                "00000000-0000-0000-0000-0000000f0001"));
+                OracleOf(6)));
     }
 
     /// <summary>
@@ -596,7 +633,8 @@ public sealed class ArchidektPrintingResolverTests
     private static string Page(int count, string? next, params string[] results)
     {
         string nextJson = next is null ? "null" : JsonSerializer.Serialize(next);
-        return $$"""{"count":{{count}},"next":{{nextJson}},"previous":null,"results":[{{string.Join(',', results)}}]}""";
+        string items = string.Join(',', results);
+        return $$"""{"count":{{count}},"next":{{nextJson}},"previous":null,"results":[{{items}}]}""";
     }
 
     /// <summary>
@@ -606,7 +644,10 @@ public sealed class ArchidektPrintingResolverTests
     private static string Result(int id, string uid, string set, string number, string name, string oracle)
     {
         string quoted = JsonSerializer.Serialize(name);
-        return $$$"""{"id":{{{id}}},"uid":"{{{uid}}}","collectorNumber":"{{{number}}}","edition":{"editioncode":"{{{set}}}"},"oracleCard":{"uid":"{{{oracle}}}","name":{{{quoted}}}}}""";
+        return $$$"""
+            {"id":{{{id}}},"uid":"{{{uid}}}","collectorNumber":"{{{number}}}","edition":{"editioncode":"{{{set}}}"},
+            "oracleCard":{"uid":"{{{oracle}}}","name":{{{quoted}}}}}
+            """;
     }
 
     /// <summary>

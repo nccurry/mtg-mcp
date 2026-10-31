@@ -152,7 +152,8 @@ public sealed class AddByNameScenarioTests
         for (int index = 0; index < added.Length; index++)
         {
             // Archidekt knows the printing that the installed card data resolved the name to.
-            JsonObject card = world.Cards.Single(value => value["name"]!.GetValue<string>() == $"Budget Card {310 + index}");
+            string wanted = $"Budget Card {310 + index}";
+            JsonObject card = world.Cards.Single(value => value["name"]!.GetValue<string>() == wanted);
             _ = world.Fake.AddCardToCatalog(
                 2310 + index,
                 card["name"]!.GetValue<string>(),

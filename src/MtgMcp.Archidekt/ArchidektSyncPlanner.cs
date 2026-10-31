@@ -229,10 +229,10 @@ public static class ArchidektSyncPlanner
     }
 
     /// <summary>
-    /// Lists the entries a pull will move because the baseline holds a zone that the current rule no longer gives them
-    /// (a deck pulled before an entry in a category outside the deck was mapped to the maybeboard). The comparison of the
-    /// two fingerprints ignores such a zone, so a push shows no difference for it; a pull still changes it, so the pull
-    /// preview lists it as an ordinary change from Archidekt.
+    /// Lists the entries a pull will move because the baseline holds a zone that the current rule no longer gives
+    /// them (a deck pulled before an entry in a category outside the deck was mapped to the maybeboard). The comparison
+    /// of the two fingerprints ignores such a zone, so a push shows no difference for it; a pull still changes it, so
+    /// the pull preview lists it as an ordinary change from Archidekt.
     /// </summary>
     public static IReadOnlyList<ArchidektDifference> FindStaleZoneMoves(
         RemoteDeckSnapshot baseline,
@@ -444,10 +444,15 @@ public static class ArchidektSyncPlanner
             return null;
         }
 
-        Dictionary<string, string> renamedByName = local.Categories
-            .Where(value => renamedCategories.ContainsKey(value.CategoryId))
-            .GroupBy(value => value.Name, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => renamedCategories[group.First().CategoryId], StringComparer.Ordinal);
+        Dictionary<string, string> renamedByName = new(StringComparer.Ordinal);
+        foreach (DeckCategory category in local.Categories)
+        {
+            if (renamedCategories.TryGetValue(category.CategoryId, out string? newName))
+            {
+                renamedByName.TryAdd(category.Name, newName);
+            }
+        }
+
         List<RemoteDeckEntry> arrivingRows = [.. keptRows.Select(row => row with
         {
             CategoryNames = [.. row.CategoryNames.Select(name => renamedByName.GetValueOrDefault(name, name))],
@@ -558,7 +563,9 @@ public static class ArchidektSyncPlanner
         }
 
         // Removals follow a fixed order, so the plan does not change when Archidekt returns rows in another order.
-        foreach (RemoteDeckCategory currentCategory in current.Categories.OrderBy(value => value.Name, StringComparer.Ordinal))
+        IEnumerable<RemoteDeckCategory> categoriesToCheck =
+            current.Categories.OrderBy(value => value.Name, StringComparer.Ordinal);
+        foreach (RemoteDeckCategory currentCategory in categoriesToCheck)
         {
             if (!FindCategory(targetCategories, currentCategories, currentCategory.Name, lenientNames, out _))
             {
@@ -606,12 +613,18 @@ public static class ArchidektSyncPlanner
             }
         }
 
-        foreach (RemoteDeckEntry currentEntry in current.Entries.OrderBy(value => value.ProviderRelationId, StringComparer.Ordinal))
+        IEnumerable<RemoteDeckEntry> entriesToCheck =
+            current.Entries.OrderBy(value => value.ProviderRelationId, StringComparer.Ordinal);
+        foreach (RemoteDeckEntry currentEntry in entriesToCheck)
         {
             if (!retainedRelations.Contains(currentEntry.ProviderRelationId))
             {
                 planned.Add(new ArchidektPlannedOperation(
-                    new ArchidektRemoteOperation(sequence++, EntryRemoveKind, currentEntry.CardName, "Remove one exact card relation."),
+                    new ArchidektRemoteOperation(
+                        sequence++,
+                        EntryRemoveKind,
+                        currentEntry.CardName,
+                        "Remove one exact card relation."),
                     TargetCategory: null,
                     CurrentCategory: null,
                     TargetEntry: null,
@@ -692,7 +705,8 @@ public static class ArchidektSyncPlanner
 
     /// <summary>
     /// Finds entries whose zone is not the zone their category names give them among the given categories, by the
-    /// same rule as <see cref="FindZoneContradictions(ArchidektRemotePlan, RemoteDeckSnapshot)"/>. A null entry is skipped.
+    /// same rule as <see cref="FindZoneContradictions(ArchidektRemotePlan, RemoteDeckSnapshot)"/>. A null entry is
+    /// skipped.
     /// </summary>
     public static IReadOnlyList<ArchidektZoneContradiction> FindZoneContradictions(
         IEnumerable<RemoteDeckEntry?> entries,
@@ -1064,7 +1078,8 @@ public sealed record ArchidektZoneContradiction(string CardName, string Zone, st
 /// would stop the pull from keeping them.
 /// </summary>
 /// <param name="Entries">The local entries with no Archidekt row in the baseline.</param>
-/// <param name="Categories">The local categories to create again, because Archidekt has no category of that name.</param>
+/// <param name="Categories">The local categories to create again, because Archidekt has no category of that
+/// name.</param>
 /// <param name="DuplicateCardNames">The kept cards that Archidekt also added since the last sync.</param>
 /// <param name="ZoneContradictions">The kept cards whose zone is not the zone their categories give them.</param>
 /// <param name="RenamedCategories">The local categories Archidekt renamed, by local category ID, with the new name the

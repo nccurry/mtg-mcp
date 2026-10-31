@@ -38,8 +38,8 @@ public sealed record ArchidektPullApplyRequest(
 
 /// <summary>
 /// Carries every immutable guard required to apply a push preview.
-/// ConfirmRemovals must equal the number of Archidekt entries the push removes when that is more than 10 entries or
-/// more than 10 percent of the Archidekt entries; it is ignored otherwise.
+/// ConfirmRemovals must equal the number of Archidekt entries the push removes when that is more than 10 entries, or
+/// 3 or more entries that are more than 10 percent of the Archidekt entries; it is ignored otherwise.
 /// </summary>
 public sealed record ArchidektPushApplyRequest(
     Guid LocalDeckId,

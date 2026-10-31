@@ -98,7 +98,9 @@ public sealed class ScryfallResponseFormatToolTests
             Assert.True(description.Length <= 4_096, $"{name} is {description.Length} characters");
             JsonElement pageSize = tools[name].ProtocolTool.InputSchema.GetProperty("properties")
                 .GetProperty("pageSize");
-            Assert.Contains("fewer when it reaches the result size limit", pageSize.GetProperty("description").GetString(),
+            Assert.Contains(
+                "fewer when it reaches the result size limit",
+                pageSize.GetProperty("description").GetString(),
                 StringComparison.Ordinal);
         }
     }

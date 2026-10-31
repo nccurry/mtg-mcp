@@ -225,8 +225,11 @@ internal sealed class ArchidektSynchronizationContext
                 remote.Data,
                 state.Data.Baseline);
             differences.AddRange(diff.Differences);
-            differences.AddRange(ArchidektSyncPlanner.FindStaleZoneMoves(state.Data.Baseline.RemoteSnapshot, remote.Data)
-                .Where(move => differences.TrueForAll(shown => shown.Path != move.Path)));
+            IReadOnlyList<ArchidektDifference> staleZoneMoves = ArchidektSyncPlanner.FindStaleZoneMoves(
+                state.Data.Baseline.RemoteSnapshot,
+                remote.Data);
+            differences.AddRange(
+                staleZoneMoves.Where(move => differences.TrueForAll(shown => shown.Path != move.Path)));
             if (HasLocalChanges(diff) && !discardLocalChanges)
             {
                 keep = ArchidektSyncPlanner.PlanPullKeep(local.Data, state.Data.Baseline, remote.Data, diff);
@@ -251,7 +254,8 @@ internal sealed class ArchidektSynchronizationContext
                 2,
                 "local-keep",
                 local.Data.DeckId.ToString("D"),
-                $"Keep {ArchidektSyncNotices.CardCount(keep.Entries.Count)} added locally since the last sync; push them afterwards."));
+                $"Keep {ArchidektSyncNotices.CardCount(keep.Entries.Count)} added locally since the last sync; " +
+                "push them afterwards."));
         }
 
         string previewFingerprint = PullPreviewFingerprint(
@@ -429,7 +433,8 @@ internal sealed class ArchidektSynchronizationContext
                 "local-keep",
                 committed.DeckId.ToString("D"),
                 "applied",
-                $"Kept {ArchidektSyncNotices.CardCount(keep.Entries.Count)} added locally; the next push adds them to Archidekt."));
+                $"Kept {ArchidektSyncNotices.CardCount(keep.Entries.Count)} added locally; the next push adds them " +
+                "to Archidekt."));
         }
 
         return new OperationSuccess<ArchidektApplyResult>(new ArchidektApplyResult(
@@ -529,7 +534,9 @@ internal sealed class ArchidektSynchronizationContext
             ArchidektSyncPlanner.FindZoneContradictions(plan, target);
         if (contradictions.Count > 0)
         {
-            return new OperationInvalidInput("entry-zone-contradicts-category", ArchidektSyncNotices.DescribeZoneContradictions(contradictions));
+            return new OperationInvalidInput(
+                "entry-zone-contradicts-category",
+                ArchidektSyncNotices.DescribeZoneContradictions(contradictions));
         }
 
         // The removals of a plan do not depend on the printings of its new cards, so an apply refuses on a changed deck
@@ -727,7 +734,11 @@ internal sealed class ArchidektSynchronizationContext
 
         // A changed Archidekt deck is reported by the apply itself; here the local deck or the plan must still be the
         // ones the caller previewed.
-        if (string.Equals(current.Data.RemoteFingerprint, request.ExpectedRemoteFingerprint, StringComparison.Ordinal) &&
+        bool sameRemoteDeck = string.Equals(
+            current.Data.RemoteFingerprint,
+            request.ExpectedRemoteFingerprint,
+            StringComparison.Ordinal);
+        if (sameRemoteDeck &&
             !string.Equals(
                 PushPreviewFingerprint(local.Data, current.Data, planned.Data.Plan),
                 request.PreviewFingerprint,

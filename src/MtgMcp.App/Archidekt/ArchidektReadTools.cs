@@ -89,13 +89,13 @@ internal sealed class ArchidektReadTools
         "language, sort order, and the rest). Pass zones (commander, main, sideboard, maybeboard) to read only " +
         "some; offsets count the chosen entries. The leading summary covers the whole deck whatever the zones: " +
         "entry, card, and category counts, cards by zone, cards held more than once across commander and main " +
-        "(duplicates, matched by Oracle ID, basic lands and entries not in the deck skipped), cards held more than " +
-        "once inside the sideboard or maybeboard (repeatsOutsideMain), and for Commander " +
-        "decks the main and commander card count next to 100. Entries come in pages that fit the size limit, " +
-        "ordered by zone, then card name; categories and unknown provider fields come with the first page. Each " +
-        "entry has inDeck: false when its first category is not included in the deck (it is then in the " +
-        "maybeboard zone). Unknown provider fields over 8,000 bytes are left out and extensionsOmitted is true. " +
-        "When truncated is true, call again with offset set to nextOffset." +
+        "(duplicates, matched by Oracle ID, basic lands and entries not in the deck skipped), cards held more " +
+        "than once inside the sideboard or maybeboard (repeatsOutsideMain), and, for Commander decks, a size " +
+        "fact (mainAndCommander, the cards in commander and main, beside expected: 100). Entries come in pages " +
+        "that fit the size limit, ordered by zone, then card name; categories and unknown provider fields come " +
+        "with the first page. Each entry has inDeck: false when its first category is not included in the deck " +
+        "(it is then in the maybeboard zone). Unknown provider fields over 8,000 bytes are left out and " +
+        "extensionsOmitted is true. When truncated is true, call again with offset set to nextOffset." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektDeckView>> GetDeckAsync(
         [Description("Exact Archidekt deck identifier.")] string deckId,
@@ -191,13 +191,13 @@ internal sealed class ArchidektReadTools
     [Description(
         "Archidekt: previews stable primitive Archidekt operations and refuses remote drift; performs zero writes. " +
         "The result starts with a summary (operation counts by kind, difference and conflict counts) and says " +
-        "whether archidekt_push_apply is available and, if not, what to ask the user to change. Rows come in pages " +
-        "that fit the size limit; the guards cover the whole preview, so the apply tool needs no page. A new card " +
-        "with no printing set gets Archidekt's default printing; each add names the printing it will use, and " +
-        "applyAvailable is false, with the card names, when Archidekt has no match. On later " +
-        "pages pass expectedPreviewFingerprint, the previewFingerprint of the first page. A push that removes more " +
-        "than 10 Archidekt entries, or more than 10 percent of them, is not available until confirmRemovals " +
-        "equals the removal count." +
+        "whether archidekt_push_apply is available and, if not, what to ask the user to change. Rows come in " +
+        "pages that fit the size limit; the guards cover the whole preview, so the apply tool needs no page. A " +
+        "new card with no printing set gets Archidekt's first listed printing of that name; each add names the " +
+        "printing it will use, and applyAvailable is false, with the card names, when Archidekt has no match. On " +
+        "later pages pass expectedPreviewFingerprint, the previewFingerprint of the first page. A push that " +
+        "removes more than 10 Archidekt entries, or 3 or more entries that are more than 10 percent of them, is " +
+        "not available until confirmRemovals equals the removal count." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSyncPreviewView>> PreviewPushAsync(
         [Description("Stable local deck UUID with an Archidekt provider binding.")] Guid localDeckId,

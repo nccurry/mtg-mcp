@@ -31,8 +31,8 @@ internal static class OperationResultSchema
     {
         ArgumentNullException.ThrowIfNull(method);
         Type type = method.ReturnType;
-        if (type.IsGenericType &&
-            (type.GetGenericTypeDefinition() == typeof(Task<>) || type.GetGenericTypeDefinition() == typeof(ValueTask<>)))
+        Type? definition = type.IsGenericType ? type.GetGenericTypeDefinition() : null;
+        if (definition == typeof(Task<>) || definition == typeof(ValueTask<>))
         {
             return type.GetGenericArguments()[0];
         }

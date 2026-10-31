@@ -45,10 +45,13 @@ allow. Every change marked **Breaking** below was taken in a patch release with 
   protocol had no `isError` because the `result` wrapper hid `kind`. E2E tests now list tools under `2024-11-05`,
   `2025-03-26`, `2025-06-18`, `2025-11-25`, and `2026-07-28`.
 - `archidekt_push_preview` and `archidekt_push_apply` resolve an added card's Archidekt printing from Archidekt's card
-  search: by printing ID, then by set code (`edition.editioncode`) and collector number, and for a card with no
-  printing by the first listed exact-name match (filtered by Oracle ID when there is one), following the next pages
-  within the request limit. Before, a name that matched more than one printing (Assassin's Trophy has 18) could not be
-  added, and the set match read a field that Archidekt does not send.
+  search: by printing ID, then by set code (`edition.editioncode`) and collector number; a card with no printing
+  takes the first listed exact-name match (filtered by Oracle ID when there is one). The search asks for an exact name
+  (`exact=true`; a plain name search also lists longer names, so Shock listed Aftershock), searches within the entry's
+  set when it has one (`edition=`, so a printing of Forest, which has 955, is found), and follows the next pages within
+  the request limit, at most 12 per search. A printing ID that Archidekt does not list stays unresolved and blocks the
+  push; it never takes the first printing instead. Before, a name that matched more than one printing (Assassin's
+  Trophy has 18) could not be added, and the set match read a field that Archidekt does not send.
 - The push preview names the printing it chose for each add, and sets `applyAvailable: false` with the card names
   when a name has no match or the lookups would pass the 150-request limit. The apply resolves every add before its
   first write, so a push that cannot place a card sends nothing.
@@ -63,8 +66,23 @@ allow. Every change marked **Breaking** below was taken in a patch release with 
   `differences`.
 - The push zone check follows `includedInDeck`, so a deck with entries under an excluded category pulls and pushes with
   no false `entry-zone-contradicts-category`.
-- `local_deck_get` and `local_deck_apply_changes` now carry deck-wide totals, so a size-cut page is easy to tell from the
+- `local_deck_get` and the deck write summaries now carry deck-wide totals, so a size-cut page is easy to tell from the
   whole deck. A cut first page was taken for the whole deck, and the agent re-added cards it thought were missing.
+- `archidekt_push_apply` checks the local and Archidekt decks against the preview, and the removal confirmation, before
+  it searches for any printing, so a refused apply spends no search requests. It also refuses (`push-preview-changed`,
+  nothing sent) when the local deck changed while the printings were looked up, instead of recording the change as
+  synchronized. A push blocked by the request limit reports `request-limit-exceeded`, not `push-printing-unresolved`.
+- A deck pulled by `0.13.0` can be pushed again and again: a push writes the zone Archidekt gives each entry whose
+  category is outside the deck into the local deck, and a card added locally before the next pull no longer makes those
+  entries read as local changes that refuse the pull.
+- A pull that keeps cards added locally follows a category Archidekt renamed: the kept card moves to the new name,
+  where it used to fail on a duplicate category after the preview said it was fine.
+- The request budget of a push counts every read the apply makes, including the read that repeats the check and
+  retries after a rate limit. If the request limit ends the check after the writes, the applied statuses are kept and
+  the outcome is `applied-unverified`.
+- The category that decides the zone of a card is its primary category, read the same way by pulls, deck reads, the
+  push check, and the verification, so a card whose primary category is outside the deck is no longer read in another
+  zone by one of them.
 
 ### Added
 
@@ -78,8 +96,8 @@ allow. Every change marked **Breaking** below was taken in a patch release with 
   `responseFormat`. The result reports `shownEntryCount`, and offsets count the chosen entries. A bad offset is refused
   with `invalid-offset` naming the chosen count.
 - `local_deck_get` pages carry `entryCount`, `cardCount`, and `cardsByZone` for the whole deck, and a cut page's `narrow`
-  says "This page shows N of M entries; the deck is not missing the rest. Follow nextCursor." The
-  `local_deck_apply_changes` summary also carries `cardsByZone`.
+  says "This page shows N of M entries; the deck is not missing the rest. Follow nextCursor." The summary of every
+  tool that writes a deck also carries `cardsByZone`.
 - `scryfall_search`, `scryfall_cards_get`, `scryfall_installed_cards_by_tag`, and `card_lists_compare` report
   `returnedCount` and `requestedCount` on every page and `cutReason: "result-size-limit"` on a cut page. The `narrow`
   text gives the kept and requested counts, the average bytes per card, where `nextCursor` continues, and that leaving
@@ -87,8 +105,9 @@ allow. Every change marked **Breaking** below was taken in a patch release with 
 - A pull preview with `discardLocalChanges` counts what it throws away ("N cards added, N changed, N removed
   (categories: ...)").
 - `archidekt_push_preview` and `archidekt_push_apply` take `confirmRemovals`. A push that removes more than 10 Archidekt
-  entries, or more than 10 percent of them, is not available until `confirmRemovals` equals the removal count; the
-  preview notice names the count, and the apply refuses with `push-removals-unconfirmed` otherwise.
+  entries, or 3 or more entries that are more than 10 percent of them, is not available until `confirmRemovals`
+  equals the removal count (removing one or two entries never needs it); the preview notice names the count, and the
+  apply refuses with `push-removals-unconfirmed` otherwise.
 
 ### Changed
 
