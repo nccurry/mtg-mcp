@@ -1354,7 +1354,7 @@ public sealed class ArchidektWorkflowTests
                 preview.PreviewFingerprint),
             token);
 
-        Assert.IsType<OperationInvalidInput>(refused.Value);
+        Assert.Equal("push-printing-unresolved", Assert.IsType<OperationInvalidInput>(refused.Value).ReasonCode);
         Assert.Equal(0, world.Fake.Mutations);
     }
 
@@ -2151,6 +2151,46 @@ public sealed class ArchidektWorkflowTests
             token);
 
         Assert.Equal("push-removals-unconfirmed", Assert.IsType<OperationInvalidInput>(refused.Value).ReasonCode);
+        Assert.True(searchesBefore > 0);
+        Assert.Equal(searchesBefore, CountSearches(world.Fake));
+        Assert.Equal(0, world.Fake.Mutations);
+    }
+
+    /// <summary>
+    /// Verifies an apply whose local deck changed after the preview is refused before any card search.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPush_WithAStaleLocalRevision_SendsNoCardSearch()
+    {
+        FakeArchidekt fake = CreateLargeDeck(30);
+        _ = fake.AddCardToCatalog(9001, "Shock");
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [new AddDeckEntryChange(new DeckEntryDraft(1, "Shock"))],
+            token));
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        _ = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            edited.Revision,
+            [new AddDeckEntryChange(new DeckEntryDraft(1, "Shock"))],
+            token));
+        int searchesBefore = CountSearches(world.Fake);
+
+        OperationResult<ArchidektApplyResult> refused = await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token);
+
+        Assert.Equal("push-preview-changed", Assert.IsType<OperationConflict>(refused.Value).ReasonCode);
         Assert.True(searchesBefore > 0);
         Assert.Equal(searchesBefore, CountSearches(world.Fake));
         Assert.Equal(0, world.Fake.Mutations);
