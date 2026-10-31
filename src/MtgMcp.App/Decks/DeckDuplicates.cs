@@ -111,15 +111,6 @@ internal sealed record DuplicateCandidate(
 internal static class DeckDuplicateFinder
 {
     /// <summary>
-    /// Lists the names of basic lands, which a Commander deck may hold in any number, for when card data is missing.
-    /// </summary>
-    private static readonly string[] BasicLandNames =
-    [
-        "plains", "island", "swamp", "mountain", "forest", "wastes", "snow-covered plains", "snow-covered island",
-        "snow-covered swamp", "snow-covered mountain", "snow-covered forest", "snow-covered wastes",
-    ];
-
-    /// <summary>
     /// Finds duplicates and plans the edits.
     /// </summary>
     /// <param name="deck">The deck that was read.</param>
@@ -209,7 +200,7 @@ internal static class DeckDuplicateFinder
             return CommanderCardText.CopyLimit(card);
         }
 
-        return BasicLandNames.Contains(candidate.Entry.CardName.Trim().ToLowerInvariant(), StringComparer.Ordinal)
+        return BasicLandNames.Contains(candidate.Entry.CardName)
             ? null
             : 1;
     }
