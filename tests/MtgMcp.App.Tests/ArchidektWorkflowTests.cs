@@ -1762,6 +1762,34 @@ public sealed class ArchidektWorkflowTests
     }
 
     /// <summary>
+    /// Verifies a pull that keeps a local card is refused with a plain message, not a crash, when Archidekt now has
+    /// two categories of the same name: the local store allows one category per name, and the local deck is unchanged.
+    /// </summary>
+    [Fact]
+    public async Task Pull_WithACardAddedAndTwoArchidektCategoriesOfTheSameName_IsRefusedAndLeavesTheDeck()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckWithOnlyRamp());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        DeckDocument edited = await AddSideCardToRampAsync(world);
+        world.Fake.AddCategory("Ramp");
+
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPullAsync("42", edited.DeckId, cancellationToken: token));
+        OperationResult<ArchidektApplyResult> refused = await world.LocalWrites.ApplyPullAsync(
+            new ArchidektPullApplyRequest(
+                "42",
+                edited.DeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token);
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(refused.Value);
+        Assert.Contains("have the same name", invalid.Message, StringComparison.Ordinal);
+        Assert.Equal(edited.Revision, Success(await world.Store.GetAsync(edited.DeckId, token)).Revision);
+    }
+
+    /// <summary>
     /// Pulls the deck, then adds Side Card 01 to its Ramp category in the main zone.
     /// </summary>
     private static async Task<DeckDocument> AddSideCardToRampAsync(World world)

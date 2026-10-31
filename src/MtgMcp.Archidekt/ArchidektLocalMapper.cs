@@ -151,8 +151,13 @@ public static class ArchidektLocalMapper
         DeckCreateRequest target,
         ArchidektPullKeep keep)
     {
-        Dictionary<string, Guid> remoteCategoryIds = (target.Categories ?? [])
-            .ToDictionary(value => value.Name, value => value.CategoryId ?? Guid.Empty, StringComparer.Ordinal);
+        Dictionary<string, Guid> remoteCategoryIds = new(StringComparer.Ordinal);
+        foreach (DeckCategoryDraft category in target.Categories ?? [])
+        {
+            // Archidekt may return two categories of one name; the first one is the one kept cards join.
+            remoteCategoryIds.TryAdd(category.Name, category.CategoryId ?? Guid.Empty);
+        }
+
         Dictionary<string, Guid> keptCategoryIds = new(StringComparer.Ordinal);
         foreach (DeckCategory category in keep.Categories)
         {

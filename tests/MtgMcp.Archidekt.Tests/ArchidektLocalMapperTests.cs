@@ -182,6 +182,33 @@ public sealed class ArchidektLocalMapperTests
     }
 
     /// <summary>
+    /// Verifies the category deletions and the plan fingerprint do not depend on the order Archidekt lists the
+    /// categories in.
+    /// </summary>
+    [Fact]
+    public void PlanRemoteApply_CategoriesListedInAnotherOrder_GiveTheSamePlanFingerprint()
+    {
+        RemoteDeckSnapshot start = ParseDeck();
+        RemoteDeckCategory kept = start.Categories[0];
+        RemoteDeckCategory zeta = new("901", "Zeta", true, false, false, 8);
+        RemoteDeckCategory alpha = new("902", "Alpha", true, false, false, 9);
+        RemoteDeckSnapshot target = start with { Categories = [kept] };
+
+        ArchidektRemotePlan forward = ArchidektSyncPlanner.PlanRemoteApply(
+            start with { Categories = [kept, zeta, alpha] },
+            target);
+        ArchidektRemotePlan reversed = ArchidektSyncPlanner.PlanRemoteApply(
+            start with { Categories = [alpha, zeta, kept] },
+            target);
+
+        Assert.Equal(["Alpha", "Zeta"], forward.PublicOperations.Select(value => value.Subject));
+        Assert.Equal(
+            forward.PublicOperations.Select(value => value.Subject),
+            reversed.PublicOperations.Select(value => value.Subject));
+        Assert.Equal(forward.PlanFingerprint, reversed.PlanFingerprint);
+    }
+
+    /// <summary>
     /// Verifies reordered or recased secondary categories never plan an entry update.
     /// </summary>
     [Fact]
