@@ -8,20 +8,30 @@ namespace MtgMcp.App.Decks;
 internal static class DeckZoneCounts
 {
     /// <summary>
-    /// Lists the zones in the order a result shows them. Any other zone follows in name order.
+    /// Gets the zones in the order a result shows them. Any other zone follows in name order.
     /// </summary>
-    private static readonly string[] ZoneOrder = ["commander", "main", "sideboard", "maybeboard"];
+    internal static IReadOnlyList<string> ZoneOrder { get; } = ["commander", "main", "sideboard", "maybeboard"];
 
     /// <summary>
-    /// Adds up the quantities of every entry by zone, in zone order. A zone with no entries is left out.
+    /// Adds up the quantities of every entry of a local deck by zone, in zone order. A zone with no entries is left
+    /// out.
     /// </summary>
     internal static IReadOnlyDictionary<string, int> Of(DeckDocument deck)
     {
         ArgumentNullException.ThrowIfNull(deck);
+        return Of(deck.Entries.Select(entry => (entry.Zone, entry.Quantity)));
+    }
+
+    /// <summary>
+    /// Adds up quantities by zone, in zone order. A zone with no entries is left out.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, int> Of(IEnumerable<(string Zone, int Quantity)> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
         Dictionary<string, int> totals = new(StringComparer.Ordinal);
-        foreach (DeckEntry entry in deck.Entries)
+        foreach ((string zone, int quantity) in entries)
         {
-            totals[entry.Zone] = totals.GetValueOrDefault(entry.Zone) + entry.Quantity;
+            totals[zone] = totals.GetValueOrDefault(zone) + quantity;
         }
 
         Dictionary<string, int> ordered = new(StringComparer.Ordinal);

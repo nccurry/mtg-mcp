@@ -19,7 +19,7 @@ internal sealed record ArchidektDeckReadOptions(IReadOnlyList<string> Zones, boo
     /// <summary>
     /// Gets the zone names a read may ask for, in the order entries are shown.
     /// </summary>
-    internal static IReadOnlyList<string> ZoneOrder { get; } = ["commander", "main", "sideboard", "maybeboard"];
+    internal static IReadOnlyList<string> ZoneOrder => DeckZoneCounts.ZoneOrder;
 
     /// <summary>
     /// Checks the zone names and the response format a caller passed and builds the options, or refuses with the name
@@ -112,12 +112,8 @@ internal static class ArchidektDeckFacts
     internal static ArchidektDeckSummary Summarize(RemoteDeckSnapshot deck)
     {
         ArgumentNullException.ThrowIfNull(deck);
-        Dictionary<string, int> cardsByZone = new(StringComparer.Ordinal);
-        foreach (RemoteDeckEntry entry in deck.Entries)
-        {
-            cardsByZone[entry.Zone] = cardsByZone.GetValueOrDefault(entry.Zone) + entry.Quantity;
-        }
-
+        IReadOnlyDictionary<string, int> cardsByZone = DeckZoneCounts.Of(
+            deck.Entries.Select(entry => (entry.Zone, entry.Quantity)));
         List<ArchidektDuplicateGroup> duplicates = FindDuplicates(deck);
         List<ArchidektDuplicateGroup> repeats = FindRepeatsOutsideMain(deck);
         int mainAndCommander = cardsByZone.GetValueOrDefault("main") + cardsByZone.GetValueOrDefault("commander");
@@ -129,16 +125,38 @@ internal static class ArchidektDeckFacts
             [.. duplicates.Take(MaximumDuplicateGroups)],
             [.. repeats.Take(MaximumDuplicateGroups)])
         {
-            RepeatsOutsideMainOmitted = repeats.Count > MaximumDuplicateGroups
-                ? repeats.Count - MaximumDuplicateGroups
-                : null,
             DuplicatesOmitted = duplicates.Count > MaximumDuplicateGroups
                 ? duplicates.Count - MaximumDuplicateGroups
+                : null,
+            RepeatsOutsideMainOmitted = repeats.Count > MaximumDuplicateGroups
+                ? repeats.Count - MaximumDuplicateGroups
                 : null,
             Size = deck.Format == "commander"
                 ? new ArchidektDeckSizeFact("commander", CommanderDeckSize, mainAndCommander)
                 : null,
         };
+    }
+
+    /// <summary>
+    /// Finds the cards held more than once across the commander and main zones. A card is the same card when its
+    /// Oracle ID matches, or its name when an entry has no Oracle ID. Basic lands are skipped, and so is any entry that
+    /// is not in the deck. Groups come in name order.
+    /// </summary>
+    private static List<ArchidektDuplicateGroup> FindDuplicates(RemoteDeckSnapshot deck)
+    {
+        return [.. GroupSameCard(
+                deck,
+                entry => entry.Zone is "commander" or "main" && deck.IsInDeck(entry),
+                _ => string.Empty)
+            .Select(members => new ArchidektDuplicateGroup(
+                members.OrderBy(value => value.CardName, StringComparer.Ordinal).First().CardName,
+                members[0].OracleId,
+                members.Sum(value => value.Quantity),
+                [.. members.Select(value => value.Zone)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(ArchidektDeckReadOptions.ZoneRank)]))
+            .OrderBy(group => group.CardName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(group => group.OracleId)];
     }
 
     /// <summary>
@@ -149,28 +167,10 @@ internal static class ArchidektDeckFacts
     /// </summary>
     private static List<ArchidektDuplicateGroup> FindRepeatsOutsideMain(RemoteDeckSnapshot deck)
     {
-        Dictionary<string, List<RemoteDeckEntry>> groups = new(StringComparer.Ordinal);
-        foreach (RemoteDeckEntry entry in deck.Entries)
-        {
-            if (entry.Zone is "commander" or "main" || BasicLandNames.Contains(entry.CardName))
-            {
-                continue;
-            }
-
-            string key = entry.Zone + "|" + (entry.OracleId is { } oracleId
-                ? "oracle:" + oracleId.ToString("D")
-                : "name:" + entry.CardName.Trim().ToLowerInvariant());
-            if (!groups.TryGetValue(key, out List<RemoteDeckEntry>? members))
-            {
-                members = [];
-                groups[key] = members;
-            }
-
-            members.Add(entry);
-        }
-
-        return [.. groups.Values
-            .Where(members => members.Sum(value => value.Quantity) > 1)
+        return [.. GroupSameCard(
+                deck,
+                entry => entry.Zone is not ("commander" or "main"),
+                entry => entry.Zone)
             .Select(members => new ArchidektDuplicateGroup(
                 members.OrderBy(value => value.CardName, StringComparer.Ordinal).First().CardName,
                 members[0].OracleId,
@@ -182,25 +182,25 @@ internal static class ArchidektDeckFacts
     }
 
     /// <summary>
-    /// Finds the cards held more than once across the commander and main zones. A card is the same card when its
-    /// Oracle ID matches, or its name when an entry has no Oracle ID. Basic lands are skipped, and so is any entry that
-    /// is not in the deck. Groups come in name order.
+    /// Groups the entries that are the same card, skipping basic lands and every entry the predicate refuses, and keeps
+    /// the groups that hold more than one card. The key prefix lets a caller keep the groups of one zone apart.
     /// </summary>
-    private static List<ArchidektDuplicateGroup> FindDuplicates(RemoteDeckSnapshot deck)
+    private static List<List<RemoteDeckEntry>> GroupSameCard(
+        RemoteDeckSnapshot deck,
+        Func<RemoteDeckEntry, bool> include,
+        Func<RemoteDeckEntry, string> keyPrefix)
     {
         Dictionary<string, List<RemoteDeckEntry>> groups = new(StringComparer.Ordinal);
         foreach (RemoteDeckEntry entry in deck.Entries)
         {
-            if (entry.Zone is not ("commander" or "main") ||
-                !deck.IsInDeck(entry) ||
-                BasicLandNames.Contains(entry.CardName))
+            if (!include(entry) || BasicLandNames.Contains(entry.CardName))
             {
                 continue;
             }
 
-            string key = entry.OracleId is { } oracleId
+            string key = keyPrefix(entry) + "|" + (entry.OracleId is { } oracleId
                 ? "oracle:" + oracleId.ToString("D")
-                : "name:" + entry.CardName.Trim().ToLowerInvariant();
+                : "name:" + entry.CardName.Trim().ToLowerInvariant());
             if (!groups.TryGetValue(key, out List<RemoteDeckEntry>? members))
             {
                 members = [];
@@ -210,16 +210,6 @@ internal static class ArchidektDeckFacts
             members.Add(entry);
         }
 
-        return [.. groups.Values
-            .Where(members => members.Sum(value => value.Quantity) > 1)
-            .Select(members => new ArchidektDuplicateGroup(
-                members.OrderBy(value => value.CardName, StringComparer.Ordinal).First().CardName,
-                members[0].OracleId,
-                members.Sum(value => value.Quantity),
-                [.. members.Select(value => value.Zone)
-                    .Distinct(StringComparer.Ordinal)
-                    .OrderBy(ArchidektDeckReadOptions.ZoneRank)]))
-            .OrderBy(group => group.CardName, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(group => group.OracleId)];
+        return [.. groups.Values.Where(members => members.Sum(value => value.Quantity) > 1)];
     }
 }

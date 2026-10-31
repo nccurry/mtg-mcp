@@ -11,6 +11,21 @@ namespace MtgMcp.Archidekt;
 internal sealed class ArchidektSession : IDisposable
 {
     /// <summary>
+    /// Gives the most retries a read gets after a rate-limit response.
+    /// </summary>
+    private const int MaximumRateLimitRetries = 2;
+
+    /// <summary>
+    /// Gives the longest a read waits before retrying after a rate-limit response.
+    /// </summary>
+    private static readonly TimeSpan MaximumRateLimitWait = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Gives the wait before a retry when a rate-limit response names no usable wait.
+    /// </summary>
+    private static readonly TimeSpan DefaultRateLimitWait = TimeSpan.FromSeconds(2);
+
+    /// <summary>
     /// Sends provider requests through an injected or owned HTTP client.
     /// </summary>
     private readonly HttpClient httpClient;
@@ -29,21 +44,6 @@ internal sealed class ArchidektSession : IDisposable
     /// Applies one shared account pacing timeline to every provider request.
     /// </summary>
     private readonly ArchidektRequestPacer pacer;
-
-    /// <summary>
-    /// Gives the most retries a read gets after a rate-limit response.
-    /// </summary>
-    private const int MaximumRateLimitRetries = 2;
-
-    /// <summary>
-    /// Gives the longest a read waits before retrying after a rate-limit response.
-    /// </summary>
-    private static readonly TimeSpan MaximumRateLimitWait = TimeSpan.FromSeconds(10);
-
-    /// <summary>
-    /// Gives the wait before a retry when a rate-limit response names no usable wait.
-    /// </summary>
-    private static readonly TimeSpan DefaultRateLimitWait = TimeSpan.FromSeconds(2);
 
     /// <summary>
     /// Waits between retries without blocking a thread; tests replace it so they do not sleep.
@@ -193,6 +193,7 @@ internal sealed class ArchidektSession : IDisposable
 
             if ((int)response.StatusCode == 429 && idempotentRead && rateLimitAttempt < MaximumRateLimitRetries)
             {
+                // The pacer records the full request only when the read finally fails.
                 rateLimitAttempt++;
                 await delay(RateLimitWait(response.Headers.RetryAfter), cancellationToken).ConfigureAwait(false);
                 continue;
@@ -221,7 +222,7 @@ internal sealed class ArchidektSession : IDisposable
 
     /// <summary>
     /// Reads how long a rate-limit response asks for, at most ten seconds, or two seconds when it asks for nothing
-    /// usable. The pacer records the full request only when the read finally fails.
+    /// usable.
     /// </summary>
     private static TimeSpan RateLimitWait(RetryConditionHeaderValue? retryAfter)
     {

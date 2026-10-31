@@ -8,11 +8,6 @@ namespace MtgMcp.Archidekt;
 internal sealed class ArchidektDeckOperations
 {
     /// <summary>
-    /// Provides deck provider routes for this workflow owner.
-    /// </summary>
-    private readonly ArchidektDeckTransport transport;
-
-    /// <summary>
     /// Says that no request reached Archidekt for an operation.
     /// </summary>
     private const string NotSentMessage = "Nothing was sent to Archidekt for this operation.";
@@ -46,6 +41,11 @@ internal sealed class ArchidektDeckOperations
     /// Gives the pause before the check after the writes is repeated when it found a difference.
     /// </summary>
     private static readonly TimeSpan VerificationSettleTime = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// Provides deck provider routes for this workflow owner.
+    /// </summary>
+    private readonly ArchidektDeckTransport transport;
 
     /// <summary>
     /// Stores the hard provider request ceiling for standalone operations.

@@ -16,15 +16,6 @@ internal sealed class ArchidektSynchronizationContext
     private const string ProviderName = "archidekt";
 
     /// <summary>
-    /// Explains why a pull is refused over a deck whose baseline an earlier version recorded, and how to leave.
-    /// </summary>
-    private const string UnverifiedPullConflictMessage =
-        "The local deck may have changed since its synchronization baseline. The earlier version that made the " +
-        "baseline did not record category colors or ordering, so the server cannot tell whether they changed. " +
-        "Push the deck to keep the local content (the push is refused too if Archidekt also changed), or preview " +
-        "and apply the pull with discardLocalChanges to take the Archidekt state, which drops the local edits.";
-
-    /// <summary>
     /// Provides revisioned local state and transactional baseline updates.
     /// </summary>
     private readonly SqliteDeckStore deckStore;
@@ -239,7 +230,7 @@ internal sealed class ArchidektSynchronizationContext
             if (HasLocalChanges(diff) && !discardLocalChanges)
             {
                 keep = ArchidektSyncPlanner.PlanPullKeep(local.Data, state.Data.Baseline, remote.Data, diff);
-                conflictReason = DescribePullConflict(keep, differences);
+                conflictReason = ArchidektSyncNotices.DescribePullConflict(keep, differences);
                 keep = conflictReason is null ? keep : null;
             }
         }
@@ -251,8 +242,8 @@ internal sealed class ArchidektSynchronizationContext
                 "local-deck-replace",
                 local.Data.DeckId.ToString("D"),
                 discardLocalChanges
-                    ? DescribeDiscard(diff)
-                    : "Replace local content transactionally from fresh Archidekt evidence."),
+                    ? ArchidektSyncNotices.DescribeDiscard(diff)
+                    : ArchidektSyncNotices.DescribeReplace(keep is not null)),
         ];
         if (keep is not null)
         {
@@ -260,7 +251,7 @@ internal sealed class ArchidektSynchronizationContext
                 2,
                 "local-keep",
                 local.Data.DeckId.ToString("D"),
-                $"Keep {CardCount(keep.Entries.Count)} added locally since the last sync; push them afterwards."));
+                $"Keep {ArchidektSyncNotices.CardCount(keep.Entries.Count)} added locally since the last sync; push them afterwards."));
         }
 
         string previewFingerprint = PullPreviewFingerprint(
@@ -438,7 +429,7 @@ internal sealed class ArchidektSynchronizationContext
                 "local-keep",
                 committed.DeckId.ToString("D"),
                 "applied",
-                $"Kept {CardCount(keep.Entries.Count)} added locally; the next push adds them to Archidekt."));
+                $"Kept {ArchidektSyncNotices.CardCount(keep.Entries.Count)} added locally; the next push adds them to Archidekt."));
         }
 
         return new OperationSuccess<ArchidektApplyResult>(new ArchidektApplyResult(
@@ -448,101 +439,6 @@ internal sealed class ArchidektSynchronizationContext
             remote.Data.RemoteId,
             remote.Data.RemoteFingerprint,
             statuses));
-    }
-
-    /// <summary>
-    /// Explains why a pull cannot go ahead over the local changes since the last sync, or returns null when it can.
-    /// A pull keeps cards and categories added locally; anything else needs <c>discardLocalChanges</c>.
-    /// </summary>
-    private static string? DescribePullConflict(ArchidektPullKeep? keep, IReadOnlyList<ArchidektDifference> differences)
-    {
-        if (keep is null)
-        {
-            return HasUnverifiedLocalChange(differences)
-                ? UnverifiedPullConflictMessage
-                : "The local deck changed since its synchronization baseline in a way a pull cannot keep: a pull " +
-                    "keeps cards and categories added locally and replaces everything else from Archidekt. Preview " +
-                    "the pull with discardLocalChanges to take the Archidekt state instead, which drops the local " +
-                    "edits.";
-        }
-
-        if (keep.DuplicateCardNames.Count > 0)
-        {
-            return "Archidekt also added " + NamedList(keep.DuplicateCardNames) + ", which was added locally too, " +
-                "so a pull would leave two entries for the same card. Remove the local copy and pull again, or " +
-                "preview the pull with discardLocalChanges to take the Archidekt state, which drops the local edits.";
-        }
-
-        return keep.ZoneContradictions.Count > 0
-            ? "A card added locally would come back in another zone because of its categories: " +
-                DescribeContradictionList(keep.ZoneContradictions) + " Change its zone or categories and pull again, " +
-                "or preview the pull with discardLocalChanges to take the Archidekt state, which drops the local edits."
-            : null;
-    }
-
-    /// <summary>
-    /// Says what a pull with <c>discardLocalChanges</c> throws away, counted from the local-* differences.
-    /// </summary>
-    private static string DescribeDiscard(ArchidektSyncDiff? diff)
-    {
-        const string replace = "Replace the local deck with the Archidekt deck.";
-        IReadOnlyList<ArchidektDifference> local =
-            [.. diff?.Differences.Where(ArchidektDifferenceStates.IsLocalChange) ?? []];
-        if (local.Count == 0)
-        {
-            return $"{replace} There are no local changes since the last sync to discard.";
-        }
-
-        (int cardsAdded, int cardsChanged, int cardsRemoved) = CountChanges(local, "/entries/");
-        (int categoriesAdded, int categoriesChanged, int categoriesRemoved) = CountChanges(local, "/categories/");
-        return $"{replace} This discards local changes made since the last sync: {cardsAdded} cards added, " +
-            $"{cardsChanged} changed, {cardsRemoved} removed (categories: {categoriesAdded} added, " +
-            $"{categoriesChanged} changed, {categoriesRemoved} removed). They are listed in differences with " +
-            "local-* states.";
-    }
-
-    /// <summary>
-    /// Counts the added, changed, and removed local rows under one path prefix.
-    /// </summary>
-    private static (int Added, int Changed, int Removed) CountChanges(
-        IReadOnlyList<ArchidektDifference> local,
-        string pathPrefix)
-    {
-        List<ArchidektDifference> rows = [.. local.Where(
-            value => value.Path.StartsWith(pathPrefix, StringComparison.Ordinal))];
-        return (
-            rows.Count(value => value.State == ArchidektDifferenceStates.LocalAdded),
-            rows.Count(value => value.State is ArchidektDifferenceStates.LocalChanged
-                or ArchidektDifferenceStates.ConcurrentChanged),
-            rows.Count(value => value.State == ArchidektDifferenceStates.LocalRemoved));
-    }
-
-    /// <summary>
-    /// Writes a count of cards as text, such as "1 card" or "3 cards".
-    /// </summary>
-    private static string CardCount(int count)
-    {
-        return count == 1 ? "1 card" : $"{count} cards";
-    }
-
-    /// <summary>
-    /// Names up to five cards, then says how many more there are.
-    /// </summary>
-    private static string NamedList(IReadOnlyList<string> names)
-    {
-        string shown = string.Join(", ", names.Take(5).Select(value => $"'{value}'"));
-        return names.Count > 5 ? $"{shown} and {names.Count - 5} more" : shown;
-    }
-
-    /// <summary>
-    /// Describes cards whose zone differs from the zone their categories give them.
-    /// </summary>
-    private static string DescribeContradictionList(IReadOnlyList<ArchidektZoneContradiction> contradictions)
-    {
-        IEnumerable<string> shown = contradictions.Take(5).Select(value =>
-            $"'{value.CardName}' (zone '{value.Zone}', but its categories give zone '{value.ExpectedZone}')");
-        string more = contradictions.Count > 5 ? $" and {contradictions.Count - 5} more" : string.Empty;
-        return $"{string.Join("; ", shown)}{more}.";
     }
 
     /// <summary>
@@ -633,7 +529,7 @@ internal sealed class ArchidektSynchronizationContext
             ArchidektSyncPlanner.FindZoneContradictions(plan, target);
         if (contradictions.Count > 0)
         {
-            return new OperationInvalidInput("entry-zone-contradicts-category", DescribeContradictions(contradictions));
+            return new OperationInvalidInput("entry-zone-contradicts-category", ArchidektSyncNotices.DescribeZoneContradictions(contradictions));
         }
 
         // The removals of a plan do not depend on the printings of its new cards, so an apply refuses on a changed deck
@@ -736,23 +632,8 @@ internal sealed class ArchidektSynchronizationContext
             [],
             PredictedProviderRequests: 0)
         {
-            ApplyBlockedNotice = "archidekt_push_apply would refuse this push: the Archidekt deck changed since the " +
-                $"last sync ({remoteRows} {(remoteRows == 1 ? "row" : "rows")}; see differences with remote-* " +
-                "states). Run archidekt_pull_preview first; a pull keeps cards added locally when those are your " +
-                "only local changes. Then push again.",
+            ApplyBlockedNotice = ArchidektSyncNotices.DescribeConflictingPush(remoteRows),
         };
-    }
-
-    /// <summary>
-    /// Explains which entries the push cannot place, and what to change.
-    /// </summary>
-    private static string DescribeContradictions(IReadOnlyList<ArchidektZoneContradiction> contradictions)
-    {
-        return "Archidekt keeps no zone of its own: a card's zone comes from its categories (a category named " +
-            "Commander, Sideboard or Maybeboard, or the commander category; otherwise main, or maybeboard when the first " +
-            "category is not included in the deck). These cards would come " +
-            $"back in another zone: {DescribeContradictionList(contradictions)} Change the zone, or add or remove the " +
-            "matching category.";
     }
 
     /// <summary>
@@ -1135,14 +1016,6 @@ internal sealed class ArchidektSynchronizationContext
             remote.RemoteFingerprint,
             plan.PlanFingerprint,
         });
-    }
-
-    /// <summary>
-    /// Reports whether the differences include a local change the server cannot verify from an earlier baseline.
-    /// </summary>
-    private static bool HasUnverifiedLocalChange(IReadOnlyList<ArchidektDifference> differences)
-    {
-        return differences.Any(value => value.State == ArchidektDifferenceStates.LocalChangedUnverified);
     }
 
     /// <summary>
