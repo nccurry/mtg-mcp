@@ -460,8 +460,10 @@ internal sealed class ArchidektDeckOperations
                 statuses.Add(Status(operation.Public, "applied", "Archidekt accepted the operation."));
             }
             catch (ArchidektProviderException exception)
-                when (exception.ReasonCode == "provider-rate-limited")
+                when (exception.ReasonCode is "provider-rate-limited" or RequestLimitReasonCode)
             {
+                // The rate limit answered, or the request limit stopped the request before it was sent (a sign-in
+                // again after a 401 can use the last request), so this write did not reach Archidekt.
                 statuses.Add(Status(operation.Public, "not-sent", $"{NotSentMessage} {exception.Message}"));
                 AddNotAttempted(statuses, plan, index + 1);
                 return new ArchidektApplyResult(

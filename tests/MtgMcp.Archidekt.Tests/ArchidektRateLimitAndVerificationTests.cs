@@ -196,6 +196,30 @@ public sealed class ArchidektRateLimitAndVerificationTests
     }
 
     /// <summary>
+    /// Verifies a write that finds the request limit used up, because a sign-in after a 401 took the last request,
+    /// is reported as not sent and keeps the statuses of the writes before it, instead of failing and losing them.
+    /// </summary>
+    [Fact]
+    public async Task Write_ThatHitsTheRequestLimitAfterASignInAgain_KeepsTheStatuses()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"t\"}");
+        handler.Add(HttpMethod.Patch, DeckRoute, "{}");
+        handler.Add(HttpMethod.Post, "api/decks/createCategory/", "{}", HttpStatusCode.Unauthorized);
+
+        ArchidektApplyResult result = await ApplyAsync(handler, [], renamedAndExtended: true, maximumRequests: 3);
+
+        Assert.Equal("partial", result.Outcome);
+        Assert.Equal(["applied", "not-sent"], result.Operations.Select(value => value.Status));
+        Assert.Contains(
+            "Nothing was sent to Archidekt for this operation.",
+            result.Operations[1].Message,
+            StringComparison.Ordinal);
+        Assert.Null(result.FinalRemoteFingerprint);
+        Assert.DoesNotContain(handler.Requests, value => value.Method == HttpMethod.Get);
+    }
+
+    /// <summary>
     /// Verifies a read that lags behind the writes is read once more after a pause, and the push counts as applied
     /// when the second read matches.
     /// </summary>
