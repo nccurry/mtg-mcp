@@ -150,18 +150,22 @@ internal sealed class ArchidektReadTools
         "Archidekt: previews creating or transactionally replacing a local deck from fresh Archidekt evidence; " +
         "performs zero writes. The result starts with a summary (operation, difference, and conflict counts) and " +
         "says whether archidekt_pull_apply is available and, if not, what to ask the user to change. A public deck " +
-        "needs no credentials; a private deck needs Archidekt credentials (see archidekt_auth_status). Rows come in " +
-        "pages that fit the size limit; the guards cover the whole preview, so the apply tool needs no page. On " +
-        "later pages pass expectedPreviewFingerprint, the previewFingerprint of the first page." +
+        "needs no credentials; a private deck needs Archidekt credentials (see archidekt_auth_status). A pull keeps " +
+        "cards and categories added locally since the last sync (a local-keep operation; the next push adds them) " +
+        "and replaces everything else from Archidekt; any other local change is a conflict that needs " +
+        "discardLocalChanges. Rows come in pages that fit the size limit; the guards cover the whole preview, so " +
+        "the apply tool needs no page. On later pages pass expectedPreviewFingerprint, the previewFingerprint of " +
+        "the first page." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSyncPreviewView>> PreviewPullAsync(
         [Description("Exact Archidekt deck identifier to read.")] string remoteDeckId,
         [Description("Optional stable local deck UUID to compare; omit to preview local creation.")]
         Guid? localDeckId = null,
         [Description(
-            "Set true to take the Archidekt state over local edits made since the last synchronization (a deck " +
-            "stuck as locally changed); the preview lists what would be discarded, and archidekt_pull_apply must " +
-            "pass the same value. Needs localDeckId.")] bool discardLocalChanges = false,
+            "Set true to take the Archidekt state over every local edit made since the last synchronization, " +
+            "including edits a pull cannot keep (anything other than added cards and categories) and cards added " +
+            "locally. The preview counts what would be discarded, and archidekt_pull_apply must pass the same " +
+            "value. Needs localDeckId.")] bool discardLocalChanges = false,
         [Description("Number of operations to skip; use nextOperationOffset from the previous page. Default 0.")]
         int operationOffset = 0,
         [Description("Number of differences to skip; use nextDifferenceOffset from the previous page. Default 0.")]

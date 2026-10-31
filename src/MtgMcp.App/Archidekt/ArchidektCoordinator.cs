@@ -707,7 +707,8 @@ internal sealed class ArchidektSynchronizationContext
         {
             ApplyBlockedNotice = "archidekt_push_apply would refuse this push: the Archidekt deck changed since the " +
                 $"last sync ({remoteRows} {(remoteRows == 1 ? "row" : "rows")}; see differences with remote-* " +
-                "states). Run archidekt_pull_preview first; cards added locally are kept. Then push again.",
+                "states). Run archidekt_pull_preview first; a pull keeps cards added locally when those are your " +
+                "only local changes. Then push again.",
         };
     }
 

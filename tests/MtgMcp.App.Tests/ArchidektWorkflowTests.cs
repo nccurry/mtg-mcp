@@ -1162,8 +1162,8 @@ public sealed class ArchidektWorkflowTests
         Assert.Equal(3, preview.Differences.Count(value => value.State == "local-added"));
         Assert.Equal(
             "archidekt_push_apply would refuse this push: the Archidekt deck changed since the last sync (3 rows; see " +
-            "differences with remote-* states). Run archidekt_pull_preview first; cards added locally are kept. Then " +
-            "push again.",
+            "differences with remote-* states). Run archidekt_pull_preview first; a pull keeps cards added locally " +
+            "when those are your only local changes. Then push again.",
             preview.ApplyNotice);
 
         OperationResult<ArchidektApplyResult> refused = await world.Writes.ApplyPushAsync(
