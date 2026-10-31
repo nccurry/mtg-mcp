@@ -221,6 +221,37 @@ public static class ArchidektSyncPlanner
     }
 
     /// <summary>
+    /// Lists the entries a pull will move because the baseline holds a zone that the current rule no longer gives them
+    /// (a deck pulled before an entry in a category outside the deck was mapped to the maybeboard). The comparison of the
+    /// two fingerprints ignores such a zone, so a push shows no difference for it; a pull still changes it, so the pull
+    /// preview lists it as an ordinary change from Archidekt.
+    /// </summary>
+    public static IReadOnlyList<ArchidektDifference> FindStaleZoneMoves(
+        RemoteDeckSnapshot baseline,
+        RemoteDeckSnapshot remote)
+    {
+        ArgumentNullException.ThrowIfNull(baseline);
+        ArgumentNullException.ThrowIfNull(remote);
+        IReadOnlyDictionary<string, RemoteDeckEntry> remoteRows = KeyEntries(remote.Entries);
+        List<ArchidektDifference> moves = [];
+        foreach ((string key, RemoteDeckEntry baselineRow) in KeyEntries(baseline.Entries))
+        {
+            if (remoteRows.TryGetValue(key, out RemoteDeckEntry? remoteRow) &&
+                !string.Equals(baselineRow.Zone, remoteRow.Zone, StringComparison.Ordinal))
+            {
+                moves.Add(new ArchidektDifference(
+                    $"/entries/{EscapePathSegment(key)}",
+                    ArchidektDifferenceStates.RemoteChanged,
+                    SerializeEntity(new Dictionary<string, RemoteDeckEntry> { [key] = baselineRow }, key),
+                    LocalValue: null,
+                    SerializeEntity(new Dictionary<string, RemoteDeckEntry> { [key] = remoteRow }, key)));
+            }
+        }
+
+        return moves;
+    }
+
+    /// <summary>
     /// Serializes one normalized entity for model-readable before/after evidence.
     /// </summary>
     private static string? SerializeEntity<T>(IReadOnlyDictionary<string, T> values, string key)

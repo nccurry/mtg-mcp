@@ -222,6 +222,8 @@ internal sealed class ArchidektSynchronizationContext
                 remote.Data,
                 state.Data.Baseline);
             differences.AddRange(diff.Differences);
+            differences.AddRange(ArchidektSyncPlanner.FindStaleZoneMoves(state.Data.Baseline.RemoteSnapshot, remote.Data)
+                .Where(move => differences.TrueForAll(shown => shown.Path != move.Path)));
             conflicts = HasLocalChanges(diff) && !discardLocalChanges;
         }
 
@@ -486,7 +488,8 @@ discardLocalChanges
             $"'{value.CardName}' (zone '{value.Zone}', but its categories give zone '{value.ExpectedZone}')");
         string more = contradictions.Count > 5 ? $" and {contradictions.Count - 5} more" : string.Empty;
         return "Archidekt keeps no zone of its own: a card's zone comes from its categories (a category named " +
-            "Commander, Sideboard or Maybeboard, or the commander category; otherwise main). These cards would come " +
+            "Commander, Sideboard or Maybeboard, or the commander category; otherwise main, or maybeboard when the first " +
+            "category is not included in the deck). These cards would come " +
             $"back in another zone: {string.Join("; ", shown)}{more}. Change the zone, or add or remove the matching " +
             "category.";
     }

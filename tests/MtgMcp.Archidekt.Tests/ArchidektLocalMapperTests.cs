@@ -757,7 +757,10 @@ public sealed class ArchidektLocalMapperTests
     [Theory]
     [InlineData("sideboard", "Sideboard", true, null)]
     [InlineData("sideboard", "Sideboard", null, null)]
-    [InlineData("main", "Out", false, null)]
+    [InlineData("main", "Out", false, "maybeboard")]
+    [InlineData("maybeboard", "Out", false, null)]
+    [InlineData("main", "Out", true, null)]
+    [InlineData("main", "Out", null, null)]
     [InlineData("main", "Sideboard", true, "sideboard")]
     [InlineData("main", "Sideboard", false, "sideboard")]
     [InlineData("maybeboard", "Sideboard", false, "sideboard")]
@@ -790,6 +793,73 @@ public sealed class ArchidektLocalMapperTests
             target);
 
         Assert.Equal(expectedZone is null ? [] : [expectedZone], found.Select(value => value.ExpectedZone));
+    }
+
+    /// <summary>
+    /// Verifies only the first category decides whether an entry is in the deck, and that the commander, sideboard and
+    /// maybeboard rules come before it: an entry with no category, or a category with no flag, is in the deck.
+    /// </summary>
+    [Theory]
+    [InlineData("Multiplayer", "maybeboard")]
+    [InlineData("Removal", "main")]
+    [InlineData("Multiplayer,Removal", "maybeboard")]
+    [InlineData("Removal,Multiplayer", "main")]
+    [InlineData("Unflagged", "main")]
+    [InlineData("Unknown", "main")]
+    [InlineData("", "main")]
+    [InlineData("Multiplayer,Sideboard", "sideboard")]
+    [InlineData("Multiplayer,Commander", "commander")]
+    [InlineData("Multiplayer,Maybeboard", "maybeboard")]
+    public void MapZone_FollowsTheFirstCategoryFlag(string categories, string expectedZone)
+    {
+        RemoteDeckSnapshot deck = WithCategories("Multiplayer", "Removal", "Sideboard", "Commander", "Maybeboard");
+        deck = deck with
+        {
+            Categories =
+            [
+                deck.Categories[0] with { IncludedInDeck = false },
+                deck.Categories[1] with { IncludedInDeck = true },
+                deck.Categories[2],
+                deck.Categories[3] with { IncludedInDeck = true },
+                deck.Categories[4],
+                new RemoteDeckCategory("200", "Unflagged", null, true, false, 9),
+            ],
+        };
+        string[] names = categories.Length == 0 ? [] : categories.Split(',');
+        Dictionary<string, RemoteDeckCategory> index = deck.Categories.ToDictionary(value => value.Name);
+
+        Assert.Equal(expectedZone, ArchidektJsonContract.MapZone(names, index));
+    }
+
+    /// <summary>
+    /// Verifies a deck says an entry is in the deck unless its first category is flagged out: no category, a category
+    /// the deck does not list, a category with no flag, and an included category all count as in the deck.
+    /// </summary>
+    [Theory]
+    [InlineData("Multiplayer", false)]
+    [InlineData("Multiplayer,Removal", false)]
+    [InlineData("Removal,Multiplayer", true)]
+    [InlineData("Unflagged", true)]
+    [InlineData("Unknown", true)]
+    [InlineData("", true)]
+    public void IsInDeck_IsFalseOnlyWhenTheFirstCategoryIsFlaggedOut(string categories, bool expected)
+    {
+        RemoteDeckSnapshot deck = WithCategories("Multiplayer", "Removal");
+        deck = deck with
+        {
+            Categories =
+            [
+                deck.Categories[0] with { IncludedInDeck = false },
+                deck.Categories[1] with { IncludedInDeck = true },
+                new RemoteDeckCategory("200", "Unflagged", null, true, false, 9),
+            ],
+        };
+        RemoteDeckEntry entry = ParseDeck().Entries[0] with
+        {
+            CategoryNames = categories.Length == 0 ? [] : categories.Split(','),
+        };
+
+        Assert.Equal(expected, deck.IsInDeck(entry));
     }
 
     /// <summary>

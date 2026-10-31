@@ -67,7 +67,8 @@ internal sealed class ArchidektReadTools
         "Archidekt: gets fresh deck metadata, a leading summary (entry, card, and category counts, cards by " +
         "zone), exact printings, zones, categories, provider IDs, and canonical fingerprints. Entries come in " +
         "pages that fit the size limit, ordered by card name; categories and unknown provider fields come with the " +
-        "first page. Unknown provider fields over 8,000 bytes are left out and extensionsOmitted is true; they " +
+        "first page. Each entry has inDeck: false when its first category is not included in the deck (it is then in " +
+        "the maybeboard zone). Unknown provider fields over 8,000 bytes are left out and extensionsOmitted is true; they " +
         "cannot be read through this tool. When truncated is true, call again with offset set to nextOffset." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektDeckView>> GetDeckAsync(

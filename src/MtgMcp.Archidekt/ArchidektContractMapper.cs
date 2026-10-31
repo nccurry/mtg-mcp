@@ -444,7 +444,8 @@ internal static class ArchidektJsonContract
     }
 
     /// <summary>
-    /// Maps provider category conventions into the format-neutral local zone vocabulary.
+    /// Maps provider category conventions into the format-neutral local zone vocabulary. An entry whose first category
+    /// is not included in the deck is not in the deck, so it maps to the maybeboard.
     /// </summary>
     internal static string MapZone(
         IReadOnlyList<string> names,
@@ -469,7 +470,20 @@ internal static class ArchidektJsonContract
             }
         }
 
-        return "main";
+        return IsInDeck(names, categoriesByName) ? "main" : "maybeboard";
+    }
+
+    /// <summary>
+    /// Tells whether Archidekt counts an entry toward the deck: only the first (primary) category decides, and an
+    /// entry with no category, or a category with no flag, is in the deck.
+    /// </summary>
+    internal static bool IsInDeck(
+        IReadOnlyList<string> names,
+        IReadOnlyDictionary<string, RemoteDeckCategory> categoriesByName)
+    {
+        return names.Count == 0 ||
+            !CategoryNames.TryFind(categoriesByName, names[0], out RemoteDeckCategory? primary) ||
+            primary.IncludedInDeck != false;
     }
 
     /// <summary>
@@ -709,6 +723,7 @@ internal static class ArchidektJsonContract
     internal static (string Content, string Remote) Recompute(RemoteDeckSnapshot deck)
     {
         ArgumentNullException.ThrowIfNull(deck);
+        deck = WithCurrentZones(deck);
         string content = FingerprintContent(
             deck.Name,
             deck.Description,
@@ -718,6 +733,32 @@ internal static class ArchidektJsonContract
             deck.Categories,
             deck.Entries);
         return (content, RemoteFingerprintOf(deck.RemoteId, content, deck.Categories, deck.Entries, deck.Extensions));
+    }
+
+    /// <summary>
+    /// Gives every entry the zone the current rule derives from its categories. A baseline stored by an earlier version
+    /// may hold another zone for an entry (before the first category's flag counted, such an entry was in main), and it
+    /// must still compare equal to the same deck read now. The entry's primary category comes first, as in a read.
+    /// </summary>
+    private static RemoteDeckSnapshot WithCurrentZones(RemoteDeckSnapshot deck)
+    {
+        Dictionary<string, RemoteDeckCategory> categories = CategoryNames.Index(deck.Categories, value => value.Name);
+        return deck with
+        {
+            Entries =
+            [
+                .. deck.Entries.Select(entry =>
+                {
+                    List<string> names = [.. entry.CategoryNames];
+                    if (entry.PrimaryCategoryName is { } primary && names.Remove(primary))
+                    {
+                        names.Insert(0, primary);
+                    }
+
+                    return entry with { Zone = MapZone(names, categories) };
+                }),
+            ],
+        };
     }
 
     /// <summary>
