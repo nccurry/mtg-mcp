@@ -653,7 +653,7 @@ public sealed class ArchidektCoordinatorTests
             QueueHandler handler = new();
             // The preview searches once, and the apply runs the preview again.
             handler.SetStanding(
-                "api/cards/v2/?name=Shock&pageSize=25",
+                "api/cards/v2/?name=Shock&exact=true&pageSize=25",
                 "{ \"count\": 1, \"next\": null, \"results\": [ { \"id\": 9001, " +
                 "\"uid\": \"33333333-3333-3333-3333-333333333309\", \"collectorNumber\": \"9\", " +
                 "\"edition\": { \"editioncode\": \"dmu\" }, \"oracleCard\": { \"name\": \"Shock\" } } ] }");
@@ -1625,7 +1625,7 @@ public sealed class ArchidektCoordinatorTests
             }
 
             handler.SetStanding(
-                "api/cards/v2/?name=Boros%20Charm&pageSize=25",
+                "api/cards/v2/?name=Boros%20Charm&exact=true&pageSize=25",
                 "{ \"count\": 1, \"next\": null, \"results\": [ { \"id\": 778, " +
                 "\"uid\": \"55555555-5555-5555-5555-555555555578\", \"collectorNumber\": \"2\", " +
                 "\"edition\": { \"editioncode\": \"dmu\" }, \"oracleCard\": { \"name\": \"Boros Charm\" } } ] }");

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MtgMcp.App.Archidekt;
@@ -1134,7 +1135,7 @@ public sealed class ArchidektWorkflowTests
         Assert.Null(preview.ApplyNotice);
         Assert.Equal(27, preview.Summary.OperationCount);
         Assert.Equal(
-            "Add one exact card relation: Archidekt printing soc 294 (default of 18; no printing was set).",
+            "Add one exact card relation: Archidekt printing soc 294 (first of 18 Archidekt printings of this name; no printing was set).",
             preview.Operations.Single(value => value.Subject == "Assassin's Trophy").Summary);
         Assert.All(
             preview.Operations,
@@ -1161,6 +1162,143 @@ public sealed class ArchidektWorkflowTests
             await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
         Assert.Empty(push.Operations);
         Assert.Empty(pull.Differences);
+    }
+
+    /// <summary>
+    /// Verifies a set printing that is on the second page of the search is found through push preview and apply: the
+    /// preview names it after reading two pages, the apply reuses that choice and sends the card of the printing.
+    /// </summary>
+    [Fact]
+    public async Task SetPrintingOnPageTwoOfTheSearch_IsPreviewedAndPushed()
+    {
+        FakeArchidekt fake = new();
+        fake.AddCategory("Removal");
+        fake.AddEntry(fake.AddCardToCatalog(501, "Bolt"), 1, "Removal");
+        for (int number = 1; number <= 30; number++)
+        {
+            _ = fake.AddCardToCatalog(7000 + number, "Test Land", "dmu", number.ToString(CultureInfo.InvariantCulture));
+        }
+
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            AddToRemoval(local, new DeckEntryDraft(1, "Test Land", SetCode: "dmu", CollectorNumber: "28")),
+            token));
+
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        List<string> searches = [.. world.Fake.Requests.Where(
+            value => value.Contains("api/cards/v2/", StringComparison.Ordinal))];
+
+        Assert.True(preview.ApplyAvailable);
+        Assert.Equal(2, searches.Count);
+        Assert.Contains("exact=true", searches[0], StringComparison.Ordinal);
+        Assert.Contains("edition=dmu", searches[0], StringComparison.Ordinal);
+        Assert.Contains("page=2", searches[1], StringComparison.Ordinal);
+        Assert.Contains(
+            "Archidekt printing dmu 28 (the set and collector number on the entry).",
+            preview.Operations.Single(value => value.Subject == "Test Land").Summary,
+            StringComparison.Ordinal);
+
+        ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token));
+
+        Assert.Equal("applied", applied.Outcome);
+        Assert.Equal("7028", world.Fake.CardIdOf("Test Land"));
+    }
+
+    /// <summary>
+    /// Verifies a set printing of a card with 955 printings, as Forest has, is found only because the search filters by
+    /// set: by name alone the printing is far past the twelve pages the server reads.
+    /// </summary>
+    [Fact]
+    public async Task SetPrintingOfACardWithManyPrintings_IsFoundThroughTheSetFilter()
+    {
+        FakeArchidekt fake = new();
+        fake.AddCategory("Removal");
+        fake.AddEntry(fake.AddCardToCatalog(501, "Bolt"), 1, "Removal");
+        for (int number = 1; number <= 955; number++)
+        {
+            bool wanted = number is >= 900 and <= 905;
+            _ = fake.AddCardToCatalog(
+                10_000 + number,
+                "Forest",
+                wanted ? "dmu" : "old",
+                (wanted ? number - 626 : number).ToString(CultureInfo.InvariantCulture));
+        }
+
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        _ = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            AddToRemoval(local, new DeckEntryDraft(1, "Forest", SetCode: "dmu", CollectorNumber: "276")),
+            token));
+
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        Assert.True(preview.ApplyAvailable);
+        Assert.Contains(
+            "Archidekt printing dmu 276",
+            preview.Operations.Single(value => value.Subject == "Forest").Summary,
+            StringComparison.Ordinal);
+        Assert.Single(world.Fake.Requests, value => value.Contains("api/cards/v2/", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Verifies a name-only add of a card whose name is part of other card names is searched for exactly, so the card
+    /// is chosen and not one of the longer names that Archidekt lists first for a plain name search.
+    /// </summary>
+    [Fact]
+    public async Task NameOnlyAdd_OfANameThatOtherCardNamesContain_PicksTheCardOfThatName()
+    {
+        FakeArchidekt fake = new();
+        fake.AddCategory("Removal");
+        fake.AddEntry(fake.AddCardToCatalog(501, "Bolt"), 1, "Removal");
+        _ = fake.AddCardToCatalog(8001, "Shock Troops");
+        _ = fake.AddCardToCatalog(8002, "Aftershock");
+        _ = fake.AddCardToCatalog(8003, "Shock");
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            AddToRemoval(local, new DeckEntryDraft(1, "Shock")),
+            token));
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token));
+
+        Assert.Equal("applied", applied.Outcome);
+        Assert.Equal("8003", world.Fake.CardIdOf("Shock"));
+        Assert.Contains(
+            "first of 1 Archidekt printings of this name",
+            preview.Operations.Single(value => value.Subject == "Shock").Summary,
+            StringComparison.Ordinal);
+        Assert.All(
+            world.Fake.Requests.Where(value => value.Contains("api/cards/v2/", StringComparison.Ordinal)),
+            value => Assert.Contains("exact=true", value, StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -2050,6 +2188,20 @@ public sealed class ArchidektWorkflowTests
         return [.. deck.CategoryAssignments
             .Where(value => value.EntryId == entry.EntryId)
             .Select(value => deck.Categories.Single(category => category.CategoryId == value.CategoryId).Name)];
+    }
+
+    /// <summary>
+    /// Builds the changes that add one entry in the Removal category.
+    /// </summary>
+    private static List<DeckChange> AddToRemoval(DeckDocument local, DeckEntryDraft draft)
+    {
+        Guid entryId = Guid.NewGuid();
+        DeckCategory removal = local.Categories.Single(value => value.Name == "Removal");
+        return
+        [
+            new AddDeckEntryChange(draft with { EntryId = entryId }),
+            new AssignDeckCategoryChange(entryId, removal.CategoryId, true),
+        ];
     }
 
     /// <summary>

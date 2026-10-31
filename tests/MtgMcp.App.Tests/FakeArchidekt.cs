@@ -127,11 +127,19 @@ internal sealed class FakeArchidekt : HttpMessageHandler
             cardId,
             cardName,
             printingId ?? new Guid(cardId, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1),
-            oracleId ?? new Guid(cardId, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2),
+            oracleId ?? OracleIdOf(cardName),
             setCode,
             collectorNumber ?? cardId.ToString(System.Globalization.CultureInfo.InvariantCulture));
         catalog[cardId] = card;
         return card;
+    }
+
+    /// <summary>
+    /// Gives every printing of a card name the same Oracle ID, as Scryfall does.
+    /// </summary>
+    private static Guid OracleIdOf(string cardName)
+    {
+        return new Guid(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(cardName.ToLowerInvariant())).AsSpan(0, 16));
     }
 
     /// <summary>
@@ -274,23 +282,28 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     /// <summary>
     /// Answers one card search the way the real service does: results of 25 per page in <c>results</c>, the number of
     /// matches in <c>count</c>, and an absolute <c>next</c> link while more pages follow. A result names its set in
-    /// <c>edition.editioncode</c> and has no top-level set code. A recorded read-only query on 2026-10-31,
-    /// <c>GET /api/cards/v2/?name=Assassin%27s%20Trophy&amp;pageSize=25</c>, returned count 18 and next null; the same
-    /// service returns count 141 and a next link for Sol Ring.
+    /// <c>edition.editioncode</c> and has no top-level set code. Read-only queries on 2026-10-31 showed that
+    /// <c>name=</c> matches any card whose name contains the text (<c>name=Shock</c> gave 71 results, among them
+    /// Aftershock and Barbed Shocker), that <c>exact=true</c> keeps only the card with that name
+    /// (<c>name=Shock&amp;exact=true</c> gave 36, all "Shock"), and that <c>edition=&lt;set code&gt;</c> keeps only
+    /// that set (<c>name=Forest&amp;edition=dmu</c> gave 6 of the 955 printings of Forest). The same service returns
+    /// count 18 for Assassin's Trophy and 141 with a next link for Sol Ring.
     /// </summary>
     private HttpResponseMessage SearchCards(string path)
     {
-        // Matches the full name or the front face, as the recorded Archidekt search does for a double-faced card, and
-        // ignores case.
         Dictionary<string, string> query = path["api/cards/v2/?".Length..]
             .Split('&')
             .Select(value => value.Split('=', 2))
             .ToDictionary(value => value[0], value => Uri.UnescapeDataString(value[1]), StringComparer.Ordinal);
         string wanted = query["name"];
+        bool exact = query.TryGetValue("exact", out string? exactText) && exactText == "true";
+        query.TryGetValue("edition", out string? edition);
         int page = query.TryGetValue("page", out string? pageText) ? int.Parse(pageText, System.Globalization.CultureInfo.InvariantCulture) : 1;
         List<FakeCard> matches = [.. catalog.Values.Where(value =>
-            string.Equals(value.Name, wanted, StringComparison.OrdinalIgnoreCase) ||
-            value.Name.StartsWith(wanted + " // ", StringComparison.OrdinalIgnoreCase))];
+            (exact
+                ? string.Equals(value.Name, wanted, StringComparison.OrdinalIgnoreCase)
+                : value.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase)) &&
+            (edition is null || string.Equals(value.SetCode, edition, StringComparison.OrdinalIgnoreCase)))];
         JsonArray results = [];
         foreach (FakeCard card in matches.Skip((page - 1) * SearchPageSize).Take(SearchPageSize))
         {
@@ -305,7 +318,11 @@ internal sealed class FakeArchidekt : HttpMessageHandler
         }
 
         JsonNode next = page * SearchPageSize < matches.Count
-            ? JsonValue.Create($"https://archidekt.com/api/cards/v2/?name={Uri.EscapeDataString(wanted)}&page={page + 1}&pageSize=25")!
+            ? JsonValue.Create(
+                $"https://archidekt.com/api/cards/v2/?name={Uri.EscapeDataString(wanted)}" +
+                (exact ? "&exact=true" : string.Empty) +
+                (edition is null ? string.Empty : $"&edition={Uri.EscapeDataString(edition)}") +
+                $"&page={page + 1}&pageSize=25")!
             : null!;
         return Json(new JsonObject
         {

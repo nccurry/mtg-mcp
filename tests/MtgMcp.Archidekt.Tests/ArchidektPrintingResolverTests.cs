@@ -18,10 +18,11 @@ public sealed class ArchidektPrintingResolverTests
     /// <summary>
     /// Holds the search route for Assassin's Trophy.
     /// </summary>
-    private const string TrophyRoute = "api/cards/v2/?name=Assassin%27s%20Trophy&pageSize=25";
+    private const string TrophyRoute = "api/cards/v2/?name=Assassin%27s%20Trophy&exact=true&pageSize=25";
 
     /// <summary>
-    /// Verifies an entry with no printing takes the first listed exact-name result and says how many there were.
+    /// Verifies an entry with no printing takes the first listed exact-name result and says how many printings of the
+    /// card the search listed (the recorded page is trimmed to four printings).
     /// </summary>
     [Fact]
     public async Task NameOnlyEntry_TakesTheFirstListedPrintingAndNamesIt()
@@ -35,7 +36,7 @@ public sealed class ArchidektPrintingResolverTests
         ArchidektPrintingChoice choice = Assert.IsType<ArchidektPrintingChoice>(choices.Find(Entry("Assassin's Trophy")));
         Assert.Equal("151025", choice.ProviderCardId);
         Assert.Equal(
-            "Archidekt printing soc 294 (default of 18; no printing was set).",
+            "Archidekt printing soc 294 (first of 4 Archidekt printings of this name; no printing was set).",
             choice.Description);
         Assert.Equal(1, choices.SearchRequests);
     }
@@ -67,7 +68,10 @@ public sealed class ArchidektPrintingResolverTests
     public async Task SetAndCollectorNumber_MatchTheEditionCode()
     {
         ArchidektTestHttpHandler handler = new();
-        handler.Add(HttpMethod.Get, TrophyRoute, TrophyPage(count: 18));
+        handler.Add(
+            HttpMethod.Get,
+            "api/cards/v2/?name=Assassin%27s%20Trophy&exact=true&edition=grn&pageSize=25",
+            TrophyPage(count: 18));
         RemoteDeckEntry entry = Entry("Assassin's Trophy") with { SetCode = "GRN", CollectorNumber = "152" };
 
         ArchidektPrintingChoices choices = await ResolveAsync(handler, entry);
@@ -84,7 +88,7 @@ public sealed class ArchidektPrintingResolverTests
         ArchidektTestHttpHandler handler = new();
         handler.Add(
             HttpMethod.Get,
-            "api/cards/v2/?name=Island&pageSize=25",
+            "api/cards/v2/?name=Island&exact=true&edition=dmu&pageSize=25",
             """{"count":1,"next":null,"results":[{"id":501,"uid":"33333333-3333-3333-3333-333333333333","setCode":"dmu","collectorNumber":"278","oracleCard":{"name":"Island","uid":"44444444-4444-4444-4444-444444444444"}}]}""");
         RemoteDeckEntry entry = Entry("Island") with { SetCode = "DMU", CollectorNumber = "278" };
 
@@ -102,7 +106,7 @@ public sealed class ArchidektPrintingResolverTests
         ArchidektTestHttpHandler handler = new();
         handler.Add(
             HttpMethod.Get,
-            "api/cards/v2/?name=Name&pageSize=25",
+            "api/cards/v2/?name=Name&exact=true&pageSize=25",
             Page(
                 2,
                 null,
@@ -125,14 +129,14 @@ public sealed class ArchidektPrintingResolverTests
         ArchidektTestHttpHandler handler = new();
         handler.Add(
             HttpMethod.Get,
-            "api/cards/v2/?name=Sol%20Ring&pageSize=25",
+            "api/cards/v2/?name=Sol%20Ring&exact=true&edition=c21&pageSize=25",
             Page(
                 2,
-                "https://archidekt.com/api/cards/v2/?name=Sol%20Ring&page=2&pageSize=25",
+                "https://archidekt.com/api/cards/v2/?name=Sol%20Ring&exact=true&edition=c21&page=2&pageSize=25",
                 Result(1, "10000000-0000-0000-0000-000000000001", "cmd", "1", "Sol Ring", TrophyOracle)));
         handler.Add(
             HttpMethod.Get,
-            "api/cards/v2/?name=Sol%20Ring&page=2&pageSize=25",
+            "api/cards/v2/?name=Sol%20Ring&exact=true&edition=c21&page=2&pageSize=25",
             Page(
                 2,
                 null,
@@ -147,6 +151,195 @@ public sealed class ArchidektPrintingResolverTests
     }
 
     /// <summary>
+    /// Verifies a printing ID that no search result has stays unresolved: the entry asked for one printing, so the
+    /// first listed printing is never taken in its place.
+    /// </summary>
+    [Fact]
+    public async Task PrintingIdNotListed_IsUnresolvedAndNotTheDefault()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Get, TrophyRoute, TrophyPage(count: 4));
+        RemoteDeckEntry entry = Entry("Assassin's Trophy") with { PrintingId = Guid.NewGuid() };
+
+        ArchidektPrintingChoices choices = await ResolveAsync(handler, entry);
+
+        Assert.Null(choices.Find(entry));
+        Assert.Equal(["Assassin's Trophy"], choices.UnresolvedCardNames);
+    }
+
+    /// <summary>
+    /// Verifies a printing ID on page two wins over a set and collector number match on page one: the set rule waits
+    /// until every page was read.
+    /// </summary>
+    [Fact]
+    public async Task PrintingIdOnPageTwo_WinsOverASetMatchOnPageOne()
+    {
+        ArchidektTestHttpHandler handler = new();
+        const string route = "api/cards/v2/?name=Sol%20Ring&exact=true&edition=c21&pageSize=25";
+        handler.Add(
+            HttpMethod.Get,
+            route,
+            Page(
+                2,
+                "https://archidekt.com/api/cards/v2/?name=Sol%20Ring&exact=true&edition=c21&page=2&pageSize=25",
+                Result(1, "10000000-0000-0000-0000-000000000001", "c21", "263", "Sol Ring", TrophyOracle)));
+        handler.Add(
+            HttpMethod.Get,
+            "api/cards/v2/?name=Sol%20Ring&exact=true&edition=c21&page=2&pageSize=25",
+            Page(2, null, Result(2, "10000000-0000-0000-0000-000000000002", "c21", "264", "Sol Ring", TrophyOracle)));
+        RemoteDeckEntry entry = Entry("Sol Ring") with
+        {
+            PrintingId = Guid.Parse("10000000-0000-0000-0000-000000000002"),
+            SetCode = "c21",
+            CollectorNumber = "263",
+        };
+
+        ArchidektPrintingChoices choices = await ResolveAsync(handler, entry);
+
+        Assert.Equal("2", choices.Find(entry)!.ProviderCardId);
+        Assert.Equal(2, choices.SearchRequests);
+    }
+
+    /// <summary>
+    /// Verifies a search whose printing is never found reads at most twelve pages and then leaves the card
+    /// unresolved, even though Archidekt keeps sending a next link.
+    /// </summary>
+    [Fact]
+    public async Task PrintingNeverFound_StopsAtTwelvePages()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Get, "api/cards/v2/?name=Forest&exact=true&pageSize=25", EndlessPage(1));
+        for (int page = 2; page <= 14; page++)
+        {
+            handler.Add(HttpMethod.Get, $"api/cards/v2/?name=Forest&exact=true&page={page}&pageSize=25", EndlessPage(page));
+        }
+
+        RemoteDeckEntry entry = Entry("Forest") with { PrintingId = Guid.NewGuid() };
+
+        ArchidektPrintingChoices choices = await ResolveAsync(handler, entry);
+
+        Assert.Equal(["Forest"], choices.UnresolvedCardNames);
+        Assert.Equal(12, choices.SearchRequests);
+        Assert.Equal(12, handler.Requests.Count);
+    }
+
+    /// <summary>
+    /// Verifies the request limit reached on page two stops the search and leaves the card unresolved.
+    /// </summary>
+    [Fact]
+    public async Task RequestLimitOnPageTwo_StopsTheSearchAndLeavesTheCardUnresolved()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Get, "api/cards/v2/?name=Forest&exact=true&pageSize=25", EndlessPage(1));
+        using ArchidektSession session = CreateSession(handler);
+        ArchidektPrintingResolver resolver = new(new ArchidektDeckTransport(session));
+        ArchidektPrintingChoices choices = new();
+        RemoteDeckEntry entry = Entry("Forest") with { PrintingId = Guid.NewGuid() };
+
+        await resolver.ResolveAsync([entry], choices, new ArchidektOperationBudget(1), TestContext.Current.CancellationToken);
+
+        Assert.True(choices.StoppedAtRequestLimit);
+        Assert.Equal(["Forest"], choices.UnresolvedCardNames);
+        Assert.Equal(1, choices.SearchRequests);
+    }
+
+    /// <summary>
+    /// Verifies a result for another card whose name only contains the name asked for is never chosen, and is not
+    /// counted among the printings of the card: Archidekt's own count includes it.
+    /// </summary>
+    [Fact]
+    public async Task ResultOfAnotherCardWithALongerName_IsSkippedAndNotCounted()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(
+            HttpMethod.Get,
+            "api/cards/v2/?name=Shock&exact=true&pageSize=25",
+            Page(
+                3,
+                null,
+                Result(1, "10000000-0000-0000-0000-000000000001", "m10", "1", "Shock Troops", "00000000-0000-0000-0000-00000000000a"),
+                Result(2, "10000000-0000-0000-0000-000000000002", "m10", "2", "Shock", "00000000-0000-0000-0000-00000000000b"),
+                Result(3, "10000000-0000-0000-0000-000000000003", "m11", "3", "Shock", "00000000-0000-0000-0000-00000000000b")));
+        RemoteDeckEntry entry = Entry("Shock");
+
+        ArchidektPrintingChoices choices = await ResolveAsync(handler, entry);
+
+        Assert.Equal("2", choices.Find(entry)!.ProviderCardId);
+        Assert.Equal(
+            "Archidekt printing m10 2 (first of 2 Archidekt printings of this name; no printing was set).",
+            choices.Find(entry)!.Description);
+    }
+
+    /// <summary>
+    /// Verifies a set printing of a card with hundreds of printings is found through the set filter: the search asks
+    /// for the set, so the printing is on the first page although the name alone would list it far past the pages
+    /// the resolver reads.
+    /// </summary>
+    [Fact]
+    public async Task SetPrintingOfACardWithManyPrintings_IsFoundThroughTheSetFilter()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(
+            HttpMethod.Get,
+            "api/cards/v2/?name=Forest&exact=true&edition=dmu&pageSize=25",
+            Page(
+                2,
+                null,
+                Result(274, "10000000-0000-0000-0000-000000000274", "dmu", "274", "Forest", "00000000-0000-0000-0000-0000000f0001"),
+                Result(275, "10000000-0000-0000-0000-000000000275", "dmu", "275", "Forest", "00000000-0000-0000-0000-0000000f0001")));
+        RemoteDeckEntry entry = Entry("Forest") with { SetCode = "DMU", CollectorNumber = "275" };
+
+        ArchidektPrintingChoices choices = await ResolveAsync(handler, entry);
+
+        Assert.Equal("275", choices.Find(entry)!.ProviderCardId);
+        Assert.Equal(1, choices.SearchRequests);
+    }
+
+    /// <summary>
+    /// Verifies a double-faced card that Archidekt does not return for its exact front-face name is asked for again
+    /// without the exact-name flag, and the name rule then keeps only its own card.
+    /// </summary>
+    [Fact]
+    public async Task ExactSearchWithNoResult_IsAskedAgainWithoutTheExactFlag()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Get, "api/cards/v2/?name=Delver%20of%20Secrets&exact=true&pageSize=25", Page(0, null));
+        handler.Add(
+            HttpMethod.Get,
+            "api/cards/v2/?name=Delver%20of%20Secrets&pageSize=25",
+            Page(
+                2,
+                null,
+                Result(1, "10000000-0000-0000-0000-000000000001", "isd", "51", "Delver of Secrets // Insectile Aberration", "00000000-0000-0000-0000-00000000000d"),
+                Result(2, "10000000-0000-0000-0000-000000000002", "isd", "52", "Delver of Secrets Fan Card", "00000000-0000-0000-0000-00000000000e")));
+        RemoteDeckEntry entry = Entry("Delver of Secrets");
+
+        ArchidektPrintingChoices choices = await ResolveAsync(handler, entry);
+
+        Assert.Equal("1", choices.Find(entry)!.ProviderCardId);
+        Assert.Equal(2, choices.SearchRequests);
+    }
+
+    /// <summary>
+    /// Verifies a result that holds both an edition code and a top-level set code is read by the edition code, the way
+    /// a deck relation is read, so the search and the deck read agree.
+    /// </summary>
+    [Fact]
+    public async Task ResultWithBothSetCodes_IsReadByTheEditionCode()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(
+            HttpMethod.Get,
+            "api/cards/v2/?name=Island&exact=true&edition=dmu&pageSize=25",
+            """{"count":1,"next":null,"results":[{"id":501,"uid":"33333333-3333-3333-3333-333333333333","setCode":"xxx","collectorNumber":"278","edition":{"editioncode":"dmu"},"oracleCard":{"name":"Island","uid":"44444444-4444-4444-4444-444444444444"}}]}""");
+        RemoteDeckEntry entry = Entry("Island") with { SetCode = "dmu", CollectorNumber = "278" };
+
+        ArchidektPrintingChoices choices = await ResolveAsync(handler, entry);
+
+        Assert.Equal("501", choices.Find(entry)!.ProviderCardId);
+    }
+
+    /// <summary>
     /// Verifies a link to another route is never followed.
     /// </summary>
     [Fact]
@@ -155,7 +348,7 @@ public sealed class ArchidektPrintingResolverTests
         ArchidektTestHttpHandler handler = new();
         handler.Add(
             HttpMethod.Get,
-            "api/cards/v2/?name=Sol%20Ring&pageSize=25",
+            "api/cards/v2/?name=Sol%20Ring&exact=true&edition=c21&pageSize=25",
             Page(
                 2,
                 "https://example.invalid/steal?x=1",
@@ -169,24 +362,38 @@ public sealed class ArchidektPrintingResolverTests
     }
 
     /// <summary>
-    /// Verifies one search serves every entry of a name, and that a name with no result is reported.
+    /// Verifies one search serves every entry of a name and a set, that an entry with a set code is searched in that
+    /// set, and that a name with no result is reported after a second try without the exact-name flag.
     /// </summary>
     [Fact]
-    public async Task OneSearchPerName_AndNamesWithoutAResultAreReported()
+    public async Task OneSearchPerNameAndSet_AndNamesWithoutAResultAreReported()
     {
         ArchidektTestHttpHandler handler = new();
         handler.Add(HttpMethod.Get, TrophyRoute, TrophyPage(count: 18));
+        handler.Add(
+            HttpMethod.Get,
+            "api/cards/v2/?name=Assassin%27s%20Trophy&exact=true&edition=tmc&pageSize=25",
+            TrophyPage(count: 1));
+        handler.Add(HttpMethod.Get, "api/cards/v2/?name=Nonexistent%20Card&exact=true&pageSize=25", Page(0, null));
         handler.Add(HttpMethod.Get, "api/cards/v2/?name=Nonexistent%20Card&pageSize=25", Page(0, null));
         RemoteDeckEntry first = Entry("Assassin's Trophy");
+        RemoteDeckEntry again = Entry("Assassin's Trophy") with { PrintingId = Guid.NewGuid() };
         RemoteDeckEntry second = first with { SetCode = "tmc", CollectorNumber = "55" };
         RemoteDeckEntry missing = Entry("Nonexistent Card");
 
-        ArchidektPrintingChoices choices = await ResolveAsync(handler, first, second, missing);
+        ArchidektPrintingChoices choices = await ResolveAsync(handler, first, again, second, missing);
 
         Assert.Equal("151025", choices.Find(first)!.ProviderCardId);
         Assert.Equal("150200", choices.Find(second)!.ProviderCardId);
-        Assert.Equal(["Nonexistent Card"], choices.UnresolvedCardNames);
-        Assert.Equal(2, handler.Requests.Count);
+        Assert.Equal(["Assassin's Trophy", "Nonexistent Card"], choices.UnresolvedCardNames.Order(StringComparer.Ordinal));
+        Assert.Equal(
+            [
+                TrophyRoute,
+                "api/cards/v2/?name=Assassin%27s%20Trophy&exact=true&edition=tmc&pageSize=25",
+                "api/cards/v2/?name=Nonexistent%20Card&exact=true&pageSize=25",
+                "api/cards/v2/?name=Nonexistent%20Card&pageSize=25",
+            ],
+            handler.Requests.Select(value => value.Path));
     }
 
     /// <summary>
@@ -218,6 +425,7 @@ public sealed class ArchidektPrintingResolverTests
     public async Task ApplyPlan_CardWithNoPrinting_SendsNothingAndIsNotApplied()
     {
         ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Get, "api/cards/v2/?name=Nonexistent%20Card&exact=true&pageSize=25", Page(0, null));
         handler.Add(HttpMethod.Get, "api/cards/v2/?name=Nonexistent%20Card&pageSize=25", Page(0, null));
         (RemoteDeckSnapshot current, RemoteDeckSnapshot target) = DeckWithNewCard(Entry("Nonexistent Card"));
         target = target with { Name = "Renamed" };
@@ -258,6 +466,10 @@ public sealed class ArchidektPrintingResolverTests
     {
         ArchidektTestHttpHandler handler = new();
         handler.Add(HttpMethod.Get, TrophyRoute, TrophyPage(count: 18));
+        handler.Add(
+            HttpMethod.Get,
+            "api/cards/v2/?name=Assassin%27s%20Trophy&exact=true&edition=tmc&pageSize=25",
+            TrophyPage(count: 18));
         handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
         handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", "{}", HttpStatusCode.InternalServerError);
         (RemoteDeckSnapshot current, RemoteDeckSnapshot target) = DeckWithNewCard(
@@ -359,6 +571,23 @@ public sealed class ArchidektPrintingResolverTests
             Result(150200, "932efc19-9bfd-4501-a623-ff6765a356d8", "tmc", "55", "Assassin's Trophy", TrophyOracle),
             Result(128098, "ed6c7d29-71b4-4134-b591-5598f479d592", "mkm", "187", "Assassin's Trophy", TrophyOracle),
             Result(76319, "906b6e99-128f-4c11-8daf-16099d35b0d4", "grn", "152", "Assassin's Trophy", TrophyOracle));
+    }
+
+    /// <summary>
+    /// Builds a page of Forest results for other printings than the test asks for, with a next link to the page after.
+    /// </summary>
+    private static string EndlessPage(int page)
+    {
+        return Page(
+            955,
+            $"https://archidekt.com/api/cards/v2/?name=Forest&exact=true&page={page + 1}&pageSize=25",
+            Result(
+                page,
+                $"10000000-0000-0000-0000-{page:D12}",
+                "dmu",
+                page.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "Forest",
+                "00000000-0000-0000-0000-0000000f0001"));
     }
 
     /// <summary>

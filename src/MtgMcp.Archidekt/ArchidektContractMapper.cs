@@ -358,8 +358,10 @@ internal static class ArchidektJsonContract
             string relationId = GetId(relation, "deckRelationId")
                 ?? GetId(relation, "id")
                 ?? throw Unsupported("Archidekt card relation identity is missing.");
-            string providerCardId = RequireId(card, "id", "Archidekt printing identity is missing.");
-            string cardName = RequireText(oracle, "name", "Archidekt card name is missing.");
+            ArchidektCardPrinting printing = ReadPrinting(card) ?? throw Unsupported(
+                GetId(card, "id") is null
+                    ? "Archidekt printing identity is missing."
+                    : "Archidekt card name is missing.");
             List<string> categoryNames = MapCategoryNames(
                 relation,
                 categoriesById,
@@ -368,13 +370,13 @@ internal static class ArchidektJsonContract
             string zone = MapZone(categoryNames, primary, categoriesByName);
             entries.Add(new RemoteDeckEntry(
                 relationId,
-                providerCardId,
+                printing.ProviderCardId,
                 Math.Max(1, GetInt32(relation, "quantity") ?? 1),
-                cardName,
-                ParseGuid(GetString(oracle, "uid")),
-                ParseGuid(GetString(card, "uid")),
-                GetString(card, "setCode") ?? GetNestedString(card, "edition", "editioncode"),
-                GetString(card, "collectorNumber"),
+                printing.CardName,
+                printing.OracleId,
+                printing.PrintingId,
+                printing.SetCode,
+                printing.CollectorNumber,
                 GetString(relation, "language") ?? GetString(card, "language") ?? "en",
                 MapFinish(GetString(relation, "modifier")),
                 zone,
@@ -398,6 +400,32 @@ internal static class ArchidektJsonContract
                 : StringComparer.Ordinal.Compare(left.ProviderRelationId, right.ProviderRelationId);
         });
         return entries;
+    }
+
+    /// <summary>
+    /// Reads the card of a deck relation or of a card search result, which have the same shape: the Archidekt card ID,
+    /// the Scryfall printing ID (<c>uid</c>), the set code (<c>edition.editioncode</c>, which is what Archidekt sends;
+    /// a top-level <c>setCode</c> is used only when there is none), the collector number, and the oracle card with
+    /// its name and Oracle ID. Returns null when the card has no ID or no oracle name.
+    /// </summary>
+    internal static ArchidektCardPrinting? ReadPrinting(JsonElement card)
+    {
+        if (card.ValueKind != JsonValueKind.Object ||
+            !card.TryGetProperty("oracleCard", out JsonElement oracle) ||
+            oracle.ValueKind != JsonValueKind.Object ||
+            GetId(card, "id") is not { } providerCardId ||
+            ArchidektContract.Optional(GetString(oracle, "name")) is not { } cardName)
+        {
+            return null;
+        }
+
+        return new ArchidektCardPrinting(
+            providerCardId,
+            cardName,
+            ParseGuid(GetString(oracle, "uid")),
+            ParseGuid(GetString(card, "uid")),
+            GetNestedString(card, "edition", "editioncode") ?? GetString(card, "setCode"),
+            GetString(card, "collectorNumber"));
     }
 
     /// <summary>

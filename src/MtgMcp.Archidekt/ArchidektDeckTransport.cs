@@ -256,18 +256,18 @@ internal sealed class ArchidektDeckTransport
     }
 
     /// <summary>
-    /// Reads one page of Archidekt's public card search for an exact card name. The first page is requested by name;
-    /// a later page is requested with the query of the previous page's <c>next</c> link, so no other address is ever
-    /// followed.
+    /// Reads one page of Archidekt's public card search. The first page is requested from the search; a later page
+    /// is requested with the query of the previous page's <c>next</c> link, so no other address is ever followed.
     /// </summary>
     internal async Task<ArchidektCardSearchPage> SearchCardsAsync(
-        string cardName,
+        ArchidektCardSearch search,
         string? nextQuery,
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(search);
         string path = nextQuery is null
-            ? $"api/cards/v2/?name={Uri.EscapeDataString(cardName)}&pageSize=25"
+            ? $"api/cards/v2/{search.FirstQuery()}"
             : $"api/cards/v2/{nextQuery}";
         ArchidektSession.ProviderResponse response = await session.SendAsync(
             HttpMethod.Get,
@@ -284,12 +284,17 @@ internal sealed class ArchidektDeckTransport
             : root.ValueKind == JsonValueKind.Object && root.TryGetProperty("results", out JsonElement results)
                 ? results
                 : default;
-        List<JsonElement> candidates = [];
+        List<ArchidektCardPrinting> candidates = [];
+        int returned = 0;
         if (collection.ValueKind == JsonValueKind.Array)
         {
             foreach (JsonElement candidate in collection.EnumerateArray())
             {
-                candidates.Add(candidate.Clone());
+                returned++;
+                if (ArchidektJsonContract.ReadPrinting(candidate) is { } printing)
+                {
+                    candidates.Add(printing);
+                }
             }
         }
 
@@ -304,7 +309,7 @@ internal sealed class ArchidektDeckTransport
             nextElement.ValueKind == JsonValueKind.String
             ? SearchNextQuery(nextElement.GetString())
             : null;
-        return new ArchidektCardSearchPage(candidates, count, next);
+        return new ArchidektCardSearchPage(candidates, returned, count, next);
     }
 
     /// <summary>

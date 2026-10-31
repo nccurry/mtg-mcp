@@ -50,6 +50,17 @@ public sealed record RemoteDeckCategory(
     int SortOrder);
 
 /// <summary>
+/// Holds one Archidekt printing as a deck relation or a card search result shows it.
+/// </summary>
+internal sealed record ArchidektCardPrinting(
+    string ProviderCardId,
+    string CardName,
+    Guid? OracleId,
+    Guid? PrintingId,
+    string? SetCode,
+    string? CollectorNumber);
+
+/// <summary>
 /// Preserves one independently addressable card relation from an Archidekt deck.
 /// </summary>
 public sealed record RemoteDeckEntry(

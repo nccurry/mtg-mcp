@@ -1,15 +1,33 @@
 using System.Globalization;
-using System.Text.Json;
 using MtgMcp.Core.Decks;
 
 namespace MtgMcp.Archidekt;
 
 /// <summary>
-/// Carries one page of Archidekt's card search: the results, how many printings match in all, and the query of the
-/// next page when there is one.
+/// Describes one Archidekt card search: the card name, matched exactly, and the set to look in when the entry has one.
+/// </summary>
+internal sealed record ArchidektCardSearch(string CardName, string? SetCode, bool ExactName = true)
+{
+    /// <summary>
+    /// Builds the query of the first page. Archidekt matches a name as part of longer names unless <c>exact=true</c> is
+    /// sent, and filters by set with <c>edition</c>, which keeps a card with hundreds of printings, such as a basic
+    /// land, inside the pages that are read.
+    /// </summary>
+    internal string FirstQuery()
+    {
+        string exact = ExactName ? "&exact=true" : string.Empty;
+        string edition = SetCode is null ? string.Empty : $"&edition={Uri.EscapeDataString(SetCode)}";
+        return $"?name={Uri.EscapeDataString(CardName)}{exact}{edition}&pageSize=25";
+    }
+}
+
+/// <summary>
+/// Carries one page of Archidekt's card search: the printings it names, how many results the page held, how many
+/// printings match in all, and the query of the next page when there is one.
 /// </summary>
 internal sealed record ArchidektCardSearchPage(
-    IReadOnlyList<JsonElement> Results,
+    IReadOnlyList<ArchidektCardPrinting> Results,
+    int ResultCount,
     int? Count,
     string? NextQuery);
 
@@ -143,7 +161,7 @@ internal sealed class ArchidektPrintingResolver
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
-        Dictionary<string, NameSearch> searches = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, CardSearch> searches = new(StringComparer.OrdinalIgnoreCase);
         foreach (RemoteDeckEntry entry in entries)
         {
             if (choices.Find(entry) is not null)
@@ -157,10 +175,12 @@ internal sealed class ArchidektPrintingResolver
                 continue;
             }
 
-            if (!searches.TryGetValue(entry.CardName, out NameSearch? search))
+            string? setCode = ArchidektContract.Optional(entry.SetCode)?.ToLowerInvariant();
+            string searchKey = $"{entry.CardName}|{setCode}";
+            if (!searches.TryGetValue(searchKey, out CardSearch? search))
             {
-                search = new NameSearch();
-                searches[entry.CardName] = search;
+                search = new CardSearch(new ArchidektCardSearch(entry.CardName, setCode));
+                searches[searchKey] = search;
             }
 
             try
@@ -186,10 +206,12 @@ internal sealed class ArchidektPrintingResolver
 
     /// <summary>
     /// Finds the printing for one entry, reading more search pages only while the printing it asks for is not found.
+    /// An entry with a set code is looked for among the printings in that set, so a card with many printings is found
+    /// within the pages that are read.
     /// </summary>
     private async Task<ArchidektPrintingChoice?> ChooseAsync(
         RemoteDeckEntry entry,
-        NameSearch search,
+        CardSearch search,
         ArchidektPrintingChoices choices,
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
@@ -217,29 +239,41 @@ internal sealed class ArchidektPrintingResolver
     }
 
     /// <summary>
-    /// Reads the next search page for a name and keeps its exact-name results.
+    /// Reads the next search page for a name and keeps its exact-name results. A first page with no result at all is
+    /// asked for again without <c>exact=true</c>, for a card that Archidekt names by both faces, since the name rule
+    /// below keeps only the entry's own card.
     /// </summary>
     private async Task ReadPageAsync(
         RemoteDeckEntry entry,
-        NameSearch search,
+        CardSearch search,
         ArchidektPrintingChoices choices,
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
         ArchidektCardSearchPage page = await transport.SearchCardsAsync(
-            entry.CardName,
+            search.Query,
             search.NextQuery,
             budget,
             cancellationToken).ConfigureAwait(false);
         choices.SearchRequests++;
+        if (search.Pages == 0 && page.ResultCount == 0 && search.Query.ExactName)
+        {
+            search.Query = search.Query with { ExactName = false };
+            page = await transport.SearchCardsAsync(search.Query, nextQuery: null, budget, cancellationToken)
+                .ConfigureAwait(false);
+            choices.SearchRequests++;
+        }
+
         search.Pages++;
         search.Count ??= page.Count;
         search.NextQuery = page.NextQuery;
-        foreach (JsonElement candidate in page.Results)
+        search.SkippedResults += page.ResultCount;
+        foreach (ArchidektCardPrinting candidate in page.Results)
         {
-            if (CardNames.Match(OracleName(candidate), entry.CardName))
+            if (CardNames.Match(candidate.CardName, entry.CardName))
             {
                 search.Matches.Add(candidate);
+                search.SkippedResults--;
             }
         }
     }
@@ -249,16 +283,16 @@ internal sealed class ArchidektPrintingResolver
     /// Scryfall ID, then by set and collector number; an entry with no printing takes the first listed match. When the
     /// entry has a printing ID, the set rule waits until every page was read, so the ID wins over a set match.
     /// </summary>
-    private static ArchidektPrintingChoice? Find(RemoteDeckEntry entry, NameSearch search, bool exhausted)
+    private static ArchidektPrintingChoice? Find(RemoteDeckEntry entry, CardSearch search, bool exhausted)
     {
-        List<JsonElement> candidates = entry.OracleId is { } oracleId
-            ? [.. search.Matches.Where(value => OracleId(value) == oracleId)]
+        List<ArchidektCardPrinting> candidates = entry.OracleId is { } oracleId
+            ? [.. search.Matches.Where(value => value.OracleId == oracleId)]
             : search.Matches;
         if (entry.PrintingId is { } printingId)
         {
-            foreach (JsonElement candidate in candidates)
+            foreach (ArchidektCardPrinting candidate in candidates)
             {
-                if (PrintingId(candidate) == printingId)
+                if (candidate.PrintingId == printingId)
                 {
                     return Describe(candidate, "the printing set on the entry");
                 }
@@ -274,10 +308,15 @@ internal sealed class ArchidektPrintingResolver
 
         if (entry.PrintingId is null && candidates.Count > 0)
         {
-            int listed = search.Count ?? search.Matches.Count;
+            // Counts only printings of this card: Archidekt's own count may include other cards, and a search that
+            // is not read to the end cannot say more than what it was told, less what was seen not to match.
+            int listed = search.NextQuery is null
+                ? search.Matches.Count
+                : Math.Max(search.Matches.Count, (search.Count ?? search.Matches.Count) - search.SkippedResults);
             return Describe(
                 candidates[0],
-                $"default of {listed.ToString(CultureInfo.InvariantCulture)}; no printing was set");
+                $"first of {listed.ToString(CultureInfo.InvariantCulture)} Archidekt printings of this name; " +
+                "no printing was set");
         }
 
         return null;
@@ -286,13 +325,13 @@ internal sealed class ArchidektPrintingResolver
     /// <summary>
     /// Finds the first result in the entry's set, with its collector number when the entry has one.
     /// </summary>
-    private static ArchidektPrintingChoice? FindBySet(RemoteDeckEntry entry, List<JsonElement> candidates)
+    private static ArchidektPrintingChoice? FindBySet(RemoteDeckEntry entry, List<ArchidektCardPrinting> candidates)
     {
-        foreach (JsonElement candidate in candidates)
+        foreach (ArchidektCardPrinting candidate in candidates)
         {
-            if (string.Equals(SetCode(candidate), entry.SetCode, StringComparison.OrdinalIgnoreCase) &&
+            if (string.Equals(candidate.SetCode, entry.SetCode, StringComparison.OrdinalIgnoreCase) &&
                 (entry.CollectorNumber is null ||
-                 string.Equals(CollectorNumber(candidate), entry.CollectorNumber, StringComparison.OrdinalIgnoreCase)))
+                 string.Equals(candidate.CollectorNumber, entry.CollectorNumber, StringComparison.OrdinalIgnoreCase)))
             {
                 return Describe(candidate, "the set and collector number on the entry");
             }
@@ -304,95 +343,34 @@ internal sealed class ArchidektPrintingResolver
     /// <summary>
     /// Builds the choice for one search result.
     /// </summary>
-    private static ArchidektPrintingChoice? Describe(JsonElement candidate, string reason)
+    private static ArchidektPrintingChoice Describe(ArchidektCardPrinting candidate, string reason)
     {
-        if (!ArchidektProviderId.TryRead(candidate, "id", out string? cardId))
-        {
-            return null;
-        }
-
-        string set = SetCode(candidate) ?? "?";
-        string collector = CollectorNumber(candidate) ?? "?";
-        return new ArchidektPrintingChoice(cardId!, $"Archidekt printing {set} {collector} ({reason}).");
+        string set = candidate.SetCode ?? "?";
+        string collector = candidate.CollectorNumber ?? "?";
+        return new ArchidektPrintingChoice(
+            candidate.ProviderCardId,
+            $"Archidekt printing {set} {collector} ({reason}).");
     }
 
     /// <summary>
-    /// Reads the card name from the result's oracle card.
+    /// Holds what the search for one card name, in one set or in all, has read so far.
     /// </summary>
-    private static string? OracleName(JsonElement candidate)
+    private sealed class CardSearch(ArchidektCardSearch query)
     {
-        return candidate.TryGetProperty("oracleCard", out JsonElement oracle) &&
-            oracle.ValueKind == JsonValueKind.Object &&
-            oracle.TryGetProperty("name", out JsonElement name) &&
-            name.ValueKind == JsonValueKind.String
-            ? name.GetString()
-            : null;
-    }
+        /// <summary>
+        /// Gets or sets the search; the exact-name flag is dropped when Archidekt answers an exact name with nothing.
+        /// </summary>
+        internal ArchidektCardSearch Query { get; set; } = query;
 
-    /// <summary>
-    /// Reads the Oracle ID from the result's oracle card.
-    /// </summary>
-    private static Guid? OracleId(JsonElement candidate)
-    {
-        return candidate.TryGetProperty("oracleCard", out JsonElement oracle) &&
-            oracle.ValueKind == JsonValueKind.Object &&
-            oracle.TryGetProperty("uid", out JsonElement uid) &&
-            uid.ValueKind == JsonValueKind.String &&
-            Guid.TryParse(uid.GetString(), out Guid value)
-            ? value
-            : null;
-    }
-
-    /// <summary>
-    /// Reads the Scryfall printing ID, which Archidekt calls <c>uid</c>.
-    /// </summary>
-    private static Guid? PrintingId(JsonElement candidate)
-    {
-        return candidate.TryGetProperty("uid", out JsonElement uid) &&
-            uid.ValueKind == JsonValueKind.String &&
-            Guid.TryParse(uid.GetString(), out Guid value)
-            ? value
-            : null;
-    }
-
-    /// <summary>
-    /// Reads the set code from <c>edition.editioncode</c>, falling back to a top-level <c>setCode</c>.
-    /// </summary>
-    private static string? SetCode(JsonElement candidate)
-    {
-        if (candidate.TryGetProperty("edition", out JsonElement edition) &&
-            edition.ValueKind == JsonValueKind.Object &&
-            edition.TryGetProperty("editioncode", out JsonElement code) &&
-            code.ValueKind == JsonValueKind.String)
-        {
-            return code.GetString();
-        }
-
-        return candidate.TryGetProperty("setCode", out JsonElement set) && set.ValueKind == JsonValueKind.String
-            ? set.GetString()
-            : null;
-    }
-
-    /// <summary>
-    /// Reads the collector number.
-    /// </summary>
-    private static string? CollectorNumber(JsonElement candidate)
-    {
-        return candidate.TryGetProperty("collectorNumber", out JsonElement number) &&
-            number.ValueKind == JsonValueKind.String
-            ? number.GetString()
-            : null;
-    }
-
-    /// <summary>
-    /// Holds what the search for one card name has read so far.
-    /// </summary>
-    private sealed class NameSearch
-    {
         /// <summary>
         /// Gets the exact-name results read so far, in the order Archidekt listed them.
         /// </summary>
-        internal List<JsonElement> Matches { get; } = [];
+        internal List<ArchidektCardPrinting> Matches { get; } = [];
+
+        /// <summary>
+        /// Gets or sets how many results read so far were for other cards.
+        /// </summary>
+        internal int SkippedResults { get; set; }
 
         /// <summary>
         /// Gets or sets the number of pages read.
