@@ -364,6 +364,8 @@ public sealed class DeckEntryResolverTests
         DeckWriteIssue issue = Assert.Single(summary.Issues!);
         Assert.Equal(DeckWriteIssue.Skipped, issue.Kind);
         Assert.Contains("could not be read", issue.Message, StringComparison.Ordinal);
+        Assert.Contains("default printing", issue.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("to resolve them", issue.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

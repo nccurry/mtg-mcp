@@ -651,10 +651,12 @@ public sealed class ArchidektCoordinatorTests
         try
         {
             QueueHandler handler = new();
-            handler.Add(
-                HttpMethod.Get,
+            // The preview searches once, and the apply runs the preview again.
+            handler.SetStanding(
                 "api/cards/v2/?name=Shock&pageSize=25",
-                "{ \"results\": [ { \"id\": 9001, \"oracleCard\": { \"name\": \"Shock\" } } ] }");
+                "{ \"count\": 1, \"next\": null, \"results\": [ { \"id\": 9001, " +
+                "\"uid\": \"33333333-3333-3333-3333-333333333309\", \"collectorNumber\": \"9\", " +
+                "\"edition\": { \"editioncode\": \"dmu\" }, \"oracleCard\": { \"name\": \"Shock\" } } ] }");
             handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", "{}");
             (ArchidektCoordinator coordinator, SqliteDeckStore store, Guid localDeckId) =
                 await PullRichDeckAsync(handler, root);
@@ -1622,6 +1624,11 @@ public sealed class ArchidektCoordinatorTests
                 handler.Add(HttpMethod.Get, "api/decks/42/", withHelix);
             }
 
+            handler.SetStanding(
+                "api/cards/v2/?name=Boros%20Charm&pageSize=25",
+                "{ \"count\": 1, \"next\": null, \"results\": [ { \"id\": 778, " +
+                "\"uid\": \"55555555-5555-5555-5555-555555555578\", \"collectorNumber\": \"2\", " +
+                "\"edition\": { \"editioncode\": \"dmu\" }, \"oracleCard\": { \"name\": \"Boros Charm\" } } ] }");
             using ArchidektService service = CreateService(handler);
             using SqliteDeckStore store = new(root, "test");
             RemoteDeckSnapshot pulled = ParseRemote(RemoteDeck);

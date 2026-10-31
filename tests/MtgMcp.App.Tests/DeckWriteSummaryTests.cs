@@ -189,6 +189,7 @@ public sealed class DeckWriteSummaryTests
         DeckWriteIssue note = Assert.Single(summary.Issues!);
         Assert.Equal(DeckWriteIssue.Skipped, note.Kind);
         Assert.Contains("not installed", note.Message, StringComparison.Ordinal);
+        Assert.Contains("default printing", note.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

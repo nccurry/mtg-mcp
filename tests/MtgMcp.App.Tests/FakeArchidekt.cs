@@ -28,6 +28,11 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     private const int ListedDecks = 120;
 
     /// <summary>
+    /// Holds how many card search results one page holds.
+    /// </summary>
+    private const int SearchPageSize = 25;
+
+    /// <summary>
     /// Holds how many named snapshots the snapshot list shows.
     /// </summary>
     private const int ListedSnapshots = 60;
@@ -130,6 +135,15 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     }
 
     /// <summary>
+    /// Gets the Archidekt card id of the one entry for a card by name, as the deck read shows it.
+    /// </summary>
+    internal string CardIdOf(string cardName)
+    {
+        return entries.Single(value => catalog[value.CardId].Name == cardName).CardId
+            .ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
     /// Gets the category names of the one entry for a card, primary first, as stored.
     /// </summary>
     internal IReadOnlyList<string> CategoriesOf(string cardName)
@@ -199,29 +213,58 @@ internal sealed class FakeArchidekt : HttpMessageHandler
 
         if (path.StartsWith("api/cards/v2/?name=", StringComparison.Ordinal))
         {
-            // Matches the full name or the front face, as the recorded Archidekt search does for a double-faced card.
-            string wanted = Uri.UnescapeDataString(path["api/cards/v2/?name=".Length..].Split('&')[0]);
-            JsonArray results = [];
-            foreach (FakeCard card in catalog.Values.Where(value => value.Name == wanted ||
-                value.Name.StartsWith(wanted + " // ", StringComparison.Ordinal)))
-            {
-                results.Add(new JsonObject
-                {
-                    ["id"] = card.Id,
-                    ["uid"] = card.PrintingId.ToString("D"),
-                    ["setCode"] = card.SetCode,
-                    ["collectorNumber"] = card.CollectorNumber,
-                    ["oracleCard"] = new JsonObject { ["name"] = card.Name },
-                });
-            }
-
-            return Json(new JsonObject { ["results"] = results }.ToJsonString());
+            return SearchCards(path);
         }
 
         return new HttpResponseMessage(HttpStatusCode.NotFound)
         {
             Content = new StringContent("{}", Encoding.UTF8, "application/json"),
         };
+    }
+
+    /// <summary>
+    /// Answers one card search the way the real service does: results of 25 per page in <c>results</c>, the number of
+    /// matches in <c>count</c>, and an absolute <c>next</c> link while more pages follow. A result names its set in
+    /// <c>edition.editioncode</c> and has no top-level set code. A recorded read-only query on 2026-10-31,
+    /// <c>GET /api/cards/v2/?name=Assassin%27s%20Trophy&amp;pageSize=25</c>, returned count 18 and next null; the same
+    /// service returns count 141 and a next link for Sol Ring.
+    /// </summary>
+    private HttpResponseMessage SearchCards(string path)
+    {
+        // Matches the full name or the front face, as the recorded Archidekt search does for a double-faced card, and
+        // ignores case.
+        Dictionary<string, string> query = path["api/cards/v2/?".Length..]
+            .Split('&')
+            .Select(value => value.Split('=', 2))
+            .ToDictionary(value => value[0], value => Uri.UnescapeDataString(value[1]), StringComparer.Ordinal);
+        string wanted = query["name"];
+        int page = query.TryGetValue("page", out string? pageText) ? int.Parse(pageText, System.Globalization.CultureInfo.InvariantCulture) : 1;
+        List<FakeCard> matches = [.. catalog.Values.Where(value =>
+            string.Equals(value.Name, wanted, StringComparison.OrdinalIgnoreCase) ||
+            value.Name.StartsWith(wanted + " // ", StringComparison.OrdinalIgnoreCase))];
+        JsonArray results = [];
+        foreach (FakeCard card in matches.Skip((page - 1) * SearchPageSize).Take(SearchPageSize))
+        {
+            results.Add(new JsonObject
+            {
+                ["id"] = card.Id,
+                ["uid"] = card.PrintingId.ToString("D"),
+                ["collectorNumber"] = card.CollectorNumber,
+                ["edition"] = new JsonObject { ["editioncode"] = card.SetCode },
+                ["oracleCard"] = new JsonObject { ["name"] = card.Name, ["uid"] = card.OracleId.ToString("D") },
+            });
+        }
+
+        JsonNode next = page * SearchPageSize < matches.Count
+            ? JsonValue.Create($"https://archidekt.com/api/cards/v2/?name={Uri.EscapeDataString(wanted)}&page={page + 1}&pageSize=25")!
+            : null!;
+        return Json(new JsonObject
+        {
+            ["count"] = matches.Count,
+            ["next"] = next,
+            ["previous"] = null,
+            ["results"] = results,
+        }.ToJsonString());
     }
 
     /// <summary>

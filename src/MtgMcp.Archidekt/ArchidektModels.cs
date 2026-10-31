@@ -273,6 +273,11 @@ public sealed record ArchidektSyncPreview(
     int PredictedProviderRequests)
 {
     /// <summary>
+    /// Gets the reason a push cannot be sent, such as a card with no Archidekt printing; null when it can.
+    /// </summary>
+    public string? ApplyBlockedNotice { get; init; }
+
+    /// <summary>
     /// Gets immutable path differences.
     /// </summary>
     public IReadOnlyList<ArchidektDifference> Differences { get; init; } =
@@ -284,6 +289,18 @@ public sealed record ArchidektSyncPreview(
     public IReadOnlyList<ArchidektRemoteOperation> Operations { get; init; } =
         Array.AsReadOnly(Operations.ToArray());
 }
+
+/// <summary>
+/// Carries a push plan whose new cards have Archidekt printings, the operations as shown to the caller, and the
+/// printings chosen so a later apply does not search again.
+/// </summary>
+public sealed record ArchidektPushPlan(
+    RemoteDeckSnapshot Target,
+    ArchidektRemotePlan Plan,
+    IReadOnlyList<ArchidektRemoteOperation> Operations,
+    int PredictedProviderRequests,
+    string? BlockedNotice,
+    ArchidektPrintingChoices Choices);
 
 /// <summary>
 /// Describes one previewed primitive provider operation without exposing transport payloads.

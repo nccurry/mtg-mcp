@@ -403,17 +403,29 @@ discardLocalChanges
     /// <summary>
     /// Previews local-to-remote primitive operations while refusing any remote drift since baseline.
     /// </summary>
-    internal Task<OperationResult<ArchidektSyncPreview>> PreviewPushAsync(
+    internal async Task<OperationResult<ArchidektSyncPreview>> PreviewPushAsync(
         Guid localDeckId,
         CancellationToken cancellationToken)
     {
-        return PreviewPushAsync(localDeckId, Service.BeginOperation(), cancellationToken);
+        OperationResult<PushPreviewState> state = await PreviewPushAsync(
+            localDeckId,
+            Service.BeginOperation(),
+            cancellationToken).ConfigureAwait(false);
+        return state is OperationSuccess<PushPreviewState> success
+            ? new OperationSuccess<ArchidektSyncPreview>(success.Data.Preview)
+            : OperationFailure.Forward<PushPreviewState, ArchidektSyncPreview>(state);
     }
 
     /// <summary>
-    /// Previews a push while charging an existing composed-tool request scope.
+    /// Holds a push preview with the Archidekt printings chosen for it, so the apply that follows reuses them.
     /// </summary>
-    private async Task<OperationResult<ArchidektSyncPreview>> PreviewPushAsync(
+    private sealed record PushPreviewState(ArchidektSyncPreview Preview, ArchidektPrintingChoices Choices);
+
+    /// <summary>
+    /// Previews a push while charging an existing composed-tool request scope. Every new card is matched to an
+    /// Archidekt printing here, and the preview says which one.
+    /// </summary>
+    private async Task<OperationResult<PushPreviewState>> PreviewPushAsync(
         Guid localDeckId,
         ArchidektOperationScope operationScope,
         CancellationToken cancellationToken)
@@ -423,7 +435,7 @@ discardLocalChanges
             cancellationToken).ConfigureAwait(false);
         if (localResult is not OperationSuccess<DeckDocument> local)
         {
-            return OperationFailure.Forward<DeckDocument, ArchidektSyncPreview>(localResult);
+            return OperationFailure.Forward<DeckDocument, PushPreviewState>(localResult);
         }
 
         OperationResult<BindingState> stateResult = await LoadBindingStateAsync(
@@ -431,7 +443,7 @@ discardLocalChanges
             cancellationToken).ConfigureAwait(false);
         if (stateResult is not OperationSuccess<BindingState> state)
         {
-            return OperationFailure.Forward<BindingState, ArchidektSyncPreview>(stateResult);
+            return OperationFailure.Forward<BindingState, PushPreviewState>(stateResult);
         }
 
         OperationResult<RemoteDeckSnapshot> remoteResult = await GetBoundRemoteAsync(
@@ -440,7 +452,7 @@ discardLocalChanges
             cancellationToken).ConfigureAwait(false);
         if (remoteResult is not OperationSuccess<RemoteDeckSnapshot> remote)
         {
-            return OperationFailure.Forward<RemoteDeckSnapshot, ArchidektSyncPreview>(remoteResult);
+            return OperationFailure.Forward<RemoteDeckSnapshot, PushPreviewState>(remoteResult);
         }
 
         ArchidektSyncDiff diff = ArchidektSyncPlanner.Diff(
@@ -464,19 +476,35 @@ discardLocalChanges
             return new OperationInvalidInput("entry-zone-contradicts-category", DescribeContradictions(contradictions));
         }
 
-        string previewFingerprint = PushPreviewFingerprint(local.Data, remote.Data, plan);
-        return new OperationSuccess<ArchidektSyncPreview>(new ArchidektSyncPreview(
-            "push",
-            local.Data.DeckId,
-            local.Data.Revision,
-            remote.Data.RemoteId,
-            remote.Data.RemoteFingerprint,
-            target.ContentFingerprint,
-            previewFingerprint,
-            remoteChanged,
-            diff.Differences,
-            plan.PublicOperations,
-            plan.PredictedProviderRequests));
+        OperationResult<ArchidektPushPlan> plannedResult = await Service.PlanPushAsync(
+            remote.Data,
+            target,
+            known: null,
+            operationScope,
+            cancellationToken).ConfigureAwait(false);
+        if (plannedResult is not OperationSuccess<ArchidektPushPlan> planned)
+        {
+            return OperationFailure.Forward<ArchidektPushPlan, PushPreviewState>(plannedResult);
+        }
+
+        string previewFingerprint = PushPreviewFingerprint(local.Data, remote.Data, planned.Data.Plan);
+        return new OperationSuccess<PushPreviewState>(new PushPreviewState(
+            new ArchidektSyncPreview(
+                "push",
+                local.Data.DeckId,
+                local.Data.Revision,
+                remote.Data.RemoteId,
+                remote.Data.RemoteFingerprint,
+                target.ContentFingerprint,
+                previewFingerprint,
+                remoteChanged,
+                diff.Differences,
+                planned.Data.Operations,
+                planned.Data.PredictedProviderRequests)
+            {
+                ApplyBlockedNotice = planned.Data.BlockedNotice,
+            },
+            planned.Data.Choices));
     }
 
     /// <summary>
@@ -504,37 +532,43 @@ discardLocalChanges
         CancellationToken cancellationToken)
     {
         ArchidektOperationScope operationScope = Service.BeginOperation();
-        OperationResult<ArchidektSyncPreview> previewResult = await PreviewPushAsync(
+        OperationResult<PushPreviewState> previewResult = await PreviewPushAsync(
             request.LocalDeckId,
             operationScope,
             cancellationToken).ConfigureAwait(false);
-        if (previewResult is not OperationSuccess<ArchidektSyncPreview> preview)
+        if (previewResult is not OperationSuccess<PushPreviewState> previewState)
         {
-            return OperationFailure.Forward<ArchidektSyncPreview, ArchidektApplyResult>(previewResult);
+            return OperationFailure.Forward<PushPreviewState, ArchidektApplyResult>(previewResult);
         }
 
-        if (preview.Data.HasConflicts)
+        ArchidektSyncPreview preview = previewState.Data.Preview;
+        if (preview.HasConflicts)
         {
             return new OperationConflict(
                 "push-conflict",
                 "The Archidekt deck changed since its synchronization baseline.",
-                new ConflictState(preview.Data.LocalRevision, preview.Data.RemoteFingerprint));
+                new ConflictState(preview.LocalRevision, preview.RemoteFingerprint));
         }
 
-        if (preview.Data.LocalRevision != request.ExpectedLocalRevision ||
+        if (preview.LocalRevision != request.ExpectedLocalRevision ||
             !string.Equals(
-                preview.Data.RemoteFingerprint,
+                preview.RemoteFingerprint,
                 request.ExpectedRemoteFingerprint,
                 StringComparison.Ordinal) ||
             !string.Equals(
-                preview.Data.PreviewFingerprint,
+                preview.PreviewFingerprint,
                 request.PreviewFingerprint,
                 StringComparison.Ordinal))
         {
             return new OperationConflict(
                 "push-preview-changed",
                 "The local or remote deck changed after the push preview.",
-                new ConflictState(preview.Data.LocalRevision, preview.Data.RemoteFingerprint));
+                new ConflictState(preview.LocalRevision, preview.RemoteFingerprint));
+        }
+
+        if (preview.ApplyBlockedNotice is not null)
+        {
+            return new OperationInvalidInput("push-printing-unresolved", preview.ApplyBlockedNotice);
         }
 
         OperationResult<DeckDocument> localResult = await deckStore.GetAsync(
@@ -562,15 +596,26 @@ discardLocalChanges
             return OperationFailure.Forward<RemoteDeckSnapshot, ArchidektApplyResult>(currentResult);
         }
 
-        RemoteDeckSnapshot target = ArchidektLocalMapper.ToRemoteTarget(
+        RemoteDeckSnapshot unresolvedTarget = ArchidektLocalMapper.ToRemoteTarget(
             local.Data,
             state.Data.Baseline,
             current.Data);
-        ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current.Data, target);
+        OperationResult<ArchidektPushPlan> plannedResult = await Service.PlanPushAsync(
+            current.Data,
+            unresolvedTarget,
+            previewState.Data.Choices,
+            operationScope,
+            cancellationToken).ConfigureAwait(false);
+        if (plannedResult is not OperationSuccess<ArchidektPushPlan> planned)
+        {
+            return OperationFailure.Forward<ArchidektPushPlan, ArchidektApplyResult>(plannedResult);
+        }
+
+        RemoteDeckSnapshot target = planned.Data.Target;
         OperationResult<ArchidektApplyResult> appliedResult = await Service.ApplyRemoteTargetAsync(
             target,
             request.ExpectedRemoteFingerprint,
-            plan.PlanFingerprint,
+            planned.Data.Plan.PlanFingerprint,
             operationScope,
             cancellationToken).ConfigureAwait(false);
         if (appliedResult is not OperationSuccess<ArchidektApplyResult> applied ||

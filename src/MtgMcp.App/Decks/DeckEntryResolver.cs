@@ -35,15 +35,17 @@ internal sealed class DeckEntryResolver
     /// Says what happens to entries when no card data is installed.
     /// </summary>
     private const string NotInstalledMessage =
-        "Scryfall card data is not installed, so new entries were added without a card identity. Run " +
-        "scryfall_card_data_sync, then local_deck_identity_reconcile_preview to resolve them.";
+        "Scryfall card data is not installed, so new entries were added without a card identity. This does not stop " +
+        "a push to Archidekt: a push uses Archidekt's default printing for an entry with no printing set. To fill " +
+        "in the card identity, run scryfall_card_data_sync, then local_deck_identity_reconcile_preview.";
 
     /// <summary>
     /// Says what happens to entries when the card data lookup itself fails.
     /// </summary>
     private const string LookupFailedMessage =
-        "The installed card data could not be read, so new entries were added without a card identity. Run " +
-        "local_deck_identity_reconcile_preview to resolve them.";
+        "The installed card data could not be read, so new entries were added without a card identity. This does " +
+        "not stop a push to Archidekt: a push uses Archidekt's default printing for an entry with no printing set. " +
+        "To fill in the card identity, run local_deck_identity_reconcile_preview.";
 
     /// <summary>
     /// Reads installed card data.
