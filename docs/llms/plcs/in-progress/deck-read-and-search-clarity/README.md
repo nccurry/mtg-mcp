@@ -7,8 +7,8 @@
 - Last updated: 2026-10-31, `main` at `f0c0814`
 - Implementation authorized: Yes (owner, 2026-10-31: "Ride with the plan")
 - Selected work and endpoint: phases 0 to 4, merged into `main` on this host,
-  audited, and released together as `0.14.0` (D-5: phase 0 rides with the
-  plan; no separate `0.13.1`).
+  audited, released together as `0.13.1`, and installed (owner, 2026-10-31:
+  "fix everything identified then release 0.13.1, then install it").
 - State: implementation starting.
 - Next action and blocker: phases 0, 1, and 3-4 run in parallel; phase 2
   follows phase 1. No blocker.
@@ -178,9 +178,10 @@ are independent of 1 and 2 and may run in parallel worktrees.
 
 ## Risks And Open Questions
 
-- **D-5 (owner, 2026-10-31):** phase 0 rides with the plan and ships in
-  `0.14.0`; no separate `0.13.1`. Claude Code shows no mtg-mcp tools until
-  then.
+- **D-5 (owner, 2026-10-31):** every phase ships together as `0.13.1`. The
+  `concise` default (D-2) is breaking, which `docs/versioning.md` reserves for
+  minor releases; the owner chose the patch number, and the CHANGELOG marks it
+  **Breaking**.
 - Phase 0 changes what clients on older protocols see: the `{"result": …}`
   wrapper goes away, matching what `2026-07-28` clients already get. CHANGELOG
   entry under Fixed.
