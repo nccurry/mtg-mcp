@@ -44,11 +44,14 @@ internal sealed class DeckCardViewCoordinator
         "Run scryfall_card_data_sync to install it.";
 
     /// <summary>
-    /// Says how to read a stored deck that is too large for one result.
+    /// Says how to change the page when a stored deck is too large for one result.
     /// </summary>
-    private const string StoredNarrowHint =
-        "The deck is too large for one result, so this page holds only some entries. Use nextCursor to read the " +
-        "rest, or ask for a smaller pageSize. Every entry is reachable by following nextCursor.";
+    private const string StoredNarrowHint = "Ask for a smaller pageSize to get smaller pages.";
+
+    /// <summary>
+    /// Says how to change the page when a page with card data is too large for one result.
+    /// </summary>
+    private const string CardsNarrowHint = "Ask for fewer fields or a smaller pageSize to get smaller pages.";
 
     /// <summary>
     /// Reads stored decks.
@@ -139,7 +142,7 @@ internal sealed class DeckCardViewCoordinator
             offset.Data,
             fingerprint,
             views.Data.Installed ? null : [NotInstalledLimit],
-            ScryfallFormattedResponse.NarrowHint);
+            CardsNarrowHint);
     }
 
     /// <summary>
@@ -338,7 +341,10 @@ internal sealed class DeckCardViewCoordinator
             NextCursor = next < deck.Entries.Count ? EncodeCursor(fingerprint, deck.Revision, next) : null,
             Limits = limits,
             Truncated = truncated ? true : null,
-            Narrow = truncated ? narrowHint : null,
+            Narrow = truncated
+                ? $"This page shows {kept.Count} of {deck.Entries.Count} entries; the deck is not missing the rest. " +
+                    $"Follow nextCursor. {narrowHint}"
+                : null,
         });
     }
 
@@ -382,9 +388,9 @@ internal sealed class DeckCardViewCoordinator
     }
 
     /// <summary>
-    /// Builds the deck view that every page repeats, without entries or assignments: the details, categories, and
-    /// provider bindings. The name is cut to a fixed length, and the description is cut on the first page and left
-    /// out of the pages after it, so a long one cannot push every page over the size limit.
+    /// Builds the deck view that every page repeats, without entries or assignments: the details, categories,
+    /// provider bindings, and deck-wide totals. The name is cut to a fixed length, and the description is cut on the
+    /// first page and left out of the pages after it, so a long one cannot push every page over the size limit.
     /// </summary>
     private static DeckDocumentView PageHeader(DeckDocument deck, int offset)
     {
@@ -397,6 +403,9 @@ internal sealed class DeckCardViewCoordinator
             NameTruncated = name.TruncatedOrNull,
             DescriptionTruncated = description.TruncatedOrNull,
             DescriptionLength = description.LengthIfTruncated,
+            EntryCount = deck.Entries.Count,
+            CardCount = deck.Entries.Sum(entry => entry.Quantity),
+            CardsByZone = DeckZoneCounts.Of(deck),
         };
     }
 

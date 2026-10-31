@@ -162,8 +162,16 @@ internal sealed record ArchidektDeckSummary(
     int CardCount,
     int CategoryCount,
     IReadOnlyDictionary<string, int> CardsByZone,
-    IReadOnlyList<ArchidektDuplicateGroup> Duplicates)
+    IReadOnlyList<ArchidektDuplicateGroup> Duplicates,
+    IReadOnlyList<ArchidektDuplicateGroup> RepeatsOutsideMain)
 {
+    /// <summary>
+    /// Gets how many groups <see cref="RepeatsOutsideMain"/> leaves out to keep the result small, or null when it
+    /// lists all.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? RepeatsOutsideMainOmitted { get; init; }
+
     /// <summary>
     /// Gets how many duplicate groups the list leaves out to keep the result small, or null when it lists all.
     /// </summary>
@@ -178,7 +186,8 @@ internal sealed record ArchidektDeckSummary(
 }
 
 /// <summary>
-/// Names one card that the commander and main zones hold more than once, counting only entries that are in the deck.
+/// Names one card that is held more than once: across the commander and main zones (counting only entries that are in
+/// the deck), or inside one sideboard or maybeboard zone.
 /// </summary>
 internal sealed record ArchidektDuplicateGroup(
     string CardName,

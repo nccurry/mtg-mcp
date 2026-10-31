@@ -589,7 +589,7 @@ public sealed class FoundationMcpTests
                 ],
             ["archidekt_push_apply"] = ["request"],
             ["archidekt_push_preview"] =
-                ["differenceOffset", "expectedPreviewFingerprint", "localDeckId", "operationOffset"],
+                ["confirmRemovals", "differenceOffset", "expectedPreviewFingerprint", "localDeckId", "operationOffset"],
             ["archidekt_snapshot_create"] = ["request"],
             ["archidekt_snapshot_delete"] = ["request"],
             ["archidekt_snapshots_get"] = ["deckId", "kind", "offset", "responseFormat", "snapshotId", "zones"],

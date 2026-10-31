@@ -277,6 +277,64 @@ public sealed class ArchidektDeckReadTests
     }
 
     /// <summary>
+    /// Verifies 17 cards that each sit four times in the sideboard are 17 repeat groups of four copies, separate from
+    /// the commander and main duplicates; basic lands, a card once in each of two zones, and a sideboard card that
+    /// appears once are not repeats; and the list is cut with a count of the groups left out.
+    /// </summary>
+    [Fact]
+    public async Task Repeats_InTheSideboard_AreListedApartFromTheDuplicates_AndTheListIsCapped()
+    {
+        FakeArchidekt fake = new();
+        fake.AddCategory("Removal");
+        fake.AddCategory("Sideboard", includedInDeck: false);
+        fake.AddCategory("Maybeboard", includedInDeck: false);
+        for (int index = 0; index < 17; index++)
+        {
+            FakeArchidekt.FakeCard card = fake.AddCardToCatalog(100 + index, $"Repeat {index:000}");
+            for (int copy = 0; copy < 4; copy++)
+            {
+                fake.AddEntry(card, 1, "Sideboard");
+            }
+        }
+
+        FakeArchidekt.FakeCard single = fake.AddCardToCatalog(300, "Single Side");
+        fake.AddEntry(single, 1, "Sideboard");
+        FakeArchidekt.FakeCard split = fake.AddCardToCatalog(301, "Split Zones");
+        fake.AddEntry(split, 1, "Sideboard");
+        fake.AddEntry(split, 1, "Maybeboard");
+        FakeArchidekt.FakeCard swamp = fake.AddCardToCatalog(302, "Swamp");
+        fake.AddEntry(swamp, 1, "Sideboard");
+        fake.AddEntry(swamp, 1, "Sideboard");
+        using ReadWorld world = new(fake);
+
+        ArchidektDeckSummary summary = Success(await world.Tools.GetDeckAsync(
+            "42",
+            cancellationToken: TestContext.Current.CancellationToken)).Summary;
+
+        Assert.Empty(summary.Duplicates);
+        Assert.Equal(17, summary.RepeatsOutsideMain.Count);
+        Assert.All(summary.RepeatsOutsideMain, value => Assert.Equal(4, value.Copies));
+        Assert.All(summary.RepeatsOutsideMain, value => Assert.Equal(["sideboard"], value.Zones));
+        Assert.Null(summary.RepeatsOutsideMainOmitted);
+
+        FakeArchidekt many = new();
+        many.AddCategory("Sideboard", includedInDeck: false);
+        for (int index = 0; index < ArchidektDeckFacts.MaximumDuplicateGroups + 3; index++)
+        {
+            FakeArchidekt.FakeCard card = many.AddCardToCatalog(100 + index, $"Twin {index:000}");
+            many.AddEntry(card, 1, "Sideboard");
+            many.AddEntry(card, 1, "Sideboard");
+        }
+
+        using ReadWorld manyWorld = new(many);
+        ArchidektDeckSummary capped = Success(await manyWorld.Tools.GetDeckAsync(
+            "42",
+            cancellationToken: TestContext.Current.CancellationToken)).Summary;
+        Assert.Equal(ArchidektDeckFacts.MaximumDuplicateGroups, capped.RepeatsOutsideMain.Count);
+        Assert.Equal(3, capped.RepeatsOutsideMainOmitted);
+    }
+
+    /// <summary>
     /// Verifies cards without an Oracle ID group by name, ignoring case, and that no verdict or size fact appears
     /// for a deck that is not Commander.
     /// </summary>

@@ -94,6 +94,27 @@ internal sealed record DeckDocumentView(
     public int? TotalEntries { get; init; }
 
     /// <summary>
+    /// Gets the number of entries in the whole deck, not only on this page. It is set only when the result is a page.
+    /// </summary>
+    [JsonPropertyName("entryCount")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? EntryCount { get; init; }
+
+    /// <summary>
+    /// Gets the number of cards in the whole deck, counting quantities, when the result is a page.
+    /// </summary>
+    [JsonPropertyName("cardCount")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CardCount { get; init; }
+
+    /// <summary>
+    /// Gets the number of cards in each zone of the whole deck, counting quantities, when the result is a page.
+    /// </summary>
+    [JsonPropertyName("cardsByZone")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyDictionary<string, int>? CardsByZone { get; init; }
+
+    /// <summary>
     /// Gets the cursor that reads the next page of entries, or null on the last page or when the result is not a page.
     /// </summary>
     [JsonPropertyName("nextCursor")]

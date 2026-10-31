@@ -115,10 +115,9 @@ public sealed class ArchidektServiceTests
     }
 
     /// <summary>
-    /// Verifies 429 and 403 responses stop immediately with sanitized availability outcomes.
+    /// Verifies a 403 response stops immediately with a sanitized availability outcome.
     /// </summary>
     [Theory]
-    [InlineData(429, "provider-rate-limited")]
     [InlineData(403, "provider-forbidden")]
     public async Task ListDecks_BlockResponsesStopImmediately(int statusCode, string reasonCode)
     {

@@ -550,10 +550,12 @@ internal sealed class ArchidektSynchronizationContext
     /// </summary>
     internal async Task<OperationResult<ArchidektSyncPreview>> PreviewPushAsync(
         Guid localDeckId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? confirmRemovals = null)
     {
         OperationResult<PushPreviewState> state = await PreviewPushAsync(
             localDeckId,
+            confirmRemovals,
             Service.BeginOperation(),
             cancellationToken).ConfigureAwait(false);
         return state is OperationSuccess<PushPreviewState> success
@@ -563,9 +565,13 @@ internal sealed class ArchidektSynchronizationContext
 
     /// <summary>
     /// Holds a push preview with the Archidekt printings chosen for it, so the apply that follows reuses them. A push
-    /// that Archidekt's own changes block plans nothing, so it has no choices.
+    /// that Archidekt's own changes block plans nothing, so it has no choices. RemovalNotice is set when the push
+    /// removes too many entries for the confirmation the caller gave.
     /// </summary>
-    private sealed record PushPreviewState(ArchidektSyncPreview Preview, ArchidektPrintingChoices? Choices);
+    private sealed record PushPreviewState(
+        ArchidektSyncPreview Preview,
+        ArchidektPrintingChoices? Choices,
+        string? RemovalNotice = null);
 
     /// <summary>
     /// Previews a push while charging an existing composed-tool request scope. Every new card is matched to an
@@ -573,6 +579,7 @@ internal sealed class ArchidektSynchronizationContext
     /// </summary>
     private async Task<OperationResult<PushPreviewState>> PreviewPushAsync(
         Guid localDeckId,
+        int? confirmRemovals,
         ArchidektOperationScope operationScope,
         CancellationToken cancellationToken)
     {
@@ -640,6 +647,10 @@ internal sealed class ArchidektSynchronizationContext
         }
 
         string previewFingerprint = PushPreviewFingerprint(local.Data, remote.Data, planned.Data.Plan);
+        string? removalNotice = ArchidektRemovalGuard.Describe(
+            ArchidektRemovalGuard.CountRemovals(planned.Data.Operations),
+            remote.Data.Entries.Count,
+            confirmRemovals);
         return new OperationSuccess<PushPreviewState>(new PushPreviewState(
             new ArchidektSyncPreview(
                 "push",
@@ -654,9 +665,12 @@ internal sealed class ArchidektSynchronizationContext
                 planned.Data.Operations,
                 planned.Data.PredictedProviderRequests)
             {
-                ApplyBlockedNotice = planned.Data.BlockedNotice,
+                ApplyBlockedNotice = ArchidektApplyAvailability.WithBlockedNotice(
+                    removalNotice,
+                    planned.Data.BlockedNotice),
             },
-            planned.Data.Choices));
+            planned.Data.Choices,
+            removalNotice));
     }
 
     /// <summary>
@@ -721,6 +735,7 @@ internal sealed class ArchidektSynchronizationContext
         ArchidektOperationScope operationScope = Service.BeginOperation();
         OperationResult<PushPreviewState> previewResult = await PreviewPushAsync(
             request.LocalDeckId,
+            request.ConfirmRemovals,
             operationScope,
             cancellationToken).ConfigureAwait(false);
         if (previewResult is not OperationSuccess<PushPreviewState> previewState)
@@ -751,6 +766,11 @@ internal sealed class ArchidektSynchronizationContext
                 "push-preview-changed",
                 "The local or remote deck changed after the push preview.",
                 new ConflictState(preview.LocalRevision, preview.RemoteFingerprint));
+        }
+
+        if (previewState.Data.RemovalNotice is { } removalNotice)
+        {
+            return new OperationInvalidInput("push-removals-unconfirmed", removalNotice, "confirmRemovals");
         }
 
         if (preview.ApplyBlockedNotice is not null)
@@ -817,7 +837,12 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (verifiedResult is not OperationSuccess<RemoteDeckSnapshot> verified)
         {
-            return OperationFailure.Forward<RemoteDeckSnapshot, ArchidektApplyResult>(verifiedResult);
+            // The writes were sent, so keep their statuses instead of reporting only the failed read.
+            return new OperationSuccess<ArchidektApplyResult>(applied.Data with
+            {
+                Outcome = applied.Data.Outcome == "applied" ? "applied-unverified" : applied.Data.Outcome,
+                Notice = applied.Data.Notice ?? ArchidektApplyResult.UnverifiedNotice,
+            });
         }
 
         DeckProviderBinding binding = state.Data.Binding with

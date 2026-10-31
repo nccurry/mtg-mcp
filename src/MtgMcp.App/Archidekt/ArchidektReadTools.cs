@@ -89,7 +89,8 @@ internal sealed class ArchidektReadTools
         "language, sort order, and the rest). Pass zones (commander, main, sideboard, maybeboard) to read only " +
         "some; offsets count the chosen entries. The leading summary covers the whole deck whatever the zones: " +
         "entry, card, and category counts, cards by zone, cards held more than once across commander and main " +
-        "(duplicates, matched by Oracle ID, basic lands and entries not in the deck skipped), and for Commander " +
+        "(duplicates, matched by Oracle ID, basic lands and entries not in the deck skipped), cards held more than " +
+        "once inside the sideboard or maybeboard (repeatsOutsideMain), and for Commander " +
         "decks the main and commander card count next to 100. Entries come in pages that fit the size limit, " +
         "ordered by zone, then card name; categories and unknown provider fields come with the first page. Each " +
         "entry has inDeck: false when its first category is not included in the deck (it is then in the " +
@@ -190,7 +191,9 @@ internal sealed class ArchidektReadTools
         "that fit the size limit; the guards cover the whole preview, so the apply tool needs no page. A new card " +
         "with no printing set gets Archidekt's default printing; each add names the printing it will use, and " +
         "applyAvailable is false, with the card names, when Archidekt has no match. On later " +
-        "pages pass expectedPreviewFingerprint, the previewFingerprint of the first page." +
+        "pages pass expectedPreviewFingerprint, the previewFingerprint of the first page. A push that removes more " +
+        "than 10 Archidekt entries, or more than 10 percent of them, is not available until confirmRemovals " +
+        "equals the removal count." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSyncPreviewView>> PreviewPushAsync(
         [Description("Stable local deck UUID with an Archidekt provider binding.")] Guid localDeckId,
@@ -199,10 +202,14 @@ internal sealed class ArchidektReadTools
         [Description("Number of differences to skip; use nextDifferenceOffset from the previous page. Default 0.")]
         int differenceOffset = 0,
         [Description(ResultPage.FingerprintHelp)] string? expectedPreviewFingerprint = null,
+        [Description(
+            "Number of Archidekt entries the push removes, to allow a large removal (more than 10 entries or 10 " +
+            "percent). Use the count the preview names; pass the same value to archidekt_push_apply.")]
+        int? confirmRemovals = null,
         CancellationToken cancellationToken = default)
     {
         OperationResult<ArchidektSyncPreview> preview = await coordinator
-            .PreviewPushAsync(localDeckId, cancellationToken).ConfigureAwait(false);
+            .PreviewPushAsync(localDeckId, cancellationToken, confirmRemovals).ConfigureAwait(false);
         return ToView(
             preview,
             operationOffset,

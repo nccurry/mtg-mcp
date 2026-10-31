@@ -408,7 +408,8 @@ public static class ArchidektSyncPlanner
             }
         }
 
-        foreach (RemoteDeckCategory currentCategory in current.Categories)
+        // Removals follow a fixed order, so the plan does not change when Archidekt returns rows in another order.
+        foreach (RemoteDeckCategory currentCategory in current.Categories.OrderBy(value => value.Name, StringComparer.Ordinal))
         {
             if (!FindCategory(targetCategories, currentCategories, currentCategory.Name, lenientNames, out _))
             {
@@ -456,7 +457,7 @@ public static class ArchidektSyncPlanner
             }
         }
 
-        foreach (RemoteDeckEntry currentEntry in current.Entries)
+        foreach (RemoteDeckEntry currentEntry in current.Entries.OrderBy(value => value.ProviderRelationId, StringComparer.Ordinal))
         {
             if (!retainedRelations.Contains(currentEntry.ProviderRelationId))
             {
