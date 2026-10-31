@@ -201,5 +201,5 @@ are independent of 1 and 2 and may run in parallel worktrees.
 
 | Requirement | State | Evidence |
 | --- | --- | --- |
-| REQ-011, REQ-012 | planned | Claude Code MCP logs (2026-10-31T14-59 to 15-11) and a stdio reproduction against installed 0.13.0: `outputSchema` is `true` for all 86 tools under `2026-07-28`; a failure under `2025-11-25` has no `isError`. |
+| REQ-011, REQ-012 | implemented on `drsc/p0-protocol`; Claude Code load check pending | `OperationResultSchema.cs`, `ToolProtocolMcpTests` (15 cases over five protocol versions), `ToolOutputSchemaTests`; built exe shows an object `outputSchema` with a `kind` enum for all 86 tools under legacy and `2026-07-28`, and `isError` on a failure. Earlier evidence: Claude Code MCP logs (2026-10-31T14-59 to 15-11) and a stdio reproduction against installed 0.13.0: `outputSchema` is `true` for all 86 tools under `2026-07-28`; a failure under `2025-11-25` has no `isError`. |
 | REQ-001 to REQ-010 | planned | Research reports of 2026-10-31: one read-only GET of Archidekt deck 22959335, one read-only Scryfall search, four Scryfall rank checks, EDHREC terms, and Archidekt terms with two read-only search GETs. |
