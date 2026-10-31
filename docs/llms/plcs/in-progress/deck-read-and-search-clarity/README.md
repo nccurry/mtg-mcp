@@ -84,8 +84,9 @@ Bloodthirsty Blade is also a real second entry, under Removal.
 | REQ-014 | `archidekt_push_preview` resolves every add without a provider card ID with the same resolver, names the chosen printing in the operation detail, and sets `applyAvailable: false` with a notice naming the cards when a name has no match or the requests would pass the 150-request budget. Apply uses the preview's resolution, so anything the preview approves, apply can resolve. | Workflow test reproducing the report: 27 name-only sideboard adds, no card data, one card with 18 printings: preview shows each chosen printing, apply gives `applied` with clean verification. An unknown name gives `applyAvailable: false` and apply refuses with zero writes. |
 | REQ-015 | Apply resolves every add before its first write; a resolution failure refuses the push with no writes. An operation that failed before anything was sent reports `not-sent` ("Nothing was sent to Archidekt for this operation."), `unknown` is kept for a failure after a write was sent, and a push where nothing was applied reports outcome `not-applied`. | ApplyPlan tests: a lookup failure on the first operation gives `not-sent` and `not-applied`, never `unknown`; a failure during a write still gives `unknown`. |
 | REQ-016 | The add-time notice for entries added without card data no longer says reconcile makes them pushable; it says push picks Archidekt's default printing unless a printing is set. | Message test. |
-| REQ-017 | A push never sends an operation whose only source is a change made on Archidekt: it changes only what the local side changed relative to the baseline, never deletes a category the remote added, and refuses apply when local and remote changed the same thing. A preview with conflicts or unpulled remote changes sets `applyAvailable: false` and tells the agent to pull first. | Workflow test reproducing the report with the fake Archidekt: remote adds a category and moves two cards, local adds 33 entries; push preview has no category-delete or entry-update for those, and either pushes only the 33 adds or refuses with "pull first"; apply never reverts the remote edits. (Design pending research.) |
-| REQ-018 | A pull can keep local-only additions instead of discarding them, and a pull preview with `discardLocalChanges: true` says plainly which local changes will be thrown away. | Design and acceptance pending research. |
+| REQ-017 | A push preview whose remote side changed since the last sync (`hasConflicts`) sets `applyAvailable: false`, lists no operations, and its notice says: "archidekt_push_apply would refuse this push: the Archidekt deck changed since the last sync (N rows; see differences with remote-* states). Run archidekt_pull_preview first; cards added locally are kept. Then push again." The mode and credentials notice comes first when it applies. | Workflow test with the fake Archidekt reproducing the report (push; remote adds Removal and moves two Sideboard cards to it; local adds 3): push preview has `hasConflicts`, `applyAvailable: false`, the notice, no operations; push apply returns `push-conflict` with no writes. |
+| REQ-018 | A pull keeps local-only additions: when every local change since the last sync is an added entry or category, the pull preview is not a conflict, shows a `local-keep` operation ("Keep N cards added locally since the last sync; push them afterwards."), and apply replaces the rest from Archidekt, then adds the kept entries, their categories (created by exact name when missing), and assignments; the new baseline leaves them `local-added` so the next push adds them. A local add that matches a card the remote also added, or a kept card whose category gives a zone contradiction, is refused. Any other local change still needs `discardLocalChanges`. | Same setup: pull without the flag succeeds; the local deck has the two moved cards in main under Removal plus the 3 local adds; the next push preview is exactly 3 `entry-add`. A local change to a card the remote also changed gives `pull-conflict`; a duplicate add on both sides is refused. |
+| REQ-019 | A pull preview with `discardLocalChanges: true` says what is thrown away: "Replace the local deck with the Archidekt deck. This discards local changes made since the last sync: N cards added, N changed, N removed (categories: …). They are listed in differences with local-* states." | Pull preview test with local adds, changes, and removals checks the counts in the text. |
 | REQ-001 | An Archidekt entry whose first category has `includedInDeck: false` is not in the deck: the zone mapping sends it to `maybeboard` (unless it is a commander, sideboard, or maybeboard entry by the existing rules). The same mapping drives pulls, `archidekt_deck_get`, push planning, and the push zone check (`ArchidektSyncPlanner.cs:515`), so pull and push stay consistent. | Fake Archidekt test copying deck 22959335: the three entries map to `maybeboard`; main plus commander is 100; pull then push preview gives zero operations; a category whose flag is `true` (or missing) still maps to `main`. |
 | REQ-002 | Decks pulled before REQ-001 keep working. A stored baseline or local entry with `main` for such an entry does not produce false differences, a refused push, or a changed fingerprint by itself; the next pull moves the local entry to `maybeboard` as an ordinary pull change. | Upgrade test with a `0.13.0`-shaped baseline and local deck: push preview has no zone contradiction and no operations; pull preview shows the zone move for exactly those entries. |
 | REQ-003 | Each `archidekt_deck_get` entry reports `inDeck` (true when the first category is included, has no flag, or the entry has no category). | Same fixture: the three entries `false`, others `true`. |
@@ -118,6 +119,19 @@ Inspected at `d8b845c` and `86d25fb`.
   (`ArchidektCoordinator.cs:404-478`) and never checks resolution. The fake
   Archidekt gives one printing per name with a top-level `setCode`, so tests
   passed against a shape the real service does not send.
+- `applyAvailable` reflects only mode and credentials
+  (`ArchidektApplyAvailability.cs:17-35`, `ArchidektResultPaging.PagePreview`).
+  The push preview already computes `hasConflicts`
+  (`ArchidektCoordinator.cs:452`), and `ApplyPushAsync` refuses a
+  conflicting push with `push-conflict` before any write (`:513-519`, tested
+  by `ApplyPush_RemoteChangedSinceBaseline_ReturnsPushConflictWithCurrentState`),
+  so the reported push would not have reverted Archidekt; the preview misled.
+  Push planning is two-way: `ToRemoteTarget` lays the whole local deck over
+  the remote (`ArchidektLocalMapper.cs:261-339`) and `PlanRemoteApply`
+  (`ArchidektSyncPlanner.cs:326-452`) never reads the baseline, which is why
+  the listed operations reverted remote edits. A pull with any local change is
+  a conflict (`ArchidektCoordinator.cs:225`), and the discard text has no
+  counts (`:228-234`).
 - Every tool returns `OperationResult<T>`, which has a custom JSON converter,
   so the schema exporter in ModelContextProtocol 2.2.0 gives the open schema
   `true`. The SDK passes it through under `2026-07-28`; under older versions
@@ -190,8 +204,8 @@ Decisions (owner, 2026-10-31):
 
 ## Steps And Verification
 
-6. Phase 6, push never reverts remote edits (REQ-017, REQ-018), after phase 5
-   (same push code). Design pending research.
+6. Phase 6, conflicting pushes and merging pulls (REQ-017 to REQ-019), after
+   phase 5 (same push code).
 5. Phase 5, push resolution (REQ-013 to REQ-016), after phase 1 (same
    Archidekt files; may run alongside phase 2 in its own worktree branched
    from phase 1).
@@ -221,6 +235,14 @@ are independent of 1 and 2 and may run in parallel worktrees.
 
 ## Risks And Open Questions
 
+- **D-7 (proposed, non-blocking):** a three-way push (push only what the
+  local side changed relative to the baseline, keeping remote-only changes) is
+  deferred. With REQ-017 a conflicting push lists no operations and refuses,
+  and REQ-018 makes pull-then-push keep local additions, so the reported
+  workflow is safe without it.
+- The report counted `remote-changed: 1` for two moved cards; the code would
+  count 2 if both kept their relation IDs. Unresolved without the preview
+  JSON; REQ-017's test asserts the code's count.
 - **D-6 (proposed, non-blocking):** the default printing for a name-only add
   is Archidekt's first listed search result (its order looked newest first;
   not verified to match what Archidekt's own site picks). Whether to skip promo
@@ -252,7 +274,7 @@ are independent of 1 and 2 and may run in parallel worktrees.
 
 | Requirement | State | Evidence |
 | --- | --- | --- |
-| REQ-017, REQ-018 | planned; research running | Report from a live session (deck 27968076). |
+| REQ-017 to REQ-019 | planned | Report from a live session (deck 27968076); research by reading code (no live calls). |
 | REQ-013 to REQ-016 | planned | Report from a live session (deck 27968076, 27 adds) and two read-only Archidekt card searches: Assassin's Trophy 18 results, Sol Ring 141 with paging, set code under `edition.editioncode`. |
 | REQ-011, REQ-012 | planned | Claude Code MCP logs (2026-10-31T14-59 to 15-11) and a stdio reproduction against installed 0.13.0: `outputSchema` is `true` for all 86 tools under `2026-07-28`; a failure under `2025-11-25` has no `isError`. |
 | REQ-001 to REQ-010 | planned | Research reports of 2026-10-31: one read-only GET of Archidekt deck 22959335, one read-only Scryfall search, four Scryfall rank checks, EDHREC terms, and Archidekt terms with two read-only search GETs. |
