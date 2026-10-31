@@ -190,7 +190,9 @@ internal sealed class ArchidektReadTools
         "that fit the size limit; the guards cover the whole preview, so the apply tool needs no page. A new card " +
         "with no printing set gets Archidekt's default printing; each add names the printing it will use, and " +
         "applyAvailable is false, with the card names, when Archidekt has no match. On later " +
-        "pages pass expectedPreviewFingerprint, the previewFingerprint of the first page." +
+        "pages pass expectedPreviewFingerprint, the previewFingerprint of the first page. A push that removes more " +
+        "than 10 Archidekt entries, or more than 10 percent of them, is not available until confirmRemovals " +
+        "equals the removal count." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSyncPreviewView>> PreviewPushAsync(
         [Description("Stable local deck UUID with an Archidekt provider binding.")] Guid localDeckId,
@@ -199,10 +201,14 @@ internal sealed class ArchidektReadTools
         [Description("Number of differences to skip; use nextDifferenceOffset from the previous page. Default 0.")]
         int differenceOffset = 0,
         [Description(ResultPage.FingerprintHelp)] string? expectedPreviewFingerprint = null,
+        [Description(
+            "Number of Archidekt entries the push removes, to allow a large removal (more than 10 entries or 10 " +
+            "percent). Use the count the preview names; pass the same value to archidekt_push_apply.")]
+        int? confirmRemovals = null,
         CancellationToken cancellationToken = default)
     {
         OperationResult<ArchidektSyncPreview> preview = await coordinator
-            .PreviewPushAsync(localDeckId, cancellationToken).ConfigureAwait(false);
+            .PreviewPushAsync(localDeckId, cancellationToken, confirmRemovals).ConfigureAwait(false);
         return ToView(
             preview,
             operationOffset,

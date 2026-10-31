@@ -1513,6 +1513,99 @@ public sealed class ArchidektWorkflowTests
     }
 
     /// <summary>
+    /// Reproduces the report: a local deck that holds 79 of the 172 Archidekt entries would remove the other 93. The
+    /// preview refuses to offer the apply and names the count, the apply refuses without sending anything, a wrong
+    /// count is refused, and the exact count lets the push through.
+    /// </summary>
+    [Fact]
+    public async Task Push_RemovingMostOfTheArchidektDeck_NeedsTheExactRemovalCount()
+    {
+        using World world = new(OperationMode.Remote, CreateLargeDeck(172));
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [.. local.Entries.Skip(79).Select(value => new RemoveDeckEntryChange(value.EntryId))],
+            token));
+
+        ArchidektSyncPreviewView refusedPreview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        ArchidektSyncPreviewView wrongPreview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, confirmRemovals: 90, cancellationToken: token));
+        ArchidektSyncPreviewView confirmedPreview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, confirmRemovals: 93, cancellationToken: token));
+
+        Assert.False(refusedPreview.ApplyAvailable);
+        Assert.Contains("removes 93 of 172 Archidekt entries", refusedPreview.ApplyNotice, StringComparison.Ordinal);
+        Assert.Contains("confirmRemovals: 93", refusedPreview.ApplyNotice, StringComparison.Ordinal);
+        Assert.Equal(93, refusedPreview.Summary.OperationsByKind["entry-remove"]);
+        Assert.False(wrongPreview.ApplyAvailable);
+        Assert.Contains("confirmRemovals 90 does not match", wrongPreview.ApplyNotice, StringComparison.Ordinal);
+        Assert.True(confirmedPreview.ApplyAvailable);
+        Assert.Null(confirmedPreview.ApplyNotice);
+        Assert.Equal(refusedPreview.PreviewFingerprint, confirmedPreview.PreviewFingerprint);
+
+        foreach (int? confirm in new int?[] { null, 90 })
+        {
+            OperationResult<ArchidektApplyResult> refused = await world.Writes.ApplyPushAsync(
+                new ArchidektPushApplyRequest(
+                    localDeckId,
+                    edited.Revision,
+                    refusedPreview.RemoteFingerprint,
+                    refusedPreview.PreviewFingerprint,
+                    confirm),
+                token);
+            OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(refused.Value);
+            Assert.Equal("push-removals-unconfirmed", invalid.ReasonCode);
+            Assert.Equal(0, world.Fake.Mutations);
+        }
+
+        ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                edited.Revision,
+                confirmedPreview.RemoteFingerprint,
+                confirmedPreview.PreviewFingerprint,
+                93),
+            token));
+        Assert.Equal("applied", applied.Outcome);
+        Assert.Equal(93, world.Fake.Mutations);
+    }
+
+    /// <summary>
+    /// Verifies a push that removes a few entries from a large deck needs no confirmation.
+    /// </summary>
+    [Fact]
+    public async Task Push_RemovingAFewEntriesFromALargeDeck_NeedsNoConfirmation()
+    {
+        using World world = new(OperationMode.Remote, CreateLargeDeck(172));
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [.. local.Entries.Take(10).Select(value => new RemoveDeckEntryChange(value.EntryId))],
+            token));
+
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token));
+
+        Assert.True(preview.ApplyAvailable);
+        Assert.Equal("applied", applied.Outcome);
+        Assert.Equal(10, world.Fake.Mutations);
+    }
+
+    /// <summary>
     /// Creates a deck for the edit-on-both-sides tests: a Ramp category, a Sideboard category outside the deck, one
     /// main card, two sideboard cards, and a catalog of three cards to add by name.
     /// </summary>
