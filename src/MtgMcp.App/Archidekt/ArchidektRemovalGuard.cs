@@ -15,6 +15,12 @@ internal static class ArchidektRemovalGuard
     internal const int MaximumUnconfirmedRemovals = 10;
 
     /// <summary>
+    /// Gives the fewest removals the percent rule applies to; removing one or two entries never needs confirmation,
+    /// even from a deck so small that one entry is more than a tenth of it.
+    /// </summary>
+    internal const int MinimumRemovalsForPercentRule = 3;
+
+    /// <summary>
     /// Counts the entries a plan removes from the Archidekt deck.
     /// </summary>
     internal static int CountRemovals(IReadOnlyList<ArchidektRemoteOperation> operations)
@@ -22,7 +28,7 @@ internal static class ArchidektRemovalGuard
         int removals = 0;
         foreach (ArchidektRemoteOperation operation in operations)
         {
-            if (operation.Kind == "entry-remove")
+            if (operation.Kind == ArchidektSyncPlanner.EntryRemoveKind)
             {
                 removals++;
             }
@@ -33,12 +39,13 @@ internal static class ArchidektRemovalGuard
 
     /// <summary>
     /// Explains why the apply would refuse the push, or returns null when it removes few enough entries or the caller
-    /// confirmed the exact removal count. A push removes too many when it removes more than 10 entries or more than 10
-    /// percent of the Archidekt entries.
+    /// confirmed the exact removal count. A push removes too many when it removes more than 10 entries, or at least 3
+    /// entries and more than 10 percent of the Archidekt entries.
     /// </summary>
     internal static string? Describe(int removals, int remoteEntryCount, int? confirmRemovals)
     {
-        bool tooMany = removals > MaximumUnconfirmedRemovals || removals * 10 > remoteEntryCount;
+        bool tooMany = removals > MaximumUnconfirmedRemovals ||
+            (removals >= MinimumRemovalsForPercentRule && removals * 10 > remoteEntryCount);
         if (!tooMany || confirmRemovals == removals)
         {
             return null;

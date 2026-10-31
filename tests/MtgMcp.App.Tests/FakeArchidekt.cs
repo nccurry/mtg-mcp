@@ -58,6 +58,11 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     private int reads;
 
     /// <summary>
+    /// Counts the deck reads made after the first write.
+    /// </summary>
+    private int readsAfterWrites;
+
+    /// <summary>
     /// Holds the next id for a new category.
     /// </summary>
     private int nextCategoryId = 100;
@@ -76,6 +81,18 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     /// Gets or sets the description the fake deck reports.
     /// </summary>
     internal string Description { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets how many deck reads still succeed after the first write; every later deck read answers 503, so
+    /// Archidekt looks unavailable. Null lets every read succeed.
+    /// </summary>
+    internal int? DeckReadsThatSucceedAfterWrites { get; set; }
+
+    /// <summary>
+    /// Gets or sets an action that runs before the fake answers a read, with the request path; a test uses it to
+    /// change something between two steps of a tool call.
+    /// </summary>
+    internal Action<string>? BeforeRead { get; set; }
 
     /// <summary>
     /// Gets the methods and paths of every request, in order.
@@ -190,6 +207,16 @@ internal sealed class FakeArchidekt : HttpMessageHandler
 
         if (request.Method == HttpMethod.Get)
         {
+            BeforeRead?.Invoke(path);
+            if (path == $"api/decks/{DeckId}/" && Mutations > 0 && DeckReadsThatSucceedAfterWrites is { } allowed &&
+                readsAfterWrites++ >= allowed)
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+                {
+                    Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+                });
+            }
+
             return Task.FromResult(Read(path));
         }
 

@@ -33,6 +33,11 @@ internal sealed class ArchidektDeckOperations
     private const string RequestLimitReasonCode = "request-limit-exceeded";
 
     /// <summary>
+    /// Gives the reason code of a push that cannot be sent because a card has no Archidekt printing.
+    /// </summary>
+    private const string PrintingUnresolvedReasonCode = "push-printing-unresolved";
+
+    /// <summary>
     /// Gives how many times a read may be tried again after a rate-limit response; the budget keeps room for them.
     /// </summary>
     private const int MaximumRetriesPerRead = 2;
@@ -243,13 +248,17 @@ internal sealed class ArchidektDeckOperations
                 RemoteDeckSnapshot resolved = choices.ApplyTo(target);
                 ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current, resolved);
                 int needed = budget.RequestCount + RequestsAfterPlanning(plan, known is null);
+                (string? notice, string? code) = Blocked(choices, needed, budget.MaximumRequests);
                 return new ArchidektPushPlan(
                     resolved,
                     plan,
                     DescribeOperations(plan, choices),
                     plan.PredictedProviderRequests + choices.SearchRequests,
-                    BlockedNotice(choices, needed, budget.MaximumRequests),
-                    choices);
+                    notice,
+                    choices)
+                {
+                    BlockedReasonCode = code,
+                };
             });
     }
 
@@ -307,14 +316,19 @@ internal sealed class ArchidektDeckOperations
     }
 
     /// <summary>
-    /// Explains why a push could not be sent, or returns null when it can.
+    /// Explains why a push could not be sent, with its reason code, or returns nulls when it can.
     /// </summary>
-    private static string? BlockedNotice(ArchidektPrintingChoices choices, int neededRequests, int maximumRequests)
+    private static (string? Notice, string? Code) Blocked(
+        ArchidektPrintingChoices choices,
+        int neededRequests,
+        int maximumRequests)
     {
         if (choices.StoppedAtRequestLimit)
         {
-            return "archidekt_push_apply would send nothing: looking up printings on Archidekt reached the limit of " +
-                $"{maximumRequests} provider requests for one operation. Push fewer new cards at a time.";
+            return (
+                "archidekt_push_apply would send nothing: looking up printings on Archidekt reached the limit of " +
+                    $"{maximumRequests} provider requests for one operation. Push fewer new cards at a time.",
+                RequestLimitReasonCode);
         }
 
         if (choices.UnresolvedCardNames.Count > 0)
@@ -323,14 +337,19 @@ internal sealed class ArchidektDeckOperations
             string more = choices.UnresolvedCardNames.Count > 10
                 ? $" and {choices.UnresolvedCardNames.Count - 10} more"
                 : string.Empty;
-            return "archidekt_push_apply would send nothing: Archidekt has no printing for " +
-                $"{string.Join(", ", shown)}{more}. Fix the card name or set a printing on the entry, then preview again.";
+            return (
+                "archidekt_push_apply would send nothing: Archidekt has no printing for " +
+                    $"{string.Join(", ", shown)}{more}. Fix the card name or set a printing on the entry, then " +
+                    "preview again.",
+                PrintingUnresolvedReasonCode);
         }
 
         return neededRequests > maximumRequests
-            ? $"archidekt_push_apply would send nothing: this push needs about {neededRequests} provider requests, " +
-                $"over the limit of {maximumRequests} for one operation. Push fewer changes at a time."
-            : null;
+            ? (
+                $"archidekt_push_apply would send nothing: this push needs about {neededRequests} provider " +
+                    $"requests, over the limit of {maximumRequests} for one operation. Push fewer changes at a time.",
+                RequestLimitReasonCode)
+            : (null, null);
     }
 
     /// <summary>

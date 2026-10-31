@@ -1230,7 +1230,7 @@ public sealed class ArchidektWorkflowTests
                 preview.RemoteFingerprint,
                 preview.PreviewFingerprint),
             token);
-        Assert.IsType<OperationInvalidInput>(refused.Value);
+        Assert.Equal("request-limit-exceeded", Assert.IsType<OperationInvalidInput>(refused.Value).ReasonCode);
         Assert.Equal(0, world.Fake.Mutations);
     }
 
@@ -1801,6 +1801,189 @@ public sealed class ArchidektWorkflowTests
     }
 
     /// <summary>
+    /// Verifies the removal rule at its edges, with nothing sent when the apply refuses: removing 11 of 200 entries
+    /// needs confirmation by the count rule alone, removing 3 of 25 by the percent rule alone, removing 10 of 100 needs
+    /// none, and removing fewer than 3 entries needs none even from a small deck.
+    /// </summary>
+    [Theory]
+    [InlineData(200, 11, true)]
+    [InlineData(25, 3, true)]
+    [InlineData(100, 10, false)]
+    [InlineData(30, 3, false)]
+    [InlineData(15, 2, false)]
+    [InlineData(5, 1, false)]
+    public async Task Push_Removals_NeedConfirmationOnlyPastTheCountOrPercentRule(
+        int deckSize,
+        int removals,
+        bool needsConfirmation)
+    {
+        using World world = new(OperationMode.Remote, CreateLargeDeck(deckSize));
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [.. local.Entries.Take(removals).Select(value => new RemoveDeckEntryChange(value.EntryId))],
+            token));
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        OperationResult<ArchidektApplyResult> result = await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token);
+
+        Assert.Equal(!needsConfirmation, preview.ApplyAvailable);
+        if (needsConfirmation)
+        {
+            Assert.Equal("push-removals-unconfirmed", Assert.IsType<OperationInvalidInput>(result.Value).ReasonCode);
+            Assert.Equal(0, world.Fake.Mutations);
+        }
+        else
+        {
+            Assert.Equal("applied", Success(result).Outcome);
+            Assert.Equal(removals, world.Fake.Mutations);
+        }
+    }
+
+    /// <summary>
+    /// Verifies an apply that the removal rule refuses sends no card search: the removals do not depend on the
+    /// printings of the new cards, so the refusal comes before the lookups.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPush_WithUnconfirmedRemovalsAndANameOnlyAdd_SendsNoCardSearch()
+    {
+        FakeArchidekt fake = CreateLargeDeck(30);
+        _ = fake.AddCardToCatalog(9001, "Shock");
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [
+                .. local.Entries.Take(12).Select(value => new RemoveDeckEntryChange(value.EntryId)),
+                new AddDeckEntryChange(new DeckEntryDraft(1, "Shock")),
+            ],
+            token));
+        ArchidektSyncPreviewView preview = Success(await world.Reads.PreviewPushAsync(
+            localDeckId,
+            confirmRemovals: 12,
+            cancellationToken: token));
+        int searchesBefore = world.Fake.Requests.Count(value => value.Contains("api/cards/v2/", StringComparison.Ordinal));
+
+        OperationResult<ArchidektApplyResult> refused = await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token);
+
+        Assert.Equal("push-removals-unconfirmed", Assert.IsType<OperationInvalidInput>(refused.Value).ReasonCode);
+        Assert.True(searchesBefore > 0);
+        Assert.Equal(
+            searchesBefore,
+            world.Fake.Requests.Count(value => value.Contains("api/cards/v2/", StringComparison.Ordinal)));
+        Assert.Equal(0, world.Fake.Mutations);
+    }
+
+    /// <summary>
+    /// Verifies an apply refuses when the local deck changes after the apply checked it, while the card searches ran:
+    /// nothing is sent to Archidekt and the local deck is not recorded as synchronized.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPush_WhenTheLocalDeckChangesDuringTheSearches_SendsNothing()
+    {
+        FakeArchidekt fake = CreateLargeDeck(12);
+        _ = fake.AddCardToCatalog(9001, "Shock");
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [new AddDeckEntryChange(new DeckEntryDraft(1, "Shock"))],
+            token));
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        bool changed = false;
+        world.Fake.BeforeRead = path =>
+        {
+            if (!changed && path.StartsWith("api/cards/v2/", StringComparison.Ordinal))
+            {
+                changed = true;
+                DeckDocument current = Success(world.Store.GetAsync(localDeckId, token).GetAwaiter().GetResult());
+                _ = Success(world.Store.ApplyChangesAsync(
+                    localDeckId,
+                    current.Revision,
+                    [new UpdateDeckEntryChange(current.Entries[0] with { Quantity = 4 })],
+                    token).GetAwaiter().GetResult());
+            }
+        };
+
+        OperationResult<ArchidektApplyResult> refused = await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token);
+
+        Assert.True(changed);
+        Assert.Equal("push-preview-changed", Assert.IsType<OperationConflict>(refused.Value).ReasonCode);
+        Assert.Equal(0, world.Fake.Mutations);
+        Assert.Equal(edited.Revision + 1, Success(await world.Store.GetAsync(localDeckId, token)).Revision);
+    }
+
+    /// <summary>
+    /// Verifies a push whose final read of Archidekt fails after the writes keeps the statuses of the writes, says the
+    /// result is not verified, and leaves the baseline and the local deck as they were.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPush_WhenTheReadAfterTheWritesFails_KeepsStatusesAndLeavesTheBaseline()
+    {
+        using World world = new(OperationMode.Remote, CreateSmallDeck());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckEntry bolt = local.Entries.Single(value => value.CardName == "Bolt");
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [new UpdateDeckEntryChange(bolt with { Quantity = 3 })],
+            token));
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        world.Fake.DeckReadsThatSucceedAfterWrites = 1;
+
+        ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token));
+        world.Fake.DeckReadsThatSucceedAfterWrites = null;
+        ArchidektSyncPreviewView after = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        Assert.Equal("applied-unverified", applied.Outcome);
+        Assert.Equal("entry-update", Assert.Single(applied.Operations).Kind);
+        Assert.Equal("applied", applied.Operations[0].Status);
+        Assert.Equal(ArchidektApplyResult.UnverifiedNotice, applied.Notice);
+        Assert.Equal(3, world.Fake.QuantityOf("Bolt"));
+        Assert.Equal(edited.Revision, Success(await world.Store.GetAsync(localDeckId, token)).Revision);
+        Assert.NotEmpty(after.Differences);
+    }
+
+    /// <summary>
     /// Verifies a push that removes a few entries from a large deck needs no confirmation.
     /// </summary>
     [Fact]
@@ -2080,7 +2263,8 @@ public sealed class ArchidektWorkflowTests
                 new ArchidektSession(
                     new HttpClient(fake) { BaseAddress = options.BaseAddress },
                     ownsHttpClient: true,
-                    options),
+                    options,
+                    delay: (_, _) => Task.CompletedTask),
                 options.MaximumRequestsPerOperation);
             Store = new SqliteDeckStore(directory.Path, "test");
             Coordinator = new ArchidektCoordinator(service, Store);

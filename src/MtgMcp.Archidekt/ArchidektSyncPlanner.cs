@@ -8,6 +8,11 @@ namespace MtgMcp.Archidekt;
 public static class ArchidektSyncPlanner
 {
     /// <summary>
+    /// Names the planned operation that removes one card relation from the Archidekt deck.
+    /// </summary>
+    public const string EntryRemoveKind = "entry-remove";
+
+    /// <summary>
     /// Computes the three-way comparison for a stored local deck, using the local fingerprints of that deck: the full
     /// one, the one for fields no row shows, and the two orders an earlier version recorded.
     /// </summary>
@@ -606,7 +611,7 @@ public static class ArchidektSyncPlanner
             if (!retainedRelations.Contains(currentEntry.ProviderRelationId))
             {
                 planned.Add(new ArchidektPlannedOperation(
-                    new ArchidektRemoteOperation(sequence++, "entry-remove", currentEntry.CardName, "Remove one exact card relation."),
+                    new ArchidektRemoteOperation(sequence++, EntryRemoveKind, currentEntry.CardName, "Remove one exact card relation."),
                     TargetCategory: null,
                     CurrentCategory: null,
                     TargetEntry: null,
