@@ -238,7 +238,7 @@ internal sealed class ArchidektSynchronizationContext
                 .Where(move => differences.TrueForAll(shown => shown.Path != move.Path)));
             if (HasLocalChanges(diff) && !discardLocalChanges)
             {
-                keep = ArchidektLocalMapper.PlanPullKeep(local.Data, state.Data.Baseline, remote.Data, diff);
+                keep = ArchidektSyncPlanner.PlanPullKeep(local.Data, state.Data.Baseline, remote.Data, diff);
                 conflictReason = DescribePullConflict(keep, differences);
                 keep = conflictReason is null ? keep : null;
             }

@@ -1507,6 +1507,126 @@ public sealed class ArchidektWorkflowTests
     }
 
     /// <summary>
+    /// Verifies a pull keeps a card added locally to a category Archidekt renamed: the card follows the category to
+    /// its new name, the pull applies, and the next push adds the card without creating the old category again.
+    /// </summary>
+    [Fact]
+    public async Task Pull_WithACardAddedToACategoryArchidektRenamed_MovesTheCardToTheNewName()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckForRemoteEdits());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckCategory ramp = local.Categories.Single(value => value.Name == "Ramp");
+        Guid cardId = Guid.NewGuid();
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [
+                new AddDeckEntryChange(new DeckEntryDraft(1, "Side Card 01", EntryId: cardId)),
+                new AssignDeckCategoryChange(cardId, ramp.CategoryId, true),
+            ],
+            token));
+        world.Fake.RenameCategory("Ramp", "Acceleration");
+
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
+
+        Assert.False(preview.HasConflicts);
+        Assert.Contains(preview.Operations, value => value.Kind == "local-keep");
+
+        ArchidektApplyResult applied = Success(await world.LocalWrites.ApplyPullAsync(
+            new ArchidektPullApplyRequest(
+                "42",
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token));
+        DeckDocument pulled = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckEntry kept = pulled.Entries.Single(value => value.CardName == "Side Card 01");
+        ArchidektSyncPreviewView push = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        Assert.Equal("applied", applied.Outcome);
+        Assert.Equal(["Acceleration"], CategoryNamesOf(pulled, kept));
+        Assert.DoesNotContain(pulled.Categories, value => value.Name == "Ramp");
+        Assert.Equal(
+            ["entry-add:Side Card 01"],
+            push.Operations.Select(value => $"{value.Kind}:{value.Subject}"));
+    }
+
+    /// <summary>
+    /// Verifies a card added locally beside the local removal of another card is a conflict: the pull would drop the
+    /// removal, so the preview and the apply refuse, no local-keep is planned, and the local deck is not changed.
+    /// </summary>
+    [Fact]
+    public async Task Pull_WithAnAddedCardAndALocalRemovalOfAnotherCard_IsAConflict()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckForRemoteEdits());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckEntry bolt = local.Entries.Single(value => value.CardName == "Bolt");
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [.. AddSideboardCards(local, "Side Card 01"), new RemoveDeckEntryChange(bolt.EntryId)],
+            token));
+        MoveTwoCardsUnderANewRemovalCategory(world.Fake);
+
+        await AssertPullIsRefusedAsync(world, localDeckId, edited.Revision);
+    }
+
+    /// <summary>
+    /// Verifies a card added locally beside a local quantity edit of another card is a conflict, for the same reason.
+    /// </summary>
+    [Fact]
+    public async Task Pull_WithAnAddedCardAndAQuantityEditOfAnotherCard_IsAConflict()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckForRemoteEdits());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckEntry bolt = local.Entries.Single(value => value.CardName == "Bolt");
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [.. AddSideboardCards(local, "Side Card 01"), new UpdateDeckEntryChange(bolt with { Quantity = 3 })],
+            token));
+        MoveTwoCardsUnderANewRemovalCategory(world.Fake);
+
+        await AssertPullIsRefusedAsync(world, localDeckId, edited.Revision);
+    }
+
+    /// <summary>
+    /// Checks a pull preview is a conflict with no local-keep, and that the apply refuses with pull-conflict and leaves
+    /// the local revision as it was.
+    /// </summary>
+    private static async Task AssertPullIsRefusedAsync(World world, Guid localDeckId, long revision)
+    {
+        CancellationToken token = TestContext.Current.CancellationToken;
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
+
+        Assert.True(preview.HasConflicts);
+        Assert.False(preview.ApplyAvailable);
+        Assert.DoesNotContain(preview.Operations, value => value.Kind == "local-keep");
+
+        OperationResult<ArchidektApplyResult> refused = await world.LocalWrites.ApplyPullAsync(
+            new ArchidektPullApplyRequest(
+                "42",
+                localDeckId,
+                revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token);
+
+        Assert.Equal("pull-conflict", Assert.IsType<OperationConflict>(refused.Value).ReasonCode);
+        Assert.Equal(revision, Success(await world.Store.GetAsync(localDeckId, token)).Revision);
+    }
+
+    /// <summary>
     /// Verifies a card added locally that Archidekt also added is refused, by name, in the preview and the apply.
     /// </summary>
     [Fact]

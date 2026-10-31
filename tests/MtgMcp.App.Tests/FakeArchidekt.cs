@@ -136,6 +136,19 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     }
 
     /// <summary>
+    /// Renames a category, with every entry that uses it, as an edit made on the Archidekt site would. The category
+    /// keeps its id. It is not counted as a mutation, since no client request made it.
+    /// </summary>
+    internal void RenameCategory(string categoryName, string newName)
+    {
+        categories.Single(value => value.Name == categoryName).Name = newName;
+        foreach (FakeEntry entry in entries)
+        {
+            entry.Categories = [.. entry.Categories.Select(value => value == categoryName ? newName : value)];
+        }
+    }
+
+    /// <summary>
     /// Gets the quantity of a card by name across the deck, or zero when it is not in the deck.
     /// </summary>
     internal int QuantityOf(string cardName)
