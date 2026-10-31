@@ -3,14 +3,16 @@
 ## Current Work
 
 - Status: Planned
-- Owner: mtg-mcp (owner approval needed before implementation)
-- Last updated: 2026-10-31, `main` at `d8b845c`
-- Selected work and endpoint: phases 1 to 3 below, merged into `main` and
-  released as the next minor version after owner approval. Decisions D-1 to
-  D-4 are open.
-- State: designed; not approved; implementation not started.
-- Next action and blocker: owner answers D-1 to D-4 and approves; then
-  implementation starts with phase 1.
+- Owner: mtg-mcp (owner approval of the whole plan needed before
+  implementation)
+- Last updated: 2026-10-31, `main` at `86d25fb`
+- Selected work and endpoint: phases 0 to 4 below, merged into `main` and
+  released as the next minor version.
+- State: designed; owner answered D-1 to D-4 on 2026-10-31; implementation not
+  authorized yet.
+- Next action and blocker: owner approves the plan and answers D-5 (whether
+  phase 0 ships alone as `0.13.1`); then implementation starts with phase 0,
+  which is urgent: Claude Code currently loads none of the tools.
 - Resume check: this file is under `docs/llms/plcs/planned/` and no
   `deck-read-and-search-clarity` worktree exists.
 
@@ -29,33 +31,69 @@ commander, 21 sideboard, 347 maybeboard):
 4. There is no commander popularity rank, so "commanders not in the top 100"
    cannot be answered.
 
+A second session (2026-10-31) reported that Claude Code loads none of the 86
+tools, and asked for commander research tools. Verified in Claude Code's MCP
+logs for this project: every session that negotiated protocol `2026-07-28`
+logged "tools/list failed … outputSchema expected object, received boolean";
+sessions on `2025-11-25` did not.
+
 Research (2026-10-31) found that problem 2 is mostly a zone-mapping gap, not
 duplicates. Archidekt counts an entry toward the deck only when its first
 category has `includedInDeck`. `MapZone`
-(`src/MtgMcp.Archidekt/ArchidektContractMapper.cs:449-472`) ignores that flag.
+(`src/MtgMcp.Archidekt/ArchidektContractMapper.cs:448-472`) ignores that flag
+and maps every entry that is not commander, sideboard, or maybeboard to `main`.
 In deck 22959335, three main entries have an excluded first category
 (Bloodthirsty Blade under Multiplayer, Revival // Revenge and Osteomancer
 Adept under Reanimate). Counted Archidekt's way, the deck has exactly 100
-cards. One Bloodthirsty Blade is also a real second entry, under Removal.
+cards. The owner notes those categories are a deck setup mistake on
+Archidekt, but mtg-mcp must follow the deck's configuration either way. One
+Bloodthirsty Blade is also a real second entry, under Removal.
 
 | ID | Required behavior | Acceptance criteria |
 | --- | --- | --- |
-| REQ-001 | Each `archidekt_deck_get` entry reports `inDeck`: whether its first category counts toward the deck on Archidekt (true when it has no category or the flag is unknown). | Fake Archidekt test copying deck 22959335: the Multiplayer Bloodthirsty Blade has `inDeck: false`; others true. |
-| REQ-002 | The `archidekt_deck_get` summary reports, for the whole deck whatever the filter: `inDeckCardCount` (Archidekt's count); main and commander entries that are not in the deck (count and up to 20 names); duplicate groups across commander and main by Oracle ID, falling back to name, skipping basic lands, capped with an omitted count; and for Commander decks a size fact `{format, expected: 100, mainAndCommander, inDeck}`. Facts only, no verdict. | Same fixture: `inDeckCardCount` 100, `mainAndCommander` 103 (101 + 2), three not-in-deck entries, one duplicate group, basics not grouped, cap sets the omitted count. No card data needed. |
-| REQ-003 | `archidekt_deck_get` takes an optional `zones` filter (`commander`, `main`, `sideboard`, `maybeboard`, the names `card_list_query` already uses) and returns `shownEntryCount`. Offsets count the filtered list. | A 417-entry fixture: `zones: ["commander","main"]` returns only those; a bad offset is refused with `invalid-offset` naming the filtered count; an unknown zone is refused by the schema enum. |
-| REQ-004 | `archidekt_deck_get` takes `responseFormat` (`concise`, `standard`, `full`, the shared attribute). `concise` entries hold `cardName`, `quantity`, `zone`, `categoryNames`, `setCode`, `collectorNumber`, `oracleId`, `inDeck`. `standard` keeps the `0.13.0` entry; `full` equals `standard` (provider extras already come back as `extensions`). The default follows D-2. | Main plus commander of deck 22959335 (103 entries) fits one page in `concise`; `standard` matches `0.13.0` field for field. |
-| REQ-005 | Entries are ordered by zone (commander, main, sideboard, maybeboard), then name, then relation ID, in every format. | Ordering is stable across the fake's per-read reordering; paging reaches every entry once. |
-| REQ-006 | `archidekt_snapshots_get` (kind `get`) takes the same `zones` and `responseFormat`, since it shares the deck pager. | Snapshot read test with both options. |
-| REQ-007 | `scryfall_search`, `scryfall_cards_get`, and `scryfall_installed_cards_by_tag` report `returnedCount` and `requestedCount` on every page, and `cutReason: "result-size-limit"` when cut. `narrow` gives the numbers: kept and requested counts, average bytes per card, where `nextCursor` continues, and that leaving `oracleText` out of `fields` fits more. `card_lists_compare` uses the same hint builder. | Recorded-fixture tests: a cut concise page reports 87 of 100 for the reporter's field set; an uncut page has no `cutReason`; cursors visit every card once; concise without `oracleText` fills 100. |
-| REQ-008 | Descriptions say `pageSize` is a maximum, that `oracleText` is usually the largest field, and that `edhrecRank` counts deck inclusion in any slot and is not a rank of how often a card is played as commander (same for `order: "edhrec"`). | Description tests and the 4,096-character limit pass. |
+| REQ-011 | Every tool publishes an `outputSchema` that is a JSON object with `type: "object"` under every supported protocol version, including `2026-07-28`: `{"type":"object","properties":{"kind":{"type":"string","enum":[…the operation result kinds…]}},"required":["kind"]}`, set once where every tool is created (`ToolRegistration.cs:52`). Each `structuredContent` is the unwrapped result with a top-level `kind`. | Claude Code (protocol `2026-07-28`) lists all tools; E2E lists tools under 2024-11-05, 2025-03-26, 2025-06-18, 2025-11-25, and 2026-07-28 (through `server/discover`) and every `inputSchema` and `outputSchema` is an object with `type: "object"`. |
+| REQ-012 | A tool failure sets `isError: true` under every protocol version. | E2E under each version: `local_deck_get` with an unknown ID has `isError: true` and a top-level `kind`; `scryfall_card_data_status` succeeds with a top-level `kind` that is in the schema's enum. |
+| REQ-001 | An Archidekt entry whose first category has `includedInDeck: false` is not in the deck: the zone mapping sends it to `maybeboard` (unless it is a commander, sideboard, or maybeboard entry by the existing rules). The same mapping drives pulls, `archidekt_deck_get`, push planning, and the push zone check (`ArchidektSyncPlanner.cs:515`), so pull and push stay consistent. | Fake Archidekt test copying deck 22959335: the three entries map to `maybeboard`; main plus commander is 100; pull then push preview gives zero operations; a category whose flag is `true` (or missing) still maps to `main`. |
+| REQ-002 | Decks pulled before REQ-001 keep working. A stored baseline or local entry with `main` for such an entry does not produce false differences, a refused push, or a changed fingerprint by itself; the next pull moves the local entry to `maybeboard` as an ordinary pull change. | Upgrade test with a `0.13.0`-shaped baseline and local deck: push preview has no zone contradiction and no operations; pull preview shows the zone move for exactly those entries. |
+| REQ-003 | Each `archidekt_deck_get` entry reports `inDeck` (true when the first category is included, has no flag, or the entry has no category). | Same fixture: the three entries `false`, others `true`. |
+| REQ-004 | The `archidekt_deck_get` summary reports, for the whole deck whatever the filter: duplicate groups across commander and main by Oracle ID, falling back to name, skipping basic lands, capped with an omitted count; and for Commander decks a size fact `{format, expected: 100, mainAndCommander}`. Facts only, no verdict. | Fixture: one duplicate group only if both copies are in the deck; basics not grouped; the cap sets the omitted count; the size fact reads 100. No card data needed. |
+| REQ-005 | `archidekt_deck_get` takes an optional `zones` filter (`commander`, `main`, `sideboard`, `maybeboard`, the names `card_list_query` uses) and returns `shownEntryCount`. Offsets count the filtered list. | 417-entry fixture: `zones: ["commander","main"]` returns only those; a bad offset is refused with `invalid-offset` naming the filtered count; an unknown zone is refused by the schema enum. |
+| REQ-006 | `archidekt_deck_get` takes `responseFormat` (shared attribute), default `concise`. `concise` entries hold `cardName`, `quantity`, `zone`, `categoryNames`, `setCode`, `collectorNumber`, `oracleId`, `inDeck`. `full` (and `standard`, the same) return every entry field as in `0.13.0` plus `inDeck`. The description's first lines and every cut page's `narrow` say to pass `responseFormat: "full"` for every field. | Main plus commander of the fixture fits one page in the default format; `full` matches `0.13.0` field for field plus `inDeck`; the description and `narrow` name `responseFormat: "full"`. |
+| REQ-007 | Entries are ordered by zone (commander, main, sideboard, maybeboard), then name, then relation ID, in every format. | Ordering is stable across the fake's per-read reordering; paging reaches every entry once. |
+| REQ-008 | `archidekt_snapshots_get` (kind `get`) takes the same `zones` and `responseFormat` with the same defaults, since it shares the deck pager. | Snapshot read test with both options and the defaults. |
+| REQ-009 | `scryfall_search`, `scryfall_cards_get`, and `scryfall_installed_cards_by_tag` report `returnedCount` and `requestedCount` on every page, and `cutReason: "result-size-limit"` when cut. `narrow` gives the numbers: kept and requested counts, average bytes per card, where `nextCursor` continues, and that leaving `oracleText` out of `fields` fits more. `card_lists_compare` uses the same hint builder. | Recorded-fixture tests: a cut concise page reports 87 of 100 for the reporter's field set; an uncut page has no `cutReason`; cursors visit every card once; concise without `oracleText` fills 100. |
+| REQ-010 | Descriptions say `pageSize` is a maximum, that `oracleText` is usually the largest field, and that `edhrecRank` counts deck inclusion in any slot and is not a rank of how often a card is played as commander (same for `order: "edhrec"`). | Description tests and the 4,096-character limit pass. |
 
-Non-goals: a commander popularity rank or an EDHREC adapter (see Decisions);
-changing how pulls map zones (D-1); an `oracleTextMaxLength` option (D-3).
+Non-goals: a commander popularity rank, an EDHREC adapter, or Archidekt public
+deck search or derived inclusion rates (see Decisions); an
+`oracleTextMaxLength` option; size facts for formats other than Commander.
 
 ## Current System And Design
 
-Inspected at `d8b845c`.
+Inspected at `d8b845c` and `86d25fb`.
 
+- Every tool returns `OperationResult<T>`, which has a custom JSON converter,
+  so the schema exporter in ModelContextProtocol 2.2.0 gives the open schema
+  `true`. The SDK passes it through under `2026-07-28`; under older versions
+  it wraps both the schema and the content in `{"result": …}`
+  (`AIFunctionMcpServerTool.cs`). The `2026-07-28` schema
+  (`schema/2026-07-28/schema.json`) requires `outputSchema` to be an object,
+  so the SDK's boolean is non-conformant and Claude Code rejects the list.
+  SDK 2.3.0 behaves the same. Because of the wrapper, `ToolCallPolicy`
+  (`ToolCallPolicy.cs:93`) misses `kind` on older protocols and leaves
+  `isError` unset on failures. An explicit object schema stops the SDK from
+  wrapping, which fixes both (inferred from SDK source; prove it first in
+  phase 0). Fallback if that fails: drop a boolean `outputSchema` in
+  `FoundationProtocolPolicy.CanonicalizeToolList`, which restores the tools
+  but not `isError`. `CardListAndRuleToolsMcpTests.cs:423` missed the bug
+  because a C# `JsonElement` holds `true` as happily as an object.
+
+- `MapZone` derives a zone from category names only. It is used when reading
+  Archidekt (`ArchidektContractMapper.cs:368`) and when checking a push for
+  zone contradictions (`ArchidektSyncPlanner.cs:515`), so changing it changes
+  both sides together. Archidekt's own Sideboard and Maybeboard categories are
+  themselves categories with `includedInDeck: false`; a custom excluded
+  category is the same idea, so it maps to `maybeboard`.
 - `archidekt_deck_get` takes `deckId` and `offset`
   (`src/MtgMcp.App/Archidekt/ArchidektReadTools.cs:73-83`). `PageDeck`
   (`ArchidektResultPaging.cs:23-96`) sorts by name and pages with
@@ -74,56 +112,85 @@ Inspected at `d8b845c`.
   reporter's query: 436 bytes per card with oracle text (87 fit), 208 without
   (100 fit). Leaving `oracleText` out of `fields` already works.
 
-Decisions made by research (2026-10-31), for owner confirmation:
+Decisions (owner, 2026-10-31):
 
-- **No commander rank.** Scryfall's `edhrec_rank` counts inclusion in any
-  slot: EDHREC's top commander, Y'shtola, Night's Blessed, has rank 2,495, so
-  sorting `is:commander` by it answers "top 100 commanders" wrongly. EDHREC has
-  the right data, but its terms forbid automated requests, and
+- **D-1, follow `includedInDeck`:** mtg-mcp respects the deck's category
+  configuration in pulls, reads, and pushes (REQ-001, REQ-002).
+- **D-2, `concise` by default:** `archidekt_deck_get` and
+  `archidekt_snapshots_get` default to `concise` now, with `full` easy to ask
+  for (REQ-006). Changing a default result is breaking under
+  `docs/versioning.md`; the owner approved it for this release, and the
+  CHANGELOG marks it **Breaking** with `responseFormat: "full"` as the way
+  back.
+- **D-3, no oracle-text cap:** report counts instead; shortened oracle text
+  hands the agent partial rules text, and a 200-character cap fits only 92 of
+  100.
+- **D-4, Commander only** for the size fact.
+- **No commander research tools** (research, 2026-10-31): EDHREC stats are
+  rejected as above. Archidekt public deck search by commander and inclusion
+  rates derived from other users' decks are an automated search over other
+  users' data, which Archidekt's terms (archidekt.com/terms) forbid and
+  `SOURCE_FEASIBILITY.md:23,57-68` records as not admitted. They reopen only
+  with written permission from Archidekt or a documented API; the search would
+  then be a small `archidekt_*` tool that labels view order as popularity,
+  not quality.
+- **No commander rank** (research, accepted with the plan): Scryfall's
+  `edhrec_rank` counts inclusion in any slot (EDHREC's top commander,
+  Y'shtola, Night's Blessed, has rank 2,495). EDHREC's terms forbid automated
+  requests, and
   `completed/evidence-first-deckbuilding-evolution/SOURCE_FEASIBILITY.md:44-56`
-  already rejected its undocumented JSON routes. REQ-008 corrects the wording
+  already rejected its undocumented JSON routes. REQ-010 corrects the wording
   so agents say the server cannot answer instead of answering wrongly.
-- **Report counts before shortening text.** Shortened oracle text hands the
-  agent partial rules text, and a 200-character cap fits only 92 of 100.
 
 ## Steps And Verification
 
-1. Phase 1, deck facts (REQ-001, REQ-002): `inDeck` on entries, the summary
-   facts, a shared basic-land list. Archidekt adapter and App paging only.
-2. Phase 2, deck reading (REQ-003 to REQ-006): `zones`, `responseFormat`,
-   zone ordering, the concise entry record, snapshot pass-through, `narrow`
-   naming the new options.
-3. Phase 3, Scryfall pages and wording (REQ-007, REQ-008): counts, cut reason,
-   numeric `narrow`, description fixes.
+0. Phase 0, tools load under every protocol (REQ-011, REQ-012): the shared
+   output schema, the protocol E2E theory, unit tests that every registered
+   tool has an object schema, and an updated
+   `CardTools_OutputSchema_IsTheSameOpenSchemaAsOtherTools`. Prove first that
+   the SDK stops wrapping on the older protocols. Also file an upstream SDK
+   issue (boolean `outputSchema` under `2026-07-28`). Verify in Claude Code
+   that all tools load.
+1. Phase 1, follow `includedInDeck` (REQ-001, REQ-002, REQ-003): the zone
+   mapping, the upgrade handling, `inDeck` on entries. Archidekt adapter and
+   sync planner, plus fingerprint and baseline upgrade tests like the
+   `0.12.0` baseline test of the previous plan.
+2. Phase 2, deck facts and reading (REQ-004 to REQ-008): duplicates and the
+   size fact, `zones`, `responseFormat` with `concise` default, zone ordering,
+   snapshot pass-through, `narrow` naming the options.
+3. Phase 3, Scryfall pages (REQ-009).
+4. Phase 4, wording (REQ-010).
 
 Each phase: focused tests with the offline fake Archidekt and recorded
 Scryfall fixtures, then `task ci`, `task test:integration`, and `task test:e2e`
 from PowerShell; `ToolResultBudgetTests` stays under the ceiling; schema and
 surface tests updated; README, CHANGELOG, `docs/output-control.md` updated.
-Phases are independent and may run in parallel worktrees; phase 2 touches the
-same pager as phase 1, so merge phase 1 first.
+Phase 2 builds on phase 1's `inDeck`, so it follows phase 1. Phases 3 and 4
+are independent of 1 and 2 and may run in parallel worktrees.
 
 ## Risks And Open Questions
 
-- **D-1 (owner, blocks nothing here):** fix `MapZone` so entries whose first
-  category is excluded do not map to `main`. This is the root cause, but it
-  changes pull results, content fingerprints, and local zones, and a "not in
-  deck" zone has no local equivalent. Proposed: a separate plan. This plan
-  only reports the fact.
-- **D-2 (owner, blocks REQ-004's default):** make `concise` the default for
-  `archidekt_deck_get`. Changing a default result is breaking under
-  `docs/versioning.md:72-75`. Proposed: opt-in now, with a `Deprecated:` note
-  that the default becomes `concise` in the following minor.
-- **D-3 (owner, non-blocking):** add `oracleTextMaxLength` later only if agents
-  still struggle once REQ-007 ships.
-- **D-4 (owner, non-blocking):** the size fact covers Commander only
-  (proposed); Oathbreaker and Brawl only if wanted.
+- **D-5 (owner, blocks the release route of phase 0):** ship phase 0 alone as
+  `0.13.1` now, or with the rest of this plan in the next minor. Claude Code
+  shows no mtg-mcp tools until it ships. Proposed: `0.13.1` now.
+- Phase 0 changes what clients on older protocols see: the `{"result": …}`
+  wrapper goes away, matching what `2026-07-28` clients already get. CHANGELOG
+  entry under Fixed.
+
+- REQ-002 is the riskiest part: any change to what a pull produces can make a
+  synced deck show differences that are not real. Prove it with a stored
+  `0.13.0`-shaped baseline before changing the mapping.
+- Mapping excluded categories to `maybeboard` means a push of a local
+  `maybeboard` entry keeps its Archidekt category (`ArchidektLocalMapper`
+  keeps category names); confirm a round trip never adds Archidekt's own
+  Maybeboard category to such an entry.
 - After Scryfall's 24-hour snapshot lifetime, an old cursor fails as
-  `invalid-cursor` (inferred from `ScryfallService.cs:1588`); REQ-007's
+  `invalid-cursor` (inferred from `ScryfallService.cs:1588`); REQ-009's
   `narrow` should not promise more.
 
 ## Evidence And Completion
 
 | Requirement | State | Evidence |
 | --- | --- | --- |
-| REQ-001 to REQ-008 | planned | Research reports of 2026-10-31: one read-only GET of Archidekt deck 22959335, one read-only Scryfall search, four Scryfall rank checks, and EDHREC terms. |
+| REQ-011, REQ-012 | planned | Claude Code MCP logs (2026-10-31T14-59 to 15-11) and a stdio reproduction against installed 0.13.0: `outputSchema` is `true` for all 86 tools under `2026-07-28`; a failure under `2025-11-25` has no `isError`. |
+| REQ-001 to REQ-010 | planned | Research reports of 2026-10-31: one read-only GET of Archidekt deck 22959335, one read-only Scryfall search, four Scryfall rank checks, EDHREC terms, and Archidekt terms with two read-only search GETs. |

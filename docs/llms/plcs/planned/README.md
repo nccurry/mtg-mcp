@@ -27,7 +27,7 @@ is complete.
 was completed and released as 0.12.0 on 2026-10-29.
 
 [deck-read-and-search-clarity](deck-read-and-search-clarity/README.md) is
-planned and awaiting owner approval: Archidekt deck facts (Archidekt's own
+planned and awaiting owner approval: an urgent fix so Claude Code loads the tools under protocol `2026-07-28`, following Archidekt's in-deck categories, deck facts (Archidekt's own
 in-deck count, duplicates, Commander size), zone filters and a concise entry
 format for `archidekt_deck_get`, and clearer Scryfall page counts.
 
