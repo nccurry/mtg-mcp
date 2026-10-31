@@ -147,6 +147,54 @@ public sealed class ArchidektRateLimitAndVerificationTests
     }
 
     /// <summary>
+    /// Verifies a push plan counts every read the apply makes, with room to retry each, so a push that could not finish
+    /// its reads is blocked when previewed and the same plan made for the apply needs one read less.
+    /// </summary>
+    [Theory]
+    [InlineData(15, true, true)]
+    [InlineData(16, true, false)]
+    [InlineData(12, false, true)]
+    [InlineData(13, false, false)]
+    public async Task PlanPush_CountsTheReadsTheApplyMakesAndTheirRetries(int maximum, bool preview, bool blocked)
+    {
+        ArchidektTestHttpHandler handler = new();
+        using ArchidektSession session = CreateSession(handler, []);
+        ArchidektDeckOperations operations = new(new ArchidektDeckTransport(session), 150);
+        RemoteDeckSnapshot current = Parse(ArchidektTestPayloads.Deck);
+        RemoteDeckSnapshot target = Parse(RenamedDeckJson);
+
+        OperationResult<ArchidektPushPlan> result = await operations.PlanPushAsync(
+            current,
+            target,
+            preview ? null : new ArchidektPrintingChoices(),
+            new ArchidektOperationScope(maximum),
+            TestContext.Current.CancellationToken);
+
+        ArchidektPushPlan plan = Assert.IsType<OperationSuccess<ArchidektPushPlan>>(result.Value).Data;
+        Assert.Equal(blocked, plan.BlockedNotice is not null);
+    }
+
+    /// <summary>
+    /// Verifies a verification read that finds the request limit used up after the writes keeps every applied status
+    /// and reports the push as applied but not verified, instead of failing and losing the statuses.
+    /// </summary>
+    [Fact]
+    public async Task VerificationRead_ThatHitsTheRequestLimitAfterTheWrites_KeepsTheStatuses()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"t\"}");
+        handler.Add(HttpMethod.Patch, DeckRoute, "{}");
+
+        ArchidektApplyResult result = await ApplyAsync(handler, [], renamedAndExtended: false, maximumRequests: 2);
+
+        Assert.Equal("applied-unverified", result.Outcome);
+        Assert.Equal("applied", Assert.Single(result.Operations).Status);
+        Assert.Null(result.FinalRemoteFingerprint);
+        Assert.Equal(ArchidektApplyResult.UnverifiedNotice, result.Notice);
+        Assert.DoesNotContain(handler.Requests, value => value.Method == HttpMethod.Get);
+    }
+
+    /// <summary>
     /// Verifies a read that lags behind the writes is read once more after a pause, and the push counts as applied
     /// when the second read matches.
     /// </summary>
@@ -205,7 +253,8 @@ public sealed class ArchidektRateLimitAndVerificationTests
     private static async Task<ArchidektApplyResult> ApplyAsync(
         ArchidektTestHttpHandler handler,
         List<TimeSpan> waits,
-        bool renamedAndExtended)
+        bool renamedAndExtended,
+        int maximumRequests = 150)
     {
         using ArchidektSession session = CreateSession(handler, waits);
         ArchidektDeckOperations operations = new(new ArchidektDeckTransport(session), 150);
@@ -228,7 +277,7 @@ public sealed class ArchidektRateLimitAndVerificationTests
             current,
             target,
             plan,
-            new ArchidektOperationBudget(150),
+            new ArchidektOperationBudget(maximumRequests),
             TestContext.Current.CancellationToken);
     }
 

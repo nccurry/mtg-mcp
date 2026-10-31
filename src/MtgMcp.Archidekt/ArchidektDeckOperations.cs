@@ -28,6 +28,16 @@ internal sealed class ArchidektDeckOperations
     private const int MaximumListedDifferences = 25;
 
     /// <summary>
+    /// Gives the reason code of the failure that says an operation has used all its provider requests.
+    /// </summary>
+    private const string RequestLimitReasonCode = "request-limit-exceeded";
+
+    /// <summary>
+    /// Gives how many times a read may be tried again after a rate-limit response; the budget keeps room for them.
+    /// </summary>
+    private const int MaximumRetriesPerRead = 2;
+
+    /// <summary>
     /// Gives the pause before the check after the writes is repeated when it found a difference.
     /// </summary>
     private static readonly TimeSpan VerificationSettleTime = TimeSpan.FromSeconds(1);
@@ -232,8 +242,7 @@ internal sealed class ArchidektDeckOperations
                     cancellationToken).ConfigureAwait(false);
                 RemoteDeckSnapshot resolved = choices.ApplyTo(target);
                 ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current, resolved);
-                // The apply makes two more reads, then one request per operation, a verifying read, and a final read.
-                int needed = budget.RequestCount + plan.PredictedProviderRequests + 3;
+                int needed = budget.RequestCount + RequestsAfterPlanning(plan, known is null);
                 return new ArchidektPushPlan(
                     resolved,
                     plan,
@@ -242,6 +251,18 @@ internal sealed class ArchidektDeckOperations
                     BlockedNotice(choices, needed, budget.MaximumRequests),
                     choices);
             });
+    }
+
+    /// <summary>
+    /// Counts the requests an apply makes after its plan is made. The plan's own count holds one request per operation
+    /// and one read. The apply also reads the deck to start (a preview adds the read the apply makes before that),
+    /// reads it to verify, reads it again when that finds a difference, and reads it a last time; room is left for each
+    /// read to be tried again after a rate-limit response.
+    /// </summary>
+    private static int RequestsAfterPlanning(ArchidektRemotePlan plan, bool planningForAPreview)
+    {
+        int reads = planningForAPreview ? 5 : 4;
+        return plan.PredictedProviderRequests - 1 + reads + (reads * MaximumRetriesPerRead);
     }
 
     /// <summary>
@@ -500,8 +521,8 @@ internal sealed class ArchidektDeckOperations
     }
 
     /// <summary>
-    /// Reads the deck again after the writes, or returns null when Archidekt cannot answer, so the statuses of the
-    /// writes that were sent are kept instead of lost.
+    /// Reads the deck again after the writes, or returns null when Archidekt cannot answer or the operation has no
+    /// requests left, so the statuses of the writes that were sent are kept instead of lost.
     /// </summary>
     private async Task<RemoteDeckSnapshot?> ReadForVerificationAsync(
         string deckId,
@@ -517,7 +538,8 @@ internal sealed class ArchidektDeckOperations
                 cancellationToken).ConfigureAwait(false);
         }
         catch (ArchidektProviderException exception)
-            when (exception.Kind is ArchidektFailureKind.Unavailable or ArchidektFailureKind.Unsupported)
+            when (exception.Kind is ArchidektFailureKind.Unavailable or ArchidektFailureKind.Unsupported ||
+                exception.ReasonCode == RequestLimitReasonCode)
         {
             return null;
         }
