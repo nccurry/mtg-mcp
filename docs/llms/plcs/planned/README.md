@@ -26,6 +26,11 @@ is complete.
 [focused-agent-tool-surface](../completed/focused-agent-tool-surface/README.md)
 was completed and released as 0.12.0 on 2026-10-29.
 
+[deck-read-and-search-clarity](deck-read-and-search-clarity/README.md) is
+planned and awaiting owner approval: Archidekt deck facts (Archidekt's own
+in-deck count, duplicates, Commander size), zone filters and a concise entry
+format for `archidekt_deck_get`, and clearer Scryfall page counts.
+
 ## Retired Reference Packets
 
 The nine legacy reference packets that used to wait here (Jasmine analysis
