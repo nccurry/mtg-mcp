@@ -1718,6 +1718,82 @@ public sealed class ArchidektWorkflowTests
     }
 
     /// <summary>
+    /// Verifies a card kept in the main zone is refused when Archidekt renamed its category to Sideboard: the card
+    /// follows the category, so its zone would change. The notice names the card and both zones.
+    /// </summary>
+    [Fact]
+    public async Task Pull_WithACardAddedToACategoryArchidektRenamedToSideboard_IsAZoneConflict()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckWithOnlyRamp());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        DeckDocument edited = await AddSideCardToRampAsync(world);
+        world.Fake.RenameCategory("Ramp", "Sideboard");
+
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPullAsync("42", edited.DeckId, cancellationToken: token));
+
+        Assert.Contains(
+            "'Side Card 01' (zone 'main', but its categories give zone 'sideboard')",
+            preview.ApplyNotice,
+            StringComparison.Ordinal);
+        await AssertPullIsRefusedAsync(world, edited.DeckId, edited.Revision);
+    }
+
+    /// <summary>
+    /// Verifies the same for a category Archidekt renamed and also took out of the deck: the card would leave the
+    /// deck, so its zone changes from main to maybeboard.
+    /// </summary>
+    [Fact]
+    public async Task Pull_WithACardAddedToACategoryArchidektTookOutOfTheDeck_IsAZoneConflict()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckWithOnlyRamp());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        DeckDocument edited = await AddSideCardToRampAsync(world);
+        world.Fake.RenameCategory("Ramp", "Acceleration", includedInDeck: false);
+
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPullAsync("42", edited.DeckId, cancellationToken: token));
+
+        Assert.Contains(
+            "'Side Card 01' (zone 'main', but its categories give zone 'maybeboard')",
+            preview.ApplyNotice,
+            StringComparison.Ordinal);
+        await AssertPullIsRefusedAsync(world, edited.DeckId, edited.Revision);
+    }
+
+    /// <summary>
+    /// Pulls the deck, then adds Side Card 01 to its Ramp category in the main zone.
+    /// </summary>
+    private static async Task<DeckDocument> AddSideCardToRampAsync(World world)
+    {
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckCategory ramp = local.Categories.Single(value => value.Name == "Ramp");
+        Guid cardId = Guid.NewGuid();
+        return Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [
+                new AddDeckEntryChange(new DeckEntryDraft(1, "Side Card 01", EntryId: cardId)),
+                new AssignDeckCategoryChange(cardId, ramp.CategoryId, true),
+            ],
+            token));
+    }
+
+    /// <summary>
+    /// Makes a deck whose only category is Ramp, so a rename to Sideboard does not collide with another category.
+    /// </summary>
+    private static FakeArchidekt CreateDeckWithOnlyRamp()
+    {
+        FakeArchidekt fake = new();
+        fake.AddCategory("Ramp");
+        fake.AddEntry(fake.AddCardToCatalog(501, "Bolt"), 2, "Ramp");
+        _ = fake.AddCardToCatalog(601, "Side Card 01");
+        return fake;
+    }
+
+    /// <summary>
     /// Verifies a card added locally beside the local removal of another card is a conflict: the pull would drop the
     /// removal, so the preview and the apply refuse, no local-keep is planned, and the local deck is not changed.
     /// </summary>

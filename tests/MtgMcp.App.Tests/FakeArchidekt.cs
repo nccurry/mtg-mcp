@@ -163,11 +163,14 @@ internal sealed class FakeArchidekt : HttpMessageHandler
 
     /// <summary>
     /// Renames a category, with every entry that uses it, as an edit made on the Archidekt site would. The category
-    /// keeps its id. It is not counted as a mutation, since no client request made it.
+    /// keeps its id. A given <paramref name="includedInDeck"/> also changes whether the category counts toward the
+    /// deck. It is not counted as a mutation, since no client request made it.
     /// </summary>
-    internal void RenameCategory(string categoryName, string newName)
+    internal void RenameCategory(string categoryName, string newName, bool? includedInDeck = null)
     {
-        categories.Single(value => value.Name == categoryName).Name = newName;
+        FakeCategory category = categories.Single(value => value.Name == categoryName);
+        category.Name = newName;
+        category.IncludedInDeck = includedInDeck ?? category.IncludedInDeck;
         foreach (FakeEntry entry in entries)
         {
             entry.Categories = [.. entry.Categories.Select(value => value == categoryName ? newName : value)];
