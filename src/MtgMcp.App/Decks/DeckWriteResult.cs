@@ -46,6 +46,12 @@ internal sealed record DeckWriteResult(
     [property: JsonPropertyName("changeCounts")] DeckChangeCounts ChangeCounts)
 {
     /// <summary>
+    /// Gets the number of cards in each zone of the whole deck after the write, counting quantities.
+    /// </summary>
+    [JsonPropertyName("cardsByZone")]
+    public IReadOnlyDictionary<string, int> CardsByZone { get; init; } = new Dictionary<string, int>();
+
+    /// <summary>
     /// Gets the revision the deck had before this write, or null when the write created the deck.
     /// </summary>
     [JsonPropertyName("previousRevision")]
@@ -245,6 +251,7 @@ internal static class DeckWriteResults
             counts)
         {
             PreviousRevision = before?.Revision,
+            CardsByZone = DeckZoneCounts.Of(after),
             NameTruncated = name.TruncatedOrNull,
             AddedEntryIds = addedEntryIds,
             UpdatedEntryIds = updatedEntryIds,

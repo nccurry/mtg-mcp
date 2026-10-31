@@ -297,6 +297,55 @@ public sealed class DeckCardViewTests
     }
 
     /// <summary>
+    /// Verifies every page of a 172-entry deck with 99 sideboard rows carries the deck-wide totals, a cut page says it
+    /// is one page of the deck, and following nextCursor reaches every entry once.
+    /// </summary>
+    [Fact]
+    public async Task Get_LargeSideboardDeck_EveryPageCarriesDeckWideTotals()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
+        List<DeckEntryDraft> drafts = [new DeckEntryDraft(1, "Commander Card", Zone: "commander")];
+        drafts.AddRange(Enumerable.Range(0, 72).Select(index =>
+            new DeckEntryDraft(1, $"Main card {index:D3} {new string('x', 120)}", Zone: "main", SortOrder: index)));
+        drafts.AddRange(Enumerable.Range(0, 99).Select(index =>
+            new DeckEntryDraft(
+                index < 12 ? 2 : 1,
+                $"Sideboard card {index:D3} {new string('y', 120)}",
+                Zone: "sideboard",
+                SortOrder: index)));
+        DeckDocument deck = Success(await setup.Store.CreateAsync(
+            new DeckCreateRequest("Big deck", Format: "commander", Entries: drafts),
+            TestContext.Current.CancellationToken));
+        List<Guid> reached = [];
+        List<DeckDocumentView> pages = [];
+        string? cursor = null;
+
+        do
+        {
+            DeckDocumentView page = Success(await setup.Get(deck.DeckId, null, null, cursor));
+            pages.Add(page);
+            reached.AddRange(page.Entries.Select(entry => entry.EntryId));
+            cursor = page.NextCursor;
+        }
+        while (cursor is not null);
+
+        Assert.True(pages.Count > 1);
+        Assert.All(pages, page => Assert.Equal(172, page.EntryCount));
+        Assert.All(pages, page => Assert.Equal(184, page.CardCount));
+        Assert.All(pages, page => Assert.Equal(
+            new Dictionary<string, int> { ["commander"] = 1, ["main"] = 72, ["sideboard"] = 111 },
+            page.CardsByZone));
+        Assert.True(pages[0].Truncated);
+        Assert.Equal(
+            $"This page shows {pages[0].Entries.Count} of 172 entries; the deck is not missing the rest. " +
+            "Follow nextCursor. Ask for a smaller pageSize to get smaller pages.",
+            pages[0].Narrow);
+        Assert.Equal(172, reached.Count);
+        Assert.Equal(172, reached.Distinct().Count());
+        Assert.Equal(deck.Entries.Select(entry => entry.EntryId).Order(), reached.Order());
+    }
+
+    /// <summary>
     /// Verifies a deck that fits one result is returned whole with no paging fields, and a caller can still ask for
     /// smaller pages of the stored deck with pageSize and a cursor.
     /// </summary>
