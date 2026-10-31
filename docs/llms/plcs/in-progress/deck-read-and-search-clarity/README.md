@@ -2,19 +2,27 @@
 
 ## Current Work
 
-- Status: Planned
-- Owner: mtg-mcp (owner approval of the whole plan needed before
-  implementation)
-- Last updated: 2026-10-31, `main` at `86d25fb`
-- Selected work and endpoint: phases 0 to 4 below, merged into `main` and
-  released as the next minor version.
-- State: designed; owner answered D-1 to D-4 on 2026-10-31; implementation not
-  authorized yet.
-- Next action and blocker: owner approves the plan and answers D-5 (whether
-  phase 0 ships alone as `0.13.1`); then implementation starts with phase 0,
-  which is urgent: Claude Code currently loads none of the tools.
-- Resume check: this file is under `docs/llms/plcs/planned/` and no
-  `deck-read-and-search-clarity` worktree exists.
+- Status: In progress
+- Owner: mtg-mcp (Opus parent session with Sonnet implementation children)
+- Last updated: 2026-10-31, `main` at `f0c0814`
+- Implementation authorized: Yes (owner, 2026-10-31: "Ride with the plan")
+- Selected work and endpoint: phases 0 to 4, merged into `main` on this host,
+  audited, and released together as `0.14.0` (D-5: phase 0 rides with the
+  plan; no separate `0.13.1`).
+- State: implementation starting.
+- Next action and blocker: phases 0, 1, and 3-4 run in parallel; phase 2
+  follows phase 1. No blocker.
+- Resume check: `git worktree list` matches the table below.
+
+Where the work lives (a worktree lock, not this table, holds a checkout
+against cleanup):
+
+| Checkout | Branch | Owner | State |
+| --- | --- | --- | --- |
+| `mtg-mcp-wt/deck-read-and-search-clarity/integ` | `drsc/integ` | parent | integration |
+| `mtg-mcp-wt/deck-read-and-search-clarity/p0-protocol` | `drsc/p0-protocol` | Sonnet child | phase 0 |
+| `mtg-mcp-wt/deck-read-and-search-clarity/p1-indeck` | `drsc/p1-indeck` | Sonnet child | phase 1, then phase 2 |
+| `mtg-mcp-wt/deck-read-and-search-clarity/p34-scryfall` | `drsc/p34-scryfall` | Sonnet child | phases 3 and 4 |
 
 ## Outcome And Requirements
 
@@ -170,9 +178,9 @@ are independent of 1 and 2 and may run in parallel worktrees.
 
 ## Risks And Open Questions
 
-- **D-5 (owner, blocks the release route of phase 0):** ship phase 0 alone as
-  `0.13.1` now, or with the rest of this plan in the next minor. Claude Code
-  shows no mtg-mcp tools until it ships. Proposed: `0.13.1` now.
+- **D-5 (owner, 2026-10-31):** phase 0 rides with the plan and ships in
+  `0.14.0`; no separate `0.13.1`. Claude Code shows no mtg-mcp tools until
+  then.
 - Phase 0 changes what clients on older protocols see: the `{"result": …}`
   wrapper goes away, matching what `2026-07-28` clients already get. CHANGELOG
   entry under Fixed.
