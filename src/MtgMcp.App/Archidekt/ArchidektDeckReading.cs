@@ -106,7 +106,8 @@ internal static class ArchidektDeckFacts
     private const int CommanderDeckSize = 100;
 
     /// <summary>
-    /// Builds the summary of a deck: counts, duplicates of the commander and main zones, and the size fact.
+    /// Builds the summary of a deck: counts, duplicates of the commander and main zones, repeats in the other zones, and
+    /// the size fact.
     /// </summary>
     internal static ArchidektDeckSummary Summarize(RemoteDeckSnapshot deck)
     {
@@ -118,14 +119,19 @@ internal static class ArchidektDeckFacts
         }
 
         List<ArchidektDuplicateGroup> duplicates = FindDuplicates(deck);
+        List<ArchidektDuplicateGroup> repeats = FindRepeatsOutsideMain(deck);
         int mainAndCommander = cardsByZone.GetValueOrDefault("main") + cardsByZone.GetValueOrDefault("commander");
         return new ArchidektDeckSummary(
             deck.Entries.Count,
             deck.Entries.Sum(value => value.Quantity),
             deck.Categories.Count,
             cardsByZone,
-            [.. duplicates.Take(MaximumDuplicateGroups)])
+            [.. duplicates.Take(MaximumDuplicateGroups)],
+            [.. repeats.Take(MaximumDuplicateGroups)])
         {
+            RepeatsOutsideMainOmitted = repeats.Count > MaximumDuplicateGroups
+                ? repeats.Count - MaximumDuplicateGroups
+                : null,
             DuplicatesOmitted = duplicates.Count > MaximumDuplicateGroups
                 ? duplicates.Count - MaximumDuplicateGroups
                 : null,
@@ -133,6 +139,46 @@ internal static class ArchidektDeckFacts
                 ? new ArchidektDeckSizeFact("commander", CommanderDeckSize, mainAndCommander)
                 : null,
         };
+    }
+
+    /// <summary>
+    /// Finds the cards held more than once inside the sideboard or the maybeboard. Each zone is read on its own, so a
+    /// card that sits once in the sideboard and once in the maybeboard is not a repeat. A card is the same card when
+    /// its Oracle ID matches, or its name when an entry has no Oracle ID. Basic lands are skipped. Groups come in zone
+    /// order, then name order.
+    /// </summary>
+    private static List<ArchidektDuplicateGroup> FindRepeatsOutsideMain(RemoteDeckSnapshot deck)
+    {
+        Dictionary<string, List<RemoteDeckEntry>> groups = new(StringComparer.Ordinal);
+        foreach (RemoteDeckEntry entry in deck.Entries)
+        {
+            if (entry.Zone is "commander" or "main" || BasicLandNames.Contains(entry.CardName))
+            {
+                continue;
+            }
+
+            string key = entry.Zone + "|" + (entry.OracleId is { } oracleId
+                ? "oracle:" + oracleId.ToString("D")
+                : "name:" + entry.CardName.Trim().ToLowerInvariant());
+            if (!groups.TryGetValue(key, out List<RemoteDeckEntry>? members))
+            {
+                members = [];
+                groups[key] = members;
+            }
+
+            members.Add(entry);
+        }
+
+        return [.. groups.Values
+            .Where(members => members.Sum(value => value.Quantity) > 1)
+            .Select(members => new ArchidektDuplicateGroup(
+                members.OrderBy(value => value.CardName, StringComparer.Ordinal).First().CardName,
+                members[0].OracleId,
+                members.Sum(value => value.Quantity),
+                [members[0].Zone]))
+            .OrderBy(group => ArchidektDeckReadOptions.ZoneRank(group.Zones[0]))
+            .ThenBy(group => group.CardName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(group => group.OracleId)];
     }
 
     /// <summary>

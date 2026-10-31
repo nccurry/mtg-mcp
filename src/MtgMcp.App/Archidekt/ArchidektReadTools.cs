@@ -89,7 +89,8 @@ internal sealed class ArchidektReadTools
         "language, sort order, and the rest). Pass zones (commander, main, sideboard, maybeboard) to read only " +
         "some; offsets count the chosen entries. The leading summary covers the whole deck whatever the zones: " +
         "entry, card, and category counts, cards by zone, cards held more than once across commander and main " +
-        "(duplicates, matched by Oracle ID, basic lands and entries not in the deck skipped), and for Commander " +
+        "(duplicates, matched by Oracle ID, basic lands and entries not in the deck skipped), cards held more than " +
+        "once inside the sideboard or maybeboard (repeatsOutsideMain), and for Commander " +
         "decks the main and commander card count next to 100. Entries come in pages that fit the size limit, " +
         "ordered by zone, then card name; categories and unknown provider fields come with the first page. Each " +
         "entry has inDeck: false when its first category is not included in the deck (it is then in the " +
