@@ -149,6 +149,18 @@ public sealed class AddByNameScenarioTests
         await using ToolBudgetWorld world = await ToolBudgetWorld.CreateAsync(token, remoteDeckSize: 3);
         string[] added =
             ["Budget Card 310", "Budget Card 311", "Budget Card 312", "budget card 313", "Budget Card 314"];
+        for (int index = 0; index < added.Length; index++)
+        {
+            // Archidekt knows the printing that the installed card data resolved the name to.
+            JsonObject card = world.Cards.Single(value => value["name"]!.GetValue<string>() == $"Budget Card {310 + index}");
+            _ = world.Fake.AddCardToCatalog(
+                2310 + index,
+                card["name"]!.GetValue<string>(),
+                card["set"]!.GetValue<string>(),
+                card["collector_number"]!.GetValue<string>(),
+                oracleId: CardJson.OracleOf(card),
+                printingId: CardJson.PrintingOf(card));
+        }
 
         JsonElement pull = (
             await world.CallAsync("archidekt_pull_preview", new JsonObject { ["remoteDeckId"] = "42" }, token)).Data;

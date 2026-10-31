@@ -151,7 +151,9 @@ internal sealed class ArchidektReadTools
         "Archidekt: previews stable primitive Archidekt operations and refuses remote drift; performs zero writes. " +
         "The result starts with a summary (operation counts by kind, difference and conflict counts) and says " +
         "whether archidekt_push_apply is available and, if not, what to ask the user to change. Rows come in pages " +
-        "that fit the size limit; the guards cover the whole preview, so the apply tool needs no page. On later " +
+        "that fit the size limit; the guards cover the whole preview, so the apply tool needs no page. A new card " +
+        "with no printing set gets Archidekt's default printing; each add names the printing it will use, and " +
+        "applyAvailable is false, with the card names, when Archidekt has no match. On later " +
         "pages pass expectedPreviewFingerprint, the previewFingerprint of the first page." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSyncPreviewView>> PreviewPushAsync(
@@ -165,11 +167,14 @@ internal sealed class ArchidektReadTools
     {
         OperationResult<ArchidektSyncPreview> preview = await coordinator
             .PreviewPushAsync(localDeckId, cancellationToken).ConfigureAwait(false);
+        string? printingNotice = preview is OperationSuccess<ArchidektSyncPreview> success
+            ? success.Data.ApplyBlockedNotice
+            : null;
         return ToView(
             preview,
             operationOffset,
             differenceOffset,
-            ArchidektApplyAvailability.PushNotice(mode, ReadAuthStatus()),
+            ArchidektApplyAvailability.PushNotice(mode, ReadAuthStatus()) ?? printingNotice,
             expectedPreviewFingerprint);
     }
 

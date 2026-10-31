@@ -998,6 +998,181 @@ public sealed class ArchidektWorkflowTests
     }
 
     /// <summary>
+    /// Reproduces the report: 27 sideboard cards added by name only, with no card data installed, one of them a card
+    /// with 18 printings on Archidekt. The preview names the printing it will use for each, the apply sends one write
+    /// per card and verifies, and the next preview and pull are clean.
+    /// </summary>
+    [Fact]
+    public async Task NameOnlySideboardAdds_PushWithArchidektsDefaultPrinting_AndTheNextPreviewIsClean()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckForNameOnlyAdds());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            AddSideboardCards(
+                local,
+                ["Assassin's Trophy", .. Enumerable.Range(1, 26).Select(value => $"Side Card {value:00}")]),
+            token));
+
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        Assert.True(preview.ApplyAvailable);
+        Assert.Null(preview.ApplyNotice);
+        Assert.Equal(27, preview.Summary.OperationCount);
+        Assert.Equal(
+            "Add one exact card relation: Archidekt printing soc 294 (default of 18; no printing was set).",
+            preview.Operations.Single(value => value.Subject == "Assassin's Trophy").Summary);
+        Assert.All(
+            preview.Operations,
+            value => Assert.Contains("Archidekt printing", value.Summary, StringComparison.Ordinal));
+        Assert.Equal(0, world.Fake.Mutations);
+
+        ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token));
+
+        Assert.Equal("applied", applied.Outcome);
+        Assert.All(applied.Operations, value => Assert.Equal("applied", value.Status));
+        Assert.Equal(27, world.Fake.Mutations);
+        Assert.Equal(1, world.Fake.QuantityOf("Assassin's Trophy"));
+        Assert.Equal("4000", world.Fake.CardIdOf("Assassin's Trophy"));
+
+        ArchidektSyncPreviewView push = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        ArchidektSyncPreviewView pull = Success(
+            await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
+        Assert.Empty(push.Operations);
+        Assert.Empty(pull.Differences);
+    }
+
+    /// <summary>
+    /// Verifies a name Archidekt does not know makes the preview say the push cannot be applied and name the card,
+    /// and that applying it anyway sends nothing.
+    /// </summary>
+    [Fact]
+    public async Task NameWithNoArchidektMatch_BlocksThePushAndSendsNothing()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckForNameOnlyAdds());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            AddSideboardCards(local, "Side Card 01", "No Such Card"),
+            token));
+
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        Assert.False(preview.ApplyAvailable);
+        Assert.Contains("'No Such Card'", preview.ApplyNotice, StringComparison.Ordinal);
+        Assert.Contains("would send nothing", preview.ApplyNotice, StringComparison.Ordinal);
+        Assert.DoesNotContain("'Side Card 01'", preview.ApplyNotice, StringComparison.Ordinal);
+
+        OperationResult<ArchidektApplyResult> refused = await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token);
+
+        Assert.IsType<OperationInvalidInput>(refused.Value);
+        Assert.Equal(0, world.Fake.Mutations);
+    }
+
+    /// <summary>
+    /// Verifies a push whose card lookups would pass the request limit is blocked, with nothing sent.
+    /// </summary>
+    [Fact]
+    public async Task PushNeedingMoreRequestsThanTheLimit_IsBlockedAndSendsNothing()
+    {
+        FakeArchidekt fake = CreateDeckForNameOnlyAdds();
+        using World world = new(OperationMode.Remote, fake, maximumRequestsPerOperation: 20);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            AddSideboardCards(local, [.. Enumerable.Range(1, 25).Select(value => $"Side Card {value:00}")]),
+            token));
+
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        Assert.False(preview.ApplyAvailable);
+        Assert.Contains("limit of 20", preview.ApplyNotice, StringComparison.Ordinal);
+        Assert.Contains("would send nothing", preview.ApplyNotice, StringComparison.Ordinal);
+        OperationResult<ArchidektApplyResult> refused = await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token);
+        Assert.IsType<OperationInvalidInput>(refused.Value);
+        Assert.Equal(0, world.Fake.Mutations);
+    }
+
+    /// <summary>
+    /// Builds the changes that add each name as a sideboard entry with no card identity, in the Sideboard category.
+    /// </summary>
+    private static List<DeckChange> AddSideboardCards(DeckDocument local, params string[] names)
+    {
+        DeckCategory sideboard = local.Categories.Single(value => value.Name == "Sideboard");
+        List<DeckChange> changes = [];
+        foreach (string name in names)
+        {
+            Guid entryId = Guid.NewGuid();
+            changes.Add(new AddDeckEntryChange(new DeckEntryDraft(1, name, Zone: "sideboard", EntryId: entryId)));
+            changes.Add(new AssignDeckCategoryChange(entryId, sideboard.CategoryId, true));
+        }
+
+        return changes;
+    }
+
+    /// <summary>
+    /// Creates a deck with a Sideboard category and one main card, and a catalog for cards added by name: Assassin's
+    /// Trophy with 18 printings (the first is soc 294, as on Archidekt) and 26 cards with two printings each.
+    /// </summary>
+    private static FakeArchidekt CreateDeckForNameOnlyAdds()
+    {
+        FakeArchidekt fake = new();
+        fake.AddCategory("Removal");
+        fake.AddCategory("Sideboard", includedInDeck: false);
+        fake.AddEntry(fake.AddCardToCatalog(501, "Bolt"), 2, "Removal");
+        string[] sets = ["soc", "tmc", "ecc", "acr", "mkm", "2x2", "grn", "pmkm", "sld"];
+        for (int index = 0; index < 18; index++)
+        {
+            _ = fake.AddCardToCatalog(
+                4000 + index,
+                "Assassin's Trophy",
+                sets[index % sets.Length],
+                (294 - index).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                oracleId: new Guid(77, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2),
+                printingId: new Guid(4000 + index, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1));
+        }
+
+        for (int index = 1; index < 27; index++)
+        {
+            _ = fake.AddCardToCatalog(5000 + (index * 2), $"Side Card {index:00}", "dmu");
+            _ = fake.AddCardToCatalog(5001 + (index * 2), $"Side Card {index:00}", "dmr");
+        }
+
+        return fake;
+    }
+
+    /// <summary>
     /// Creates a small deck with two multi-category entries.
     /// </summary>
     private static FakeArchidekt CreateSmallDeck()
@@ -1134,7 +1309,11 @@ public sealed class ArchidektWorkflowTests
         /// <summary>
         /// Creates the world around one fake Archidekt, in the given mode.
         /// </summary>
-        internal World(OperationMode mode, FakeArchidekt fake, bool credentials = true)
+        internal World(
+            OperationMode mode,
+            FakeArchidekt fake,
+            bool credentials = true,
+            int maximumRequestsPerOperation = 2_000)
         {
             Fake = fake;
             ArchidektOptions options = ArchidektOptions.CreateDefault(
@@ -1144,7 +1323,7 @@ public sealed class ArchidektWorkflowTests
                 BaseAddress = new Uri("https://archidekt.test/"),
                 MinimumRequestInterval = TimeSpan.Zero,
                 MaximumRequestsPerWindow = 100_000,
-                MaximumRequestsPerOperation = 2_000,
+                MaximumRequestsPerOperation = maximumRequestsPerOperation,
             };
             service = new ArchidektService(
                 new ArchidektSession(

@@ -9,61 +9,6 @@ namespace MtgMcp.Archidekt.Tests;
 public sealed class ArchidektProviderRouteTests
 {
     /// <summary>
-    /// Verifies exact printing resolution accepts numeric IDs and rejects ambiguous name-only candidates.
-    /// </summary>
-    [Fact]
-    public async Task ResolveCardId_RequiresOneExactPrinting()
-    {
-        ArchidektTestHttpHandler handler = new();
-        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"access_token\":\"test-token\"}");
-        handler.Add(
-            HttpMethod.Get,
-            "api/cards/v2/?name=Island&pageSize=25",
-            "{\"results\":[{\"id\":501,\"uid\":\"33333333-3333-3333-3333-333333333333\",\"setCode\":\"dmu\",\"collectorNumber\":\"278\",\"oracleCard\":{\"name\":\"Island\"}}]}");
-        using ArchidektSession session = CreateSession(handler);
-        ArchidektDeckTransport transport = new(session);
-        RemoteDeckEntry exact = new(
-            "",
-            "",
-            1,
-            "Island",
-            OracleId: null,
-            Guid.Parse("33333333-3333-3333-3333-333333333333"),
-            "DMU",
-            "278",
-            "en",
-            "nonfoil",
-            "main",
-            [],
-            PrimaryCategoryName: null,
-            SortOrder: 0);
-
-        string cardId = await transport.ResolveCardIdAsync(
-            exact,
-            new ArchidektOperationBudget(5),
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal("501", cardId);
-
-        ArchidektTestHttpHandler ambiguousHandler = new();
-        ambiguousHandler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"jwt\":\"test-token\"}");
-        ambiguousHandler.Add(
-            HttpMethod.Get,
-            "api/cards/v2/?name=Island&pageSize=25",
-            "[{\"id\":1,\"oracleCard\":{\"name\":\"Island\"}},{\"id\":2,\"oracleCard\":{\"name\":\"Island\"}}]");
-        using ArchidektSession ambiguousSession = CreateSession(ambiguousHandler);
-        ArchidektDeckTransport ambiguousTransport = new(ambiguousSession);
-        RemoteDeckEntry ambiguous = exact with { PrintingId = null, SetCode = null, CollectorNumber = null };
-
-        ArchidektProviderException exception = await Assert.ThrowsAsync<ArchidektProviderException>(
-            () => ambiguousTransport.ResolveCardIdAsync(
-                ambiguous,
-                new ArchidektOperationBudget(5),
-                TestContext.Current.CancellationToken));
-        Assert.Equal("printing-resolution-unavailable", exception.ReasonCode);
-    }
-
-    /// <summary>
     /// Verifies every supported format alias and provider-ID representation.
     /// </summary>
     [Theory]
