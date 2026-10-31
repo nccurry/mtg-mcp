@@ -533,17 +533,33 @@ public static class ArchidektSyncPlanner
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(target);
-        Dictionary<string, RemoteDeckCategory> categories = CategoryNames.Index(target.Categories, value => value.Name);
+        return FindZoneContradictions(
+            plan.PlannedOperations
+                .Where(operation => operation.Public.Kind is "entry-add" or "entry-update")
+                .Select(operation => operation.TargetEntry),
+            target.Categories);
+    }
+
+    /// <summary>
+    /// Finds entries whose zone is not the zone their category names give them among the given categories, by the
+    /// same rule as <see cref="FindZoneContradictions(ArchidektRemotePlan, RemoteDeckSnapshot)"/>. A null entry is skipped.
+    /// </summary>
+    public static IReadOnlyList<ArchidektZoneContradiction> FindZoneContradictions(
+        IEnumerable<RemoteDeckEntry?> entries,
+        IReadOnlyList<RemoteDeckCategory> categories)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        ArgumentNullException.ThrowIfNull(categories);
+        Dictionary<string, RemoteDeckCategory> byName = CategoryNames.Index(categories, value => value.Name);
         List<ArchidektZoneContradiction> found = [];
-        foreach (ArchidektPlannedOperation operation in plan.PlannedOperations)
+        foreach (RemoteDeckEntry? entry in entries)
         {
-            RemoteDeckEntry? entry = operation.TargetEntry;
-            if (entry is null || operation.Public.Kind is not ("entry-add" or "entry-update"))
+            if (entry is null)
             {
                 continue;
             }
 
-            string expected = ArchidektJsonContract.MapZone(entry.CategoryNames, categories);
+            string expected = ArchidektJsonContract.MapZone(entry.CategoryNames, byName);
             if (!string.Equals(entry.Zone, expected, StringComparison.Ordinal))
             {
                 found.Add(new ArchidektZoneContradiction(entry.CardName, entry.Zone, expected));

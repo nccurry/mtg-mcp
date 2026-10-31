@@ -35,6 +35,17 @@ internal static class ArchidektApplyAvailability
     }
 
     /// <summary>
+    /// Joins the notice about the session (mode and credentials) with the one a preview gives for its own change, such
+    /// as a push that Archidekt's own edits block. The session notice comes first; either may be null.
+    /// </summary>
+    internal static string? WithBlockedNotice(string? sessionNotice, string? blockedNotice)
+    {
+        return sessionNotice is not null && blockedNotice is not null
+            ? $"{sessionNotice} {blockedNotice}"
+            : sessionNotice ?? blockedNotice;
+    }
+
+    /// <summary>
     /// Explains why <c>archidekt_pull_apply</c> is not available, or returns null when it is. A pull needs local or
     /// remote mode. It reads a public deck without credentials, so credentials do not decide the answer.
     /// </summary>

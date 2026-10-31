@@ -73,13 +73,138 @@ public static class ArchidektLocalMapper
     }
 
     /// <summary>
-    /// Builds one transactional replacement change list while retaining the selected local deck identity.
+    /// Finds what a pull can keep of the local deck. Every local change since the last sync must be a card entry or a
+    /// category added locally, and the fields no row shows (order numbers, category colors and ranks) must be as the
+    /// baseline recorded them; the pull replaces everything else from Archidekt, so any other change is not kept.
+    /// </summary>
+    /// <returns>
+    /// Null when the local deck has a change a pull cannot keep. Otherwise the added entries and categories, with the
+    /// duplicates and zone contradictions that would stop the pull.
+    /// </returns>
+    public static ArchidektPullKeep? PlanPullKeep(
+        DeckDocument local,
+        ArchidektSyncBaseline baseline,
+        RemoteDeckSnapshot remote,
+        ArchidektSyncDiff diff)
+    {
+        ArgumentNullException.ThrowIfNull(local);
+        ArgumentNullException.ThrowIfNull(baseline);
+        ArgumentNullException.ThrowIfNull(remote);
+        ArgumentNullException.ThrowIfNull(diff);
+        if (baseline.LocalInvisibleFingerprint is null ||
+            !diff.Differences.Where(ArchidektDifferenceStates.IsLocalChange).All(IsKeepableChange) ||
+            !string.Equals(
+                LinkedInvisibleFingerprint(local, baseline),
+                baseline.LocalInvisibleFingerprint,
+                StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        Dictionary<string, RemoteDeckEntry> baselineEntries = baseline.RemoteSnapshot.Entries
+            .ToDictionary(value => value.ProviderRelationId, StringComparer.Ordinal);
+        Dictionary<string, RemoteDeckCategory> baselineCategories = baseline.RemoteSnapshot.Categories
+            .ToDictionary(value => value.ProviderCategoryId, StringComparer.Ordinal);
+        RemoteDeckSnapshot target = ToRemoteTarget(local, baseline, remote);
+        List<DeckEntry> entries = [];
+        List<RemoteDeckEntry> keptRows = [];
+        for (int index = 0; index < local.Entries.Count; index++)
+        {
+            if (FindBaselineRow(local.Entries[index].EntryId, baseline.EntryRelations, baselineEntries) is null)
+            {
+                entries.Add(local.Entries[index]);
+                keptRows.Add(target.Entries[index]);
+            }
+        }
+
+        Dictionary<string, RemoteDeckCategory> remoteCategories =
+            CategoryNames.Index(remote.Categories, value => value.Name);
+        Dictionary<string, DeckCategory> newCategories = new(StringComparer.Ordinal);
+        List<RemoteDeckCategory> shownCategories = [.. remote.Categories];
+        for (int index = 0; index < local.Categories.Count; index++)
+        {
+            DeckCategory category = local.Categories[index];
+            bool added = FindBaselineRow(category.CategoryId, baseline.CategoryRelations, baselineCategories) is null;
+            bool used = keptRows.Exists(value => value.CategoryNames.Contains(category.Name, StringComparer.Ordinal));
+            if ((added || used) &&
+                !CategoryNames.TryFind(remoteCategories, category.Name, out _) &&
+                newCategories.TryAdd(category.Name, category))
+            {
+                shownCategories.Add(target.Categories[index]);
+            }
+        }
+
+        if (entries.Count == 0 && newCategories.Count == 0)
+        {
+            return null;
+        }
+
+        HashSet<string> baselineRelationIds = baseline.RemoteSnapshot.Entries
+            .Select(value => value.ProviderRelationId)
+            .ToHashSet(StringComparer.Ordinal);
+        List<RemoteDeckEntry> remoteAdded = [.. remote.Entries.Where(
+            value => !baselineRelationIds.Contains(value.ProviderRelationId))];
+        List<string> duplicates = [.. entries
+            .Where(kept => remoteAdded.Exists(added => SameCard(kept, added)))
+            .Select(kept => kept.CardName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
+        return new ArchidektPullKeep(
+            entries,
+            [.. newCategories.Values],
+            duplicates,
+            ArchidektSyncPlanner.FindZoneContradictions(keptRows, shownCategories));
+    }
+
+    /// <summary>
+    /// Tells whether a local change is an entry or category added locally, which a pull keeps. The row for the fields
+    /// no row shows is accepted here; the caller checks that those fields did not change.
+    /// </summary>
+    private static bool IsKeepableChange(ArchidektDifference difference)
+    {
+        if (difference.State == ArchidektDifferenceStates.LocalChanged)
+        {
+            return difference.Path == "/localOnly/content";
+        }
+
+        return difference.State == ArchidektDifferenceStates.LocalAdded &&
+            (difference.Path.StartsWith("/entries/", StringComparison.Ordinal) ||
+                difference.Path.StartsWith("/categories/", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Computes the fingerprint of the fields no row shows over the local rows the baseline links to Archidekt rows, so
+    /// an added entry or category does not count as an edit of those fields.
+    /// </summary>
+    private static string LinkedInvisibleFingerprint(DeckDocument local, ArchidektSyncBaseline baseline)
+    {
+        return InvisibleFingerprint(
+            local.Entries.Where(value => baseline.EntryRelations.ContainsKey(value.EntryId))
+                .Select(value => (value.EntryId, value.SortOrder)),
+            local.Categories.Where(value => baseline.CategoryRelations.ContainsKey(value.CategoryId))
+                .Select(value => (value.CategoryId, value.Color, value.SortOrder)));
+    }
+
+    /// <summary>
+    /// Tells whether a locally added entry is the same card as an entry Archidekt added: the same printing, the same
+    /// Oracle card, or the same name.
+    /// </summary>
+    private static bool SameCard(DeckEntry kept, RemoteDeckEntry added)
+    {
+        return (kept.PrintingId is not null && kept.PrintingId == added.PrintingId) ||
+            (kept.OracleId is not null && kept.OracleId == added.OracleId) ||
+            string.Equals(kept.CardName, added.CardName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Builds one transactional replacement change list while retaining the selected local deck identity. A
+    /// <paramref name="keep"/> brings the locally added entries and categories back after the replacement.
     /// </summary>
     public static IReadOnlyList<DeckChange> BuildPullChanges(
         DeckDocument local,
         RemoteDeckSnapshot remote,
         DeckProviderBinding binding,
-        string canonicalBaseline)
+        string canonicalBaseline,
+        ArchidektPullKeep? keep = null)
     {
         ArgumentNullException.ThrowIfNull(local);
         DeckCreateRequest target = ToCreateRequest(remote, binding, local.DeckId);
@@ -116,8 +241,72 @@ public static class ArchidektLocalMapper
                 assignment.IsPrimary));
         }
 
+        if (keep is not null)
+        {
+            AddKeptChanges(changes, local, target, keep);
+        }
+
         changes.Add(new UpsertDeckProviderBindingChange(binding, canonicalBaseline));
         return changes;
+    }
+
+    /// <summary>
+    /// Adds the changes that bring the locally added entries and categories back after the replacement. A category
+    /// Archidekt has keeps the Archidekt row; a category it lacks is created again by its name.
+    /// </summary>
+    private static void AddKeptChanges(
+        List<DeckChange> changes,
+        DeckDocument local,
+        DeckCreateRequest target,
+        ArchidektPullKeep keep)
+    {
+        Dictionary<string, Guid> remoteCategoryIds = (target.Categories ?? [])
+            .ToDictionary(value => value.Name, value => value.CategoryId ?? Guid.Empty, StringComparer.Ordinal);
+        Dictionary<string, Guid> keptCategoryIds = new(StringComparer.Ordinal);
+        foreach (DeckCategory category in keep.Categories)
+        {
+            keptCategoryIds[category.Name] = category.CategoryId;
+            changes.Add(new AddDeckCategoryChange(new DeckCategoryDraft(
+                category.Name,
+                category.Color,
+                category.SortOrder,
+                category.CategoryId)));
+        }
+
+        foreach (DeckEntry entry in keep.Entries)
+        {
+            changes.Add(new AddDeckEntryChange(new DeckEntryDraft(
+                entry.Quantity,
+                entry.CardName,
+                entry.OracleId,
+                entry.PrintingId,
+                entry.SetCode,
+                entry.CollectorNumber,
+                entry.Language,
+                entry.Finish,
+                entry.Zone,
+                entry.SortOrder,
+                entry.EntryId)));
+        }
+
+        Dictionary<Guid, string> localCategoryNames = local.Categories.ToDictionary(
+            value => value.CategoryId,
+            value => value.Name);
+        foreach (DeckEntry entry in keep.Entries)
+        {
+            HashSet<Guid> assigned = [];
+            foreach (DeckCategoryAssignment assignment in local.CategoryAssignments.Where(
+                value => value.EntryId == entry.EntryId))
+            {
+                if (localCategoryNames.TryGetValue(assignment.CategoryId, out string? name) &&
+                    (CategoryNames.TryFind(remoteCategoryIds, name, out Guid categoryId) ||
+                        keptCategoryIds.TryGetValue(name, out categoryId)) &&
+                    assigned.Add(categoryId))
+                {
+                    changes.Add(new AssignDeckCategoryChange(entry.EntryId, categoryId, assignment.IsPrimary));
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -752,3 +941,17 @@ public sealed record ArchidektSyncBaseline(
     public IReadOnlyDictionary<Guid, string> CategoryRelations { get; init; } =
         new Dictionary<Guid, string>(CategoryRelations);
 }
+
+/// <summary>
+/// Holds what a pull keeps of the local deck: the entries and categories added locally since the last sync, and what
+/// would stop the pull from keeping them.
+/// </summary>
+/// <param name="Entries">The local entries with no Archidekt row in the baseline.</param>
+/// <param name="Categories">The local categories to create again, because Archidekt has no category of that name.</param>
+/// <param name="DuplicateCardNames">The kept cards that Archidekt also added since the last sync.</param>
+/// <param name="ZoneContradictions">The kept cards whose zone is not the zone their categories give them.</param>
+public sealed record ArchidektPullKeep(
+    IReadOnlyList<DeckEntry> Entries,
+    IReadOnlyList<DeckCategory> Categories,
+    IReadOnlyList<string> DuplicateCardNames,
+    IReadOnlyList<ArchidektZoneContradiction> ZoneContradictions);

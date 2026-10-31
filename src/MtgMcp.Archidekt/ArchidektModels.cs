@@ -273,7 +273,8 @@ public sealed record ArchidektSyncPreview(
     int PredictedProviderRequests)
 {
     /// <summary>
-    /// Gets the reason a push cannot be sent, such as a card with no Archidekt printing; null when it can.
+    /// Gets the reason the apply tool would refuse this preview, such as a card with no Archidekt printing or a change
+    /// on the other side; null when it would not.
     /// </summary>
     public string? ApplyBlockedNotice { get; init; }
 

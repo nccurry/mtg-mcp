@@ -1129,6 +1129,428 @@ public sealed class ArchidektWorkflowTests
     }
 
     /// <summary>
+    /// Reproduces the report: after a sync, the deck is edited on Archidekt (a new Removal category, and two sideboard
+    /// cards moved under it) while three cards are added locally. The push preview must not offer the apply or list
+    /// operations that would revert the Archidekt edit, and the apply must refuse and send nothing.
+    /// </summary>
+    [Fact]
+    public async Task PushPreview_AfterTheRemoteChanged_OffersNoApplyAndNoOperations()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckForRemoteEdits());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            AddSideboardCards(local, "Side Card 01", "Side Card 02", "Side Card 03"),
+            token));
+        MoveTwoCardsUnderANewRemovalCategory(world.Fake);
+
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        Assert.True(preview.HasConflicts);
+        Assert.False(preview.ApplyAvailable);
+        Assert.Empty(preview.Operations);
+        Assert.Equal(0, preview.Summary.OperationCount);
+        Assert.Equal(
+            ["remote-added", "remote-changed", "remote-changed"],
+            preview.Differences.Where(value => value.State.StartsWith("remote-", StringComparison.Ordinal))
+                .Select(value => value.State)
+                .Order(StringComparer.Ordinal));
+        Assert.Equal(3, preview.Differences.Count(value => value.State == "local-added"));
+        Assert.Equal(
+            "archidekt_push_apply would refuse this push: the Archidekt deck changed since the last sync (3 rows; see " +
+            "differences with remote-* states). Run archidekt_pull_preview first; cards added locally are kept. Then " +
+            "push again.",
+            preview.ApplyNotice);
+
+        OperationResult<ArchidektApplyResult> refused = await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token);
+
+        OperationConflict conflict = Assert.IsType<OperationConflict>(refused.Value);
+        Assert.Equal("push-conflict", conflict.ReasonCode);
+        Assert.Equal(0, world.Fake.Mutations);
+    }
+
+    /// <summary>
+    /// Verifies a conflicting push preview in local mode puts the mode notice first and the conflict notice after it.
+    /// </summary>
+    [Fact]
+    public async Task PushPreview_AfterTheRemoteChanged_InLocalMode_PutsTheModeNoticeFirst()
+    {
+        using World world = new(OperationMode.Local, CreateDeckForRemoteEdits());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        MoveTwoCardsUnderANewRemovalCategory(world.Fake);
+
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        Assert.False(preview.ApplyAvailable);
+        Assert.StartsWith(
+            "archidekt_push_apply is not available because the server runs in local mode.",
+            preview.ApplyNotice,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "archidekt_push_apply would refuse this push: the Archidekt deck changed since the last sync (",
+            preview.ApplyNotice,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies a pull with no flag keeps the three cards added locally and takes the two cards Archidekt moved, and
+    /// that the push after it adds exactly the three cards.
+    /// </summary>
+    [Fact]
+    public async Task Pull_AfterTheRemoteChanged_KeepsLocalAdditionsAndTheNextPushAddsOnlyThem()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckForRemoteEdits());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            AddSideboardCards(local, "Side Card 01", "Side Card 02", "Side Card 03"),
+            token));
+        MoveTwoCardsUnderANewRemovalCategory(world.Fake);
+
+        ArchidektSyncPreviewView pullPreview = Success(
+            await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
+
+        Assert.False(pullPreview.HasConflicts);
+        Assert.True(pullPreview.ApplyAvailable);
+        Assert.Equal(
+            ["local-deck-replace", "local-keep"],
+            pullPreview.Operations.Select(value => value.Kind));
+        Assert.Equal(
+            "Keep 3 cards added locally since the last sync; push them afterwards.",
+            pullPreview.Operations.Single(value => value.Kind == "local-keep").Summary);
+
+        ArchidektApplyResult applied = Success(await world.LocalWrites.ApplyPullAsync(
+            new ArchidektPullApplyRequest(
+                "42",
+                localDeckId,
+                edited.Revision,
+                pullPreview.RemoteFingerprint,
+                pullPreview.PreviewFingerprint),
+            token));
+
+        Assert.Equal("applied", applied.Outcome);
+        DeckDocument pulled = Success(await world.Store.GetAsync(localDeckId, token));
+        Assert.Equal(6, pulled.Entries.Count);
+        foreach (string moved in new[] { "Assassin's Trophy", "Pick Your Poison" })
+        {
+            DeckEntry entry = pulled.Entries.Single(value => value.CardName == moved);
+            Assert.Equal("main", entry.Zone);
+            Assert.Equal(
+                ["Removal"],
+                CategoryNamesOf(pulled, entry));
+        }
+
+        foreach (string added in new[] { "Side Card 01", "Side Card 02", "Side Card 03" })
+        {
+            DeckEntry entry = pulled.Entries.Single(value => value.CardName == added);
+            Assert.Equal("sideboard", entry.Zone);
+            Assert.Equal(["Sideboard"], CategoryNamesOf(pulled, entry));
+        }
+
+        ArchidektSyncPreviewView push = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        Assert.True(push.ApplyAvailable);
+        Assert.False(push.HasConflicts);
+        Assert.Equal(
+            ["entry-add:Side Card 01", "entry-add:Side Card 02", "entry-add:Side Card 03"],
+            push.Operations.Select(value => $"{value.Kind}:{value.Subject}").Order(StringComparer.Ordinal));
+        Assert.Equal(0, world.Fake.Mutations);
+
+        ArchidektApplyResult pushed = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                pulled.Revision,
+                push.RemoteFingerprint,
+                push.PreviewFingerprint),
+            token));
+
+        Assert.Equal("applied", pushed.Outcome);
+        Assert.Equal(3, world.Fake.Mutations);
+        Assert.Equal(1, world.Fake.QuantityOf("Side Card 02"));
+    }
+
+    /// <summary>
+    /// Verifies a pull keeps a category added locally, creating it again when Archidekt has no category of that name.
+    /// </summary>
+    [Fact]
+    public async Task Pull_WithALocalCategory_KeepsItAndTheNextPushCreatesIt()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckForRemoteEdits());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        Guid drawId = Guid.NewGuid();
+        Guid cardId = Guid.NewGuid();
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [
+                new AddDeckCategoryChange(new DeckCategoryDraft("Draw", CategoryId: drawId)),
+                new AddDeckEntryChange(new DeckEntryDraft(1, "Side Card 01", EntryId: cardId)),
+                new AssignDeckCategoryChange(cardId, drawId, true),
+            ],
+            token));
+        MoveTwoCardsUnderANewRemovalCategory(world.Fake);
+
+        ArchidektSyncPreviewView pullPreview = Success(
+            await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
+        Assert.False(pullPreview.HasConflicts);
+        _ = Success(await world.LocalWrites.ApplyPullAsync(
+            new ArchidektPullApplyRequest(
+                "42",
+                localDeckId,
+                edited.Revision,
+                pullPreview.RemoteFingerprint,
+                pullPreview.PreviewFingerprint),
+            token));
+
+        DeckDocument pulled = Success(await world.Store.GetAsync(localDeckId, token));
+        Assert.Contains(pulled.Categories, value => value.Name == "Draw" && value.CategoryId == drawId);
+        Assert.Equal(["Draw"], CategoryNamesOf(pulled, pulled.Entries.Single(value => value.EntryId == cardId)));
+        ArchidektSyncPreviewView push = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        Assert.False(push.HasConflicts);
+        Assert.Equal(
+            ["category-create:Draw", "entry-add:Side Card 01"],
+            push.Operations.Select(value => $"{value.Kind}:{value.Subject}").Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// Verifies a local edit to a card Archidekt also changed is a conflict: the preview says the apply would refuse,
+    /// and the apply refuses with pull-conflict and changes nothing.
+    /// </summary>
+    [Fact]
+    public async Task Pull_WithALocalChangeToACardTheRemoteChanged_IsAConflict()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckForRemoteEdits());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckEntry trophy = local.Entries.Single(value => value.CardName == "Assassin's Trophy");
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [new UpdateDeckEntryChange(trophy with { Quantity = 2 })],
+            token));
+        MoveTwoCardsUnderANewRemovalCategory(world.Fake);
+
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
+
+        Assert.True(preview.HasConflicts);
+        Assert.False(preview.ApplyAvailable);
+        Assert.Contains("discardLocalChanges", preview.ApplyNotice, StringComparison.Ordinal);
+        Assert.DoesNotContain(preview.Operations, value => value.Kind == "local-keep");
+
+        OperationResult<ArchidektApplyResult> refused = await world.LocalWrites.ApplyPullAsync(
+            new ArchidektPullApplyRequest(
+                "42",
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token);
+
+        Assert.Equal("pull-conflict", Assert.IsType<OperationConflict>(refused.Value).ReasonCode);
+        Assert.Equal(edited.Revision, Success(await world.Store.GetAsync(localDeckId, token)).Revision);
+    }
+
+    /// <summary>
+    /// Verifies an edit to a field no row shows (the order number of a card) beside an added card is still a conflict,
+    /// since the pull would drop the edit.
+    /// </summary>
+    [Fact]
+    public async Task Pull_WithAnAddedCardAndAnEditToCardOrder_IsAConflict()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckForRemoteEdits());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckEntry bolt = local.Entries.Single(value => value.CardName == "Bolt");
+        _ = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [
+                .. AddSideboardCards(local, "Side Card 01"),
+                new UpdateDeckEntryChange(bolt with { SortOrder = bolt.SortOrder + 50 }),
+            ],
+            token));
+
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
+
+        Assert.True(preview.HasConflicts);
+        Assert.False(preview.ApplyAvailable);
+        Assert.DoesNotContain(preview.Operations, value => value.Kind == "local-keep");
+    }
+
+    /// <summary>
+    /// Verifies a card added locally that Archidekt also added is refused, by name, in the preview and the apply.
+    /// </summary>
+    [Fact]
+    public async Task Pull_WithACardBothSidesAdded_IsRefused()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckForRemoteEdits());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            AddSideboardCards(local, "Side Card 01", "Side Card 02"),
+            token));
+        world.Fake.AddEntry(world.Fake.AddCardToCatalog(601, "Side Card 01"), 1, "Sideboard");
+
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
+
+        Assert.True(preview.HasConflicts);
+        Assert.False(preview.ApplyAvailable);
+        Assert.Contains("'Side Card 01'", preview.ApplyNotice, StringComparison.Ordinal);
+        Assert.DoesNotContain("'Side Card 02'", preview.ApplyNotice, StringComparison.Ordinal);
+
+        OperationResult<ArchidektApplyResult> refused = await world.LocalWrites.ApplyPullAsync(
+            new ArchidektPullApplyRequest(
+                "42",
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token);
+
+        OperationConflict conflict = Assert.IsType<OperationConflict>(refused.Value);
+        Assert.Equal("pull-conflict", conflict.ReasonCode);
+        Assert.Contains("'Side Card 01'", conflict.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies a card added locally in a zone its categories contradict is refused, naming the card and both zones.
+    /// </summary>
+    [Fact]
+    public async Task Pull_WithAKeptCardWhoseCategoriesGiveAnotherZone_IsRefused()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckForRemoteEdits());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckCategory sideboard = local.Categories.Single(value => value.Name == "Sideboard");
+        Guid cardId = Guid.NewGuid();
+        _ = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [
+                new AddDeckEntryChange(new DeckEntryDraft(1, "Side Card 01", Zone: "main", EntryId: cardId)),
+                new AssignDeckCategoryChange(cardId, sideboard.CategoryId, true),
+            ],
+            token));
+
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
+
+        Assert.True(preview.HasConflicts);
+        Assert.False(preview.ApplyAvailable);
+        Assert.Contains(
+            "'Side Card 01' (zone 'main', but its categories give zone 'sideboard')",
+            preview.ApplyNotice,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies the discard preview says what is thrown away: the cards and categories added, changed, and removed
+    /// locally since the last sync.
+    /// </summary>
+    [Fact]
+    public async Task PullPreview_WithDiscard_CountsWhatIsThrownAway()
+    {
+        using World world = new(OperationMode.Remote, CreateDeckForRemoteEdits());
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckEntry bolt = local.Entries.Single(value => value.CardName == "Bolt");
+        DeckEntry poison = local.Entries.Single(value => value.CardName == "Pick Your Poison");
+        DeckCategory ramp = local.Categories.Single(value => value.Name == "Ramp");
+        _ = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [
+                .. AddSideboardCards(local, "Side Card 01", "Side Card 02"),
+                new UpdateDeckEntryChange(bolt with { Quantity = 4 }),
+                new RemoveDeckEntryChange(poison.EntryId),
+                new RemoveDeckCategoryChange(ramp.CategoryId),
+                new AddDeckCategoryChange(new DeckCategoryDraft("Draw")),
+            ],
+            token));
+
+        ArchidektSyncPreviewView preview = Success(await world.Reads.PreviewPullAsync(
+            "42",
+            localDeckId,
+            discardLocalChanges: true,
+            cancellationToken: token));
+
+        Assert.False(preview.HasConflicts);
+        Assert.Equal(
+            "Replace the local deck with the Archidekt deck. This discards local changes made since the last sync: " +
+            "2 cards added, 1 changed, 1 removed (categories: 1 added, 0 changed, 1 removed). They are listed in " +
+            "differences with local-* states.",
+            preview.Operations.Single(value => value.Kind == "local-deck-replace").Summary);
+        Assert.DoesNotContain(preview.Operations, value => value.Kind == "local-keep");
+    }
+
+    /// <summary>
+    /// Creates a deck for the edit-on-both-sides tests: a Ramp category, a Sideboard category outside the deck, one
+    /// main card, two sideboard cards, and a catalog of three cards to add by name.
+    /// </summary>
+    private static FakeArchidekt CreateDeckForRemoteEdits()
+    {
+        FakeArchidekt fake = new();
+        fake.AddCategory("Ramp");
+        fake.AddCategory("Sideboard", includedInDeck: false);
+        fake.AddEntry(fake.AddCardToCatalog(501, "Bolt"), 2, "Ramp");
+        fake.AddEntry(fake.AddCardToCatalog(502, "Assassin's Trophy"), 1, "Sideboard");
+        fake.AddEntry(fake.AddCardToCatalog(503, "Pick Your Poison"), 1, "Sideboard");
+        _ = fake.AddCardToCatalog(601, "Side Card 01");
+        _ = fake.AddCardToCatalog(602, "Side Card 02");
+        _ = fake.AddCardToCatalog(603, "Side Card 03");
+        return fake;
+    }
+
+    /// <summary>
+    /// Makes the edit of the report on the fake: a new Removal category, with two sideboard cards moved under it.
+    /// </summary>
+    private static void MoveTwoCardsUnderANewRemovalCategory(FakeArchidekt fake)
+    {
+        fake.AddCategory("Removal");
+        fake.SetCategories("Assassin's Trophy", "Removal");
+        fake.SetCategories("Pick Your Poison", "Removal");
+    }
+
+    /// <summary>
+    /// Lists the names of the categories one entry is assigned to.
+    /// </summary>
+    private static string[] CategoryNamesOf(DeckDocument deck, DeckEntry entry)
+    {
+        return [.. deck.CategoryAssignments
+            .Where(value => value.EntryId == entry.EntryId)
+            .Select(value => deck.Categories.Single(category => category.CategoryId == value.CategoryId).Name)];
+    }
+
+    /// <summary>
     /// Builds the changes that add each name as a sideboard entry with no card identity, in the Sideboard category.
     /// </summary>
     private static List<DeckChange> AddSideboardCards(DeckDocument local, params string[] names)
