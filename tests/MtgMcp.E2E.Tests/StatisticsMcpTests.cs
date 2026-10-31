@@ -12,17 +12,19 @@ namespace MtgMcp.E2E.Tests;
 public sealed class StatisticsMcpTests
 {
     /// <summary>
-    /// Lists the exact eight statistics tools in canonical discovery order.
+    /// Lists the exact ten statistics tools in canonical discovery order.
     /// </summary>
     private static readonly string[] ToolNames =
     [
-        "stats_deck_summary",
+        "stats_castability",
         "stats_hypergeometric",
+        "stats_local_deck_summary",
         "stats_mana_availability",
         "stats_minimum_count",
         "stats_mulligan",
         "stats_multivariate",
         "stats_package_assembly",
+        "stats_simulate",
         "stats_turn_table",
     ];
 
@@ -90,10 +92,21 @@ public sealed class StatisticsMcpTests
             Assert.Equal(ToolNames, tools.Select(value => value.Name));
             foreach (McpClientTool tool in tools)
             {
-                Assert.Equal(["request"], tool.ProtocolTool.InputSchema
+                string[] expectedInputs = tool.Name switch
+                {
+                    "stats_castability" => ["onThePlay", "requireLandDrops", "source", "sources", "turn"],
+                    "stats_simulate" =>
+                    [
+                        "conditions", "deck", "eachTurn", "groups", "openingHand", "preset", "sampleHands", "samples",
+                        "seed", "turns",
+                    ],
+                    _ => ["request"],
+                };
+                Assert.Equal(expectedInputs, tool.ProtocolTool.InputSchema
                     .GetProperty("properties")
                     .EnumerateObject()
-                    .Select(value => value.Name));
+                    .Select(value => value.Name)
+                    .Order(StringComparer.Ordinal));
                 Assert.NotNull(tool.ProtocolTool.OutputSchema);
                 Assert.NotNull(tool.ProtocolTool.Annotations);
                 Assert.True(tool.ProtocolTool.Annotations.ReadOnlyHint);
@@ -265,7 +278,7 @@ public sealed class StatisticsMcpTests
 
         JsonElement summary = await CallExactAsync(
             session,
-            "stats_deck_summary",
+            "stats_local_deck_summary",
             SummaryRequest(deckId, revision, entries)).ConfigureAwait(false);
         Assert.Equal(99, summary.GetProperty("totalQuantity").GetInt32());
         Assert.Equal(10, summary.GetProperty("entryCount").GetInt32());
@@ -323,13 +336,13 @@ public sealed class StatisticsMcpTests
         long revision = deck.GetProperty("revision").GetInt64();
         JsonElement stale = await CallResultAsync(
             session,
-            "stats_deck_summary",
+            "stats_local_deck_summary",
             new { request = FailureSummaryRequest(deckId, revision + 1) }).ConfigureAwait(false);
         Assert.Equal("conflict", stale.GetProperty("kind").GetString());
 
         JsonElement missing = await CallResultAsync(
             session,
-            "stats_deck_summary",
+            "stats_local_deck_summary",
             new { request = FailureSummaryRequest(Guid.NewGuid(), 1) }).ConfigureAwait(false);
         Assert.Equal("not-found", missing.GetProperty("kind").GetString());
 
@@ -408,9 +421,9 @@ public sealed class StatisticsMcpTests
             entries.Add(new { quantity = 1, cardName = "Winota, Joiner of Forces", zone = "commander" });
         }
 
-        return await CallSuccessAsync(
+        return await WholeDeck.SuccessAsync(
             session,
-            "deck_create",
+            "local_deck_create",
             new
             {
                 request = new
@@ -552,7 +565,7 @@ public sealed class StatisticsMcpTests
     {
         _ = await CallSuccessAsync(
             session,
-            "deck_delete",
+            "local_deck_delete",
             new { deckId, expectedRevision = revision }).ConfigureAwait(false);
     }
 
@@ -603,8 +616,8 @@ public sealed class StatisticsMcpTests
             toolName,
             (IReadOnlyDictionary<string, object?>?)arguments,
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
-        Assert.NotEqual(true, call.IsError);
         JsonElement content = Assert.IsType<JsonElement>(call.StructuredContent);
+        Assert.Equal(!string.Equals(content.GetProperty("kind").GetString(), "success", StringComparison.Ordinal), call.IsError == true);
         return content;
     }
 

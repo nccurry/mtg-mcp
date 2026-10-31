@@ -17,7 +17,7 @@ operations. The client LLM decides how to build the deck.
 | `MtgMcp.Playgroup` | Pinned official Public API contract |
 | `MtgMcp.Spellbook` | Bounded Commander Spellbook source evidence and cache |
 | `MtgMcp.Statistics` | BCL-only exact calculations |
-| `MtgMcp.OnCurve` | Pure, repeatable sampled cast-by-turn calculation |
+| `MtgMcp.Simulation` | Pure, seeded sampling engine for `stats_simulate` |
 | `MtgMcp.App` | MCP host, configuration, composition, modes, and schemas |
 
 Core references no adapter or host. Provider adapters do not reference one
@@ -27,14 +27,14 @@ another. App wires the server together.
 
 The server uses stdio and registers static tools for one session. It exposes:
 
-- 29 `deck_*` tools;
-- 18 `scryfall_*` tools;
-- 8 `stats_*` tools;
-- 23 opt-in `archidekt_*` tools;
-- 16 opt-in `playgroup_*` tools;
-- 3 opt-in `spellbook_*` tools;
+- 19 `local_deck_*` tools;
+- 13 `scryfall_*` tools and two `card_list*` tools (`card_list_query`, `card_lists_compare`);
+- 10 `stats_*` tools;
+- 21 `archidekt_*` tools (on when Archidekt credentials are present);
+- 17 `playgroup_*` tools (on when a Playgroup key is present);
+- 4 `spellbook_*` tools;
 - `mtg://server/capabilities`; and
-- zero prompts.
+- three workflow prompts (`audit-deck`, `build-from-commander`, and `compare-decks`).
 
 Toolsets choose which tools appear. Modes control what the server may change.
 See [Toolsets](toolsets.md).
@@ -73,10 +73,12 @@ Provider facts, community evidence, exact derivations, parser classifications,
 heuristics, and sampled estimates remain distinct. Unknown, unavailable,
 unsupported, and empty results are not interchangeable.
 
-`deck_on_curve_estimate` is the only sampled estimate. App reads the saved deck
-and installed Scryfall facts, then passes a resolved request to `MtgMcp.OnCurve`.
-The calculation uses only caller-supplied land rules and returns its seed,
-uncertainty range, and limits. It does not parse card text or make a deck choice.
+`stats_simulate` is the only sampled estimate. App reads the saved deck, resolves the
+caller's groups to main-zone entries, and passes plain counts and rule records to
+`MtgMcp.Simulation`, which shuffles with a versioned SplitMix64 generator and applies only
+the fixed engine rules and the rules in the request. Its `on-curve` preset reads installed
+Scryfall facts and expands to ordinary rules. The result returns its seed, applied rules,
+uncertainty ranges, and limits. It does not parse card text or make a deck choice.
 
 ## Write flow
 
@@ -85,13 +87,15 @@ revision. Synchronization and categorization use preview fingerprints. Remote
 writes also require provider fingerprints or checksums where supported.
 
 The server refuses stale or tampered requests. It does not choose a conflict
-winner.
+winner. A conflict caused by stale state includes a `current` object with the
+current local revision, remote fingerprint, or both, so the caller can preview
+again and retry.
 
 ## Non-goals
 
 Stable `0.9.0` does not provide:
 
-- deck legality decisions;
+- deck legality verdicts (Commander rule facts are reported, with no legal or illegal answer);
 - advisor prompts or intent inference;
 - weak-card or replacement judgments;
 - blended quality scores;

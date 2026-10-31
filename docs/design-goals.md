@@ -41,10 +41,14 @@
 - Keep tool registration stable, deterministic, described, annotated, and
   schema-backed.
 - Bound routine output with detail levels and pagination.
-- Use `read-only`, `local` (default), and `remote`. Enforce local and remote
+- Use `read-only`, `local`, and `remote` (default). Enforce local and remote
   mutation authority separately in code rather than trusting annotations.
 - Redact credentials and sensitive local paths from logs, errors, resources,
   test data, and configuration output.
+- Report every failed tool call with the MCP `isError` flag and a structured
+  body (`kind`, `reasonCode`, `message`). Input the server cannot read returns
+  `invalid-input` with reason `invalid-arguments` and a top-level `path` to the
+  rejected value. A union's `kind` may appear in any property position.
 
 ## Clear Tool Groups
 
@@ -52,8 +56,8 @@
   client sees; operation modes decide what it may change.
 - Keep registration fixed for the MCP session. Select toolsets at startup and
   report the resulting tool list without claiming it can change dynamically.
-- Make `decks`, `scryfall`, and `stats` the focused default profile. Require
-  explicit enablement for `archidekt`, `playgroup`, and `spellbook`.
+- Turn every toolset on by default. Turn `archidekt` and `playgroup` off until
+  their credentials are present, and say why in the capabilities resource.
 - Support `default`, `all`, `none`, and explicit toolset lists so clients and
   tests can request a predictable tool list.
 - Add a tool only when its distinct input/output contract completes a useful LLM
@@ -67,9 +71,9 @@
 - Heuristic recommendations, blended scores, and simulation are not stable
   rewrite capabilities. Do not preserve the legacy model/profile architecture
   merely because it exists.
-- The approved `deck_on_curve_estimate` follows this rule: it is versioned,
-  bounded, replayable, and visibly separate from provider facts and exact
-  mathematics. Any future sampled or heuristic evidence must meet the same bar.
+- The approved `stats_simulate` follows this rule: it is versioned, bounded,
+  replayable, applies only fixed engine rules and rules the caller states, and is
+  visibly separate from provider facts and exact mathematics. Any future sampled or heuristic evidence must meet the same bar.
 - Never add a generic rules engine or arbitrary expression language.
 
 See [Evidence-First Rewrite Guide](rewrite-guide.md) for what the server does

@@ -37,7 +37,7 @@ public sealed class ScryfallServiceTests
             TestContext.Current.CancellationToken));
         int requestsAfterSync = handler.Requests.Count;
 
-        ScryfallCardResult card = RequireSuccess(await service.GetCardAsync(
+        ScryfallCardResult card = RequireSuccess(await service.ReadCardAsync(
             new ScryfallCardLookup("scryfall-id", ScryfallTestFixture.WhiteCardId.ToString("D")),
             "cache-only",
             cancellationToken: TestContext.Current.CancellationToken));
@@ -70,7 +70,7 @@ public sealed class ScryfallServiceTests
         int requestsAfterSync = handler.Requests.Count;
         Assert.Equal(5, requestsAfterSync);
 
-        ScryfallCardResult card = RequireSuccess(await service.GetCardAsync(
+        ScryfallCardResult card = RequireSuccess(await service.ReadCardAsync(
             new ScryfallCardLookup("exact-name", "Venerable Knight"),
             "default",
             includeRaw: true,
@@ -126,7 +126,7 @@ public sealed class ScryfallServiceTests
             cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(ScryfallTestFixture.AggroTagId, Assert.Single(aliasSearch.Items).Id);
 
-        ScryfallCardsByTagResult inherited = RequireSuccess(await service.GetCardsByTagAsync(
+        ScryfallCardsByTagResult inherited = RequireSuccess(await service.ReadCardsByTagAsync(
             "aggro",
             "oracle",
             true,
@@ -141,7 +141,7 @@ public sealed class ScryfallServiceTests
             [ScryfallTestFixture.AggroTagId, ScryfallTestFixture.WeenieTagId],
             inherited.Assignments[0].HierarchyPath);
 
-        ScryfallCardsByTagResult directOnly = RequireSuccess(await service.GetCardsByTagAsync(
+        ScryfallCardsByTagResult directOnly = RequireSuccess(await service.ReadCardsByTagAsync(
             "aggro",
             "oracle",
             false,
@@ -150,7 +150,7 @@ public sealed class ScryfallServiceTests
         Assert.Empty(directOnly.Page.Items);
         Assert.Empty(directOnly.Assignments);
 
-        ScryfallCardsByTagResult filteredByWeight = RequireSuccess(await service.GetCardsByTagAsync(
+        ScryfallCardsByTagResult filteredByWeight = RequireSuccess(await service.ReadCardsByTagAsync(
             "white-weenie",
             "oracle",
             false,
@@ -160,28 +160,28 @@ public sealed class ScryfallServiceTests
         Assert.Empty(filteredByWeight.Assignments);
         Assert.Equal(requestsAfterSync, handler.Requests.Count);
 
-        Assert.Equal(ScryfallTestFixture.WhiteCardId, RequireSuccess(await service.GetCardAsync(
+        Assert.Equal(ScryfallTestFixture.WhiteCardId, RequireSuccess(await service.ReadCardAsync(
             new ScryfallCardLookup("scryfall-id", ScryfallTestFixture.WhiteCardId.ToString("D")),
             "cache-only",
             cancellationToken: TestContext.Current.CancellationToken)).Card.Id);
-        Assert.Equal(ScryfallTestFixture.WhiteOracleId, RequireSuccess(await service.GetCardAsync(
+        Assert.Equal(ScryfallTestFixture.WhiteOracleId, RequireSuccess(await service.ReadCardAsync(
             new ScryfallCardLookup("oracle-id", ScryfallTestFixture.WhiteOracleId.ToString("D")),
             "cache-only",
             cancellationToken: TestContext.Current.CancellationToken)).Card.OracleId);
-        Assert.Equal("eld", RequireSuccess(await service.GetCardAsync(
+        Assert.Equal("eld", RequireSuccess(await service.ReadCardAsync(
             new ScryfallCardLookup("printing", SetCode: "eld", CollectorNumber: "35"),
             "cache-only",
             cancellationToken: TestContext.Current.CancellationToken)).Card.SetCode);
-        Assert.Equal(ScryfallTestFixture.WhiteCardId, RequireSuccess(await service.GetCardAsync(
+        Assert.Equal(ScryfallTestFixture.WhiteCardId, RequireSuccess(await service.ReadCardAsync(
             new ScryfallCardLookup("exact-name", " Venerable Knight "),
             "cache-only",
             cancellationToken: TestContext.Current.CancellationToken)).Card.Id);
-        Assert.Equal("eld", RequireSuccess(await service.GetCardAsync(
+        Assert.Equal("eld", RequireSuccess(await service.ReadCardAsync(
             new ScryfallCardLookup("printing", SetCode: " ELD ", CollectorNumber: "35 "),
             "cache-only",
             cancellationToken: TestContext.Current.CancellationToken)).Card.SetCode);
 
-        ScryfallCollectionResult mixed = RequireSuccess(await service.GetCollectionAsync(
+        ScryfallCollectionResult mixed = RequireSuccess(await service.ReadCollectionAsync(
             [
                 new ScryfallCardLookup("exact-name", "Venerable Knight"),
                 new ScryfallCardLookup("exact-name", "Missing Fixture"),
@@ -199,7 +199,7 @@ public sealed class ScryfallServiceTests
         }
 
         int requestsAfterCollection = handler.Requests.Count;
-        ScryfallCollectionResult cachedMixed = RequireSuccess(await service.GetCollectionAsync(
+        ScryfallCollectionResult cachedMixed = RequireSuccess(await service.ReadCollectionAsync(
             [
                 new ScryfallCardLookup("exact-name", "Venerable Knight"),
                 new ScryfallCardLookup("exact-name", "Missing Fixture"),
@@ -235,7 +235,7 @@ public sealed class ScryfallServiceTests
         RecordingHandler handler = ScryfallTestFixture.Provider();
         using ScryfallService service = CreateService(temporary.Path, handler);
 
-        ScryfallSearchResult first = RequireSuccess(await service.SearchAsync(
+        ScryfallSearchResult first = RequireSuccess(await service.ReadSearchAsync(
             "ci<=rw mv=1",
             pageSize: 1,
             cancellationToken: TestContext.Current.CancellationToken));
@@ -247,7 +247,7 @@ public sealed class ScryfallServiceTests
         Assert.Null(Assert.Single(first.Page.Items).Raw);
         int providerRequests = handler.Requests.Count;
 
-        ScryfallSearchResult full = RequireSuccess(await service.SearchAsync(
+        ScryfallSearchResult full = RequireSuccess(await service.ReadSearchAsync(
             "ci<=rw mv=1",
             pageSize: 2,
             includeRaw: true,
@@ -255,7 +255,7 @@ public sealed class ScryfallServiceTests
         Assert.All(full.Page.Items, value => Assert.NotNull(value.Raw));
         Assert.Equal(providerRequests, handler.Requests.Count);
 
-        ScryfallSearchResult secondPage = RequireSuccess(await service.SearchAsync(
+        ScryfallSearchResult secondPage = RequireSuccess(await service.ReadSearchAsync(
             "ci<=rw mv=1",
             cursor: first.Page.NextCursor,
             pageSize: 1,
@@ -264,7 +264,7 @@ public sealed class ScryfallServiceTests
         Assert.Equal(first.Snapshot.SnapshotId, secondPage.Snapshot.SnapshotId);
         Assert.Equal(providerRequests, handler.Requests.Count);
 
-        Assert.IsType<OperationInvalidInput>((await service.SearchAsync(
+        Assert.IsType<OperationInvalidInput>((await service.ReadSearchAsync(
             "ci<=rw mv=1",
             cursor: "tampered",
             cancellationToken: TestContext.Current.CancellationToken)).Value);
@@ -345,7 +345,7 @@ public sealed class ScryfallServiceTests
         RecordingHandler handler = ScryfallTestFixture.Provider();
         using ScryfallService service = CreateService(temporary.Path, handler);
 
-        ScryfallCardResult card = RequireSuccess(await service.GetCardAsync(
+        ScryfallCardResult card = RequireSuccess(await service.ReadCardAsync(
             new ScryfallCardLookup("scryfall-id", ScryfallTestFixture.WhiteCardId.ToString("D")),
             cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal("request-snapshot", card.Origin);
@@ -359,18 +359,18 @@ public sealed class ScryfallServiceTests
         Assert.Equal("scryfall-price", Assert.IsType<SourceFactDescriptor>(usd.Evidence.Value).Source);
         Assert.Equal(42, card.Card.RankEvidence.Single(value => value.Field == "edhrec_rank").Rank);
 
-        ScryfallCardResult fuzzy = RequireSuccess(await service.GetCardAsync(
+        ScryfallCardResult fuzzy = RequireSuccess(await service.ReadCardAsync(
             new ScryfallCardLookup("fuzzy-name", "Venerable Kniht"),
             cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal("Venerable Knight", fuzzy.Card.Name);
 
-        ScryfallCollectionResult collection = RequireSuccess(await service.GetCollectionAsync(
+        ScryfallCollectionResult collection = RequireSuccess(await service.ReadCollectionAsync(
             [new ScryfallCardLookup("exact-name", "Monastery Swiftspear")],
             cancellationToken: TestContext.Current.CancellationToken));
         ScryfallCollectionRow collectionRow = Assert.Single(collection.Page.Items);
         Assert.Equal("found", collectionRow.Status);
         Assert.Equal("request-snapshot", collectionRow.Origin);
-        ScryfallCollectionResult fullCollection = RequireSuccess(await service.GetCollectionAsync(
+        ScryfallCollectionResult fullCollection = RequireSuccess(await service.ReadCollectionAsync(
             [new ScryfallCardLookup("exact-name", "Monastery Swiftspear")],
             freshnessPolicy: "cache-only",
             includeRaw: true,
@@ -443,19 +443,19 @@ public sealed class ScryfallServiceTests
         RecordingHandler handler = ScryfallTestFixture.Provider();
         using ScryfallService service = CreateService(temporary.Path, handler, clock);
 
-        ScryfallSearchResult original = RequireSuccess(await service.SearchAsync(
+        ScryfallSearchResult original = RequireSuccess(await service.ReadSearchAsync(
             "name:knight",
             cancellationToken: TestContext.Current.CancellationToken));
         int firstCount = handler.Requests.Count;
         clock.Advance(TimeSpan.FromHours(24));
-        ScryfallSearchResult boundary = RequireSuccess(await service.SearchAsync(
+        ScryfallSearchResult boundary = RequireSuccess(await service.ReadSearchAsync(
             "name:knight",
             cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(original.Snapshot.SnapshotId, boundary.Snapshot.SnapshotId);
         Assert.Equal(firstCount, handler.Requests.Count);
 
         clock.Advance(TimeSpan.FromTicks(1));
-        ScryfallSearchResult refreshed = RequireSuccess(await service.SearchAsync(
+        ScryfallSearchResult refreshed = RequireSuccess(await service.ReadSearchAsync(
             "name:knight",
             cancellationToken: TestContext.Current.CancellationToken));
         Assert.NotEqual(original.Snapshot.SnapshotId, refreshed.Snapshot.SnapshotId);
@@ -487,13 +487,13 @@ public sealed class ScryfallServiceTests
         Assert.Equal(original.Snapshot.SnapshotId, retained.PredecessorId);
 
         clock.Advance(TimeSpan.FromDays(10));
-        ScryfallSearchResult stale = RequireSuccess(await service.SearchAsync(
+        ScryfallSearchResult stale = RequireSuccess(await service.ReadSearchAsync(
             "name:knight",
             freshnessPolicy: "cache-only",
             cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal("stale", stale.Snapshot.Freshness);
         Assert.All(stale.Page.Items.SelectMany(value => value.PriceEvidence), value => Assert.Equal("stale", value.Freshness));
-        Assert.IsType<OperationNotCached>((await service.SearchAsync(
+        Assert.IsType<OperationNotCached>((await service.ReadSearchAsync(
             "different query",
             freshnessPolicy: "cache-only",
             cancellationToken: TestContext.Current.CancellationToken)).Value);
@@ -568,13 +568,14 @@ public sealed class ScryfallServiceTests
             temporary.Path,
             allowLocalWrites: false,
             "0.9.0-preview.1",
+            ScryfallTestFixture.ResultOptions,
             ScryfallTestFixture.ApiBaseUri,
             handler: handler);
 
-        AssertUnavailable(await service.SearchAsync(
+        AssertUnavailable(await service.ReadSearchAsync(
             "name:knight",
             cancellationToken: TestContext.Current.CancellationToken), "local-write-required");
-        AssertUnavailable(await service.SearchAsync(
+        AssertUnavailable(await service.ReadSearchAsync(
             "name:knight",
             freshnessPolicy: "refresh",
             cancellationToken: TestContext.Current.CancellationToken), "local-write-required");
@@ -583,7 +584,7 @@ public sealed class ScryfallServiceTests
         Assert.Empty(handler.Requests);
         Assert.False(File.Exists(Path.Combine(temporary.Path, "scryfall.db")));
 
-        ScryfallCollectionResult cacheOnlyCollection = RequireSuccess(await service.GetCollectionAsync(
+        ScryfallCollectionResult cacheOnlyCollection = RequireSuccess(await service.ReadCollectionAsync(
             [new ScryfallCardLookup("exact-name", "Missing Fixture")],
             freshnessPolicy: "cache-only",
             cancellationToken: TestContext.Current.CancellationToken));
@@ -591,36 +592,36 @@ public sealed class ScryfallServiceTests
         Assert.Empty(handler.Requests);
         Assert.False(File.Exists(Path.Combine(temporary.Path, "scryfall.db")));
 
-        Assert.IsType<OperationInvalidInput>((await service.SearchAsync(
+        Assert.IsType<OperationInvalidInput>((await service.ReadSearchAsync(
             " ",
             cancellationToken: TestContext.Current.CancellationToken)).Value);
-        Assert.IsType<OperationInvalidInput>((await service.SearchAsync(
+        Assert.IsType<OperationInvalidInput>((await service.ReadSearchAsync(
             "x",
             unique: "invalid",
             cancellationToken: TestContext.Current.CancellationToken)).Value);
-        Assert.IsType<OperationInvalidInput>((await service.SearchAsync(
+        Assert.IsType<OperationInvalidInput>((await service.ReadSearchAsync(
             "x",
             order: "invented",
             cancellationToken: TestContext.Current.CancellationToken)).Value);
-        Assert.IsType<OperationInvalidInput>((await service.SearchAsync(
+        Assert.IsType<OperationInvalidInput>((await service.ReadSearchAsync(
             "x",
             pageSize: 101,
             cancellationToken: TestContext.Current.CancellationToken)).Value);
-        Assert.IsType<OperationInvalidInput>((await service.SearchAsync(
+        Assert.IsType<OperationInvalidInput>((await service.ReadSearchAsync(
             "x",
             pageSize: 26,
             includeRaw: true,
             cancellationToken: TestContext.Current.CancellationToken)).Value);
-        Assert.IsType<OperationInvalidInput>((await service.GetCardAsync(
+        Assert.IsType<OperationInvalidInput>((await service.ReadCardAsync(
             new ScryfallCardLookup("printing", SetCode: "eld"),
             cancellationToken: TestContext.Current.CancellationToken)).Value);
-        Assert.IsType<OperationInvalidInput>((await service.GetCollectionAsync(
+        Assert.IsType<OperationInvalidInput>((await service.ReadCollectionAsync(
             [],
             cancellationToken: TestContext.Current.CancellationToken)).Value);
-        Assert.IsType<OperationInvalidInput>((await service.GetCollectionAsync(
+        Assert.IsType<OperationInvalidInput>((await service.ReadCollectionAsync(
             Enumerable.Repeat(new ScryfallCardLookup("exact-name", "x"), 151).ToArray(),
             cancellationToken: TestContext.Current.CancellationToken)).Value);
-        Assert.IsType<OperationInvalidInput>((await service.GetCollectionAsync(
+        Assert.IsType<OperationInvalidInput>((await service.ReadCollectionAsync(
             [new ScryfallCardLookup("exact-name", "x")],
             pageSize: 26,
             includeRaw: true,
@@ -638,7 +639,7 @@ public sealed class ScryfallServiceTests
             "x",
             "invalid",
             cancellationToken: TestContext.Current.CancellationToken)).Value);
-        Assert.IsType<OperationInvalidInput>((await service.GetCardsByTagAsync(
+        Assert.IsType<OperationInvalidInput>((await service.ReadCardsByTagAsync(
             "x",
             "oracle",
             minimumWeight: "invalid",
@@ -663,7 +664,7 @@ public sealed class ScryfallServiceTests
         RecordingHandler blocked = new(_ => ScryfallTestFixture.Json("{}", HttpStatusCode.TooManyRequests));
         using (ScryfallService service = CreateService(blockedRoot.Path, blocked))
         {
-            AssertUnavailable(await service.SearchAsync(
+            AssertUnavailable(await service.ReadSearchAsync(
                 "x",
                 cancellationToken: TestContext.Current.CancellationToken), "scryfall-access-blocked");
         }
@@ -680,7 +681,7 @@ public sealed class ScryfallServiceTests
         })));
         using (ScryfallService service = CreateService(foreignRoot.Path, foreign))
         {
-            AssertUnavailable(await service.SearchAsync(
+            AssertUnavailable(await service.ReadSearchAsync(
                 "foreign-page",
                 cancellationToken: TestContext.Current.CancellationToken), "unexpected-provider-host");
         }
@@ -691,7 +692,7 @@ public sealed class ScryfallServiceTests
         RecordingHandler transport = new((_, _) => throw new HttpRequestException("fixture transport failure"));
         using (ScryfallService service = CreateService(transportRoot.Path, transport))
         {
-            AssertUnavailable(await service.SearchAsync(
+            AssertUnavailable(await service.ReadSearchAsync(
                 "transport-failure",
                 cancellationToken: TestContext.Current.CancellationToken), "scryfall-unavailable");
         }
@@ -715,7 +716,7 @@ public sealed class ScryfallServiceTests
         });
         using (ScryfallService service = CreateService(retryRoot.Path, retry))
         {
-            Assert.Single(RequireSuccess(await service.SearchAsync(
+            Assert.Single(RequireSuccess(await service.ReadSearchAsync(
                 "x",
                 cancellationToken: TestContext.Current.CancellationToken)).Page.Items);
         }
@@ -729,7 +730,7 @@ public sealed class ScryfallServiceTests
         Guid snapshotId;
         using (ScryfallService service = CreateService(staleRoot.Path, initial, clock))
         {
-            snapshotId = RequireSuccess(await service.SearchAsync(
+            snapshotId = RequireSuccess(await service.ReadSearchAsync(
                 "stale-query",
                 cancellationToken: TestContext.Current.CancellationToken)).Snapshot.SnapshotId;
         }
@@ -738,7 +739,7 @@ public sealed class ScryfallServiceTests
         RecordingHandler failure = new(_ => ScryfallTestFixture.Json("{}", HttpStatusCode.Forbidden));
         using (ScryfallService service = CreateService(staleRoot.Path, failure, clock))
         {
-            OperationUnavailable unavailable = Assert.IsType<OperationUnavailable>((await service.SearchAsync(
+            OperationUnavailable unavailable = Assert.IsType<OperationUnavailable>((await service.ReadSearchAsync(
                 "stale-query",
                 cancellationToken: TestContext.Current.CancellationToken)).Value);
             Assert.Contains(snapshotId.ToString("D"), unavailable.Message, StringComparison.Ordinal);
@@ -850,7 +851,7 @@ public sealed class ScryfallServiceTests
                 TestContext.Current.CancellationToken));
 
             Assert.NotEqual(active.GenerationId, updated.GenerationId);
-            ScryfallCardsByTagResult cards = RequireSuccess(await service.GetCardsByTagAsync(
+            ScryfallCardsByTagResult cards = RequireSuccess(await service.ReadCardsByTagAsync(
                 "dangling-fixture",
                 dataset == "art_tags" ? "art" : "oracle",
                 includeDescendants: true,
@@ -919,13 +920,39 @@ public sealed class ScryfallServiceTests
         });
         using ScryfallService service = CreateService(temporary.Path, handler);
 
-        Assert.IsType<OperationUnavailable>((await service.SearchAsync(
+        Assert.IsType<OperationUnavailable>((await service.ReadSearchAsync(
             "two-page-query",
             cancellationToken: TestContext.Current.CancellationToken)).Value);
         Assert.Equal(4, handler.Requests.Count);
         Assert.Empty(RequireSuccess(await service.ListSnapshotsAsync(
             "search",
             cancellationToken: TestContext.Current.CancellationToken)).Items);
+    }
+
+    /// <summary>
+    /// Verifies a query that uses oracle tags and other filters reaches Scryfall exactly as written.
+    /// </summary>
+    [Fact]
+    public async Task Search_OracleTagQuery_PassesThroughUnchanged()
+    {
+        const string query = "otag:ramp t:sorcery mv<=2 f:commander";
+        using TemporaryScryfallDirectory temporary = new();
+        RecordingHandler handler = new(_ => ScryfallTestFixture.Json(JsonSerializer.Serialize(new
+        {
+            @object = "list",
+            has_more = false,
+            data = new[] { JsonSerializer.Deserialize<JsonElement>(ScryfallTestFixture.WhiteCard()) },
+        })));
+        using ScryfallService service = CreateService(temporary.Path, handler);
+
+        CancellationToken token = TestContext.Current.CancellationToken;
+        _ = RequireSuccess(await service.ReadSearchAsync(query, cancellationToken: token));
+
+        RecordedRequest search = Assert.Single(
+            handler.Requests,
+            request => request.Uri.AbsolutePath == "/cards/search");
+        string? sent = System.Web.HttpUtility.ParseQueryString(search.Uri.Query)["q"];
+        Assert.Equal(query, sent);
     }
 
     /// <summary>
@@ -956,7 +983,7 @@ public sealed class ScryfallServiceTests
         });
         using ScryfallService service = CreateService(temporary.Path, handler);
 
-        ScryfallSearchResult result = RequireSuccess(await service.SearchAsync(
+        ScryfallSearchResult result = RequireSuccess(await service.ReadSearchAsync(
             "two-page-success",
             cancellationToken: TestContext.Current.CancellationToken));
 
@@ -992,7 +1019,7 @@ public sealed class ScryfallServiceTests
             .Select(index => new ScryfallCardLookup("exact-name", $"Missing Fixture {index}"))
             .ToArray();
 
-        ScryfallCollectionResult result = RequireSuccess(await service.GetCollectionAsync(
+        ScryfallCollectionResult result = RequireSuccess(await service.ReadCollectionAsync(
             lookups,
             pageSize: 100,
             cancellationToken: TestContext.Current.CancellationToken));
@@ -1019,7 +1046,7 @@ public sealed class ScryfallServiceTests
             not_found = Array.Empty<object>(),
         })));
         using ScryfallService doubleFacedService = CreateService(doubleFacedRoot.Path, doubleFacedHandler);
-        ScryfallCollectionResult doubleFacedResult = RequireSuccess(await doubleFacedService.GetCollectionAsync(
+        ScryfallCollectionResult doubleFacedResult = RequireSuccess(await doubleFacedService.ReadCollectionAsync(
             [new ScryfallCardLookup("exact-name", "Front Fixture")],
             cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal("found", Assert.Single(doubleFacedResult.Page.Items).Status);
@@ -1041,7 +1068,7 @@ public sealed class ScryfallServiceTests
             new ScryfallCardLookup("exact-name", "Missing Fixture"),
             count).ToArray();
 
-        ScryfallCollectionResult first = RequireSuccess(await service.GetCollectionAsync(
+        ScryfallCollectionResult first = RequireSuccess(await service.ReadCollectionAsync(
             lookups,
             pageSize: 100,
             cancellationToken: TestContext.Current.CancellationToken));
@@ -1049,7 +1076,7 @@ public sealed class ScryfallServiceTests
         string? cursor = first.Page.NextCursor;
         while (cursor is not null)
         {
-            ScryfallCollectionResult next = RequireSuccess(await service.GetCollectionAsync(
+            ScryfallCollectionResult next = RequireSuccess(await service.ReadCollectionAsync(
                 lookups,
                 freshnessPolicy: "refresh",
                 cursor: cursor,
@@ -1081,7 +1108,7 @@ public sealed class ScryfallServiceTests
             .Select(index => new ScryfallCardLookup("exact-name", $"Missing Fixture {index}"))
             .ToArray();
 
-        ScryfallCollectionResult first = RequireSuccess(await service.GetCollectionAsync(
+        ScryfallCollectionResult first = RequireSuccess(await service.ReadCollectionAsync(
             lookups,
             pageSize: 100,
             cancellationToken: TestContext.Current.CancellationToken));
@@ -1102,7 +1129,7 @@ public sealed class ScryfallServiceTests
         }
 
         int requestCount = handler.Requests.Count;
-        ScryfallCollectionResult second = RequireSuccess(await service.GetCollectionAsync(
+        ScryfallCollectionResult second = RequireSuccess(await service.ReadCollectionAsync(
             lookups,
             freshnessPolicy: "refresh",
             cursor: first.Page.NextCursor,
@@ -1110,7 +1137,7 @@ public sealed class ScryfallServiceTests
             cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(Enumerable.Range(100, 25), second.Page.Items.Select(value => value.Index));
         Assert.NotNull(second.Page.NextCursor);
-        ScryfallCollectionResult third = RequireSuccess(await service.GetCollectionAsync(
+        ScryfallCollectionResult third = RequireSuccess(await service.ReadCollectionAsync(
             lookups,
             cursor: second.Page.NextCursor,
             pageSize: 100,
@@ -1121,13 +1148,13 @@ public sealed class ScryfallServiceTests
 
         ScryfallCardLookup[] wrongLookups = [.. lookups];
         wrongLookups[0] = new ScryfallCardLookup("exact-name", "Different Fixture");
-        Assert.IsType<OperationInvalidInput>((await service.GetCollectionAsync(
+        Assert.IsType<OperationInvalidInput>((await service.ReadCollectionAsync(
             wrongLookups,
             cursor: first.Page.NextCursor,
             cancellationToken: TestContext.Current.CancellationToken)).Value);
         string originalCursor = first.Page.NextCursor!;
         string tampered = (originalCursor[0] == 'A' ? 'B' : 'A') + originalCursor[1..];
-        Assert.IsType<OperationInvalidInput>((await service.GetCollectionAsync(
+        Assert.IsType<OperationInvalidInput>((await service.ReadCollectionAsync(
             lookups,
             cursor: tampered,
             cancellationToken: TestContext.Current.CancellationToken)).Value);
@@ -1151,7 +1178,7 @@ public sealed class ScryfallServiceTests
             first.Snapshot.Checksum,
             true,
             TestContext.Current.CancellationToken));
-        OperationUnavailable deletedEvidence = Assert.IsType<OperationUnavailable>((await service.GetCollectionAsync(
+        OperationUnavailable deletedEvidence = Assert.IsType<OperationUnavailable>((await service.ReadCollectionAsync(
             lookups,
             cursor: first.Page.NextCursor,
             cancellationToken: TestContext.Current.CancellationToken)).Value);
@@ -1338,6 +1365,7 @@ public sealed class ScryfallServiceTests
             temporary.Path,
             allowLocalWrites: false,
             "0.9.0-preview.1",
+            ScryfallTestFixture.ResultOptions,
             ScryfallTestFixture.ApiBaseUri,
             handler: handler);
 
@@ -1371,7 +1399,7 @@ public sealed class ScryfallServiceTests
             new ScryfallCardLookup("exact-name", "Venerable Knight"),
             30).ToArray();
 
-        ScryfallCollectionResult first = RequireSuccess(await service.GetCollectionAsync(
+        ScryfallCollectionResult first = RequireSuccess(await service.ReadCollectionAsync(
             lookups,
             freshnessPolicy: "cache-only",
             pageSize: 10,
@@ -1381,7 +1409,7 @@ public sealed class ScryfallServiceTests
         string cursor = first.Page.NextCursor!;
 
         _ = await SyncRevisionAsync(temporary.Path, 2, "Renewed Knight");
-        ScryfallCollectionResult retained = RequireSuccess(await service.GetCollectionAsync(
+        ScryfallCollectionResult retained = RequireSuccess(await service.ReadCollectionAsync(
             lookups,
             freshnessPolicy: "refresh",
             cursor: cursor,
@@ -1392,7 +1420,7 @@ public sealed class ScryfallServiceTests
         Assert.Empty(handler.Requests);
 
         _ = await SyncRevisionAsync(temporary.Path, 3, "Newest Knight");
-        OperationUnavailable unavailable = Assert.IsType<OperationUnavailable>((await service.GetCollectionAsync(
+        OperationUnavailable unavailable = Assert.IsType<OperationUnavailable>((await service.ReadCollectionAsync(
             lookups,
             cursor: cursor,
             cancellationToken: TestContext.Current.CancellationToken)).Value);
@@ -1430,7 +1458,7 @@ public sealed class ScryfallServiceTests
             .Select(index => new ScryfallCardLookup("exact-name", $"Missing Fixture {index}"))
             .ToArray();
 
-        OperationUnavailable unavailable = Assert.IsType<OperationUnavailable>((await service.GetCollectionAsync(
+        OperationUnavailable unavailable = Assert.IsType<OperationUnavailable>((await service.ReadCollectionAsync(
             lookups,
             cancellationToken: TestContext.Current.CancellationToken)).Value);
         Assert.Equal("scryfall-access-blocked", unavailable.ReasonCode);
@@ -1485,7 +1513,7 @@ public sealed class ScryfallServiceTests
             "refresh",
             cancellationToken: TestContext.Current.CancellationToken));
 
-        ScryfallCardResult result = RequireSuccess(await service.GetCardAsync(
+        ScryfallCardResult result = RequireSuccess(await service.ReadCardAsync(
             new ScryfallCardLookup("exact-name", "Monastery Swiftspear"),
             "cache-only",
             cancellationToken: TestContext.Current.CancellationToken));
@@ -1530,13 +1558,46 @@ public sealed class ScryfallServiceTests
 
         _ = RequireSuccess(sync);
 
-        ScryfallCardResult result = RequireSuccess(await service.GetCardAsync(
+        ScryfallCardResult result = RequireSuccess(await service.ReadCardAsync(
             new ScryfallCardLookup("exact-name", "Monastery Swiftspear"),
             "cache-only",
             cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal(ScryfallTestFixture.RedCardId, result.Card.Id);
         Assert.Equal("Monastery Swiftspear", result.Card.Name);
+    }
+
+    /// <summary>
+    /// Verifies a single-card read by exact name returns the card, not a newer token with the same name, from installed
+    /// card data alone.
+    /// </summary>
+    [Fact]
+    public async Task CardGet_ExactNameSharedByTokenAndCard_ReturnsTheCard()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        JsonObject token = JsonNode.Parse(ScryfallTestFixture.RedCard())!.AsObject();
+        token["id"] = "88888888-8888-4888-8888-888888888888";
+        token["oracle_id"] = "99999999-9999-4999-8999-999999999999";
+        token["set"] = "ttt";
+        token["collector_number"] = "1";
+        token["layout"] = "token";
+        token["released_at"] = "2030-01-01";
+        RecordingHandler handler = ScryfallTestFixture.Provider(
+            intercept: request => request.RequestUri!.AbsolutePath == "/download/all_cards.jsonl.gz"
+                ? ScryfallTestFixture.Bytes(ScryfallTestFixture.GzipLines(
+                    [ScryfallTestFixture.WhiteCard(), ScryfallTestFixture.RedCard(), token.ToJsonString()]))
+                : null);
+        using ScryfallService service = CreateService(temporary.Path, handler);
+        _ = RequireSuccess(await service.SyncCorpusAsync(
+            "refresh",
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        ScryfallCardResult result = RequireSuccess(await service.ReadCardAsync(
+            new ScryfallCardLookup("exact-name", "Monastery Swiftspear"),
+            "cache-only",
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(ScryfallTestFixture.RedCardId, result.Card.Id);
     }
 
     /// <summary>
@@ -1736,6 +1797,7 @@ public sealed class ScryfallServiceTests
             dataRoot,
             allowLocalWrites: true,
             "0.9.0-preview.1",
+            ScryfallTestFixture.ResultOptions,
             ScryfallTestFixture.ApiBaseUri,
             TimeSpan.FromHours(24),
             timeProvider,

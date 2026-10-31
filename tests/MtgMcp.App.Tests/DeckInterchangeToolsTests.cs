@@ -24,24 +24,25 @@ public sealed class DeckInterchangeToolsTests
         DeckInterchangeWriteTools writes = new(service, OperationMode.Local);
 
         Assert.Equal(4, RequireSuccess(reads.ListFormats()).Count);
-        DeckImportPreview preview = RequireSuccess(await reads.PreviewAsync(
+        DeckImportPreviewView preview = RequireSuccess(await reads.PreviewAsync(
             "generic-text-v1",
             "[commander]\n1 Commander",
             new DeckImportOptions(DeckName: "Wrapper"),
-            TestContext.Current.CancellationToken));
-        DeckImportCreateResult created = RequireSuccess(await writes.CreateAsync(
+            cancellationToken: TestContext.Current.CancellationToken));
+        DeckImportCreateView created = RequireSuccess(await writes.CreateAsync(
             "generic-text-v1",
             "[commander]\n1 Commander",
             preview.Fingerprint!,
             new DeckImportOptions(DeckName: "Wrapper"),
-            TestContext.Current.CancellationToken));
-        DeckExportBundle exported = RequireSuccess(await reads.ExportAsync(
-            created.Deck.DeckId,
+            cancellationToken: TestContext.Current.CancellationToken));
+        DeckExportBundleView exported = RequireSuccess(await reads.ExportAsync(
+            created.Summary.DeckId,
             "generic-text-v1",
             null,
-            TestContext.Current.CancellationToken));
+            cancellationToken: TestContext.Current.CancellationToken));
 
-        Assert.Equal("Wrapper", created.Deck.Name);
+        Assert.Equal("Wrapper", created.Summary.Name);
+        Assert.Null(created.Summary.Deck);
         Assert.Equal(["deck.txt", "deck.mtg-mcp.json", "preservation.json"], exported.Artifacts.Select(value => value.FileName));
     }
 
@@ -55,12 +56,12 @@ public sealed class DeckInterchangeToolsTests
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
         DeckInterchangeWriteTools writes = new(new DeckInterchangeService(store), OperationMode.ReadOnly);
 
-        OperationResult<DeckImportCreateResult> result = await writes.CreateAsync(
+        OperationResult<DeckImportCreateView> result = await writes.CreateAsync(
             "generic-text-v1",
             "1 Island",
             "unused",
             null,
-            TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("operation-mode-denied", Assert.IsType<OperationUnsupported>(result.Value).ReasonCode);
         Assert.False(File.Exists(Path.Combine(temporary.Path, "decks.db")));

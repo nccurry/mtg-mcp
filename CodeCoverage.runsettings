@@ -7,9 +7,9 @@
         <ModulePath>.*MtgMcp\.Archidekt\.dll$</ModulePath>
         <ModulePath>.*MtgMcp\.Core\.dll$</ModulePath>
         <ModulePath>.*MtgMcp\.Decks\.dll$</ModulePath>
-        <ModulePath>.*MtgMcp\.OnCurve\.dll$</ModulePath>
         <ModulePath>.*MtgMcp\.Playgroup\.dll$</ModulePath>
         <ModulePath>.*MtgMcp\.Scryfall\.dll$</ModulePath>
+        <ModulePath>.*MtgMcp\.Simulation\.dll$</ModulePath>
         <ModulePath>.*MtgMcp\.Spellbook\.dll$</ModulePath>
         <ModulePath>.*MtgMcp\.Statistics\.dll$</ModulePath>
       </Include>

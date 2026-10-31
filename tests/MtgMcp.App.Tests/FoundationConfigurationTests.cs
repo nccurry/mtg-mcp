@@ -23,19 +23,20 @@ public sealed class FoundationConfigurationTests
     /// Verifies that omitted configuration selects local mode and the versioned platform path without creating it.
     /// </summary>
     [Fact]
-    public void Resolve_OmittedValues_UsesLocalVersionedPathWithoutCreatingIt()
+    public void Resolve_OmittedValues_UsesRemoteModeAndLocalVersionedPathWithoutCreatingIt()
     {
         using TemporaryDirectory temporary = new();
         IConfiguration configuration = new ConfigurationBuilder().Build();
         string expectedPath = Path.Combine(temporary.Path, "mtg-mcp", "v0.9");
 
         FoundationConfiguration resolved = RequireSuccess(
-            FoundationConfigurationLoader.Resolve(configuration, temporary.Path, string.Empty));
+            FoundationConfigurationLoader.Resolve(configuration, temporary.Path, string.Empty, temporary.Path));
 
-        Assert.Equal(OperationMode.Local, resolved.Mode);
+        Assert.Equal(OperationMode.Remote, resolved.Mode);
         Assert.Equal(CapabilityToolsetSelectionKind.Default, resolved.Toolsets.Kind);
         Assert.True(resolved.Toolsets.Includes(CapabilityToolset.Decks));
         Assert.True(resolved.Toolsets.Includes(CapabilityToolset.Scryfall));
+        Assert.True(resolved.Toolsets.Includes(CapabilityToolset.Spellbook));
         Assert.Equal(TimeSpan.FromHours(24), resolved.ScryfallFreshnessTtl);
         Assert.Equal(TimeSpan.FromMinutes(15), resolved.SpellbookCacheTtl);
         Assert.Equal(expectedPath, resolved.DataRoot);
@@ -405,37 +406,6 @@ public sealed class FoundationConfigurationTests
     }
 
     /// <summary>
-    /// Verifies every valid result case is forwarded explicitly and an unexpected success fails closed.
-    /// </summary>
-    [Fact]
-    public void ForwardFailure_AllUnionCasesRemainStructured()
-    {
-        OperationResult<int>[] failures =
-        [
-            new OperationNotFound("not-found", "Not found."),
-            new OperationNotCached("not-cached", "Not cached."),
-            new OperationUnsupported("unsupported", "Unsupported."),
-            new OperationUnavailable("unavailable", "Unavailable."),
-            new OperationConflict("conflict", "Conflict."),
-            new OperationInvalidInput("invalid-input", "Invalid input."),
-        ];
-
-        foreach (OperationResult<int> failure in failures)
-        {
-            OperationResult<FoundationConfiguration> forwarded =
-                FoundationConfigurationLoader.ForwardFailure(failure);
-
-            Assert.Same(failure.Value, forwarded.Value);
-        }
-
-        OperationResult<FoundationConfiguration> unexpectedSuccess =
-            FoundationConfigurationLoader.ForwardFailure<int>(new OperationSuccess<int>(42));
-        OperationUnavailable unavailable =
-            Assert.IsType<OperationUnavailable>(unexpectedSuccess.Value);
-        Assert.Equal("configuration-resolution-failed", unavailable.ReasonCode);
-    }
-
-    /// <summary>
     /// Verifies legacy data remains byte-identical and no v0.9 directory is created during inspection.
     /// </summary>
     [Fact]
@@ -503,7 +473,8 @@ public sealed class FoundationConfigurationTests
             false,
             new LegacyDataBoundary((LegacyDataState)999, "Migration remains disabled."),
             ArchidektOptions.CreateDefault(),
-            PlaygroupOptions.CreateDefault(null));
+            PlaygroupOptions.CreateDefault(null),
+            new ProviderCredentialPresence(false, false));
 
         FoundationConfigurationStatus status = configuration.ToPublicStatus();
 

@@ -16,15 +16,16 @@ provider composition, tool registration, and result presenters.
   resources instead of unbounded text or collections.
 - Preserve evidence source, assumptions, warnings, confidence, freshness, and
   replay metadata when presenting Core results.
-- Annotations are risk hints, not authorization. Keep local and remote writes
-  distinct.
+- Annotations are risk hints, not authorization. Enforce write capability with
+  `OperationModeGuard`, and keep local and remote writes distinct.
 - Each stable tool belongs to exactly one of `decks`, `scryfall`, `stats`,
   `archidekt`, `playgroup`, or `spellbook`. Build one deterministic
   registration set at startup by intersecting enabled toolsets with
   operation-mode visibility.
-- Keep the default profile limited to `decks`, `scryfall`, and `stats`. The
-  `archidekt`, `playgroup`, and `spellbook` toolsets are opt-in. Do not
-  advertise dynamic tool-list changes while registration is fixed per session.
+- Every toolset is on by default. `archidekt` and `playgroup` are off when
+  their credentials are absent, even when named; check presence only, never
+  call the provider or read secrets for this. Do not advertise dynamic
+  tool-list changes while registration is fixed per session.
 - Community-tag evidence goes through `scryfall`. Do not add a Tagger
   descriptor, placeholder, or alias.
 
@@ -40,8 +41,8 @@ provider composition, tool registration, and result presenters.
 
 - Update surface tests for every tool, resource, prompt, annotation, schema,
   operation-mode, or toolset change. They prove prefixed names, one capability
-  resource, zero prompts, exact toolset membership, default and explicit
-  profile behavior, and that legacy decision surfaces are absent.
+  resource, the three workflow prompts, exact toolset membership, default and
+  explicit profile behavior, and that legacy decision surfaces are absent.
 - Use App unit tests for presenters and registration, and process E2E tests
   for transport-visible behavior.
 

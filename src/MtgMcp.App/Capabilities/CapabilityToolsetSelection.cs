@@ -13,7 +13,8 @@ internal sealed class CapabilityToolsetSelection
     /// </summary>
     internal CapabilityToolsetSelection(
         CapabilityToolsetSelectionKind kind,
-        IEnumerable<CapabilityToolset> enabledToolsets)
+        IEnumerable<CapabilityToolset> enabledToolsets,
+        IEnumerable<DisabledToolset>? disabledToolsets = null)
     {
         if (!Enum.IsDefined(kind))
         {
@@ -22,6 +23,7 @@ internal sealed class CapabilityToolsetSelection
 
         ArgumentNullException.ThrowIfNull(enabledToolsets);
         Kind = kind;
+        DisabledToolsets = [.. disabledToolsets ?? []];
         EnabledToolsets = [.. enabledToolsets];
         HashSet<CapabilityToolset> uniqueToolsets = [];
         foreach (CapabilityToolset toolset in EnabledToolsets)
@@ -46,6 +48,11 @@ internal sealed class CapabilityToolsetSelection
     internal ImmutableArray<CapabilityToolset> EnabledToolsets { get; }
 
     /// <summary>
+    /// Gets the toolsets that would be on but were turned off at startup, with the reason for each.
+    /// </summary>
+    internal ImmutableArray<DisabledToolset> DisabledToolsets { get; }
+
+    /// <summary>
     /// Gets the sanitized public selection label.
     /// </summary>
     internal string Label => CapabilityToolsetPolicy.Format(Kind);
@@ -56,6 +63,25 @@ internal sealed class CapabilityToolsetSelection
     internal bool Includes(CapabilityToolset toolset)
     {
         return EnabledToolsets.Contains(toolset);
+    }
+
+    /// <summary>
+    /// Finds the reason a toolset was turned off at startup, or null when it was not turned off.
+    /// </summary>
+    internal string? FindDisabledReason(CapabilityToolset toolset)
+    {
+        return DisabledToolsets.FirstOrDefault(disabled => disabled.Toolset == toolset)?.Reason;
+    }
+
+    /// <summary>
+    /// Returns a selection without the disabled toolsets, and records why each one is off.
+    /// </summary>
+    internal CapabilityToolsetSelection WithDisabledToolsets(IReadOnlyList<DisabledToolset> disabledToolsets)
+    {
+        ArgumentNullException.ThrowIfNull(disabledToolsets);
+        IEnumerable<CapabilityToolset> remaining = EnabledToolsets
+            .Where(toolset => disabledToolsets.All(disabled => disabled.Toolset != toolset));
+        return new CapabilityToolsetSelection(Kind, remaining, disabledToolsets);
     }
 }
 
@@ -82,9 +108,7 @@ internal static class CapabilityToolsetSelectionParser
             return Success(
                 CapabilityToolsetSelectionKind.Default,
                 implementedDescriptors,
-                descriptor =>
-                    descriptor.Stability == CapabilityToolsetStability.Stable &&
-                    descriptor.DefaultEnabled);
+                descriptor => descriptor.Stability == CapabilityToolsetStability.Stable);
         }
 
         if (string.Equals(normalized, "all", StringComparison.Ordinal))

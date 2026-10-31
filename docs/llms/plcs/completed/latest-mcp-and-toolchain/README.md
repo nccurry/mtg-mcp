@@ -26,6 +26,8 @@ The server and its official-client end-to-end tests will require MCP
 The change is intentional. It keeps the public protocol contract small and
 current.
 
+> Superseded by focused-agent-tool-surface FIX-001 (2026-10-28): the server now also answers the standard `initialize` handshake for every protocol version the SDK serves, because the pin left clients such as Claude Code with no tools.
+
 The packet also records one source of truth for each version type. `global.json`
 selects the .NET SDK. Mise installs that SDK and pins Task and PowerShell.
 Task remains the normal command entry point after setup.
@@ -47,7 +49,7 @@ Task remains the normal command entry point after setup.
 | Lock Mise downloads and NuGet restores. | Accepted | A fresh machine must resolve the reviewed tool and package graph. | [SADD](SADD.md#version-ownership) |
 | Pin GitHub Actions by commit SHA. | Accepted | Dependabot already keeps the reviewed action pins current. | [SADD](SADD.md#version-ownership) |
 | Manage `mcp-publisher` through Mise. | Accepted | The release workflow must not download an unpinned `latest` binary. | [SADD](SADD.md#version-ownership) |
-| Pin MCP to `2026-07-28`. | Accepted | The owner chose no backwards compatibility. | [SADD](SADD.md#current-only-mcp-protocol) |
+| Pin MCP to `2026-07-28`. | Accepted | The owner chose no backwards compatibility. Superseded by focused-agent-tool-surface FIX-001. | [SADD](SADD.md#current-only-mcp-protocol) |
 | Use C# 15 only when it makes changed code simpler. | Accepted | New syntax must improve clarity, not add novelty. | [SADD](SADD.md#c-15-use) |
 
 ## Project and Surface Impact

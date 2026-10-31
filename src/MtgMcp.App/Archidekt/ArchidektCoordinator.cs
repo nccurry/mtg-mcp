@@ -16,6 +16,15 @@ internal sealed class ArchidektSynchronizationContext
     private const string ProviderName = "archidekt";
 
     /// <summary>
+    /// Explains why a pull is refused over a deck whose baseline an earlier version recorded, and how to leave.
+    /// </summary>
+    private const string UnverifiedPullConflictMessage =
+        "The local deck may have changed since its synchronization baseline. The earlier version that made the " +
+        "baseline did not record category colors or ordering, so the server cannot tell whether they changed. " +
+        "Push the deck to keep the local content (the push is refused too if Archidekt also changed), or preview " +
+        "and apply the pull with discardLocalChanges to take the Archidekt state, which drops the local edits.";
+
+    /// <summary>
     /// Provides revisioned local state and transactional baseline updates.
     /// </summary>
     private readonly SqliteDeckStore deckStore;
@@ -47,7 +56,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (localResult is not OperationSuccess<DeckDocument> local)
         {
-            return ForwardFailure<ArchidektSyncDiff, DeckDocument>(localResult);
+            return OperationFailure.Forward<DeckDocument, ArchidektSyncDiff>(localResult);
         }
 
         OperationResult<BindingState> stateResult = await LoadBindingStateAsync(
@@ -55,7 +64,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (stateResult is not OperationSuccess<BindingState> state)
         {
-            return ForwardFailure<ArchidektSyncDiff, BindingState>(stateResult);
+            return OperationFailure.Forward<BindingState, ArchidektSyncDiff>(stateResult);
         }
 
         OperationResult<RemoteDeckSnapshot> remoteResult = await GetBoundRemoteAsync(
@@ -64,13 +73,11 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (remoteResult is not OperationSuccess<RemoteDeckSnapshot> remote)
         {
-            return ForwardFailure<ArchidektSyncDiff, RemoteDeckSnapshot>(remoteResult);
+            return OperationFailure.Forward<RemoteDeckSnapshot, ArchidektSyncDiff>(remoteResult);
         }
 
         return new OperationSuccess<ArchidektSyncDiff>(ArchidektSyncPlanner.Diff(
-            local.Data.DeckId,
-            local.Data.Revision,
-            ArchidektLocalMapper.LocalFingerprint(local.Data),
+            local.Data,
             ArchidektLocalMapper.ToRemoteTarget(
                 local.Data,
                 state.Data.Baseline,
@@ -90,6 +97,24 @@ internal sealed class ArchidektSynchronizationContext
         return PreviewPullAsync(
             remoteDeckId,
             localDeckId,
+            discardLocalChanges: false,
+            Service.BeginOperation(),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Previews a pull, optionally taking the Archidekt state over local edits made since the baseline.
+    /// </summary>
+    internal Task<OperationResult<ArchidektSyncPreview>> PreviewPullAsync(
+        string remoteDeckId,
+        Guid? localDeckId,
+        bool discardLocalChanges,
+        CancellationToken cancellationToken)
+    {
+        return PreviewPullAsync(
+            remoteDeckId,
+            localDeckId,
+            discardLocalChanges,
             Service.BeginOperation(),
             cancellationToken);
     }
@@ -100,6 +125,7 @@ internal sealed class ArchidektSynchronizationContext
     private async Task<OperationResult<ArchidektSyncPreview>> PreviewPullAsync(
         string remoteDeckId,
         Guid? localDeckId,
+        bool discardLocalChanges,
         ArchidektOperationScope operationScope,
         CancellationToken cancellationToken)
     {
@@ -115,7 +141,15 @@ internal sealed class ArchidektSynchronizationContext
                 localDeckId,
                 operationScope,
                 cancellationToken).ConfigureAwait(false);
-            return ForwardFailure<ArchidektSyncPreview, RemoteDeckSnapshot>(classified);
+            return OperationFailure.Forward<RemoteDeckSnapshot, ArchidektSyncPreview>(classified);
+        }
+
+        if (discardLocalChanges && localDeckId is null)
+        {
+            return new OperationInvalidInput(
+                "discard-needs-local-deck",
+                "discardLocalChanges replaces an existing local deck; pass localDeckId or leave it off.",
+                "discardLocalChanges");
         }
 
         if (localDeckId is null)
@@ -125,7 +159,12 @@ internal sealed class ArchidektSynchronizationContext
                 "local-deck-create",
                 remote.Data.RemoteId,
                 "Create one local deck from fresh Archidekt evidence.");
-            string fingerprint = PullPreviewFingerprint(remote.Data, localDeckId: null, localRevision: null, [operation]);
+            string fingerprint = PullPreviewFingerprint(
+                remote.Data,
+                localDeckId: null,
+                localRevision: null,
+                discardLocalChanges: false,
+                [operation]);
             return new OperationSuccess<ArchidektSyncPreview>(new ArchidektSyncPreview(
                 "pull",
                 LocalDeckId: null,
@@ -145,13 +184,13 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (localResult is not OperationSuccess<DeckDocument> local)
         {
-            return ForwardFailure<ArchidektSyncPreview, DeckDocument>(localResult);
+            return OperationFailure.Forward<DeckDocument, ArchidektSyncPreview>(localResult);
         }
 
         OperationResult<DeckProviderBinding?> bindingResult = ResolveBinding(local.Data);
         if (bindingResult is not OperationSuccess<DeckProviderBinding?> bindingSuccess)
         {
-            return ForwardFailure<ArchidektSyncPreview, DeckProviderBinding?>(bindingResult);
+            return OperationFailure.Forward<DeckProviderBinding?, ArchidektSyncPreview>(bindingResult);
         }
 
         DeckProviderBinding? binding = bindingSuccess.Data;
@@ -171,13 +210,11 @@ internal sealed class ArchidektSynchronizationContext
                 cancellationToken).ConfigureAwait(false);
             if (stateResult is not OperationSuccess<BindingState> state)
             {
-                return ForwardFailure<ArchidektSyncPreview, BindingState>(stateResult);
+                return OperationFailure.Forward<BindingState, ArchidektSyncPreview>(stateResult);
             }
 
             ArchidektSyncDiff diff = ArchidektSyncPlanner.Diff(
-                local.Data.DeckId,
-                local.Data.Revision,
-                ArchidektLocalMapper.LocalFingerprint(local.Data),
+                local.Data,
                 ArchidektLocalMapper.ToRemoteTarget(
                     local.Data,
                     state.Data.Baseline,
@@ -185,18 +222,21 @@ internal sealed class ArchidektSynchronizationContext
                 remote.Data,
                 state.Data.Baseline);
             differences.AddRange(diff.Differences);
-            conflicts = HasLocalChanges(diff);
+            conflicts = HasLocalChanges(diff) && !discardLocalChanges;
         }
 
         ArchidektRemoteOperation replace = new(
             1,
             "local-deck-replace",
             local.Data.DeckId.ToString("D"),
-            "Replace local content transactionally from fresh Archidekt evidence.");
+discardLocalChanges
+                ? "Replace local content transactionally from fresh Archidekt evidence, discarding local changes."
+                : "Replace local content transactionally from fresh Archidekt evidence.");
         string previewFingerprint = PullPreviewFingerprint(
             remote.Data,
             local.Data.DeckId,
             local.Data.Revision,
+            discardLocalChanges,
             [replace]);
         return new OperationSuccess<ArchidektSyncPreview>(new ArchidektSyncPreview(
             "pull",
@@ -223,18 +263,23 @@ internal sealed class ArchidektSynchronizationContext
         OperationResult<ArchidektSyncPreview> previewResult = await PreviewPullAsync(
             request.RemoteDeckId,
             request.LocalDeckId,
+            request.DiscardLocalChanges,
             operationScope,
             cancellationToken).ConfigureAwait(false);
         if (previewResult is not OperationSuccess<ArchidektSyncPreview> preview)
         {
-            return ForwardFailure<ArchidektApplyResult, ArchidektSyncPreview>(previewResult);
+            return OperationFailure.Forward<ArchidektSyncPreview, ArchidektApplyResult>(previewResult);
         }
 
         if (preview.Data.HasConflicts)
         {
             return new OperationConflict(
                 "pull-conflict",
-                "The local deck changed since its synchronization baseline.");
+                HasUnverifiedLocalChange(preview.Data.Differences)
+                    ? UnverifiedPullConflictMessage
+                    : "The local deck changed since its synchronization baseline. Preview the pull with " +
+                    "discardLocalChanges to take the Archidekt state instead, which drops the local edits.",
+                new ConflictState(preview.Data.LocalRevision, preview.Data.RemoteFingerprint));
         }
 
         if (!string.Equals(
@@ -246,7 +291,8 @@ internal sealed class ArchidektSynchronizationContext
         {
             return new OperationConflict(
                 "pull-preview-changed",
-                "The local or remote deck changed after the pull preview.");
+                "The local or remote deck changed after the pull preview.",
+                new ConflictState(preview.Data.LocalRevision, preview.Data.RemoteFingerprint));
         }
 
         OperationResult<RemoteDeckSnapshot> remoteResult = await Service.GetDeckAsync(
@@ -255,7 +301,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (remoteResult is not OperationSuccess<RemoteDeckSnapshot> remote)
         {
-            return ForwardFailure<ArchidektApplyResult, RemoteDeckSnapshot>(remoteResult);
+            return OperationFailure.Forward<RemoteDeckSnapshot, ArchidektApplyResult>(remoteResult);
         }
 
         if (!string.Equals(
@@ -265,7 +311,8 @@ internal sealed class ArchidektSynchronizationContext
         {
             return new OperationConflict(
                 "remote-deck-changed",
-                "The Archidekt deck changed after the pull preview.");
+                "The Archidekt deck changed after the pull preview.",
+                new ConflictState(RemoteFingerprint: remote.Data.RemoteFingerprint));
         }
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
@@ -286,7 +333,7 @@ internal sealed class ArchidektSynchronizationContext
                 cancellationToken).ConfigureAwait(false);
             if (created is not OperationSuccess<DeckDocument> success)
             {
-                return ForwardFailure<ArchidektApplyResult, DeckDocument>(created);
+                return OperationFailure.Forward<DeckDocument, ArchidektApplyResult>(created);
             }
 
             committed = success.Data;
@@ -298,13 +345,13 @@ internal sealed class ArchidektSynchronizationContext
                 cancellationToken).ConfigureAwait(false);
             if (localResult is not OperationSuccess<DeckDocument> local)
             {
-                return ForwardFailure<ArchidektApplyResult, DeckDocument>(localResult);
+                return OperationFailure.Forward<DeckDocument, ArchidektApplyResult>(localResult);
             }
 
             OperationResult<DeckProviderBinding?> bindingResult = ResolveBinding(local.Data);
             if (bindingResult is not OperationSuccess<DeckProviderBinding?> bindingSuccess)
             {
-                return ForwardFailure<ArchidektApplyResult, DeckProviderBinding?>(bindingResult);
+                return OperationFailure.Forward<DeckProviderBinding?, ArchidektApplyResult>(bindingResult);
             }
 
             DeckProviderBinding? existing = bindingSuccess.Data;
@@ -331,7 +378,7 @@ internal sealed class ArchidektSynchronizationContext
                 cancellationToken).ConfigureAwait(false);
             if (updated is not OperationSuccess<DeckDocument> success)
             {
-                return ForwardFailure<ArchidektApplyResult, DeckDocument>(updated);
+                return OperationFailure.Forward<DeckDocument, ArchidektApplyResult>(updated);
             }
 
             committed = success.Data;
@@ -374,7 +421,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (localResult is not OperationSuccess<DeckDocument> local)
         {
-            return ForwardFailure<ArchidektSyncPreview, DeckDocument>(localResult);
+            return OperationFailure.Forward<DeckDocument, ArchidektSyncPreview>(localResult);
         }
 
         OperationResult<BindingState> stateResult = await LoadBindingStateAsync(
@@ -382,7 +429,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (stateResult is not OperationSuccess<BindingState> state)
         {
-            return ForwardFailure<ArchidektSyncPreview, BindingState>(stateResult);
+            return OperationFailure.Forward<BindingState, ArchidektSyncPreview>(stateResult);
         }
 
         OperationResult<RemoteDeckSnapshot> remoteResult = await GetBoundRemoteAsync(
@@ -391,13 +438,11 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (remoteResult is not OperationSuccess<RemoteDeckSnapshot> remote)
         {
-            return ForwardFailure<ArchidektSyncPreview, RemoteDeckSnapshot>(remoteResult);
+            return OperationFailure.Forward<RemoteDeckSnapshot, ArchidektSyncPreview>(remoteResult);
         }
 
         ArchidektSyncDiff diff = ArchidektSyncPlanner.Diff(
-            local.Data.DeckId,
-            local.Data.Revision,
-            ArchidektLocalMapper.LocalFingerprint(local.Data),
+            local.Data,
             ArchidektLocalMapper.ToRemoteTarget(
                 local.Data,
                 state.Data.Baseline,
@@ -410,6 +455,13 @@ internal sealed class ArchidektSynchronizationContext
             state.Data.Baseline,
             remote.Data);
         ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(remote.Data, target);
+        IReadOnlyList<ArchidektZoneContradiction> contradictions =
+            ArchidektSyncPlanner.FindZoneContradictions(plan, target);
+        if (contradictions.Count > 0)
+        {
+            return new OperationInvalidInput("entry-zone-contradicts-category", DescribeContradictions(contradictions));
+        }
+
         string previewFingerprint = PushPreviewFingerprint(local.Data, remote.Data, plan);
         return new OperationSuccess<ArchidektSyncPreview>(new ArchidektSyncPreview(
             "push",
@@ -426,7 +478,23 @@ internal sealed class ArchidektSynchronizationContext
     }
 
     /// <summary>
-    /// Applies one unchanged push preview and updates its local baseline only after remote verification.
+    /// Explains which entries the push cannot place, and what to change.
+    /// </summary>
+    private static string DescribeContradictions(IReadOnlyList<ArchidektZoneContradiction> contradictions)
+    {
+        IEnumerable<string> shown = contradictions.Take(5).Select(value =>
+            $"'{value.CardName}' (zone '{value.Zone}', but its categories give zone '{value.ExpectedZone}')");
+        string more = contradictions.Count > 5 ? $" and {contradictions.Count - 5} more" : string.Empty;
+        return "Archidekt keeps no zone of its own: a card's zone comes from its categories (a category named " +
+            "Commander, Sideboard or Maybeboard, or the commander category; otherwise main). These cards would come " +
+            $"back in another zone: {string.Join("; ", shown)}{more}. Change the zone, or add or remove the matching " +
+            "category.";
+    }
+
+    /// <summary>
+    /// Applies one unchanged push preview and updates its local baseline only after remote verification. When the
+    /// verification finds a difference, the operations that were applied are still recorded, so a created card is
+    /// linked to its Archidekt row and is not added again by the next push.
     /// </summary>
     internal async Task<OperationResult<ArchidektApplyResult>> ApplyPushAsync(
         ArchidektPushApplyRequest request,
@@ -439,14 +507,15 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (previewResult is not OperationSuccess<ArchidektSyncPreview> preview)
         {
-            return ForwardFailure<ArchidektApplyResult, ArchidektSyncPreview>(previewResult);
+            return OperationFailure.Forward<ArchidektSyncPreview, ArchidektApplyResult>(previewResult);
         }
 
         if (preview.Data.HasConflicts)
         {
             return new OperationConflict(
                 "push-conflict",
-                "The Archidekt deck changed since its synchronization baseline.");
+                "The Archidekt deck changed since its synchronization baseline.",
+                new ConflictState(preview.Data.LocalRevision, preview.Data.RemoteFingerprint));
         }
 
         if (preview.Data.LocalRevision != request.ExpectedLocalRevision ||
@@ -461,7 +530,8 @@ internal sealed class ArchidektSynchronizationContext
         {
             return new OperationConflict(
                 "push-preview-changed",
-                "The local or remote deck changed after the push preview.");
+                "The local or remote deck changed after the push preview.",
+                new ConflictState(preview.Data.LocalRevision, preview.Data.RemoteFingerprint));
         }
 
         OperationResult<DeckDocument> localResult = await deckStore.GetAsync(
@@ -469,7 +539,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (localResult is not OperationSuccess<DeckDocument> local)
         {
-            return ForwardFailure<ArchidektApplyResult, DeckDocument>(localResult);
+            return OperationFailure.Forward<DeckDocument, ArchidektApplyResult>(localResult);
         }
 
         OperationResult<BindingState> stateResult = await LoadBindingStateAsync(
@@ -477,7 +547,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (stateResult is not OperationSuccess<BindingState> state)
         {
-            return ForwardFailure<ArchidektApplyResult, BindingState>(stateResult);
+            return OperationFailure.Forward<BindingState, ArchidektApplyResult>(stateResult);
         }
 
         OperationResult<RemoteDeckSnapshot> currentResult = await GetBoundRemoteAsync(
@@ -486,7 +556,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (currentResult is not OperationSuccess<RemoteDeckSnapshot> current)
         {
-            return ForwardFailure<ArchidektApplyResult, RemoteDeckSnapshot>(currentResult);
+            return OperationFailure.Forward<RemoteDeckSnapshot, ArchidektApplyResult>(currentResult);
         }
 
         RemoteDeckSnapshot target = ArchidektLocalMapper.ToRemoteTarget(
@@ -501,7 +571,7 @@ internal sealed class ArchidektSynchronizationContext
             operationScope,
             cancellationToken).ConfigureAwait(false);
         if (appliedResult is not OperationSuccess<ArchidektApplyResult> applied ||
-            applied.Data.Outcome != "applied")
+            applied.Data.Outcome is not ("applied" or "verification-mismatch"))
         {
             return appliedResult;
         }
@@ -512,7 +582,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (verifiedResult is not OperationSuccess<RemoteDeckSnapshot> verified)
         {
-            return ForwardFailure<ArchidektApplyResult, RemoteDeckSnapshot>(verifiedResult);
+            return OperationFailure.Forward<RemoteDeckSnapshot, ArchidektApplyResult>(verifiedResult);
         }
 
         DeckProviderBinding binding = state.Data.Binding with
@@ -520,7 +590,12 @@ internal sealed class ArchidektSynchronizationContext
             BaselineFingerprint = verified.Data.RemoteFingerprint,
             LastPushedAtUtc = DateTimeOffset.UtcNow,
         };
-        string baseline = ArchidektLocalMapper.CreateBaseline(local.Data, verified.Data);
+        (string baseline, IReadOnlyList<Guid>? unlinkedLocalIds) =
+            ArchidektLocalMapper.CreatePushBaseline(
+                local.Data,
+                verified.Data,
+                target,
+                verificationMismatch: applied.Data.Outcome == "verification-mismatch");
         OperationResult<DeckDocument> baselineUpdate = await deckStore.ApplyChangesAsync(
             local.Data.DeckId,
             local.Data.Revision,
@@ -528,7 +603,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (baselineUpdate is not OperationSuccess<DeckDocument> updated)
         {
-            return ForwardFailure<ArchidektApplyResult, DeckDocument>(baselineUpdate);
+            return OperationFailure.Forward<DeckDocument, ArchidektApplyResult>(baselineUpdate);
         }
 
         return new OperationSuccess<ArchidektApplyResult>(applied.Data with
@@ -536,6 +611,7 @@ internal sealed class ArchidektSynchronizationContext
             LocalDeckId = updated.Data.DeckId,
             LocalRevision = updated.Data.Revision,
             FinalRemoteFingerprint = verified.Data.RemoteFingerprint,
+            UnlinkedLocalIds = unlinkedLocalIds,
         });
     }
 
@@ -556,20 +632,21 @@ internal sealed class ArchidektSynchronizationContext
                 cancellationToken).ConfigureAwait(false);
             if (localResult is not OperationSuccess<DeckDocument> success)
             {
-                return ForwardFailure<RemoteDeckSnapshot, DeckDocument>(localResult);
+                return OperationFailure.Forward<DeckDocument, RemoteDeckSnapshot>(localResult);
             }
 
             if (success.Data.Revision != expectedLocalRevision)
             {
                 return new OperationConflict(
                     "local-deck-changed",
-                    "The local deck changed before remote creation.");
+                    "The local deck changed before remote creation.",
+                    new ConflictState(Revision: success.Data.Revision));
             }
 
             OperationResult<DeckProviderBinding?> bindingResult = ResolveBinding(success.Data);
             if (bindingResult is not OperationSuccess<DeckProviderBinding?> bindingSuccess)
             {
-                return ForwardFailure<RemoteDeckSnapshot, DeckProviderBinding?>(bindingResult);
+                return OperationFailure.Forward<DeckProviderBinding?, RemoteDeckSnapshot>(bindingResult);
             }
 
             if (bindingSuccess.Data is not null)
@@ -606,7 +683,7 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         return bindResult is OperationSuccess<DeckDocument>
             ? createdResult
-            : ForwardFailure<RemoteDeckSnapshot, DeckDocument>(bindResult);
+            : OperationFailure.Forward<DeckDocument, RemoteDeckSnapshot>(bindResult);
     }
 
     /// <summary>
@@ -619,7 +696,7 @@ internal sealed class ArchidektSynchronizationContext
         OperationResult<DeckProviderBinding?> bindingResult = ResolveBinding(local);
         if (bindingResult is not OperationSuccess<DeckProviderBinding?> bindingSuccess)
         {
-            return ForwardFailure<BindingState, DeckProviderBinding?>(bindingResult);
+            return OperationFailure.Forward<DeckProviderBinding?, BindingState>(bindingResult);
         }
 
         DeckProviderBinding? binding = bindingSuccess.Data;
@@ -643,7 +720,7 @@ internal sealed class ArchidektSynchronizationContext
 
         if (baselineResult is not OperationSuccess<DeckSyncBaseline> baseline)
         {
-            return ForwardFailure<BindingState, DeckSyncBaseline>(baselineResult);
+            return OperationFailure.Forward<DeckSyncBaseline, BindingState>(baselineResult);
         }
 
         try
@@ -714,6 +791,7 @@ internal sealed class ArchidektSynchronizationContext
         RemoteDeckSnapshot remote,
         Guid? localDeckId,
         long? localRevision,
+        bool discardLocalChanges,
         IReadOnlyList<ArchidektRemoteOperation> operations)
     {
         return Fingerprint(new
@@ -721,6 +799,7 @@ internal sealed class ArchidektSynchronizationContext
             direction = "pull",
             localDeckId,
             localRevision,
+            discardLocalChanges,
             remote.RemoteId,
             remote.RemoteFingerprint,
             remote.ContentFingerprint,
@@ -748,13 +827,19 @@ internal sealed class ArchidektSynchronizationContext
     }
 
     /// <summary>
+    /// Reports whether the differences include a local change the server cannot verify from an earlier baseline.
+    /// </summary>
+    private static bool HasUnverifiedLocalChange(IReadOnlyList<ArchidektDifference> differences)
+    {
+        return differences.Any(value => value.State == ArchidektDifferenceStates.LocalChangedUnverified);
+    }
+
+    /// <summary>
     /// Reports whether a three-way diff contains any caller-local change.
     /// </summary>
     private static bool HasLocalChanges(ArchidektSyncDiff diff)
     {
-        return diff.Differences.Any(value =>
-            value.State.StartsWith("local-", StringComparison.Ordinal) ||
-            value.State == "concurrent-changed");
+        return diff.Differences.Any(ArchidektDifferenceStates.IsLocalChange);
     }
 
     /// <summary>
@@ -762,9 +847,7 @@ internal sealed class ArchidektSynchronizationContext
     /// </summary>
     private static bool HasRemoteChanges(ArchidektSyncDiff diff)
     {
-        return diff.Differences.Any(value =>
-            value.State.StartsWith("remote-", StringComparison.Ordinal) ||
-            value.State == "concurrent-changed");
+        return diff.Differences.Any(ArchidektDifferenceStates.IsRemoteChange);
     }
 
     /// <summary>
@@ -846,7 +929,7 @@ internal sealed class ArchidektSynchronizationContext
                 cancellationToken).ConfigureAwait(false);
             if (pageResult is not OperationSuccess<RemoteDeckPage> page)
             {
-                return ForwardFailure<RemoteDeckSnapshot, RemoteDeckPage>(pageResult);
+                return OperationFailure.Forward<RemoteDeckPage, RemoteDeckSnapshot>(pageResult);
             }
 
             if (page.Data.Items.Any(value =>
@@ -874,26 +957,6 @@ internal sealed class ArchidektSynchronizationContext
         string json = System.Text.Json.JsonSerializer.Serialize(value);
         byte[] bytes = System.Text.Encoding.UTF8.GetBytes(json);
         return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
-    }
-
-    /// <summary>
-    /// Forwards one shared operation failure without unsafe casts.
-    /// </summary>
-    private static OperationResult<TTarget> ForwardFailure<TTarget, TSource>(
-        OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-            OperationSuccess<TSource> => new OperationUnavailable(
-                "unexpected-operation-state",
-                "The operation returned an unexpected state."),
-        };
     }
 
     /// <summary>

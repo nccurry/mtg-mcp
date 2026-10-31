@@ -432,7 +432,8 @@ internal static class DeckSql
     }
 
     /// <summary>
-    /// Creates or updates one assignment after proving both rows belong to the deck.
+    /// Creates or updates one assignment after proving both rows belong to the deck. A primary assignment makes the
+    /// category the entry's primary one and keeps the previous primary category assigned as a non-primary one.
     /// </summary>
     internal static async Task AssignCategoryAsync(
         SqliteConnection connection,
@@ -448,6 +449,18 @@ internal static class DeckSql
             assignment.EntryId,
             assignment.CategoryId,
             cancellationToken).ConfigureAwait(false);
+        if (assignment.IsPrimary)
+        {
+            await using SqliteCommand demote = CreateCommand(connection, transaction, """
+                UPDATE deck_entry_categories
+                SET is_primary = 0
+                WHERE entry_id = $entryId AND category_id <> $categoryId AND is_primary = 1;
+                """);
+            demote.Parameters.AddWithValue("$entryId", FormatId(assignment.EntryId));
+            demote.Parameters.AddWithValue("$categoryId", FormatId(assignment.CategoryId));
+            await demote.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         await using SqliteCommand command = CreateCommand(connection, transaction, """
             INSERT INTO deck_entry_categories (entry_id, category_id, is_primary)
             VALUES ($entryId, $categoryId, $isPrimary)

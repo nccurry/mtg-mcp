@@ -49,7 +49,10 @@ public sealed class SqliteDeckStore : IDisposable
         this.timeProvider = timeProvider ?? TimeProvider.System;
         this.createId = createId ?? (() => Guid.CreateVersion7(this.timeProvider.GetUtcNow()));
         this.applicationVersion = applicationVersion.Trim();
-        database = new DeckDatabase(Path.Combine(Path.GetFullPath(dataRoot), "decks.db"));
+        database = new DeckDatabase(
+            Path.Combine(Path.GetFullPath(dataRoot), "decks.db"),
+            this.timeProvider,
+            this.applicationVersion);
         Backups = new DeckBackupStore(
             database,
             mutationGate,
@@ -432,7 +435,7 @@ public sealed class SqliteDeckStore : IDisposable
                 if (revision is not OperationSuccess<long>)
                 {
                     await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                    return ForwardFailure<DeckDeleteResult, long>(revision);
+                    return OperationFailure.Forward<long, DeckDeleteResult>(revision);
                 }
 
                 await DeckSql.DeleteDeckAsync(connection, transaction, deckId, cancellationToken)
@@ -499,11 +502,13 @@ public sealed class SqliteDeckStore : IDisposable
                 if (revision is not OperationSuccess<long>)
                 {
                     await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                    return ForwardFailure<DeckDocument, long>(revision);
+                    return OperationFailure.Forward<long, DeckDocument>(revision);
                 }
 
+                Dictionary<Guid, Guid> primaryAssigned = [];
                 foreach (DeckChange change in changes)
                 {
+                    RejectSecondPrimaryInBatch(change, primaryAssigned);
                     await ApplyChangeAsync(
                         connection,
                         transaction,
@@ -571,6 +576,56 @@ public sealed class SqliteDeckStore : IDisposable
     public void Dispose()
     {
         mutationGate.Dispose();
+    }
+
+    /// <summary>
+    /// Refuses a batch that makes two different categories primary for one entry at the same time. A single primary
+    /// assignment demotes the entry's earlier primary category, so only a conflict inside one request is an error.
+    /// The entry forgets its remembered primary when the batch unassigns that category, assigns it as non-primary,
+    /// removes the category, or removes the entry.
+    /// </summary>
+    private static void RejectSecondPrimaryInBatch(DeckChange change, Dictionary<Guid, Guid> primaryAssigned)
+    {
+        switch (change)
+        {
+            case AssignDeckCategoryChange { IsPrimary: true } assignment:
+                if (primaryAssigned.TryGetValue(assignment.EntryId, out Guid current) &&
+                    current != assignment.CategoryId)
+                {
+                    throw new DeckInputException("An entry may have only one primary category.");
+                }
+
+                primaryAssigned[assignment.EntryId] = assignment.CategoryId;
+                break;
+            case AssignDeckCategoryChange assignment:
+                ForgetPrimary(primaryAssigned, assignment.EntryId, assignment.CategoryId);
+                break;
+            case UnassignDeckCategoryChange unassignment:
+                ForgetPrimary(primaryAssigned, unassignment.EntryId, unassignment.CategoryId);
+                break;
+            case RemoveDeckCategoryChange removal:
+                foreach (Guid entryId in primaryAssigned.Where(value => value.Value == removal.CategoryId)
+                    .Select(value => value.Key).ToArray())
+                {
+                    primaryAssigned.Remove(entryId);
+                }
+
+                break;
+            case RemoveDeckEntryChange removal:
+                primaryAssigned.Remove(removal.EntryId);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Drops the remembered primary category of an entry when it is the given category.
+    /// </summary>
+    private static void ForgetPrimary(Dictionary<Guid, Guid> primaryAssigned, Guid entryId, Guid categoryId)
+    {
+        if (primaryAssigned.TryGetValue(entryId, out Guid current) && current == categoryId)
+        {
+            primaryAssigned.Remove(entryId);
+        }
     }
 
     /// <summary>
@@ -801,7 +856,8 @@ public sealed class SqliteDeckStore : IDisposable
         {
             return new OperationConflict(
                 "stale-deck-revision",
-                "The deck changed after the supplied revision.");
+                "The deck changed after the supplied revision.",
+                new ConflictState(Revision: current.Value));
         }
 
         return new OperationSuccess<long>(current.Value);
@@ -852,8 +908,7 @@ public sealed class SqliteDeckStore : IDisposable
             SqliteException { SqliteErrorCode: 5 or 6 } => new OperationUnavailable(
                 "deck-database-busy",
                 "The local deck database is busy."),
-            SqliteException { SqliteErrorCode: 19 } => Invalid<T>(
-                "The requested deck change violates a local constraint."),
+            SqliteException { SqliteErrorCode: 19 } constraint => Invalid<T>(DescribeConstraint(constraint)),
             SqliteException => new OperationUnavailable(
                 "deck-database-unavailable",
                 "The local deck database is unavailable."),
@@ -864,6 +919,37 @@ public sealed class SqliteDeckStore : IDisposable
                 "deck-storage-unavailable",
                 "Local deck storage is unavailable."),
         };
+    }
+
+    /// <summary>
+    /// Names the violated constraint in plain words, from the table and columns SQLite reports.
+    /// </summary>
+    internal static string DescribeConstraint(SqliteException exception)
+    {
+        string message = exception.Message;
+        if (message.Contains("deck_categories.deck_id, deck_categories.name", StringComparison.Ordinal))
+        {
+            return "Two categories of one deck have the same name; category names are unique per deck.";
+        }
+
+        if (message.Contains("deck_entries.entry_id", StringComparison.Ordinal))
+        {
+            return "An entry ID is already used by an entry of a local deck; entry IDs are unique across local decks.";
+        }
+
+        if (message.Contains("provider_bindings", StringComparison.Ordinal))
+        {
+            return "The deck already has a binding to this provider deck.";
+        }
+
+        if (message.Contains("deck_entry_categories", StringComparison.Ordinal))
+        {
+            return "An entry has more than one primary category or repeats a category.";
+        }
+
+        int index = message.IndexOf("failed: ", StringComparison.Ordinal);
+        string detail = index < 0 ? string.Empty : " (" + message[(index + 8)..].Trim() + ")";
+        return "The requested deck change violates a local constraint" + detail + ".";
     }
 
     /// <summary>
@@ -880,25 +966,5 @@ public sealed class SqliteDeckStore : IDisposable
     private static OperationResult<T> NotFound<T>()
     {
         return new OperationNotFound("deck-not-found", "The local deck was not found.");
-    }
-
-    /// <summary>
-    /// Forwards a closed failure union while rejecting an unexpected success.
-    /// </summary>
-    private static OperationResult<TTarget> ForwardFailure<TTarget, TSource>(
-        OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationSuccess<TSource> => new OperationUnavailable(
-                "deck-operation-failed",
-                "The local deck operation could not be completed."),
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-        };
     }
 }

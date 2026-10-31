@@ -36,18 +36,21 @@ are design evidence, not designs to copy; current code and tests win.
 ## Product rules
 
 - The stable server returns evidence, provider data, explicit operations, exact
-  mathematics, and one bounded sampled on-curve estimate. Do not add advisor
-  prompts, intent inference, recommendations, weak-card judgments, blended
-  quality scores, or strategic simulation to the stable surface. Statistics
-  stays exact, caller-supplied, provider-independent, and legality-free.
-- Operation modes are `read-only`, `local` (default), and `remote`. Mode is the
-  only write-permission boundary.
-- Tools use the `deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`,
-  `spellbook_*`, and `stats_*` prefixes. Assign every stable tool to exactly
-  one toolset. Toolsets choose which tools an LLM sees; they never grant write
-  access.
-- Registration is fixed for an MCP session. The default profile stays focused;
-  optional provider toolsets need explicit enablement.
+  mathematics, and one seeded sampler, `stats_simulate`, that applies only rules
+  the request states. Do not add advisor prompts, intent inference,
+  recommendations, weak-card judgments, blended quality scores, or strategic
+  simulation to the stable surface. Statistics stays exact and caller-supplied
+  and makes no legality verdicts.
+- Operation modes are `read-only`, `local`, and `remote` (default). Mode is
+  the only write-permission boundary. With every toolset on, the server exposes
+  86 tools in `remote` mode (59 in `read-only`, 73 in `local`).
+- Tools use the `local_deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`,
+  `spellbook_*`, and `stats_*` prefixes, and each description starts with its
+  data source. Assign every stable tool to exactly one toolset. Toolsets choose
+  which tools an LLM sees; they never grant write access.
+- Registration is fixed for an MCP session. Every toolset is on by default; the
+  Archidekt and Playgroup toolsets turn on only when their credentials are
+  present.
 - Community tags come from official Scryfall data and live in `scryfall.db`.
   There is no separate Tagger prefix, adapter, toolset, or database.
 - Do not add automatic legacy data, configuration, or schema migration, or
@@ -61,12 +64,12 @@ are design evidence, not designs to copy; current code and tests win.
 | Path | What it owns |
 | --- | --- |
 | `src/MtgMcp.Core/` | Dependency-light, provider-neutral evidence, identifiers, failures, and shared contracts |
-| `src/MtgMcp.App/` | MCP host, registration, tools, resources, operation modes, configuration, and wiring |
+| `src/MtgMcp.App/` | MCP host, registration, tools, resources, prompts, operation modes, configuration, and wiring |
 | `src/MtgMcp.Decks/` | Local deck storage (`decks.db`) and manual import and export |
 | `src/MtgMcp.Statistics/` | Exact deck calculations |
-| `src/MtgMcp.OnCurve/` | The sampled on-curve estimate |
+| `src/MtgMcp.Simulation/` | The seeded sampling engine behind `stats_simulate` |
 | `src/MtgMcp.Scryfall/` | Scryfall API, card data, rulings, tags, and `scryfall.db` |
-| `src/MtgMcp.Archidekt/`, `src/MtgMcp.Playgroup/`, `src/MtgMcp.Spellbook/` | Optional provider adapters |
+| `src/MtgMcp.Archidekt/`, `src/MtgMcp.Playgroup/`, `src/MtgMcp.Spellbook/` | Provider adapters |
 | `tests/` | One test project per production project, plus architecture and E2E tests |
 | `docs/` | Product docs, `architecture.md`, `adapters.md`, and agent docs under `docs/llms/` |
 | `scripts/` | Helper scripts that Task calls |
@@ -79,6 +82,11 @@ Read the closest folder `AGENTS.md` before changing files in that folder.
 - Third-party HTTP contracts, auth, pacing, retries, and provider caches stay
   in their adapter projects. Adapters may translate provider payloads into Core
   models, but Core must not expose provider transport types.
+- `MtgMcp.Simulation` takes plain counts and rule records and never reads the
+  deck store or Scryfall. A choice the engine makes is either a fixed engine
+  rule listed in the tool description or a required request field; add a rule
+  kind as one record, one evaluator case, and fixtures. Keep its random
+  sequence versioned and free of runtime-dependent hashing or ordering.
 - Full Scryfall card-data downloads are explicit. Nothing downloads in the
   background, and there is no Tagger-site acquisition.
 
@@ -88,7 +96,7 @@ Use Task for every repeatable operation. Run `task --list` for the menu and see
 `docs/llms/repo-operations.md` for the policy.
 
 ```sh
-task test:unit          # App, Core, Statistics, and OnCurve unit tests
+task test:unit          # App, Core, Statistics, and Simulation unit tests
 task test:integration   # architecture and local deck integration tests
 task test:e2e           # process end-to-end tests
 task lint               # format check plus strict analyzer build

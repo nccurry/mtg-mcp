@@ -1,0 +1,878 @@
+[
+  {
+    "id": "7673784e-db4b-43a1-8d55-1bb9fc1e284f",
+    "oracleId": "4457ed35-7c10-48c8-9776-456485fdf070",
+    "illustrationId": "58884d99-ed2d-4efd-b192-b1eb6f87c39f",
+    "name": "Lightning Bolt",
+    "setCode": "msc",
+    "collectorNumber": "806",
+    "language": "en",
+    "releasedAt": "2026-06-26",
+    "manaCost": "{R}",
+    "manaValue": 1.0,
+    "typeLine": "Instant",
+    "oracleText": "Lightning Bolt deals 3 damage to any target.",
+    "colors": [
+      "R"
+    ],
+    "producedMana": {
+      "kind": "missing"
+    },
+    "colorIdentity": [
+      "R"
+    ],
+    "keywords": [],
+    "legalities": {
+      "standard": "not_legal",
+      "future": "not_legal",
+      "historic": "banned",
+      "timeless": "legal",
+      "gladiator": "legal",
+      "pioneer": "not_legal",
+      "modern": "legal",
+      "legacy": "legal",
+      "pauper": "legal",
+      "vintage": "legal",
+      "penny": "not_legal",
+      "commander": "legal",
+      "oathbreaker": "legal",
+      "standardbrawl": "not_legal",
+      "brawl": "legal",
+      "competitivebrawl": "legal",
+      "alchemy": "not_legal",
+      "paupercommander": "legal",
+      "duel": "legal",
+      "oldschool": "not_legal",
+      "premodern": "legal",
+      "predh": "legal",
+      "tlr": "legal"
+    },
+    "imageUris": {
+      "small": "https://cards.scryfall.io/small/front/7/6/7673784e-db4b-43a1-8d55-1bb9fc1e284f.jpg?1783903008",
+      "normal": "https://cards.scryfall.io/normal/front/7/6/7673784e-db4b-43a1-8d55-1bb9fc1e284f.jpg?1783903008",
+      "large": "https://cards.scryfall.io/large/front/7/6/7673784e-db4b-43a1-8d55-1bb9fc1e284f.jpg?1783903008",
+      "png": "https://cards.scryfall.io/png/front/7/6/7673784e-db4b-43a1-8d55-1bb9fc1e284f.png?1783903008",
+      "art_crop": "https://cards.scryfall.io/art_crop/front/7/6/7673784e-db4b-43a1-8d55-1bb9fc1e284f.jpg?1783903008",
+      "border_crop": "https://cards.scryfall.io/border_crop/front/7/6/7673784e-db4b-43a1-8d55-1bb9fc1e284f.jpg?1783903008",
+      "thumb": "https://cards.scryfall.io/thumb/front/7/6/7673784e-db4b-43a1-8d55-1bb9fc1e284f.webp?1783903008",
+      "grid": "https://cards.scryfall.io/grid/front/7/6/7673784e-db4b-43a1-8d55-1bb9fc1e284f.webp?1783903008",
+      "display": "https://cards.scryfall.io/display/front/7/6/7673784e-db4b-43a1-8d55-1bb9fc1e284f.webp?1783903008",
+      "art": "https://cards.scryfall.io/art/front/7/6/7673784e-db4b-43a1-8d55-1bb9fc1e284f.webp?1783903008",
+      "crop": "https://cards.scryfall.io/crop/front/7/6/7673784e-db4b-43a1-8d55-1bb9fc1e284f.webp?1783903008",
+      "jpeg": "https://cards.scryfall.io/normal/front/7/6/7673784e-db4b-43a1-8d55-1bb9fc1e284f.jpg?1783903008"
+    },
+    "prices": {
+      "usd": "0.82",
+      "usd_foil": "2.59",
+      "usd_etched": null,
+      "eur": "1.89",
+      "eur_foil": "2.45",
+      "tix": "0.02"
+    },
+    "priceEvidence": [
+      {
+        "field": "eur",
+        "amount": "1.89",
+        "currency": "EUR",
+        "finish": "nonfoil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "eur_foil",
+        "amount": "2.45",
+        "currency": "EUR",
+        "finish": "foil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "tix",
+        "amount": "0.02",
+        "currency": "TIX",
+        "finish": "digital",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd",
+        "amount": "0.82",
+        "currency": "USD",
+        "finish": "nonfoil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd_etched",
+        "currency": "USD",
+        "finish": "etched",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd_foil",
+        "amount": "2.59",
+        "currency": "USD",
+        "finish": "foil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      }
+    ],
+    "rankEvidence": [
+      {
+        "field": "edhrec_rank",
+        "rank": 158,
+        "context": "edhrec-deck-inclusion",
+        "freshness": "fresh"
+      }
+    ],
+    "faces": [],
+    "tags": [],
+    "tagCoverage": "not-cached"
+  },
+  {
+    "id": "6904ea20-e504-47da-95a0-08739fdde260",
+    "oracleId": "edd531b9-f615-4399-8c8c-1c5e18c4acbf",
+    "name": "Delver of Secrets // Insectile Aberration",
+    "setCode": "inr",
+    "collectorNumber": "60",
+    "language": "en",
+    "releasedAt": "2025-01-24",
+    "manaValue": 1.0,
+    "typeLine": "Creature — Human Wizard // Creature — Human Insect",
+    "colors": [],
+    "producedMana": {
+      "kind": "missing"
+    },
+    "colorIdentity": [
+      "U"
+    ],
+    "keywords": [
+      "Flying",
+      "Transform"
+    ],
+    "legalities": {
+      "standard": "not_legal",
+      "future": "not_legal",
+      "historic": "legal",
+      "timeless": "legal",
+      "gladiator": "legal",
+      "pioneer": "legal",
+      "modern": "legal",
+      "legacy": "legal",
+      "pauper": "legal",
+      "vintage": "legal",
+      "penny": "not_legal",
+      "commander": "legal",
+      "oathbreaker": "legal",
+      "standardbrawl": "not_legal",
+      "brawl": "legal",
+      "competitivebrawl": "legal",
+      "alchemy": "not_legal",
+      "paupercommander": "legal",
+      "duel": "legal",
+      "oldschool": "not_legal",
+      "premodern": "not_legal",
+      "predh": "not_legal",
+      "tlr": "legal"
+    },
+    "imageUris": {},
+    "prices": {
+      "usd": "0.30",
+      "usd_foil": "0.31",
+      "usd_etched": null,
+      "eur": "0.39",
+      "eur_foil": "0.63",
+      "tix": "0.04"
+    },
+    "priceEvidence": [
+      {
+        "field": "eur",
+        "amount": "0.39",
+        "currency": "EUR",
+        "finish": "nonfoil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "eur_foil",
+        "amount": "0.63",
+        "currency": "EUR",
+        "finish": "foil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "tix",
+        "amount": "0.04",
+        "currency": "TIX",
+        "finish": "digital",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd",
+        "amount": "0.30",
+        "currency": "USD",
+        "finish": "nonfoil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd_etched",
+        "currency": "USD",
+        "finish": "etched",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd_foil",
+        "amount": "0.31",
+        "currency": "USD",
+        "finish": "foil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      }
+    ],
+    "rankEvidence": [
+      {
+        "field": "edhrec_rank",
+        "rank": 16273,
+        "context": "edhrec-deck-inclusion",
+        "freshness": "fresh"
+      },
+      {
+        "field": "penny_rank",
+        "rank": 180,
+        "context": "penny-dreadful-popularity",
+        "freshness": "fresh"
+      }
+    ],
+    "faces": [
+      {
+        "name": "Delver of Secrets",
+        "manaCost": "{U}",
+        "typeLine": "Creature — Human Wizard",
+        "oracleText": "At the beginning of your upkeep, look at the top card of your library. You may reveal that card. If an instant or sorcery card is revealed this way, transform this creature.",
+        "colors": [
+          "U"
+        ],
+        "imageUris": {
+          "small": "https://cards.scryfall.io/small/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+          "normal": "https://cards.scryfall.io/normal/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+          "large": "https://cards.scryfall.io/large/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+          "png": "https://cards.scryfall.io/png/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.png?1783908173",
+          "art_crop": "https://cards.scryfall.io/art_crop/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+          "border_crop": "https://cards.scryfall.io/border_crop/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+          "thumb": "https://cards.scryfall.io/thumb/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+          "grid": "https://cards.scryfall.io/grid/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+          "display": "https://cards.scryfall.io/display/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+          "art": "https://cards.scryfall.io/art/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+          "crop": "https://cards.scryfall.io/crop/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+          "jpeg": "https://cards.scryfall.io/normal/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173"
+        },
+        "illustrationId": "1c2fee9b-89ea-4ab1-a751-451c3cd65a88"
+      },
+      {
+        "name": "Insectile Aberration",
+        "manaCost": "",
+        "typeLine": "Creature — Human Insect",
+        "oracleText": "Flying",
+        "colors": [
+          "U"
+        ],
+        "imageUris": {
+          "small": "https://cards.scryfall.io/small/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+          "normal": "https://cards.scryfall.io/normal/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+          "large": "https://cards.scryfall.io/large/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+          "png": "https://cards.scryfall.io/png/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.png?1783908173",
+          "art_crop": "https://cards.scryfall.io/art_crop/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+          "border_crop": "https://cards.scryfall.io/border_crop/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+          "thumb": "https://cards.scryfall.io/thumb/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+          "grid": "https://cards.scryfall.io/grid/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+          "display": "https://cards.scryfall.io/display/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+          "art": "https://cards.scryfall.io/art/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+          "crop": "https://cards.scryfall.io/crop/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.webp?1783908173",
+          "jpeg": "https://cards.scryfall.io/normal/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173"
+        },
+        "illustrationId": "c2b5f731-771b-4949-90f3-0ad40d676100"
+      }
+    ],
+    "tags": [],
+    "tagCoverage": "not-cached"
+  },
+  {
+    "id": "b5b71cd2-de35-451f-b16e-2e3936169407",
+    "oracleId": "d6d72f5f-8f5d-4180-b514-f22ff5482902",
+    "illustrationId": "c7f49422-def6-4502-bc02-38aee9924371",
+    "name": "Bonecrusher Giant // Stomp",
+    "setCode": "clb",
+    "collectorNumber": "781",
+    "language": "en",
+    "releasedAt": "2022-06-10",
+    "manaCost": "{2}{R} // {1}{R}",
+    "manaValue": 3.0,
+    "typeLine": "Creature — Giant // Instant — Adventure",
+    "colors": [
+      "R"
+    ],
+    "producedMana": {
+      "kind": "missing"
+    },
+    "colorIdentity": [
+      "R"
+    ],
+    "keywords": [],
+    "legalities": {
+      "standard": "not_legal",
+      "future": "not_legal",
+      "historic": "legal",
+      "timeless": "legal",
+      "gladiator": "legal",
+      "pioneer": "legal",
+      "modern": "legal",
+      "legacy": "legal",
+      "pauper": "not_legal",
+      "vintage": "legal",
+      "penny": "legal",
+      "commander": "legal",
+      "oathbreaker": "legal",
+      "standardbrawl": "not_legal",
+      "brawl": "legal",
+      "competitivebrawl": "legal",
+      "alchemy": "not_legal",
+      "paupercommander": "not_legal",
+      "duel": "legal",
+      "oldschool": "not_legal",
+      "premodern": "not_legal",
+      "predh": "not_legal",
+      "tlr": "legal"
+    },
+    "imageUris": {
+      "small": "https://cards.scryfall.io/small/front/b/5/b5b71cd2-de35-451f-b16e-2e3936169407.jpg?1783922435",
+      "normal": "https://cards.scryfall.io/normal/front/b/5/b5b71cd2-de35-451f-b16e-2e3936169407.jpg?1783922435",
+      "large": "https://cards.scryfall.io/large/front/b/5/b5b71cd2-de35-451f-b16e-2e3936169407.jpg?1783922435",
+      "png": "https://cards.scryfall.io/png/front/b/5/b5b71cd2-de35-451f-b16e-2e3936169407.png?1783922435",
+      "art_crop": "https://cards.scryfall.io/art_crop/front/b/5/b5b71cd2-de35-451f-b16e-2e3936169407.jpg?1783922435",
+      "border_crop": "https://cards.scryfall.io/border_crop/front/b/5/b5b71cd2-de35-451f-b16e-2e3936169407.jpg?1783922435",
+      "thumb": "https://cards.scryfall.io/thumb/front/b/5/b5b71cd2-de35-451f-b16e-2e3936169407.webp?1783922435",
+      "grid": "https://cards.scryfall.io/grid/front/b/5/b5b71cd2-de35-451f-b16e-2e3936169407.webp?1783922435",
+      "display": "https://cards.scryfall.io/display/front/b/5/b5b71cd2-de35-451f-b16e-2e3936169407.webp?1783922435",
+      "art": "https://cards.scryfall.io/art/front/b/5/b5b71cd2-de35-451f-b16e-2e3936169407.webp?1783922435",
+      "crop": "https://cards.scryfall.io/crop/front/b/5/b5b71cd2-de35-451f-b16e-2e3936169407.webp?1783922435",
+      "jpeg": "https://cards.scryfall.io/normal/front/b/5/b5b71cd2-de35-451f-b16e-2e3936169407.jpg?1783922435"
+    },
+    "prices": {
+      "usd": "0.38",
+      "usd_foil": null,
+      "usd_etched": null,
+      "eur": "0.42",
+      "eur_foil": null,
+      "tix": "0.47"
+    },
+    "priceEvidence": [
+      {
+        "field": "eur",
+        "amount": "0.42",
+        "currency": "EUR",
+        "finish": "nonfoil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "eur_foil",
+        "currency": "EUR",
+        "finish": "foil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "tix",
+        "amount": "0.47",
+        "currency": "TIX",
+        "finish": "digital",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd",
+        "amount": "0.38",
+        "currency": "USD",
+        "finish": "nonfoil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd_etched",
+        "currency": "USD",
+        "finish": "etched",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd_foil",
+        "currency": "USD",
+        "finish": "foil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      }
+    ],
+    "rankEvidence": [
+      {
+        "field": "edhrec_rank",
+        "rank": 6016,
+        "context": "edhrec-deck-inclusion",
+        "freshness": "fresh"
+      },
+      {
+        "field": "penny_rank",
+        "rank": 85,
+        "context": "penny-dreadful-popularity",
+        "freshness": "fresh"
+      }
+    ],
+    "faces": [
+      {
+        "name": "Bonecrusher Giant",
+        "manaCost": "{2}{R}",
+        "typeLine": "Creature — Giant",
+        "oracleText": "Whenever this creature becomes the target of a spell, this creature deals 2 damage to that spell's controller.",
+        "colors": [],
+        "imageUris": {},
+        "illustrationId": "c7f49422-def6-4502-bc02-38aee9924371"
+      },
+      {
+        "name": "Stomp",
+        "manaCost": "{1}{R}",
+        "typeLine": "Instant — Adventure",
+        "oracleText": "Damage can't be prevented this turn. Stomp deals 2 damage to any target.",
+        "colors": [],
+        "imageUris": {}
+      }
+    ],
+    "tags": [],
+    "tagCoverage": "not-cached"
+  },
+  {
+    "id": "c8817585-0d32-4d56-9142-0d29512e86a9",
+    "oracleId": "7f77a84e-5a4b-4834-aefa-3cecc175ae8e",
+    "illustrationId": "b0ab416a-c7a8-4531-8e6a-00a167db4f76",
+    "name": "Jace, the Mind Sculptor",
+    "setCode": "2xm",
+    "collectorNumber": "56",
+    "language": "en",
+    "releasedAt": "2020-08-07",
+    "manaCost": "{2}{U}{U}",
+    "manaValue": 4.0,
+    "typeLine": "Legendary Planeswalker — Jace",
+    "oracleText": "+2: Look at the top card of target player's library. You may put that card on the bottom of that player's library.\n0: Draw three cards, then put two cards from your hand on top of your library in any order.\n−1: Return target creature to its owner's hand.\n−12: Exile all cards from target player's library, then that player shuffles their hand into their library.",
+    "colors": [
+      "U"
+    ],
+    "producedMana": {
+      "kind": "missing"
+    },
+    "colorIdentity": [
+      "U"
+    ],
+    "keywords": [],
+    "legalities": {
+      "standard": "not_legal",
+      "future": "not_legal",
+      "historic": "legal",
+      "timeless": "legal",
+      "gladiator": "legal",
+      "pioneer": "not_legal",
+      "modern": "legal",
+      "legacy": "legal",
+      "pauper": "not_legal",
+      "vintage": "legal",
+      "penny": "not_legal",
+      "commander": "legal",
+      "oathbreaker": "legal",
+      "standardbrawl": "not_legal",
+      "brawl": "legal",
+      "competitivebrawl": "legal",
+      "alchemy": "not_legal",
+      "paupercommander": "not_legal",
+      "duel": "legal",
+      "oldschool": "not_legal",
+      "premodern": "not_legal",
+      "predh": "legal",
+      "tlr": "not_legal"
+    },
+    "imageUris": {
+      "small": "https://cards.scryfall.io/small/front/c/8/c8817585-0d32-4d56-9142-0d29512e86a9.jpg?1783930196",
+      "normal": "https://cards.scryfall.io/normal/front/c/8/c8817585-0d32-4d56-9142-0d29512e86a9.jpg?1783930196",
+      "large": "https://cards.scryfall.io/large/front/c/8/c8817585-0d32-4d56-9142-0d29512e86a9.jpg?1783930196",
+      "png": "https://cards.scryfall.io/png/front/c/8/c8817585-0d32-4d56-9142-0d29512e86a9.png?1783930196",
+      "art_crop": "https://cards.scryfall.io/art_crop/front/c/8/c8817585-0d32-4d56-9142-0d29512e86a9.jpg?1783930196",
+      "border_crop": "https://cards.scryfall.io/border_crop/front/c/8/c8817585-0d32-4d56-9142-0d29512e86a9.jpg?1783930196",
+      "thumb": "https://cards.scryfall.io/thumb/front/c/8/c8817585-0d32-4d56-9142-0d29512e86a9.webp?1783930196",
+      "grid": "https://cards.scryfall.io/grid/front/c/8/c8817585-0d32-4d56-9142-0d29512e86a9.webp?1783930196",
+      "display": "https://cards.scryfall.io/display/front/c/8/c8817585-0d32-4d56-9142-0d29512e86a9.webp?1783930196",
+      "art": "https://cards.scryfall.io/art/front/c/8/c8817585-0d32-4d56-9142-0d29512e86a9.webp?1783930196",
+      "crop": "https://cards.scryfall.io/crop/front/c/8/c8817585-0d32-4d56-9142-0d29512e86a9.webp?1783930196",
+      "jpeg": "https://cards.scryfall.io/normal/front/c/8/c8817585-0d32-4d56-9142-0d29512e86a9.jpg?1783930196"
+    },
+    "prices": {
+      "usd": "23.78",
+      "usd_foil": "21.56",
+      "usd_etched": null,
+      "eur": "15.83",
+      "eur_foil": "18.28",
+      "tix": "1.83"
+    },
+    "priceEvidence": [
+      {
+        "field": "eur",
+        "amount": "15.83",
+        "currency": "EUR",
+        "finish": "nonfoil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "eur_foil",
+        "amount": "18.28",
+        "currency": "EUR",
+        "finish": "foil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "tix",
+        "amount": "1.83",
+        "currency": "TIX",
+        "finish": "digital",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd",
+        "amount": "23.78",
+        "currency": "USD",
+        "finish": "nonfoil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd_etched",
+        "currency": "USD",
+        "finish": "etched",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd_foil",
+        "amount": "21.56",
+        "currency": "USD",
+        "finish": "foil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      }
+    ],
+    "rankEvidence": [
+      {
+        "field": "edhrec_rank",
+        "rank": 3268,
+        "context": "edhrec-deck-inclusion",
+        "freshness": "fresh"
+      }
+    ],
+    "faces": [],
+    "tags": [],
+    "tagCoverage": "not-cached"
+  },
+  {
+    "id": "6adadbc9-4a08-4c1d-adf7-edee73799d9e",
+    "name": "Adrix and Nev, Twincasters // Adrix and Nev, Twincasters",
+    "setCode": "sld",
+    "collectorNumber": "1544",
+    "language": "en",
+    "releasedAt": "2024-02-05",
+    "colors": [],
+    "producedMana": {
+      "kind": "missing"
+    },
+    "colorIdentity": [
+      "G",
+      "U"
+    ],
+    "keywords": [
+      "Ward"
+    ],
+    "legalities": {
+      "standard": "not_legal",
+      "future": "not_legal",
+      "historic": "legal",
+      "timeless": "legal",
+      "gladiator": "legal",
+      "pioneer": "not_legal",
+      "modern": "not_legal",
+      "legacy": "legal",
+      "pauper": "not_legal",
+      "vintage": "legal",
+      "penny": "not_legal",
+      "commander": "legal",
+      "oathbreaker": "legal",
+      "standardbrawl": "not_legal",
+      "brawl": "legal",
+      "competitivebrawl": "legal",
+      "alchemy": "not_legal",
+      "paupercommander": "not_legal",
+      "duel": "legal",
+      "oldschool": "not_legal",
+      "premodern": "not_legal",
+      "predh": "not_legal",
+      "tlr": "not_legal"
+    },
+    "imageUris": {},
+    "prices": {
+      "usd": "10.82",
+      "usd_foil": "11.23",
+      "usd_etched": null,
+      "eur": "8.04",
+      "eur_foil": "9.34",
+      "tix": null
+    },
+    "priceEvidence": [
+      {
+        "field": "eur",
+        "amount": "8.04",
+        "currency": "EUR",
+        "finish": "nonfoil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "eur_foil",
+        "amount": "9.34",
+        "currency": "EUR",
+        "finish": "foil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "tix",
+        "currency": "TIX",
+        "finish": "digital",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd",
+        "amount": "10.82",
+        "currency": "USD",
+        "finish": "nonfoil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd_etched",
+        "currency": "USD",
+        "finish": "etched",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd_foil",
+        "amount": "11.23",
+        "currency": "USD",
+        "finish": "foil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      }
+    ],
+    "rankEvidence": [
+      {
+        "field": "edhrec_rank",
+        "rank": 1411,
+        "context": "edhrec-deck-inclusion",
+        "freshness": "fresh"
+      }
+    ],
+    "faces": [
+      {
+        "name": "Adrix and Nev, Twincasters",
+        "manaCost": "{2}{G}{U}",
+        "typeLine": "Legendary Creature — Merfolk Wizard",
+        "oracleText": "Ward {2} (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {2}.)\nIf one or more tokens would be created under your control, twice that many of those tokens are created instead.",
+        "colors": [
+          "G",
+          "U"
+        ],
+        "imageUris": {
+          "small": "https://cards.scryfall.io/small/front/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.jpg?1783913089",
+          "normal": "https://cards.scryfall.io/normal/front/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.jpg?1783913089",
+          "large": "https://cards.scryfall.io/large/front/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.jpg?1783913089",
+          "png": "https://cards.scryfall.io/png/front/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.png?1783913089",
+          "art_crop": "https://cards.scryfall.io/art_crop/front/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.jpg?1783913089",
+          "border_crop": "https://cards.scryfall.io/border_crop/front/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.jpg?1783913089",
+          "thumb": "https://cards.scryfall.io/thumb/front/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.webp?1783913089",
+          "grid": "https://cards.scryfall.io/grid/front/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.webp?1783913089",
+          "display": "https://cards.scryfall.io/display/front/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.webp?1783913089",
+          "art": "https://cards.scryfall.io/art/front/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.webp?1783913089",
+          "crop": "https://cards.scryfall.io/crop/front/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.webp?1783913089",
+          "jpeg": "https://cards.scryfall.io/normal/front/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.jpg?1783913089"
+        },
+        "illustrationId": "4dfae46c-6590-4466-86cc-0037caa1e629"
+      },
+      {
+        "name": "Adrix and Nev, Twincasters",
+        "manaCost": "{2}{G}{U}",
+        "typeLine": "Legendary Creature — Merfolk Wizard",
+        "oracleText": "Ward {2} (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {2}.)\nIf one or more tokens would be created under your control, twice that many of those tokens are created instead.",
+        "colors": [
+          "G",
+          "U"
+        ],
+        "imageUris": {
+          "small": "https://cards.scryfall.io/small/back/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.jpg?1783913089",
+          "normal": "https://cards.scryfall.io/normal/back/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.jpg?1783913089",
+          "large": "https://cards.scryfall.io/large/back/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.jpg?1783913089",
+          "png": "https://cards.scryfall.io/png/back/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.png?1783913089",
+          "art_crop": "https://cards.scryfall.io/art_crop/back/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.jpg?1783913089",
+          "border_crop": "https://cards.scryfall.io/border_crop/back/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.jpg?1783913089",
+          "thumb": "https://cards.scryfall.io/thumb/back/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.webp?1783913089",
+          "grid": "https://cards.scryfall.io/grid/back/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.webp?1783913089",
+          "display": "https://cards.scryfall.io/display/back/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.webp?1783913089",
+          "art": "https://cards.scryfall.io/art/back/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.webp?1783913089",
+          "crop": "https://cards.scryfall.io/crop/back/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.webp?1783913089",
+          "jpeg": "https://cards.scryfall.io/normal/back/6/a/6adadbc9-4a08-4c1d-adf7-edee73799d9e.jpg?1783913089"
+        },
+        "illustrationId": "312c9a0e-b55b-45be-8ef5-a794e5c15693"
+      }
+    ],
+    "tags": [],
+    "tagCoverage": "not-cached"
+  },
+  {
+    "id": "7dd7d787-b149-492c-bf13-3f5a01507701",
+    "oracleId": "a051dee0-60c8-4f58-84cb-55460c097115",
+    "illustrationId": "decda2b6-62c2-4b8f-ab17-e4d87187abeb",
+    "name": "Abandoned Sarcophagus",
+    "setCode": "akr",
+    "collectorNumber": "268",
+    "language": "en",
+    "releasedAt": "2020-08-13",
+    "manaCost": "{3}",
+    "manaValue": 3.0,
+    "typeLine": "Artifact",
+    "oracleText": "You may cast spells that have a cycling ability from your graveyard.\nIf a card that has a cycling ability would be put into your graveyard from anywhere and it wasn't cycled, exile it instead.",
+    "colors": [],
+    "producedMana": {
+      "kind": "missing"
+    },
+    "colorIdentity": [],
+    "keywords": [],
+    "legalities": {
+      "standard": "not_legal",
+      "future": "not_legal",
+      "historic": "legal",
+      "timeless": "legal",
+      "gladiator": "legal",
+      "pioneer": "legal",
+      "modern": "legal",
+      "legacy": "legal",
+      "pauper": "not_legal",
+      "vintage": "legal",
+      "penny": "legal",
+      "commander": "legal",
+      "oathbreaker": "legal",
+      "standardbrawl": "not_legal",
+      "brawl": "legal",
+      "competitivebrawl": "legal",
+      "alchemy": "not_legal",
+      "paupercommander": "not_legal",
+      "duel": "legal",
+      "oldschool": "not_legal",
+      "premodern": "not_legal",
+      "predh": "not_legal",
+      "tlr": "legal"
+    },
+    "imageUris": {
+      "small": "https://cards.scryfall.io/small/front/7/d/7dd7d787-b149-492c-bf13-3f5a01507701.jpg?1783929896",
+      "normal": "https://cards.scryfall.io/normal/front/7/d/7dd7d787-b149-492c-bf13-3f5a01507701.jpg?1783929896",
+      "large": "https://cards.scryfall.io/large/front/7/d/7dd7d787-b149-492c-bf13-3f5a01507701.jpg?1783929896",
+      "png": "https://cards.scryfall.io/png/front/7/d/7dd7d787-b149-492c-bf13-3f5a01507701.png?1783929896",
+      "art_crop": "https://cards.scryfall.io/art_crop/front/7/d/7dd7d787-b149-492c-bf13-3f5a01507701.jpg?1783929896",
+      "border_crop": "https://cards.scryfall.io/border_crop/front/7/d/7dd7d787-b149-492c-bf13-3f5a01507701.jpg?1783929896",
+      "thumb": "https://cards.scryfall.io/thumb/front/7/d/7dd7d787-b149-492c-bf13-3f5a01507701.webp?1783929896",
+      "grid": "https://cards.scryfall.io/grid/front/7/d/7dd7d787-b149-492c-bf13-3f5a01507701.webp?1783929896",
+      "display": "https://cards.scryfall.io/display/front/7/d/7dd7d787-b149-492c-bf13-3f5a01507701.webp?1783929896",
+      "art": "https://cards.scryfall.io/art/front/7/d/7dd7d787-b149-492c-bf13-3f5a01507701.webp?1783929896",
+      "crop": "https://cards.scryfall.io/crop/front/7/d/7dd7d787-b149-492c-bf13-3f5a01507701.webp?1783929896",
+      "jpeg": "https://cards.scryfall.io/normal/front/7/d/7dd7d787-b149-492c-bf13-3f5a01507701.jpg?1783929896"
+    },
+    "prices": {
+      "usd": null,
+      "usd_foil": null,
+      "usd_etched": null,
+      "eur": null,
+      "eur_foil": null,
+      "tix": null
+    },
+    "priceEvidence": [
+      {
+        "field": "eur",
+        "currency": "EUR",
+        "finish": "nonfoil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "eur_foil",
+        "currency": "EUR",
+        "finish": "foil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "tix",
+        "currency": "TIX",
+        "finish": "digital",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd",
+        "currency": "USD",
+        "finish": "nonfoil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd_etched",
+        "currency": "USD",
+        "finish": "etched",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      },
+      {
+        "field": "usd_foil",
+        "currency": "USD",
+        "finish": "foil",
+        "context": "scryfall-market-price",
+        "freshness": "fresh"
+      }
+    ],
+    "rankEvidence": [
+      {
+        "field": "edhrec_rank",
+        "rank": 13464,
+        "context": "edhrec-deck-inclusion",
+        "freshness": "fresh"
+      },
+      {
+        "field": "penny_rank",
+        "rank": 5636,
+        "context": "penny-dreadful-popularity",
+        "freshness": "fresh"
+      }
+    ],
+    "faces": [],
+    "tags": [],
+    "tagCoverage": "not-cached"
+  }
+]

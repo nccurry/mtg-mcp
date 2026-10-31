@@ -21,24 +21,13 @@ is complete, and the
 [umbrella planning program](../completed/evidence-first-mcp-rewrite-program/README.md)
 is complete.
 
-## Product Foundation Follow-ups
+## Agent Surface
 
-| Packet | Status | Summary |
-| --- | --- | --- |
-| [mcp-trust-evidence](mcp-trust-evidence/README.md) | Absorbed/reference-only | Evidence vocabulary rationale is owned by rewrite foundation/provider/statistics children; do not implement independently. |
-| [configurable-decision-models](configurable-decision-models/README.md) | Post-cutover reference | Seed for a future experimental feasibility PLC; not stable `0.9.0` scope. |
-| [provider-evidence-workflows](provider-evidence-workflows/README.md) | Absorbed/reference-only | Provider principles are owned by the unified Scryfall, Archidekt, and Playgroup children. |
+[focused-agent-tool-surface](../completed/focused-agent-tool-surface/README.md)
+was completed and released as 0.12.0 on 2026-10-29.
 
-## Jasmine Analysis Repair Packets
+## Retired Reference Packets
 
-| Packet | Status | Summary |
-| --- | --- | --- |
-| [card-snapshot-integrity](card-snapshot-integrity/README.md) | Superseded/reference-only | Known-empty/unknown and root/face principles are absorbed by local deck and Scryfall children. |
-| [deck-count-contracts](deck-count-contracts/README.md) | Superseded/reference-only | Zone-based storage and exact summaries remove the category-count root cause. |
-| [land-entry-classification](land-entry-classification/README.md) | Reference-only | Exact statistics uses caller-supplied source masks and does not parse oracle text. |
-| [simulation-profile-evidence](simulation-profile-evidence/README.md) | Post-cutover reference | Fixture input for future simulation feasibility; not stable scope. |
-| [stats-lab-interaction-readiness](stats-lab-interaction-readiness/README.md) | Post-cutover reference | Heuristic sequencing taxonomy is deferred to future simulation feasibility. |
-| [conservative-goldfish-v2](conservative-goldfish-v2/README.md) | Post-cutover design seed | Conservative kernel design may follow, but cannot precede, feasibility approval. |
-
-See the [Jasmine analysis repair roadmap](../../plans/jasmine-analysis-repair-roadmap.md)
-for finding ownership, dependencies, compatibility, and shared fixture policy.
+The nine legacy reference packets that used to wait here (Jasmine analysis
+repair packets and product foundation follow-ups) were superseded by the
+rewrite and moved to [`completed/`](../completed/README.md) on 2026-10-27.

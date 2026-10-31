@@ -1,12 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
 using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
 using MtgMcp.Playgroup;
 
 namespace MtgMcp.App.Playgroup;
 
 /// <summary>
-/// Owns the exact opt-in Playgroup surface and operation-mode registration.
+/// Owns the exact credential-gated Playgroup surface and operation-mode registration.
 /// </summary>
 internal static class PlaygroupToolsetManifest
 {
@@ -16,7 +17,9 @@ internal static class PlaygroupToolsetManifest
     internal static CapabilityToolsetDescriptor Descriptor { get; } = new(
         CapabilityToolset.Playgroup,
         CapabilityToolsetStability.Stable,
-        "Provider-shaped evidence from every documented Playgroup Public API 1.0.0 operation. Deck updates are explicitly unsupported; this provider toolset is opt-in.",
+        "Provider-shaped evidence from every documented Playgroup Public API 1.0.0 operation, plus one derived " +
+        "game statistics read. Deck updates are explicitly unsupported; this toolset turns on only when a " +
+        "Playgroup key is present.",
         [
             "playgroup_auth_status",
             "playgroup_commander_get",
@@ -24,6 +27,7 @@ internal static class PlaygroupToolsetManifest
             "playgroup_commander_turn_damage_get",
             "playgroup_deck_elo_history_get",
             "playgroup_deck_get",
+            "playgroup_games_stats_get",
             "playgroup_me_get",
             "playgroup_playgroup_game_get",
             "playgroup_playgroup_games_list",
@@ -46,10 +50,12 @@ internal static class PlaygroupToolsetManifest
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(service);
-        builder.WithTools(new PlaygroupReadTools(service));
+        builder
+            .WithRegisteredTools(ToolRegistration.Create(new PlaygroupReadTools(service)))
+            .WithRegisteredTools(ToolRegistration.Create(new PlaygroupStatsTools(service)));
         if (OperationModeGuard.Allows(mode, OperationRequirement.RemoteWrite))
         {
-            builder.WithTools(new PlaygroupRemoteWriteTools(service, mode));
+            builder.WithRegisteredTools(ToolRegistration.Create(new PlaygroupRemoteWriteTools(service, mode)));
         }
     }
 }

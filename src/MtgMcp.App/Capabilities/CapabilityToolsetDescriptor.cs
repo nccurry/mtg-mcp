@@ -68,11 +68,6 @@ internal sealed class CapabilityToolsetDescriptor
     internal string Name => CapabilityToolsetPolicy.Format(Toolset);
 
     /// <summary>
-    /// Gets whether the ordinary profile enables this descriptor.
-    /// </summary>
-    internal bool DefaultEnabled => CapabilityToolsetPolicy.IsDefaultEnabled(Toolset);
-
-    /// <summary>
     /// Gets whether the descriptor participates in stable reserved profiles.
     /// </summary>
     internal CapabilityToolsetStability Stability { get; }

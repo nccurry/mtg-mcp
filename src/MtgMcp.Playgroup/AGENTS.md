@@ -33,4 +33,5 @@ The root `AGENTS.md` and `src/AGENTS.md` still apply. This file adds rules for
   observation date, exact byte count, SHA-256, operation inventory, auth/rate
   review, tool schemas, and fixtures together.
 - Preserve one MCP tool per documented operation plus the redacted local auth
-  status. Keep Playgroup opt-in and both provider writes remote-only.
+  status. Playgroup is on by default only when its credentials are present, and both
+  provider writes stay remote-only.

@@ -10,7 +10,7 @@ status log.
 
 ## Start here
 
-- [README](README.md): Deck, Scryfall, Archidekt, Playgroup, and Spellbook tools, configuration, and development commands.
+- [README](README.md): Local deck, Scryfall, Archidekt, Playgroup, Spellbook, exact statistics, and seeded simulation (`stats_simulate`) tools, the three workflow prompts, configuration, and development commands.
 - [Agent instructions](AGENTS.md): Rules, architecture boundaries, commands, and worktree conventions.
 - [Contributing](CONTRIBUTING.md): Bootstrap, build, and change expectations.
 - [Taskfile](Taskfile.yml): Supported local and CI operations; run `task --list`.
@@ -22,8 +22,8 @@ status log.
 
 - [Architecture](docs/architecture.md): Project, data, evidence, and write boundaries.
 - [Adapters](docs/adapters.md): Scryfall, Archidekt, Playgroup, Spellbook, and Moxfield boundaries.
-- [Toolsets](docs/toolsets.md): Tool-group selection, operation modes, and common profiles.
-- [Output control](docs/output-control.md): Shared summary, normal, and full result levels.
+- [Toolsets](docs/toolsets.md): Tool-group selection, credential gating, operation modes, common profiles, and the workflow prompts.
+- [Output control](docs/output-control.md): Card response formats (`concise`, `standard`, `full`), the 40,000-byte result size limit, and the historical `detailLevel` levels.
 - [Heuristic models](docs/heuristic-models.md): Constraints for experimental work outside the stable surface.
 - [Versioning](docs/versioning.md): How versions and public changes are handled.
 

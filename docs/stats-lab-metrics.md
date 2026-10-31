@@ -6,7 +6,7 @@
 > [exact-statistics PLC](llms/plcs/completed/exact-deck-statistics/README.md).
 
 > Everything below describes removed legacy behavior. The current supported
-> statistics are the eight exact `stats_*` tools documented in [README.md](../README.md).
+> statistics are the nine exact `stats_*` tools documented in [README.md](../README.md).
 
 Stats Lab is deterministic Monte Carlo analysis over cached deck data. It is not a Magic rules engine. Metrics describe the behavior of the heuristic sampler for a fixed deck, profile, seed, simulation count, and turn horizon.
 

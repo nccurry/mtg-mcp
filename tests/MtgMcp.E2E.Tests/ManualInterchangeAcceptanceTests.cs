@@ -55,7 +55,7 @@ public sealed class ManualInterchangeAcceptanceTests
         Guid basicsId = Guid.Parse("20000000-0000-4000-8000-000000000002");
         Guid candidateCategoryId = Guid.Parse("20000000-0000-4000-8000-000000000003");
         Guid creaturesId = Guid.Parse("20000000-0000-4000-8000-000000000004");
-        JsonElement created = await CallSuccessAsync(session, "deck_create", new Dictionary<string, object?>
+        JsonElement created = await WholeDeck.SuccessAsync(session, "local_deck_create", new Dictionary<string, object?>
         {
             ["request"] = new
             {
@@ -95,11 +95,14 @@ public sealed class ManualInterchangeAcceptanceTests
                      ("moxfield-bulk-edit-v1", "moxfield", "deck.moxfield.txt"),
                  })
         {
-            JsonElement bundle = await CallSuccessAsync(session, "deck_export_bundle", new Dictionary<string, object?>
-            {
-                ["deckId"] = deckId,
-                ["formatId"] = provider.FormatId,
-            }).ConfigureAwait(false);
+            JsonElement bundle = await CallSuccessAsync(
+                session,
+                "local_deck_export_bundle",
+                new Dictionary<string, object?>
+                {
+                    ["deckId"] = deckId,
+                    ["formatId"] = provider.FormatId,
+                }).ConfigureAwait(false);
             string providerDirectory = Path.Combine(outputRoot, provider.DirectoryName);
             Directory.CreateDirectory(providerDirectory);
             foreach (JsonElement artifact in bundle.GetProperty("artifacts").EnumerateArray())
@@ -152,7 +155,7 @@ public sealed class ManualInterchangeAcceptanceTests
             new UTF8Encoding(false),
             TestContext.Current.CancellationToken).ConfigureAwait(false);
 
-        _ = await CallSuccessAsync(session, "deck_delete", new Dictionary<string, object?>
+        _ = await CallSuccessAsync(session, "local_deck_delete", new Dictionary<string, object?>
         {
             ["deckId"] = deckId,
             ["expectedRevision"] = revision,
@@ -171,8 +174,8 @@ public sealed class ManualInterchangeAcceptanceTests
             toolName,
             arguments,
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
-        Assert.NotEqual(true, call.IsError);
         JsonElement content = Assert.IsType<JsonElement>(call.StructuredContent);
+        Assert.Equal(!string.Equals(content.GetProperty("kind").GetString(), "success", StringComparison.Ordinal), call.IsError == true);
         JsonElement result = content;
         Assert.Equal("success", result.GetProperty("kind").GetString());
         return result.GetProperty("data");

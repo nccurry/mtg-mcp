@@ -134,7 +134,7 @@ public sealed class SqliteDeckStoreTests
             new DeckCreateRequest("Deck", Categories: [new DeckCategoryDraft(" ")]),
             new DeckCreateRequest(
                 "Deck",
-                Categories: [new DeckCategoryDraft("Same"), new DeckCategoryDraft("same")]),
+                Categories: [new DeckCategoryDraft("Same"), new DeckCategoryDraft("Same")]),
             new DeckCreateRequest(
                 "Deck",
                 Entries: [new DeckEntryDraft(1, "Card", EntryId: entryId)],
@@ -298,7 +298,7 @@ public sealed class SqliteDeckStoreTests
 
         await AssertSingleRowAsync(connection, """
             SELECT version, applied_at_utc, application_version, checksum
-            FROM schema_migrations;
+            FROM schema_migrations WHERE version=1;
             """, reader =>
         {
             Assert.Equal(1L, reader.GetInt64(0));
@@ -393,7 +393,7 @@ public sealed class SqliteDeckStoreTests
         Assert.Equal(0L, await ScalarInt64Async(connection, "SELECT COUNT(*) FROM deck_entry_categories;"));
         Assert.Equal(0L, await ScalarInt64Async(connection, "SELECT COUNT(*) FROM provider_bindings;"));
         Assert.Equal(0L, await ScalarInt64Async(connection, "SELECT COUNT(*) FROM sync_baselines;"));
-        Assert.Equal(1L, await ScalarInt64Async(connection, "SELECT COUNT(*) FROM schema_migrations;"));
+        Assert.Equal(2L, await ScalarInt64Async(connection, "SELECT COUNT(*) FROM schema_migrations;"));
     }
 
     /// <summary>
@@ -461,7 +461,8 @@ public sealed class SqliteDeckStoreTests
         DeckDocument persisted = RequireSuccess(
             await store.GetAsync(deck.DeckId, TestContext.Current.CancellationToken));
 
-        Assert.IsType<OperationConflict>(stale.Value);
+        OperationConflict conflict = Assert.IsType<OperationConflict>(stale.Value);
+        Assert.Equal(updated.Revision, conflict.Current?.Revision);
         Assert.Equal(
             "deck-category-not-found",
             Assert.IsType<OperationNotFound>(invalid.Value).ReasonCode);
@@ -532,6 +533,46 @@ public sealed class SqliteDeckStoreTests
         Assert.Empty(persisted.Categories);
         Assert.Empty(persisted.CategoryAssignments);
         Assert.Equal(deck.Revision, persisted.Revision);
+    }
+
+    /// <summary>
+    /// Verifies assigning a new primary category in a later batch demotes the earlier primary to a non-primary
+    /// assignment instead of failing (PRE-005).
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_NewPrimaryCategory_DemotesThePreviousPrimary()
+    {
+        using TemporaryDeckDirectory temporary = new();
+        using SqliteDeckStore store = CreateStore(temporary.Path);
+        DeckDocument deck = await CreateCommanderAsync(store);
+        Guid entryId = Assert.Single(deck.Entries).EntryId;
+        Guid firstCategoryId = Guid.CreateVersion7();
+        Guid secondCategoryId = Guid.CreateVersion7();
+        DeckDocument first = RequireSuccess(await store.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [
+                new AddDeckCategoryChange(new DeckCategoryDraft("First", CategoryId: firstCategoryId)),
+                new AddDeckCategoryChange(new DeckCategoryDraft("Second", CategoryId: secondCategoryId)),
+                new AssignDeckCategoryChange(entryId, firstCategoryId, true),
+            ],
+            TestContext.Current.CancellationToken));
+
+        DeckDocument second = RequireSuccess(await store.ApplyChangesAsync(
+            first.DeckId,
+            first.Revision,
+            [new AssignDeckCategoryChange(entryId, secondCategoryId, true)],
+            TestContext.Current.CancellationToken));
+        DeckDocument third = RequireSuccess(await store.ApplyChangesAsync(
+            second.DeckId,
+            second.Revision,
+            [new AssignDeckCategoryChange(entryId, secondCategoryId, true)],
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(2, third.CategoryAssignments.Count);
+        Assert.True(third.CategoryAssignments.Single(value => value.CategoryId == secondCategoryId).IsPrimary);
+        Assert.False(third.CategoryAssignments.Single(value => value.CategoryId == firstCategoryId).IsPrimary);
+        Assert.Empty(DeckValidator.Validate(third).Issues);
     }
 
     /// <summary>
@@ -674,7 +715,7 @@ public sealed class SqliteDeckStoreTests
         Assert.Equal(1L, await ScalarInt64Async(connection, "PRAGMA foreign_keys;"));
         Assert.Equal("wal", await ScalarStringAsync(connection, "PRAGMA journal_mode;"));
         Assert.Equal(5000L, await ScalarInt64Async(connection, "PRAGMA busy_timeout;"));
-        Assert.Equal(1L, await ScalarInt64Async(connection, "SELECT MAX(version) FROM schema_migrations;"));
+        Assert.Equal(2L, await ScalarInt64Async(connection, "SELECT MAX(version) FROM schema_migrations;"));
         Assert.Matches(
             "^[0-9a-f]{64}$",
             await ScalarStringAsync(connection, "SELECT checksum FROM schema_migrations WHERE version=1;"));
@@ -702,7 +743,7 @@ public sealed class SqliteDeckStoreTests
             writable: true,
             TestContext.Current.CancellationToken);
         SqliteMigration migration = new(
-            2,
+            DeckDatabase.SchemaVersion + 1,
             true,
             "ALTER TABLE decks ADD COLUMN note TEXT; SELECT * FROM missing_table;");
 
@@ -713,7 +754,7 @@ public sealed class SqliteDeckStoreTests
                 DateTimeOffset.UtcNow,
                 "0.9.0-preview.1",
                 TestContext.Current.CancellationToken));
-        Assert.Equal(1, await DeckDatabase.GetSchemaVersionAsync(
+        Assert.Equal(DeckDatabase.SchemaVersion, await DeckDatabase.GetSchemaVersionAsync(
             connection,
             TestContext.Current.CancellationToken));
         Assert.Equal(

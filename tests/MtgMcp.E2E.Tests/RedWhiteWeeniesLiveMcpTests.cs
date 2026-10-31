@@ -48,9 +48,9 @@ public sealed class RedWhiteWeeniesLiveMcpTests
                 sortOrder = index,
             })
             .ToArray();
-        JsonElement deck = await CallSuccessAsync(
+        JsonElement deck = await WholeDeck.SuccessAsync(
             session,
-            "deck_create",
+            "local_deck_create",
             new Dictionary<string, object?>
             {
                 ["request"] = new
@@ -67,7 +67,7 @@ public sealed class RedWhiteWeeniesLiveMcpTests
 
         JsonElement validation = await CallSuccessAsync(
             session,
-            "deck_validate",
+            "local_deck_validate",
             new Dictionary<string, object?> { ["deckId"] = deckId }).ConfigureAwait(false);
         Assert.True(validation.GetProperty("isStructurallyValid").GetBoolean());
         Assert.Empty(validation.GetProperty("issues").EnumerateArray());
@@ -77,7 +77,7 @@ public sealed class RedWhiteWeeniesLiveMcpTests
             .ToArray();
         JsonElement collection = await CallSuccessAsync(
             session,
-            "scryfall_card_collection",
+            "scryfall_cards_get",
             new Dictionary<string, object?>
             {
                 ["lookups"] = lookups,
@@ -99,9 +99,10 @@ public sealed class RedWhiteWeeniesLiveMcpTests
 
         JsonElement snapshots = await CallSuccessAsync(
             session,
-            "scryfall_snapshot_list",
-            new Dictionary<string, object?> { ["operation"] = "card-collection" }).ConfigureAwait(false);
-        Assert.Single(snapshots.GetProperty("items").EnumerateArray());
+            "scryfall_request_snapshots_get",
+            new Dictionary<string, object?> { ["kind"] = "list", ["operation"] = "card-collection" })
+            .ConfigureAwait(false);
+        Assert.Single(snapshots.GetProperty("snapshots").GetProperty("items").EnumerateArray());
         Assert.True(File.Exists(Path.Combine(session.DataRoot, "decks.db")));
         Assert.True(File.Exists(Path.Combine(session.DataRoot, "scryfall.db")));
     }
@@ -116,11 +117,11 @@ public sealed class RedWhiteWeeniesLiveMcpTests
     {
         CallToolResult result = await session.Client.CallToolAsync(
             toolName,
-            arguments,
+            WholeDeck.Prepare(toolName, arguments),
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
-        Assert.NotEqual(true, result.IsError);
         JsonElement structured = Assert.IsType<JsonElement>(result.StructuredContent);
-        JsonElement operation = structured;
+        Assert.Equal(!string.Equals(structured.GetProperty("kind").GetString(), "success", StringComparison.Ordinal), result.IsError == true);
+        JsonElement operation = WholeDeck.Unwrap(toolName, structured);
         Assert.Equal("success", operation.GetProperty("kind").GetString());
         return operation.GetProperty("data");
     }

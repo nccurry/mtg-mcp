@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using MtgMcp.App.Capabilities;
+using MtgMcp.App.CardLists;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
 using MtgMcp.Scryfall;
 
 namespace MtgMcp.App.Scryfall;
@@ -16,29 +18,27 @@ internal static class ScryfallToolsetManifest
     internal static CapabilityToolsetDescriptor Descriptor { get; } = new(
         CapabilityToolset.Scryfall,
         CapabilityToolsetStability.Stable,
-        "Official Scryfall evidence with exact-request snapshots, an explicitly synchronized local " +
-        "corpus, and community tags kept distinct from card facts.",
+        "Official Scryfall evidence with exact-request snapshots, explicitly synchronized " +
+        "installed card data, and community tags kept distinct from card facts. The card list tools also read " +
+        "local decks, deck backups, and Archidekt decks when those sources are available.",
         [
+            "card_list_query",
+            "card_lists_compare",
             "scryfall_autocomplete",
-            "scryfall_bulk_metadata",
-            "scryfall_card_collection",
-            "scryfall_card_get",
-            "scryfall_card_prints",
-            "scryfall_card_rulings",
-            "scryfall_cards_by_tag",
-            "scryfall_catalog",
-            "scryfall_corpus_status",
+            "scryfall_card_data_status",
+            "scryfall_card_details",
+            "scryfall_cards_get",
+            "scryfall_installed_cards_by_tag",
+            "scryfall_reference_get",
+            "scryfall_request_snapshots_get",
             "scryfall_search",
-            "scryfall_sets",
-            "scryfall_snapshot_get",
-            "scryfall_snapshot_list",
-            "scryfall_tag_search",
+            "scryfall_tags_search",
         ],
         [
-            "scryfall_corpus_delete",
-            "scryfall_corpus_rollback",
-            "scryfall_corpus_sync",
-            "scryfall_snapshot_delete",
+            "scryfall_card_data_delete",
+            "scryfall_card_data_rollback",
+            "scryfall_card_data_sync",
+            "scryfall_request_snapshot_delete",
         ],
         []);
 
@@ -48,15 +48,23 @@ internal static class ScryfallToolsetManifest
     internal static void Register(
         IMcpServerBuilder builder,
         ScryfallService service,
-        OperationMode mode)
+        OperationMode mode,
+        CardListAccess access)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(access);
+        CardListTools cardLists = new(new CardListCoordinator(new CardListResolver(service, access), service));
 
-        builder.WithTools(new ScryfallReadTools(service));
+        builder
+            .WithRegisteredTools(ToolRegistration.Create(new ScryfallReadTools(service), ScryfallReadTools.ItemChoices))
+            .WithRegisteredTools(ToolRegistration.Create(
+                new ScryfallReferenceTools(service),
+                ScryfallReferenceTools.ItemChoices))
+            .WithRegisteredTools(ToolRegistration.Create(cardLists, CardListTools.ItemChoices));
         if (OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
-            builder.WithTools(new ScryfallWriteTools(service, mode));
+            builder.WithRegisteredTools(ToolRegistration.Create(new ScryfallWriteTools(service, mode)));
         }
     }
 }

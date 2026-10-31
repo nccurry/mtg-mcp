@@ -41,7 +41,11 @@ internal sealed record AddDeckEntryInput(
 /// Replaces one existing entry by stable entry identifier.
 /// </summary>
 internal sealed record UpdateDeckEntryInput(
-    [property: Description("The complete replacement entry, including its existing entryId.")] DeckEntry Entry)
+    [property: Description(
+        "The complete replacement entry, including its existing entryId. Send only the stored entry fields " +
+        "(entryId, quantity, cardName, oracleId, printingId, setCode, collectorNumber, language, finish, zone, " +
+        "sortOrder); drop cardData, card, and tags, which local_deck_get adds to entries when you pass include.")]
+    DeckEntry Entry)
     : DeckChangeInput;
 
 /// <summary>
@@ -78,7 +82,9 @@ internal sealed record RemoveDeckCategoryInput(
 internal sealed record AssignDeckCategoryInput(
     [property: Description("The stable identifier of the entry receiving the category.")] Guid EntryId,
     [property: Description("The stable identifier of the category to assign.")] Guid CategoryId,
-    [property: Description("Whether this assignment becomes the entry's primary category.")] bool IsPrimary)
+    [property: Description(
+        "Whether this assignment becomes the entry's primary category; a previous primary category stays assigned " +
+        "as non-primary.")] bool IsPrimary)
     : DeckChangeInput;
 
 /// <summary>

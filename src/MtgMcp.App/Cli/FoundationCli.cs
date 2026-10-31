@@ -1,3 +1,4 @@
+using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Hosting;
 using MtgMcp.App.Security;
@@ -74,6 +75,11 @@ internal static class FoundationCli
         {
             output.WriteLine("mtg-mcp process ready");
             return 0;
+        }
+
+        foreach (DisabledToolset disabled in configuration.Data.Toolsets.DisabledToolsets)
+        {
+            error.WriteLine(disabled.DescribeNotice());
         }
 
         try

@@ -5,11 +5,13 @@ It does not carry the released legacy API forward.
 
 ## Current `0.9.0` Status
 
-The local deck store, manual deck-file support, Scryfall tools, and optional
-Archidekt, Playgroup, and Commander Spellbook tools use the official C# SDK
+The local deck store, manual deck-file support, Scryfall tools, Commander
+Spellbook tools, and the Archidekt and Playgroup tools (on when their
+credentials are present) use the official C# SDK
 selected in `Directory.Packages.props`.
-The server requires MCP `2026-07-28`; it does not support older
-initialize-based clients. Official-client E2E tests prove current-protocol
+The server speaks MCP `2026-07-28` (`server/discover`) and also answers the standard `initialize`
+handshake for the older versions the SDK serves (`2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25`), so
+clients such as Claude Code that still use `initialize` list every tool. Official-client E2E tests prove current-protocol
 connections in `read-only`, `local`, and `remote` modes, protocol reporting,
 resource listing and reading, unknown-resource errors, sanitized pre-transport
 failures, and clean process termination when stdin closes.
@@ -19,11 +21,15 @@ The current public MCP contract is:
 - server name `io.github.nccurry/mtg-mcp`, title `mtg-mcp`, and the evaluated
   package version;
 - one static `application/json` resource at `mtg://server/capabilities`;
-- a default profile of 33/55/55 tools and complete `all` profile of 61/84/97
-  tools by mode, plus zero prompts;
-- fixed `default`, `all`, `none`, and explicit toolset selection, with version 7
+- a default profile (the same as `all`) of 35/48/48 tools by mode with no
+  provider credentials and 59/73/86 tools with Archidekt and Playgroup
+  credentials, plus three workflow prompts (`audit-deck`,
+  `build-from-commander`, and `compare-decks`), with the default mode `remote`;
+- fixed `default`, `all`, `none`, and explicit toolset selection, with version 8
   of the capabilities-resource schema; and
-- no logging, subscription, or changing-tool-list feature advertisement.
+- no logging, subscription, or changing tool-list, prompt-list, or
+  resource-list feature advertisement; the server removes these from both the
+  initialize result and the `server/discover` result of the `2026-07-28` protocol.
 
 `task smoke:process` is only a one-shot startup/configuration probe.
 `task smoke:mcp` establishes a real MCP session, reads the resource, verifies

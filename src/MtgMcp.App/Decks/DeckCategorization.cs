@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
@@ -23,8 +24,6 @@ namespace MtgMcp.App.Decks;
 /// <param name="PreviewFingerprint">The evidence-bound preview fingerprint.</param>
 /// <param name="ApplyToken">The opaque token required for apply.</param>
 /// <param name="CorpusGenerationId">The Scryfall generation used.</param>
-/// <param name="PresetSchemaVersion">The preset schema version when applicable.</param>
-/// <param name="PresetChecksum">The immutable preset checksum when applicable.</param>
 internal sealed record DeckCategoryRulesPreview(
     [property: JsonPropertyName("deckId")] Guid DeckId,
     [property: JsonPropertyName("deckRevision")] long DeckRevision,
@@ -34,9 +33,7 @@ internal sealed record DeckCategoryRulesPreview(
     [property: JsonPropertyName("isComplete")] bool IsComplete,
     [property: JsonPropertyName("previewFingerprint")] string PreviewFingerprint,
     [property: JsonPropertyName("applyToken")] string ApplyToken,
-    [property: JsonPropertyName("corpusGenerationId")] Guid? CorpusGenerationId,
-    [property: JsonPropertyName("presetSchemaVersion")] int? PresetSchemaVersion,
-    [property: JsonPropertyName("presetChecksum")] string? PresetChecksum);
+    [property: JsonPropertyName("corpusGenerationId")] Guid? CorpusGenerationId);
 
 /// <summary>Coordinates category rules, local decks, and shared Scryfall evidence.</summary>
 [ExcludeFromCodeCoverage(Justification = "Provider composition is verified through App and official-client integration tests; deterministic evaluation is covered in Core.")]
@@ -59,22 +56,13 @@ internal sealed class DeckCategorizationCoordinator
         ruleResolver = new DeckCategoryRuleResolver(scryfall);
     }
 
-    /// <summary>Validates and expands a rule source without mutating the deck.</summary>
-    internal async Task<OperationResult<DeckCategoryRulesPreview>> ValidateAsync(
-        Guid deckId,
-        CategoryRuleSource source,
-        string freshnessPolicy,
-        CancellationToken cancellationToken)
-    {
-        OperationResult<DeckCategoryRulesPreview> result = await BuildPreviewAsync(
-            deckId, null, source, freshnessPolicy, cancellationToken).ConfigureAwait(false);
-        return result;
-    }
-
-    /// <summary>Builds a fingerprinted category proposal without mutation.</summary>
+    /// <summary>
+    /// Validates the rules and builds a fingerprinted category proposal without mutation.
+    /// An omitted revision skips only the revision check.
+    /// </summary>
     internal Task<OperationResult<DeckCategoryRulesPreview>> PreviewAsync(
         Guid deckId,
-        long expectedRevision,
+        long? expectedRevision,
         CategoryRuleSource source,
         string freshnessPolicy,
         CancellationToken cancellationToken)
@@ -83,7 +71,7 @@ internal sealed class DeckCategorizationCoordinator
     }
 
     /// <summary>Recomputes and applies an unchanged proposal in one deck revision.</summary>
-    internal async Task<OperationResult<DeckDocument>> ApplyAsync(
+    internal async Task<OperationResult<DeckWriteResult>> ApplyAsync(
         Guid deckId,
         long expectedRevision,
         Guid? expectedCorpusGeneration,
@@ -91,6 +79,7 @@ internal sealed class DeckCategorizationCoordinator
         string freshnessPolicy,
         string previewFingerprint,
         string applyToken,
+        bool returnDeck,
         CancellationToken cancellationToken)
     {
         string expectedToken = Hash(JsonSerializer.Serialize(new { deckId, expectedRevision, previewFingerprint }, SerializerOptions));
@@ -103,7 +92,7 @@ internal sealed class DeckCategorizationCoordinator
             deckId, expectedRevision, source, freshnessPolicy, cancellationToken).ConfigureAwait(false);
         if (previewResult is not OperationSuccess<DeckCategoryRulesPreview> preview)
         {
-            return ForwardFailure<DeckCategoryRulesPreview, DeckDocument>(previewResult);
+            return OperationFailure.Forward<DeckCategoryRulesPreview, DeckWriteResult>(previewResult);
         }
 
         if (!string.Equals(preview.Data.PreviewFingerprint, previewFingerprint, StringComparison.Ordinal))
@@ -124,13 +113,20 @@ internal sealed class DeckCategorizationCoordinator
         OperationResult<DeckDocument> deckResult = await deckStore.GetAsync(deckId, cancellationToken).ConfigureAwait(false);
         if (deckResult is not OperationSuccess<DeckDocument> deck)
         {
-            return deckResult;
+            return OperationFailure.Forward<DeckDocument, DeckWriteResult>(deckResult);
         }
 
         List<DeckChange> changes = BuildChanges(deck.Data, preview.Data);
-        return changes.Count == 0
-            ? deckResult
-            : await deckStore.ApplyChangesAsync(deckId, expectedRevision, changes, cancellationToken).ConfigureAwait(false);
+        if (changes.Count == 0)
+        {
+            return new OperationSuccess<DeckWriteResult>(DeckWriteResults.After(deck.Data, deck.Data, [], returnDeck));
+        }
+
+        OperationResult<DeckDocument> applied = await deckStore
+            .ApplyChangesAsync(deckId, expectedRevision, changes, cancellationToken).ConfigureAwait(false);
+        return applied is OperationSuccess<DeckDocument> after
+            ? new OperationSuccess<DeckWriteResult>(DeckWriteResults.After(deck.Data, after.Data, [], returnDeck))
+            : OperationFailure.Forward<DeckDocument, DeckWriteResult>(applied);
     }
 
     /// <summary>Builds one preview after validating the deck and source.</summary>
@@ -144,12 +140,15 @@ internal sealed class DeckCategorizationCoordinator
         OperationResult<DeckDocument> deckResult = await deckStore.GetAsync(deckId, cancellationToken).ConfigureAwait(false);
         if (deckResult is not OperationSuccess<DeckDocument> deck)
         {
-            return ForwardFailure<DeckDocument, DeckCategoryRulesPreview>(deckResult);
+            return OperationFailure.Forward<DeckDocument, DeckCategoryRulesPreview>(deckResult);
         }
 
         if (expectedRevision is long revision && (revision <= 0 || revision != deck.Data.Revision))
         {
-            return new OperationConflict("deck-revision-conflict", "The local deck revision changed before categorization.");
+            return new OperationConflict(
+                "deck-revision-conflict",
+                "The local deck revision changed before categorization.",
+                new ConflictState(Revision: deck.Data.Revision));
         }
 
         OperationResult<ResolvedDeckCategoryRules> resolution = await ruleResolver.ResolveAsync(
@@ -159,7 +158,7 @@ internal sealed class DeckCategorizationCoordinator
             cancellationToken).ConfigureAwait(false);
         if (resolution is not OperationSuccess<ResolvedDeckCategoryRules> resolvedRules)
         {
-            return ForwardFailure<ResolvedDeckCategoryRules, DeckCategoryRulesPreview>(resolution);
+            return OperationFailure.Forward<ResolvedDeckCategoryRules, DeckCategoryRulesPreview>(resolution);
         }
 
         List<CategoryEntryEvidence> evidence = [];
@@ -179,7 +178,7 @@ internal sealed class DeckCategorizationCoordinator
                 cancellationToken).ConfigureAwait(false);
             if (sourceEvidence is not OperationSuccess<ScryfallDeckTagEvidence> tags)
             {
-                return ForwardFailure<ScryfallDeckTagEvidence, DeckCategoryRulesPreview>(sourceEvidence);
+                return OperationFailure.Forward<ScryfallDeckTagEvidence, DeckCategoryRulesPreview>(sourceEvidence);
             }
 
             if (tags.Data.Entries.Count != entries.Count || tags.Data.GenerationId != generation)
@@ -221,8 +220,7 @@ internal sealed class DeckCategorizationCoordinator
         string token = Hash(JsonSerializer.Serialize(new { deckId, expectedRevision = deck.Data.Revision, previewFingerprint = fingerprint }, SerializerOptions));
         return new OperationSuccess<DeckCategoryRulesPreview>(new DeckCategoryRulesPreview(
             deckId, deck.Data.Revision, source, resolvedRules.Data.Rules, evaluation.Decisions,
-            complete, fingerprint, token, resolvedRules.Data.ScryfallGenerationId,
-            resolvedRules.Data.PresetSchemaVersion, resolvedRules.Data.PresetChecksum));
+            complete, fingerprint, token, resolvedRules.Data.ScryfallGenerationId));
     }
 
     /// <summary>Creates the strongest stable local lookup for one deck entry.</summary>
@@ -270,21 +268,6 @@ internal sealed class DeckCategorizationCoordinator
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     }
 
-    /// <summary>Maps a non-success result to the categorization result type.</summary>
-    private static OperationResult<T> ForwardFailure<TSource, T>(OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-            OperationSuccess<TSource> => new OperationUnavailable("unexpected-result", "The operation returned an unexpected result."),
-            _ => new OperationUnavailable("unexpected-result", "The operation returned an unexpected result."),
-        };
-    }
 }
 
 /// <summary>Registers deterministic category validation and preview tools.</summary>
@@ -300,29 +283,46 @@ internal sealed class DeckCategorizationReadTools
         this.coordinator = coordinator;
     }
 
-    /// <summary>Validates an inline rule set or explicit common-v1 preset.</summary>
-    [McpServerTool(Name = "deck_category_rules_validate", Title = "Validate Deck Category Rules", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
-    [Description("Validates explicit inline rules or the common-v1 preset without changing the deck.")]
-    internal Task<OperationResult<DeckCategoryRulesPreview>> ValidateAsync(
-        [Description("Stable local deck UUID.")] Guid deckId,
-        [Description("Explicit inline or preset category rule source.")] CategoryRuleSource source,
-        [Description("default, cache-only, or refresh Scryfall evidence policy.")] string freshnessPolicy = "default",
-        CancellationToken cancellationToken = default)
-    {
-        return coordinator.ValidateAsync(deckId, source, freshnessPolicy, cancellationToken);
-    }
-
     /// <summary>Previews exact category changes without mutation.</summary>
-    [McpServerTool(Name = "deck_category_rules_preview", Title = "Preview Deck Category Rules", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
-    [Description("Evaluates explicit category rules and returns evidence, unknowns, and an apply fingerprint.")]
-    internal Task<OperationResult<DeckCategoryRulesPreview>> PreviewAsync(
+    [McpServerTool(
+        Name = "local_deck_category_rules_preview",
+        Title = "Preview Deck Category Rules",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true,
+        OpenWorld = false,
+        UseStructuredContent = true)]
+    [Description(
+        "Local deck store: checks inline category rules and previews the category assignments they would make, " +
+        "without changing the deck. Rules are validated first, so invalid rules return invalid-input with a " +
+        "reason; the result holds the expanded rules, a decision for every entry (matched, unmatched, or " +
+        "unknown), the tag evidence, and the fingerprint and token that local_deck_category_rules_apply needs. " +
+        "Card tags come from installed card data (scryfall_card_data_sync). Rules are inline only; send " +
+        "the tags you choose. Omit expectedRevision to only validate and preview. Decisions come in pages that fit " +
+        "the size limit; the fingerprint and token cover the whole preview, so apply needs no page. When truncated " +
+        "is true, call again with offset set to nextOffset and expectedPreviewFingerprint set to the " +
+        "previewFingerprint of the first page." +
+        DeckToolExamples.ExamplePrefix + "minimal): " + DeckToolExamples.RulesPreviewMinimal +
+        DeckToolExamples.ExamplePrefix + "full): " + DeckToolExamples.RulesPreviewFull)]
+    internal async Task<OperationResult<DeckCategoryRulesPreviewView>> PreviewAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
-         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
-         [Description("Explicit inline or preset category rule source.")] CategoryRuleSource source,
-        [Description("default, cache-only, or refresh Scryfall evidence policy.")] string freshnessPolicy = "default",
+        [Description("Inline category rules; the only supported source kind is inline.")]
+        CategoryRuleSource source,
+        [Description("Optional current deck revision; when given, a different revision returns conflict.")]
+        long? expectedRevision = null,
+        [Description("default, cache-only, or refresh Scryfall evidence policy."), FreshnessPolicyValues]
+        string freshnessPolicy = "default",
+        [Description("Number of decisions to skip; use nextOffset from the previous page. Default 0.")]
+        int offset = 0,
+        [Description(ResultPage.FingerprintHelp)] string? expectedPreviewFingerprint = null,
         CancellationToken cancellationToken = default)
     {
-        return coordinator.PreviewAsync(deckId, expectedRevision, source, freshnessPolicy, cancellationToken);
+        OperationResult<DeckCategoryRulesPreview> preview = await coordinator
+            .PreviewAsync(deckId, expectedRevision, source, freshnessPolicy, cancellationToken)
+            .ConfigureAwait(false);
+        return preview is OperationSuccess<DeckCategoryRulesPreview> success
+            ? DeckPreviewPaging.PageCategoryRules(success.Data, offset, expectedPreviewFingerprint)
+            : OperationFailure.Forward<DeckCategoryRulesPreview, DeckCategoryRulesPreviewView>(preview);
     }
 }
 
@@ -343,24 +343,46 @@ internal sealed class DeckCategorizationWriteTools
     }
 
     /// <summary>Applies an unchanged complete category preview.</summary>
-    [McpServerTool(Name = "deck_category_rules_apply", Title = "Apply Deck Category Rules", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true)]
-    [Description("Applies only an unchanged, complete category preview in one local deck revision.")]
-    internal Task<OperationResult<DeckDocument>> ApplyAsync(
+    [McpServerTool(
+        Name = "local_deck_category_rules_apply",
+        Title = "Apply Deck Category Rules",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = false,
+        OpenWorld = false,
+        UseStructuredContent = true)]
+    [Description(
+        "Local deck store: applies only an unchanged, complete category preview in one local deck revision. The " +
+        "result is a summary (new revision, counts, IDs of changed entries and categories); pass returnDeck true " +
+        "to also get the whole deck.")]
+    internal Task<OperationResult<DeckWriteResult>> ApplyAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
         [Description("Scryfall card-data generation returned by the preview, or null when no card evidence was needed.")] Guid? expectedCorpusGeneration,
-        [Description("Explicit inline or preset category rule source.")] CategoryRuleSource source,
-        [Description("default, cache-only, or refresh Scryfall evidence policy.")] string freshnessPolicy,
-        [Description("Fingerprint returned by deck_category_rules_preview.")] string previewFingerprint,
-        [Description("Opaque token returned by deck_category_rules_preview.")] string applyToken,
+        [Description("Inline category rules; the only supported source kind is inline.")] CategoryRuleSource source,
+        [Description("default, cache-only, or refresh Scryfall evidence policy."), FreshnessPolicyValues]
+        string freshnessPolicy,
+        [Description("Fingerprint returned by local_deck_category_rules_preview.")] string previewFingerprint,
+        [Description("Opaque token returned by local_deck_category_rules_preview.")] string applyToken,
+        [Description("Set true to also return the whole deck after the write. The default summary is much smaller.")]
+        bool returnDeck = false,
         CancellationToken cancellationToken = default)
     {
         if (!OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
-            return Task.FromResult<OperationResult<DeckDocument>>(
+            return Task.FromResult<OperationResult<DeckWriteResult>>(
                 new OperationUnsupported("operation-mode-denied", "The effective operation mode does not permit local writes."));
         }
 
-        return coordinator.ApplyAsync(deckId, expectedRevision, expectedCorpusGeneration, source, freshnessPolicy, previewFingerprint, applyToken, cancellationToken);
+        return coordinator.ApplyAsync(
+            deckId,
+            expectedRevision,
+            expectedCorpusGeneration,
+            source,
+            freshnessPolicy,
+            previewFingerprint,
+            applyToken,
+            returnDeck,
+            cancellationToken);
     }
 }

@@ -205,6 +205,11 @@ public sealed class DeckBackupStore
                 File.Delete(replacementPath);
             }
 
+            // A backup made by an earlier version has the older schema; upgrade it now, as every write would.
+            await database.EnsureInitializedAsync(
+                timeProvider.GetUtcNow(),
+                applicationVersion,
+                cancellationToken).ConfigureAwait(false);
             string restoredFingerprint = await ComputeCurrentFingerprintAsync(cancellationToken)
                 .ConfigureAwait(false);
             return new OperationSuccess<DeckRestoreResult>(
@@ -252,6 +257,60 @@ public sealed class DeckBackupStore
         finally
         {
             mutationGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Reads one deck as it was in a backup. The backup file is opened read-only and no migration runs, so the
+    /// backup and the live database stay as they are. A backup whose schema version differs from the one this
+    /// server reads is reported as unsupported, naming both versions.
+    /// </summary>
+    public async Task<OperationResult<DeckDocument>> ReadDeckAsync(
+        Guid backupId,
+        Guid deckId,
+        CancellationToken cancellationToken)
+    {
+        if (backupId == Guid.Empty || deckId == Guid.Empty)
+        {
+            return Invalid<DeckDocument>("A backup ID and a deck ID are required.");
+        }
+
+        (string backupPath, _) = GetBackupPaths(backupId);
+        if (!File.Exists(backupPath))
+        {
+            return BackupNotFound<DeckDocument>();
+        }
+
+        try
+        {
+            SqliteConnectionStringBuilder builder = new()
+            {
+                DataSource = backupPath,
+                Mode = SqliteOpenMode.ReadOnly,
+                Pooling = false,
+            };
+            await using SqliteConnection connection = new(builder.ToString());
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            int version = await DeckDatabase.GetSchemaVersionAsync(connection, cancellationToken)
+                .ConfigureAwait(false);
+            if (version is < 1 || version > DeckDatabase.SchemaVersion)
+            {
+                return new OperationUnsupported(
+                    "backup-schema-mismatch",
+                    $"The backup uses decks.db schema version {version}, but this server reads version " +
+                    $"{DeckDatabase.SchemaVersion}. Restore the backup with the version of mtg-mcp that made it, " +
+                    "or use another source.");
+            }
+
+            DeckDocument? deck = await DeckSql.ReadDeckAsync(connection, transaction: null, deckId, cancellationToken)
+                .ConfigureAwait(false);
+            return deck is null
+                ? new OperationNotFound("deck-not-in-backup", "The deck is not in this backup.")
+                : new OperationSuccess<DeckDocument>(deck);
+        }
+        catch (Exception exception) when (IsExpectedFailure(exception))
+        {
+            return MapFailure<DeckDocument>(exception);
         }
     }
 
@@ -426,7 +485,7 @@ public sealed class DeckBackupStore
             cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidDataException("The local deck backup manifest is invalid.");
         if (manifest.BackupId == Guid.Empty ||
-            manifest.SchemaVersion != DeckDatabase.SchemaVersion ||
+            manifest.SchemaVersion < 1 || manifest.SchemaVersion > DeckDatabase.SchemaVersion ||
             string.IsNullOrWhiteSpace(manifest.Fingerprint) ||
             manifest.DeckCount < 0)
         {

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Results;
 using MtgMcp.Playgroup;
 
@@ -21,7 +22,9 @@ internal sealed class PlaygroupReadTools
 
     /// <summary>Reports redacted API-key readiness without provider I/O.</summary>
     [McpServerTool(Name = "playgroup_auth_status", Title = "Inspect Playgroup Authentication", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
-    [Description("Reports only whether a Playgroup API key is configured; no key, account identity, or path is returned.")]
+    [Description(
+        "Playgroup: reports only whether a Playgroup API key is configured; no key, account identity, or path is " +
+        "returned.")]
     internal OperationResult<PlaygroupAuthStatus> AuthStatus()
     {
         return service.GetAuthStatus();
@@ -29,7 +32,8 @@ internal sealed class PlaygroupReadTools
 
     /// <summary>Gets the authenticated Playgroup user.</summary>
     [McpServerTool(Name = "playgroup_me_get", Title = "Get Current Playgroup User", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Gets the current user from the documented Playgroup public API with retrieval evidence.")]
+    [Description("Playgroup: gets the current user from the documented Playgroup public API with retrieval evidence." +
+        UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> GetCurrentUserAsync(CancellationToken cancellationToken = default)
     {
         return service.GetCurrentUserAsync(cancellationToken);
@@ -37,7 +41,8 @@ internal sealed class PlaygroupReadTools
 
     /// <summary>Gets one commander by provider identifier.</summary>
     [McpServerTool(Name = "playgroup_commander_get", Title = "Get Playgroup Commander", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Gets one provider-shaped commander observation by exact Playgroup identifier.")]
+    [Description("Playgroup: gets one provider-shaped commander observation by exact Playgroup identifier." +
+        UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> GetCommanderAsync(
         [Description("Exact Playgroup commander identifier.")] int commanderId,
         CancellationToken cancellationToken = default)
@@ -47,7 +52,10 @@ internal sealed class PlaygroupReadTools
 
     /// <summary>Gets one commander through the provider's name lookup.</summary>
     [McpServerTool(Name = "playgroup_commander_get_by_name", Title = "Get Playgroup Commander By Name", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Uses Playgroup's documented commander-name lookup and returns the provider result without local inference.")]
+    [Description(
+        "Playgroup: uses Playgroup's documented commander-name lookup and returns the provider result without local " +
+        "inference." +
+        UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> GetCommanderByNameAsync(
         [Description("Exact commander name sent to Playgroup's documented lookup.")] string name,
         CancellationToken cancellationToken = default)
@@ -57,7 +65,10 @@ internal sealed class PlaygroupReadTools
 
     /// <summary>Gets one provider-computed commander turn-damage observation.</summary>
     [McpServerTool(Name = "playgroup_commander_turn_damage_get", Title = "Get Commander Turn Damage", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Gets Playgroup's turn-damage observation for one exact commander ID as provider evidence, not a quality ranking.")]
+    [Description(
+        "Playgroup: gets Playgroup's turn-damage observation for one exact commander ID as provider evidence, not a " +
+        "quality ranking." +
+        UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> GetCommanderTurnDamageAsync(
         [Description("Exact Playgroup commander identifier.")] int commanderId,
         CancellationToken cancellationToken = default)
@@ -67,7 +78,8 @@ internal sealed class PlaygroupReadTools
 
     /// <summary>Gets one provider deck.</summary>
     [McpServerTool(Name = "playgroup_deck_get", Title = "Get Playgroup Deck", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Gets one Playgroup deck by provider identifier with an explicit archived-deck option.")]
+    [Description("Playgroup: gets one deck by provider identifier with an explicit archived-deck option." +
+        UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> GetDeckAsync(
         [Description("Exact Playgroup deck identifier.")] int deckId,
         [Description("Whether an archived deck may be returned.")] bool includeArchived = false,
@@ -78,7 +90,10 @@ internal sealed class PlaygroupReadTools
 
     /// <summary>Gets provider-computed deck ELO history.</summary>
     [McpServerTool(Name = "playgroup_deck_elo_history_get", Title = "Get Playgroup Deck ELO History", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Gets provider-computed ELO history with explicit optional playgroup and league scope; it does not rank deck quality locally.")]
+    [Description(
+        "Playgroup: gets provider-computed ELO history with explicit optional playgroup and league scope; it does " +
+        "not rank deck quality locally." +
+        UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> GetDeckEloHistoryAsync(
         [Description("Exact Playgroup deck identifier.")] int deckId,
         [Description("Optional exact playgroup scope for the provider-computed history.")] int? playgroupId = null,
@@ -96,7 +111,8 @@ internal sealed class PlaygroupReadTools
 
     /// <summary>Gets one provider user.</summary>
     [McpServerTool(Name = "playgroup_user_get", Title = "Get Playgroup User", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Gets one provider-shaped user observation by exact Playgroup identifier.")]
+    [Description("Playgroup: gets one provider-shaped user observation by exact Playgroup identifier." +
+        UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> GetUserAsync(
         [Description("Exact Playgroup user identifier visible to the authenticated key.")] int userId,
         CancellationToken cancellationToken = default)
@@ -106,7 +122,9 @@ internal sealed class PlaygroupReadTools
 
     /// <summary>Lists one user's provider decks.</summary>
     [McpServerTool(Name = "playgroup_user_decks_list", Title = "List Playgroup User Decks", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Lists the provider-shaped decks for one exact user with an explicit archived-deck option.")]
+    [Description(
+        "Playgroup: lists the provider-shaped decks for one exact user with an explicit archived-deck option." +
+        UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> ListUserDecksAsync(
         [Description("Exact Playgroup user identifier visible to the authenticated key.")] int userId,
         [Description("Whether archived decks should be included.")] bool includeArchived = false,
@@ -117,7 +135,8 @@ internal sealed class PlaygroupReadTools
 
     /// <summary>Lists playgroups visible for one authenticated user.</summary>
     [McpServerTool(Name = "playgroup_user_playgroups_list", Title = "List User Playgroups", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Lists playgroups visible to the authenticated API key for one exact user.")]
+    [Description("Playgroup: lists playgroups visible to the authenticated API key for one exact user." +
+        UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> ListUserPlaygroupsAsync(
         [Description("Exact Playgroup user identifier visible to the authenticated key.")] int userId,
         CancellationToken cancellationToken = default)
@@ -127,7 +146,8 @@ internal sealed class PlaygroupReadTools
 
     /// <summary>Gets one user's playgroup relationship.</summary>
     [McpServerTool(Name = "playgroup_user_playgroup_get", Title = "Get User Playgroup", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Gets one authenticated user/playgroup relationship by exact provider identifiers.")]
+    [Description("Playgroup: gets one authenticated user/playgroup relationship by exact provider identifiers." +
+        UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> GetUserPlaygroupAsync(
         [Description("Exact Playgroup user identifier visible to the authenticated key.")] int userId,
         [Description("Exact playgroup identifier visible to the authenticated key.")] int playgroupId,
@@ -138,7 +158,8 @@ internal sealed class PlaygroupReadTools
 
     /// <summary>Lists members of one authenticated playgroup.</summary>
     [McpServerTool(Name = "playgroup_playgroup_members_list", Title = "List Playgroup Members", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Lists provider-shaped member records for one authenticated playgroup.")]
+    [Description("Playgroup: lists provider-shaped member records for one authenticated playgroup." +
+        UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> ListPlaygroupMembersAsync(
         [Description("Exact playgroup identifier visible to the authenticated key.")] int playgroupId,
         CancellationToken cancellationToken = default)
@@ -148,7 +169,10 @@ internal sealed class PlaygroupReadTools
 
     /// <summary>Lists one bounded page of playgroup games.</summary>
     [McpServerTool(Name = "playgroup_playgroup_games_list", Title = "List Playgroup Games", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Lists one provider-bounded game page; page, limit, and event inclusion remain caller-controlled.")]
+    [Description(
+        "Playgroup: lists one page of games for a playgroup. You choose the page, the page size, and whether " +
+        "events are included." +
+        UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> ListPlaygroupGamesAsync(
         [Description("Exact playgroup identifier visible to the authenticated key.")] int playgroupId,
         [Description("One-based provider page number.")] int page = 1,
@@ -161,7 +185,10 @@ internal sealed class PlaygroupReadTools
 
     /// <summary>Gets one game with optional event records.</summary>
     [McpServerTool(Name = "playgroup_playgroup_game_get", Title = "Get Playgroup Game", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
-    [Description("Gets one exact playgroup game and optionally its provider event history without additional fan-out.")]
+    [Description(
+        "Playgroup: gets one exact playgroup game and optionally its provider event history without additional " +
+        "fan-out." +
+        UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> GetPlaygroupGameAsync(
         [Description("Exact playgroup identifier visible to the authenticated key.")] int playgroupId,
         [Description("Exact game identifier within the playgroup.")] int gameId,

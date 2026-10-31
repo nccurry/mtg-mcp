@@ -13,6 +13,16 @@ namespace MtgMcp.E2E.Tests;
 public sealed class LiveMethodAcceptanceTests
 {
     /// <summary>
+    /// Asks the card details tool for the printings section only.
+    /// </summary>
+    private static readonly string[] PrintsOnly = ["prints"];
+
+    /// <summary>
+    /// Asks the card details tool for the rulings section only.
+    /// </summary>
+    private static readonly string[] RulingsOnly = ["rulings"];
+
+    /// <summary>
     /// Identifies the owner-authorized mutable Archidekt acceptance deck.
     /// </summary>
     private const string ArchidektDeckId = "24257863";
@@ -48,7 +58,7 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement formats = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_interchange_formats",
+                "local_deck_interchange_formats",
                 EmptyArguments(),
                 token).ConfigureAwait(false);
             Assert.Equal(4, formats.GetArrayLength());
@@ -59,7 +69,7 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement preview = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_import_preview",
+                "local_deck_import_preview",
                 new Dictionary<string, object?>
                 {
                     ["formatId"] = "generic-text-v1",
@@ -70,7 +80,7 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement imported = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_import_create",
+                "local_deck_import_create",
                 new Dictionary<string, object?>
                 {
                     ["formatId"] = "generic-text-v1",
@@ -79,14 +89,14 @@ public sealed class LiveMethodAcceptanceTests
                     ["options"] = new { deckName = "Obeka Acceptance Import", format = "commander" },
                 },
                 token).ConfigureAwait(false);
-            JsonElement importedDeck = imported.GetProperty("deck");
+            JsonElement importedDeck = imported.GetProperty("summary");
             Guid importedDeckId = importedDeck.GetProperty("deckId").GetGuid();
             long importedRevision = importedDeck.GetProperty("revision").GetInt64();
 
             JsonElement deck = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_create",
+                "local_deck_create",
                 new Dictionary<string, object?>
                 {
                     ["request"] = new
@@ -110,7 +120,7 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement identityPreview = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_identity_reconcile_preview",
+                "local_deck_identity_reconcile_preview",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
@@ -122,7 +132,7 @@ public sealed class LiveMethodAcceptanceTests
             deck = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_identity_reconcile_apply",
+                "local_deck_identity_reconcile_apply",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
@@ -137,7 +147,7 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement rulesDeck = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_create",
+                "local_deck_create",
                 new Dictionary<string, object?>
                 {
                     ["request"] = new { name = "Category Rules Acceptance" },
@@ -148,12 +158,24 @@ public sealed class LiveMethodAcceptanceTests
             rulesDeck = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_category_create",
+                "local_deck_apply_changes",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = rulesDeckId,
                     ["expectedRevision"] = rulesRevision,
-                    ["category"] = new { name = "Rule Acceptance", color = (string?)null, sortOrder = 0 },
+                    ["changes"] = new object[]
+                    {
+                        new
+                        {
+                            kind = "add-category",
+                            categoryDraft = new
+                            {
+                                name = "Rule Acceptance",
+                                color = (string?)null,
+                                sortOrder = 0,
+                            },
+                        },
+                    },
                 },
                 token).ConfigureAwait(false);
             rulesRevision = rulesDeck.GetProperty("revision").GetInt64();
@@ -178,21 +200,10 @@ public sealed class LiveMethodAcceptanceTests
                     },
                 },
             };
-            _ = await CallSuccessAsync(
-                environment,
-                session,
-                "deck_category_rules_validate",
-                new Dictionary<string, object?>
-                {
-                    ["deckId"] = rulesDeckId,
-                    ["source"] = categoryRules,
-                    ["freshnessPolicy"] = "cache-only",
-                },
-                token).ConfigureAwait(false);
             JsonElement categoryPreview = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_category_rules_preview",
+                "local_deck_category_rules_preview",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = rulesDeckId,
@@ -204,7 +215,7 @@ public sealed class LiveMethodAcceptanceTests
             rulesDeck = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_category_rules_apply",
+                "local_deck_category_rules_apply",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = rulesDeckId,
@@ -220,7 +231,7 @@ public sealed class LiveMethodAcceptanceTests
             _ = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_delete",
+                "local_deck_delete",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = rulesDeckId,
@@ -232,7 +243,7 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement listed = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_list",
+                "local_deck_list",
                 new Dictionary<string, object?> { ["pageSize"] = 1 },
                 token).ConfigureAwait(false);
             Assert.Single(listed.GetProperty("items").EnumerateArray());
@@ -240,7 +251,7 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement secondPage = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_list",
+                "local_deck_list",
                 new Dictionary<string, object?> { ["cursor"] = listCursor, ["pageSize"] = 100 },
                 token).ConfigureAwait(false);
             Assert.Single(secondPage.GetProperty("items").EnumerateArray());
@@ -249,7 +260,7 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement loaded = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_get",
+                "local_deck_get",
                 new Dictionary<string, object?> { ["deckId"] = deckId },
                 token).ConfigureAwait(false);
             Assert.Equal("Obeka Method Acceptance", loaded.GetProperty("name").GetString());
@@ -257,7 +268,7 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement validation = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_validate",
+                "local_deck_validate",
                 new Dictionary<string, object?> { ["deckId"] = deckId },
                 token).ConfigureAwait(false);
             Assert.True(validation.GetProperty("isStructurallyValid").GetBoolean());
@@ -265,28 +276,42 @@ public sealed class LiveMethodAcceptanceTests
             deck = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_update",
+                "local_deck_apply_changes",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
                     ["expectedRevision"] = revision,
-                    ["name"] = "Obeka Method Acceptance Updated",
-                    ["description"] = "Updated through the packaged MCP",
-                    ["format"] = "commander",
+                    ["changes"] = new object[]
+                    {
+                        new
+                        {
+                            kind = "update-metadata",
+                            name = "Obeka Method Acceptance Updated",
+                            description = "Updated through the packaged MCP",
+                            format = "commander",
+                        },
+                    },
                 },
                 token).ConfigureAwait(false);
             revision = deck.GetProperty("revision").GetInt64();
 
             JsonElement stale = await CallResultAsync(
                 session,
-                "deck_update",
+                "local_deck_apply_changes",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
                     ["expectedRevision"] = revision - 1,
-                    ["name"] = "Stale mutation",
-                    ["description"] = string.Empty,
-                    ["format"] = "commander",
+                    ["changes"] = new object[]
+                    {
+                        new
+                        {
+                            kind = "update-metadata",
+                            name = "Stale mutation",
+                            description = string.Empty,
+                            format = "commander",
+                        },
+                    },
                 },
                 token).ConfigureAwait(false);
             Assert.Equal("conflict", stale.GetProperty("kind").GetString());
@@ -294,12 +319,24 @@ public sealed class LiveMethodAcceptanceTests
             deck = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_entry_add",
+                "local_deck_apply_changes",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
                     ["expectedRevision"] = revision,
-                    ["entry"] = new { quantity = 2, cardName = "Island", zone = "main" },
+                    ["changes"] = new object[]
+                    {
+                        new
+                        {
+                            kind = "add-entry",
+                            entryDraft = new
+                            {
+                                quantity = 2,
+                                cardName = "Island",
+                                zone = "main",
+                            },
+                        },
+                    },
                 },
                 token).ConfigureAwait(false);
             revision = deck.GetProperty("revision").GetInt64();
@@ -310,21 +347,21 @@ public sealed class LiveMethodAcceptanceTests
             deck = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_entry_update",
+                "local_deck_apply_changes",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
                     ["expectedRevision"] = revision,
-                    ["entry"] = new
-                    {
-                        entryId = islandId,
-                        quantity = 3,
-                        cardName = "Island",
-                        language = "en",
-                        finish = "nonfoil",
-                        zone = "main",
-                        sortOrder = 10,
-                    },
+                    ["changes"] = new object[] { new { kind = "update-entry", entry = new
+                {
+                    entryId = islandId,
+                    quantity = 3,
+                    cardName = "Island",
+                    language = "en",
+                    finish = "nonfoil",
+                    zone = "main",
+                    sortOrder = 10,
+                } } },
                 },
                 token).ConfigureAwait(false);
             revision = deck.GetProperty("revision").GetInt64();
@@ -332,12 +369,24 @@ public sealed class LiveMethodAcceptanceTests
             deck = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_category_create",
+                "local_deck_apply_changes",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
                     ["expectedRevision"] = revision,
-                    ["category"] = new { name = "Acceptance Added", color = "#3366ff", sortOrder = 1 },
+                    ["changes"] = new object[]
+                    {
+                        new
+                        {
+                            kind = "add-category",
+                            categoryDraft = new
+                            {
+                                name = "Acceptance Added",
+                                color = "#3366ff",
+                                sortOrder = 1,
+                            },
+                        },
+                    },
                 },
                 token).ConfigureAwait(false);
             revision = deck.GetProperty("revision").GetInt64();
@@ -346,17 +395,39 @@ public sealed class LiveMethodAcceptanceTests
             deck = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_category_update",
+                "local_deck_apply_changes",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
                     ["expectedRevision"] = revision,
-                    ["category"] = new
+                    ["changes"] = new object[] { new { kind = "update-category", category = new
+                {
+                    categoryId,
+                    name = "Acceptance Evidence",
+                    color = "#6633ff",
+                    sortOrder = 2,
+                } } },
+                },
+                token).ConfigureAwait(false);
+            revision = deck.GetProperty("revision").GetInt64();
+
+            deck = await CallSuccessAsync(
+                environment,
+                session,
+                "local_deck_apply_changes",
+                new Dictionary<string, object?>
+                {
+                    ["deckId"] = deckId,
+                    ["expectedRevision"] = revision,
+                    ["changes"] = new object[]
                     {
-                        categoryId,
-                        name = "Acceptance Evidence",
-                        color = "#6633ff",
-                        sortOrder = 2,
+                        new
+                        {
+                            kind = "assign-category",
+                            entryId = islandId,
+                            categoryId = categoryId,
+                            isPrimary = true,
+                        },
                     },
                 },
                 token).ConfigureAwait(false);
@@ -365,14 +436,20 @@ public sealed class LiveMethodAcceptanceTests
             deck = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_category_assign",
+                "local_deck_apply_changes",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
                     ["expectedRevision"] = revision,
-                    ["entryId"] = islandId,
-                    ["categoryId"] = categoryId,
-                    ["isPrimary"] = true,
+                    ["changes"] = new object[]
+                    {
+                        new
+                        {
+                            kind = "unassign-category",
+                            entryId = islandId,
+                            categoryId = categoryId,
+                        },
+                    },
                 },
                 token).ConfigureAwait(false);
             revision = deck.GetProperty("revision").GetInt64();
@@ -380,21 +457,7 @@ public sealed class LiveMethodAcceptanceTests
             deck = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_category_unassign",
-                new Dictionary<string, object?>
-                {
-                    ["deckId"] = deckId,
-                    ["expectedRevision"] = revision,
-                    ["entryId"] = islandId,
-                    ["categoryId"] = categoryId,
-                },
-                token).ConfigureAwait(false);
-            revision = deck.GetProperty("revision").GetInt64();
-
-            deck = await CallSuccessAsync(
-                environment,
-                session,
-                "deck_apply_changes",
+                "local_deck_apply_changes",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
@@ -413,7 +476,7 @@ public sealed class LiveMethodAcceptanceTests
                 token).ConfigureAwait(false);
             revision = deck.GetProperty("revision").GetInt64();
             CallToolResult invalidBatch = await session.Client.CallToolAsync(
-                "deck_apply_changes",
+                "local_deck_apply_changes",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
@@ -426,12 +489,12 @@ public sealed class LiveMethodAcceptanceTests
             deck = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_entry_remove",
+                "local_deck_apply_changes",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
                     ["expectedRevision"] = revision,
-                    ["entryId"] = islandId,
+                    ["changes"] = new object[] { new { kind = "remove-entry", entryId = islandId } },
                 },
                 token).ConfigureAwait(false);
             revision = deck.GetProperty("revision").GetInt64();
@@ -439,12 +502,12 @@ public sealed class LiveMethodAcceptanceTests
             deck = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_category_delete",
+                "local_deck_apply_changes",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
                     ["expectedRevision"] = revision,
-                    ["categoryId"] = categoryId,
+                    ["changes"] = new object[] { new { kind = "remove-category", categoryId = categoryId } },
                 },
                 token).ConfigureAwait(false);
             revision = deck.GetProperty("revision").GetInt64();
@@ -460,7 +523,7 @@ public sealed class LiveMethodAcceptanceTests
                 JsonElement bundle = await CallSuccessAsync(
                     environment,
                     session,
-                    "deck_export_bundle",
+                    "local_deck_export_bundle",
                     new Dictionary<string, object?> { ["deckId"] = deckId, ["formatId"] = formatId },
                     token).ConfigureAwait(false);
                 Assert.Equal("available", bundle.GetProperty("status").GetString());
@@ -472,14 +535,14 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement backup = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_backup_create",
+                "local_deck_backup_create",
                 EmptyArguments(),
                 token).ConfigureAwait(false);
             Guid backupId = backup.GetProperty("backupId").GetGuid();
             JsonElement backups = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_backup_list",
+                "local_deck_backup_list",
                 EmptyArguments(),
                 token).ConfigureAwait(false);
             Assert.Contains(backups.GetProperty("items").EnumerateArray(), value => value.GetProperty("backupId").GetGuid() == backupId);
@@ -487,26 +550,33 @@ public sealed class LiveMethodAcceptanceTests
             _ = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_update",
+                "local_deck_apply_changes",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
                     ["expectedRevision"] = revision,
-                    ["name"] = "State after backup",
-                    ["description"] = "Must be restored",
-                    ["format"] = "commander",
+                    ["changes"] = new object[]
+                    {
+                        new
+                        {
+                            kind = "update-metadata",
+                            name = "State after backup",
+                            description = "Must be restored",
+                            format = "commander",
+                        },
+                    },
                 },
                 token).ConfigureAwait(false);
             JsonElement changedInventory = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_backup_list",
+                "local_deck_backup_list",
                 EmptyArguments(),
                 token).ConfigureAwait(false);
             JsonElement restored = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_backup_restore",
+                "local_deck_backup_restore",
                 new Dictionary<string, object?>
                 {
                     ["backupId"] = backupId,
@@ -517,7 +587,7 @@ public sealed class LiveMethodAcceptanceTests
             loaded = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_get",
+                "local_deck_get",
                 new Dictionary<string, object?> { ["deckId"] = deckId },
                 token).ConfigureAwait(false);
             Assert.Equal("Obeka Batched Acceptance", loaded.GetProperty("name").GetString());
@@ -535,7 +605,7 @@ public sealed class LiveMethodAcceptanceTests
                 _ = await CallSuccessAsync(
                     environment,
                     session,
-                    "deck_backup_delete",
+                    "local_deck_backup_delete",
                     new Dictionary<string, object?> { ["backupId"] = id },
                     token).ConfigureAwait(false);
             }
@@ -543,7 +613,7 @@ public sealed class LiveMethodAcceptanceTests
             _ = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_delete",
+                "local_deck_delete",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = importedDeckId,
@@ -553,13 +623,13 @@ public sealed class LiveMethodAcceptanceTests
             _ = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_delete",
+                "local_deck_delete",
                 new Dictionary<string, object?> { ["deckId"] = deckId, ["expectedRevision"] = revision },
                 token).ConfigureAwait(false);
             listed = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_list",
+                "local_deck_list",
                 EmptyArguments(),
                 token).ConfigureAwait(false);
             Assert.Empty(listed.GetProperty("items").EnumerateArray());
@@ -588,7 +658,7 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement status = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_corpus_status",
+                "scryfall_card_data_status",
                 EmptyArguments(),
                 token).ConfigureAwait(false);
             Assert.Equal("available", status.GetProperty("state").GetString());
@@ -596,27 +666,29 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement metadata = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_bulk_metadata",
-                new Dictionary<string, object?> { ["freshnessPolicy"] = "refresh" },
+                "scryfall_reference_get",
+                new Dictionary<string, object?> { ["kind"] = "bulk", ["freshnessPolicy"] = "refresh" },
                 token).ConfigureAwait(false);
             Assert.Equal(
                 ["all_cards", "rulings", "oracle_tags", "art_tags"],
-                metadata.GetProperty("datasets").EnumerateArray().Select(value => value.GetProperty("type").GetString()));
+                metadata.GetProperty("bulk").GetProperty("datasets").EnumerateArray()
+                    .Select(value => value.GetProperty("type").GetString()));
 
             JsonElement obeka = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_card_get",
+                "scryfall_cards_get",
                 new Dictionary<string, object?>
                 {
-                    ["lookup"] = new { kind = "exact-name", value = "Obeka, Splitter of Seconds" },
+                    ["lookups"] = new[] { new { kind = "exact-name", value = "Obeka, Splitter of Seconds" } },
                     ["freshnessPolicy"] = "cache-only",
-                    ["includeRaw"] = true,
+                    ["responseFormat"] = "full",
                 },
                 token).ConfigureAwait(false);
-            JsonElement obekaCard = obeka.GetProperty("card");
+            JsonElement obekaRow = obeka.GetProperty("page").GetProperty("items")[0];
+            JsonElement obekaCard = obekaRow.GetProperty("card");
             Assert.Equal("Obeka, Splitter of Seconds", obekaCard.GetProperty("name").GetString());
-            Assert.Equal("corpus", obeka.GetProperty("origin").GetString());
+            Assert.Equal("corpus", obekaRow.GetProperty("origin").GetString());
             Assert.True(obekaCard.TryGetProperty("raw", out _));
             Guid obekaCardId = obekaCard.GetProperty("id").GetGuid();
             Guid obekaOracleId = obekaCard.GetProperty("oracleId").GetGuid();
@@ -632,7 +704,7 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement collectionFirst = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_card_collection",
+                "scryfall_cards_get",
                 new Dictionary<string, object?>
                 {
                     ["lookups"] = collectionLookups,
@@ -647,7 +719,7 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement collectionRest = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_card_collection",
+                "scryfall_cards_get",
                 new Dictionary<string, object?>
                 {
                     ["lookups"] = collectionLookups,
@@ -663,69 +735,75 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement prints = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_card_prints",
+                "scryfall_card_details",
                 new Dictionary<string, object?>
                 {
                     ["oracleId"] = obekaOracleId,
+                    ["include"] = PrintsOnly,
                     ["freshnessPolicy"] = "cache-only",
                     ["pageSize"] = 2,
                 },
                 token).ConfigureAwait(false);
-            Assert.NotEmpty(prints.GetProperty("page").GetProperty("items").EnumerateArray());
+            Assert.NotEmpty(prints.GetProperty("prints").GetProperty("page").GetProperty("items").EnumerateArray());
 
             JsonElement rulings = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_card_rulings",
+                "scryfall_card_details",
                 new Dictionary<string, object?>
                 {
                     ["oracleId"] = obekaOracleId,
+                    ["include"] = RulingsOnly,
                     ["scryfallCardId"] = obekaCardId,
                     ["freshnessPolicy"] = "cache-only",
                 },
                 token).ConfigureAwait(false);
-            Assert.NotEqual(Guid.Empty, rulings.GetProperty("corpusGenerationId").GetGuid());
-            Assert.False(rulings.TryGetProperty("snapshot", out _));
+            JsonElement rulingsSection = rulings.GetProperty("rulings");
+            Assert.NotEqual(Guid.Empty, rulingsSection.GetProperty("corpusGenerationId").GetGuid());
+            Assert.False(rulingsSection.TryGetProperty("snapshot", out _));
 
             JsonElement sets = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_sets",
+                "scryfall_reference_get",
                 new Dictionary<string, object?>
                 {
+                    ["kind"] = "sets",
                     ["freshnessPolicy"] = "refresh",
                     ["pageSize"] = 2,
                 },
                 token).ConfigureAwait(false);
-            JsonElement firstSet = sets.GetProperty("page").GetProperty("items")[0];
+            JsonElement firstSet = sets.GetProperty("sets").GetProperty("page").GetProperty("items")[0];
             string setCode = firstSet.GetProperty("code").GetString()!;
             JsonElement exactSet = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_sets",
+                "scryfall_reference_get",
                 new Dictionary<string, object?>
                 {
+                    ["kind"] = "sets",
                     ["codeOrId"] = setCode,
                     ["freshnessPolicy"] = "default",
                     ["pageSize"] = 25,
                 },
                 token).ConfigureAwait(false);
             Assert.Contains(
-                exactSet.GetProperty("page").GetProperty("items").EnumerateArray(),
+                exactSet.GetProperty("sets").GetProperty("page").GetProperty("items").EnumerateArray(),
                 value => value.GetProperty("code").GetString() == setCode);
 
             JsonElement catalog = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_catalog",
+                "scryfall_reference_get",
                 new Dictionary<string, object?>
                 {
-                    ["catalog"] = "card-types",
+                    ["kind"] = "catalog",
+                    ["catalogName"] = "card-types",
                     ["freshnessPolicy"] = "refresh",
                     ["pageSize"] = 5,
                 },
                 token).ConfigureAwait(false);
-            Assert.NotEmpty(catalog.GetProperty("page").GetProperty("items").EnumerateArray());
+            Assert.NotEmpty(catalog.GetProperty("catalog").GetProperty("page").GetProperty("items").EnumerateArray());
 
             JsonElement autocomplete = await CallSuccessAsync(
                 environment,
@@ -776,7 +854,7 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement tags = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_tag_search",
+                "scryfall_tags_search",
                 new Dictionary<string, object?>
                 {
                     ["query"] = "extra-upkeep",
@@ -790,7 +868,7 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement cardsByTag = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_cards_by_tag",
+                "scryfall_installed_cards_by_tag",
                 new Dictionary<string, object?>
                 {
                     ["tagIdentity"] = tagIdentity,
@@ -805,30 +883,32 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement snapshots = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_snapshot_list",
-                new Dictionary<string, object?> { ["operation"] = "search", ["pageSize"] = 25 },
+                "scryfall_request_snapshots_get",
+                new Dictionary<string, object?> { ["kind"] = "list", ["operation"] = "search", ["pageSize"] = 25 },
                 token).ConfigureAwait(false);
             Assert.Contains(
-                snapshots.GetProperty("items").EnumerateArray(),
+                snapshots.GetProperty("snapshots").GetProperty("items").EnumerateArray(),
                 value => value.GetProperty("snapshotId").GetGuid() == searchSnapshotId);
             JsonElement replay = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_snapshot_get",
+                "scryfall_request_snapshots_get",
                 new Dictionary<string, object?>
                 {
+                    ["kind"] = "get",
                     ["snapshotId"] = searchSnapshotId,
                     ["includeRaw"] = true,
                     ["pageSize"] = 25,
                 },
                 token).ConfigureAwait(false);
-            Assert.Equal(searchSnapshotId, replay.GetProperty("summary").GetProperty("snapshotId").GetGuid());
-            Assert.NotEmpty(replay.GetProperty("items").EnumerateArray());
+            JsonElement replayPage = replay.GetProperty("snapshot");
+            Assert.Equal(searchSnapshotId, replayPage.GetProperty("summary").GetProperty("snapshotId").GetGuid());
+            Assert.NotEmpty(replayPage.GetProperty("items").EnumerateArray());
 
             _ = await CallSuccessAsync(
                 environment,
                 session,
-                "scryfall_snapshot_delete",
+                "scryfall_request_snapshot_delete",
                 new Dictionary<string, object?>
                 {
                     ["snapshotId"] = searchSnapshotId,
@@ -838,8 +918,8 @@ public sealed class LiveMethodAcceptanceTests
                 token).ConfigureAwait(false);
             JsonElement deleted = await CallResultAsync(
                 session,
-                "scryfall_snapshot_get",
-                new Dictionary<string, object?> { ["snapshotId"] = searchSnapshotId },
+                "scryfall_request_snapshots_get",
+                new Dictionary<string, object?> { ["kind"] = "get", ["snapshotId"] = searchSnapshotId },
                 token).ConfigureAwait(false);
             Assert.Equal("not-found", deleted.GetProperty("kind").GetString());
         }
@@ -874,7 +954,7 @@ public sealed class LiveMethodAcceptanceTests
         JsonElement before = await CallSuccessAsync(
             environment,
             session,
-            "scryfall_corpus_status",
+            "scryfall_card_data_status",
             EmptyArguments(),
             token).ConfigureAwait(false);
         Assert.Equal("available", before.GetProperty("state").GetString());
@@ -883,7 +963,7 @@ public sealed class LiveMethodAcceptanceTests
         JsonElement sync = await CallSuccessAsync(
             environment,
             session,
-            "scryfall_corpus_sync",
+            "scryfall_card_data_sync",
             new Dictionary<string, object?>
             {
                 ["metadataPolicy"] = "refresh",
@@ -896,7 +976,7 @@ public sealed class LiveMethodAcceptanceTests
             previousValue.ValueKind == JsonValueKind.Null)
         {
             await environment.Journal.RecordAsync(
-                "scryfall_corpus_rollback",
+                "scryfall_card_data_rollback",
                 "pending-provider-generation",
                 "provider-has-not-published-a-new-generation",
                 token).ConfigureAwait(false);
@@ -907,7 +987,7 @@ public sealed class LiveMethodAcceptanceTests
         JsonElement rolledBack = await CallSuccessAsync(
             environment,
             session,
-            "scryfall_corpus_rollback",
+            "scryfall_card_data_rollback",
             new Dictionary<string, object?>
             {
                 ["expectedActiveGeneration"] = activeGeneration,
@@ -918,7 +998,7 @@ public sealed class LiveMethodAcceptanceTests
         JsonElement restored = await CallSuccessAsync(
             environment,
             session,
-            "scryfall_corpus_rollback",
+            "scryfall_card_data_rollback",
             new Dictionary<string, object?>
             {
                 ["expectedActiveGeneration"] = rolledBack.GetProperty("activeGenerationId").GetGuid(),
@@ -931,7 +1011,7 @@ public sealed class LiveMethodAcceptanceTests
         _ = await CallSuccessAsync(
             environment,
             session,
-            "scryfall_corpus_delete",
+            "scryfall_card_data_delete",
             new Dictionary<string, object?>
             {
                 ["expectedActiveGeneration"] = activeGeneration,
@@ -941,7 +1021,7 @@ public sealed class LiveMethodAcceptanceTests
         JsonElement after = await CallSuccessAsync(
             environment,
             session,
-            "scryfall_corpus_status",
+            "scryfall_card_data_status",
             EmptyArguments(),
             token).ConfigureAwait(false);
         Assert.Equal("not-cached", after.GetProperty("state").GetString());
@@ -1031,23 +1111,25 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement snapshots = await CallSuccessAsync(
                 environment,
                 session,
-                "archidekt_snapshot_list",
-                new Dictionary<string, object?> { ["deckId"] = ArchidektDeckId },
+                "archidekt_snapshots_get",
+                new Dictionary<string, object?> { ["kind"] = "list", ["deckId"] = ArchidektDeckId },
                 token).ConfigureAwait(false);
             Assert.Contains(
-                snapshots.GetProperty("items").EnumerateArray(),
+                snapshots.GetProperty("snapshots").GetProperty("items").EnumerateArray(),
                 value => value.GetProperty("snapshotId").GetString() == recoverySnapshotId);
 
             JsonElement fullSnapshot = await CallSuccessAsync(
                 environment,
                 session,
-                "archidekt_snapshot_get",
+                "archidekt_snapshots_get",
                 new Dictionary<string, object?>
                 {
+                    ["kind"] = "get",
                     ["deckId"] = ArchidektDeckId,
                     ["snapshotId"] = recoverySnapshotId,
                 },
                 token).ConfigureAwait(false);
+            fullSnapshot = fullSnapshot.GetProperty("snapshot");
             JsonElement unchangedRestore = RequireSuccess(await CallResultAsync(
                 session,
                 "archidekt_snapshot_restore_preview",
@@ -1118,34 +1200,34 @@ public sealed class LiveMethodAcceptanceTests
                 JsonElement cardResult = await CallSuccessAsync(
                     environment,
                     session,
-                    "scryfall_card_get",
+                    "scryfall_cards_get",
                     new Dictionary<string, object?>
                     {
-                        ["lookup"] = new { kind = "exact-name", value = cardName },
+                        ["lookups"] = new[] { new { kind = "exact-name", value = cardName } },
                         ["freshnessPolicy"] = "refresh",
                     },
                     token).ConfigureAwait(false);
-                JsonElement card = cardResult.GetProperty("card");
+                JsonElement card = cardResult.GetProperty("page").GetProperty("items")[0].GetProperty("card");
                 JsonElement localDeck = await CallSuccessAsync(
                     environment,
                     session,
-                    "deck_entry_add",
+                    "local_deck_apply_changes",
                     new Dictionary<string, object?>
                     {
                         ["deckId"] = localDeckId,
                         ["expectedRevision"] = localRevision,
-                        ["entry"] = new
-                        {
-                            quantity = 1,
-                            cardName,
-                            oracleId = card.GetProperty("oracleId").GetGuid(),
-                            printingId = card.GetProperty("id").GetGuid(),
-                            setCode = card.GetProperty("setCode").GetString(),
-                            collectorNumber = card.GetProperty("collectorNumber").GetString(),
-                            language = card.GetProperty("language").GetString(),
-                            finish = "nonfoil",
-                            zone = "main",
-                        },
+                        ["changes"] = new object[] { new { kind = "add-entry", entryDraft = new
+                    {
+                        quantity = 1,
+                        cardName,
+                        oracleId = card.GetProperty("oracleId").GetGuid(),
+                        printingId = card.GetProperty("id").GetGuid(),
+                        setCode = card.GetProperty("setCode").GetString(),
+                        collectorNumber = card.GetProperty("collectorNumber").GetString(),
+                        language = card.GetProperty("language").GetString(),
+                        finish = "nonfoil",
+                        zone = "main",
+                    } } },
                     },
                     token).ConfigureAwait(false);
                 localRevision = localDeck.GetProperty("revision").GetInt64();
@@ -1157,12 +1239,24 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement categorizedDeck = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_category_create",
+                "local_deck_apply_changes",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = localDeckId,
                     ["expectedRevision"] = localRevision,
-                    ["category"] = new { name = "Acceptance Added", color = "#6633ff", sortOrder = 0 },
+                    ["changes"] = new object[]
+                    {
+                        new
+                        {
+                            kind = "add-category",
+                            categoryDraft = new
+                            {
+                                name = "Acceptance Added",
+                                color = "#6633ff",
+                                sortOrder = 0,
+                            },
+                        },
+                    },
                 },
                 token).ConfigureAwait(false);
             localRevision = categorizedDeck.GetProperty("revision").GetInt64();
@@ -1175,18 +1269,18 @@ public sealed class LiveMethodAcceptanceTests
             categorizedDeck = await CallSuccessAsync(
                 environment,
                 session,
-                "deck_category_update",
+                "local_deck_apply_changes",
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = localDeckId,
                     ["expectedRevision"] = localRevision,
-                    ["category"] = new
-                    {
-                        categoryId = commanderCategoryId,
-                        name = "Commander",
-                        color = (string?)null,
-                        sortOrder = 1,
-                    },
+                    ["changes"] = new object[] { new { kind = "update-category", category = new
+                {
+                    categoryId = commanderCategoryId,
+                    name = "Commander",
+                    color = (string?)null,
+                    sortOrder = 1,
+                } } },
                 },
                 token).ConfigureAwait(false);
             localRevision = categorizedDeck.GetProperty("revision").GetInt64();
@@ -1194,14 +1288,21 @@ public sealed class LiveMethodAcceptanceTests
             {
                 JsonElement categoryAssignment = await CallResultAsync(
                     session,
-                    "deck_category_assign",
+                    "local_deck_apply_changes",
                     new Dictionary<string, object?>
                     {
                         ["deckId"] = localDeckId,
                         ["expectedRevision"] = localRevision,
-                        ["entryId"] = entryId,
-                        ["categoryId"] = categoryId,
-                        ["isPrimary"] = false,
+                        ["changes"] = new object[]
+                        {
+                            new
+                            {
+                                kind = "assign-category",
+                                entryId = entryId,
+                                categoryId = categoryId,
+                                isPrimary = false,
+                            },
+                        },
                     },
                     token).ConfigureAwait(false);
                 string categoryKind = categoryAssignment.GetProperty("kind").GetString()!;
@@ -1268,7 +1369,7 @@ public sealed class LiveMethodAcceptanceTests
                     token).ConfigureAwait(false));
                 JsonElement observedLocal = RequireSuccess(await CallResultAsync(
                     session,
-                    "deck_get",
+                    "local_deck_get",
                     new Dictionary<string, object?> { ["deckId"] = localDeckId },
                     token).ConfigureAwait(false));
                 string diagnostic = JsonSerializer.Serialize(
@@ -1316,13 +1417,15 @@ public sealed class LiveMethodAcceptanceTests
             fullSnapshot = await CallSuccessAsync(
                 environment,
                 session,
-                "archidekt_snapshot_get",
+                "archidekt_snapshots_get",
                 new Dictionary<string, object?>
                 {
+                    ["kind"] = "get",
                     ["deckId"] = ArchidektDeckId,
                     ["snapshotId"] = recoverySnapshotId,
                 },
                 token).ConfigureAwait(false);
+            fullSnapshot = fullSnapshot.GetProperty("snapshot");
             _ = await CallSuccessAsync(
                 environment,
                 session,
@@ -1378,8 +1481,8 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement folderTree = await CallSuccessAsync(
                 environment,
                 session,
-                "archidekt_folder_list",
-                EmptyArguments(),
+                "archidekt_folders_get",
+                new Dictionary<string, object?> { ["kind"] = "list" },
                 token).ConfigureAwait(false);
             Assert.Contains(
                 folderTree.GetProperty("items").EnumerateArray(),
@@ -1387,8 +1490,8 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement folderDetail = await CallSuccessAsync(
                 environment,
                 session,
-                "archidekt_folder_get",
-                new Dictionary<string, object?> { ["folderId"] = temporaryFolderId },
+                "archidekt_folders_get",
+                new Dictionary<string, object?> { ["kind"] = "get", ["folderId"] = temporaryFolderId },
                 token).ConfigureAwait(false);
             Assert.Single(folderDetail.GetProperty("items").EnumerateArray());
 
@@ -1411,8 +1514,8 @@ public sealed class LiveMethodAcceptanceTests
             folderTree = await CallSuccessAsync(
                 environment,
                 session,
-                "archidekt_folder_list",
-                EmptyArguments(),
+                "archidekt_folders_get",
+                new Dictionary<string, object?> { ["kind"] = "list" },
                 token).ConfigureAwait(false);
             JsonElement moved = await CallSuccessAsync(
                 environment,
@@ -1447,8 +1550,8 @@ public sealed class LiveMethodAcceptanceTests
             folderTree = await CallSuccessAsync(
                 environment,
                 session,
-                "archidekt_folder_list",
-                EmptyArguments(),
+                "archidekt_folders_get",
+                new Dictionary<string, object?> { ["kind"] = "list" },
                 token).ConfigureAwait(false);
             moved = await CallSuccessAsync(
                 environment,
@@ -1499,8 +1602,8 @@ public sealed class LiveMethodAcceptanceTests
             folderTree = await CallSuccessAsync(
                 environment,
                 session,
-                "archidekt_folder_list",
-                EmptyArguments(),
+                "archidekt_folders_get",
+                new Dictionary<string, object?> { ["kind"] = "list" },
                 token).ConfigureAwait(false);
             _ = await CallSuccessAsync(
                 environment,
@@ -1829,10 +1932,10 @@ public sealed class LiveMethodAcceptanceTests
     {
         JsonElement page = RequireSuccess(await CallResultAsync(
             session,
-            "archidekt_snapshot_list",
-            new Dictionary<string, object?> { ["deckId"] = ArchidektDeckId },
+            "archidekt_snapshots_get",
+            new Dictionary<string, object?> { ["kind"] = "list", ["deckId"] = ArchidektDeckId },
             cancellationToken).ConfigureAwait(false));
-        foreach (JsonElement summary in page.GetProperty("items").EnumerateArray())
+        foreach (JsonElement summary in page.GetProperty("snapshots").GetProperty("items").EnumerateArray())
         {
             string name = summary.GetProperty("name").GetString()!;
             if (!name.StartsWith("mtg-mcp acceptance recovery", StringComparison.Ordinal) &&
@@ -1844,9 +1947,15 @@ public sealed class LiveMethodAcceptanceTests
             string snapshotId = summary.GetProperty("snapshotId").GetString()!;
             JsonElement snapshot = RequireSuccess(await CallResultAsync(
                 session,
-                "archidekt_snapshot_get",
-                new Dictionary<string, object?> { ["deckId"] = ArchidektDeckId, ["snapshotId"] = snapshotId },
+                "archidekt_snapshots_get",
+                new Dictionary<string, object?>
+                {
+                    ["kind"] = "get",
+                    ["deckId"] = ArchidektDeckId,
+                    ["snapshotId"] = snapshotId,
+                },
                 cancellationToken).ConfigureAwait(false));
+            snapshot = snapshot.GetProperty("snapshot");
             _ = RequireSuccess(await CallResultAsync(
                 session,
                 "archidekt_snapshot_delete",
@@ -1971,8 +2080,8 @@ public sealed class LiveMethodAcceptanceTests
         {
             JsonElement treeResult = await CallResultAsync(
                 session,
-                "archidekt_folder_list",
-                EmptyArguments(),
+                "archidekt_folders_get",
+                new Dictionary<string, object?> { ["kind"] = "list" },
                 cancellationToken).ConfigureAwait(false);
             if (treeResult.GetProperty("kind").GetString() == "success")
             {
@@ -2004,12 +2113,17 @@ public sealed class LiveMethodAcceptanceTests
         {
             JsonElement snapshotResult = await CallResultAsync(
                 session,
-                "archidekt_snapshot_get",
-                new Dictionary<string, object?> { ["deckId"] = ArchidektDeckId, ["snapshotId"] = snapshotId },
+                "archidekt_snapshots_get",
+                new Dictionary<string, object?>
+                {
+                    ["kind"] = "get",
+                    ["deckId"] = ArchidektDeckId,
+                    ["snapshotId"] = snapshotId,
+                },
                 cancellationToken).ConfigureAwait(false);
             if (snapshotResult.GetProperty("kind").GetString() == "success")
             {
-                JsonElement snapshot = snapshotResult.GetProperty("data");
+                JsonElement snapshot = snapshotResult.GetProperty("data").GetProperty("snapshot");
                 _ = await CallResultAsync(
                     session,
                     "archidekt_snapshot_delete",
@@ -2189,12 +2303,12 @@ public sealed class LiveMethodAcceptanceTests
     {
         (string Mode, string Toolsets, int Count)[] cases =
         [
-            ("read-only", "default", 33),
-            ("local", "default", 55),
-            ("remote", "default", 55),
-            ("read-only", "all", 61),
-            ("local", "all", 84),
-            ("remote", "all", 97),
+            ("read-only", "default", 59),
+            ("local", "default", 73),
+            ("remote", "default", 86),
+            ("read-only", "all", 59),
+            ("local", "all", 73),
+            ("remote", "all", 86),
             ("read-only", "none", 0),
             ("local", "none", 0),
             ("remote", "none", 0),
@@ -2224,7 +2338,7 @@ public sealed class LiveMethodAcceptanceTests
             }
 
             Assert.NotNull(session.Client.ServerCapabilities.Resources);
-            Assert.Null(session.Client.ServerCapabilities.Prompts);
+            Assert.NotNull(session.Client.ServerCapabilities.Prompts);
             IList<McpClientResource> resources = await session.Client.ListResourcesAsync(
                 cancellationToken: cancellationToken).ConfigureAwait(false);
             McpClientResource resource = Assert.Single(resources);
@@ -2264,11 +2378,11 @@ public sealed class LiveMethodAcceptanceTests
     {
         CallToolResult call = await session.Client.CallToolAsync(
             toolName,
-            arguments,
+            WholeDeck.Prepare(toolName, arguments),
             cancellationToken: cancellationToken).ConfigureAwait(false);
-        Assert.NotEqual(true, call.IsError);
         JsonElement content = Assert.IsType<JsonElement>(call.StructuredContent);
-        return content;
+        Assert.Equal(!string.Equals(content.GetProperty("kind").GetString(), "success", StringComparison.Ordinal), call.IsError == true);
+        return WholeDeck.Unwrap(toolName, content);
     }
 
     /// <summary>
@@ -2361,7 +2475,7 @@ public sealed class LiveMethodAcceptanceTests
                 maximumCount = 10,
             }).ConfigureAwait(false);
         await ExactAsync(
-            "stats_deck_summary",
+            "stats_local_deck_summary",
             new
             {
                 deckId,

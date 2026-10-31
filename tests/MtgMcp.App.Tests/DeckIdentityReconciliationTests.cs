@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using MtgMcp.App.Decks;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
@@ -95,7 +96,8 @@ public sealed class DeckIdentityReconciliationTests
             preview.PreviewFingerprint,
             preview.ApplyToken,
             allowPartial: false,
-            TestContext.Current.CancellationToken));
+            returnDeck: true,
+            TestContext.Current.CancellationToken)).Deck!;
 
         Assert.Equal(deck.Revision + 1, applied.Revision);
         Assert.Single(handler.RequestBodies);
@@ -155,6 +157,7 @@ public sealed class DeckIdentityReconciliationTests
             preview.PreviewFingerprint,
             tampered,
             true,
+            false,
             TestContext.Current.CancellationToken)).Value);
         string incompleteEnvelope = Convert.ToBase64String(Encoding.UTF8.GetBytes("{}"))
             .TrimEnd('=')
@@ -166,6 +169,7 @@ public sealed class DeckIdentityReconciliationTests
             preview.PreviewFingerprint,
             incompleteEnvelope,
             true,
+            false,
             TestContext.Current.CancellationToken)).Value);
         DeckIdentityReconciliationCoordinator restartedCoordinator = new(store, scryfall);
         OperationInvalidInput processBound = Assert.IsType<OperationInvalidInput>(
@@ -175,6 +179,7 @@ public sealed class DeckIdentityReconciliationTests
                 preview.PreviewFingerprint,
                 preview.ApplyToken,
                 true,
+                false,
                 TestContext.Current.CancellationToken)).Value);
         Assert.Equal("invalid-identity-apply-token", processBound.ReasonCode);
         OperationInvalidInput partial = Assert.IsType<OperationInvalidInput>((await coordinator.ApplyAsync(
@@ -182,6 +187,7 @@ public sealed class DeckIdentityReconciliationTests
             deck.Revision,
             preview.PreviewFingerprint,
             preview.ApplyToken,
+            false,
             false,
             TestContext.Current.CancellationToken)).Value);
         Assert.Equal("partial-identity-reconciliation-not-allowed", partial.ReasonCode);
@@ -195,7 +201,8 @@ public sealed class DeckIdentityReconciliationTests
             preview.PreviewFingerprint,
             preview.ApplyToken,
             true,
-            TestContext.Current.CancellationToken));
+            returnDeck: true,
+            TestContext.Current.CancellationToken)).Deck!;
         Assert.Equal("Canonical Card", Assert.Single(applied.Entries, value => value.EntryId == resolvedId).CardName);
         Assert.Equal("Conflicting Name", Assert.Single(applied.Entries, value => value.EntryId == conflictId).CardName);
         OperationConflict stale = Assert.IsType<OperationConflict>((await coordinator.ApplyAsync(
@@ -204,8 +211,37 @@ public sealed class DeckIdentityReconciliationTests
             preview.PreviewFingerprint,
             preview.ApplyToken,
             true,
+            false,
             TestContext.Current.CancellationToken)).Value);
         Assert.Equal("deck-revision-conflict", stale.ReasonCode);
+        Assert.Equal(new ConflictState(Revision: applied.Revision), stale.Current);
+    }
+
+    /// <summary>
+    /// Verifies a preview for a stale revision reports the current revision and makes no provider call.
+    /// </summary>
+    [Fact]
+    public async Task Preview_StaleRevision_ReturnsConflictWithCurrentRevision()
+    {
+        using TemporaryDirectory temporary = new();
+        IdentityProviderHandler handler = new();
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        using ScryfallService scryfall = CreateScryfall(temporary.Path, handler);
+        DeckIdentityReconciliationCoordinator coordinator = new(store, scryfall);
+        DeckDocument deck = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest("Stale Fixture", Entries: [new DeckEntryDraft(1, "canonical card")]),
+            TestContext.Current.CancellationToken));
+
+        OperationConflict conflict = Assert.IsType<OperationConflict>((await coordinator.PreviewAsync(
+            deck.DeckId,
+            deck.Revision + 1,
+            null,
+            "default",
+            TestContext.Current.CancellationToken)).Value);
+
+        Assert.Equal("deck-revision-conflict", conflict.ReasonCode);
+        Assert.Equal(new ConflictState(Revision: deck.Revision), conflict.Current);
+        Assert.Empty(handler.RequestBodies);
     }
 
     /// <summary>
@@ -240,6 +276,7 @@ public sealed class DeckIdentityReconciliationTests
             deck.Revision,
             preview.PreviewFingerprint,
             preview.ApplyToken,
+            false,
             false,
             TestContext.Current.CancellationToken)).Value);
         Assert.Equal("identity-evidence-unavailable", unavailable.ReasonCode);
@@ -317,6 +354,7 @@ public sealed class DeckIdentityReconciliationTests
             dataRoot,
             allowLocalWrites: true,
             "0.9.0-preview.1",
+            ToolCallPolicy.SerializerOptions,
             new Uri("https://identity.fixture/", UriKind.Absolute),
             handler: handler);
     }

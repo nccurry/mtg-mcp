@@ -135,7 +135,8 @@ internal sealed class ArchidektDeckOperations
                 RequireFingerprint(
                     request.ExpectedRemoteFingerprint,
                     current.RemoteFingerprint,
-                    "remote-deck-changed");
+                    "remote-deck-changed",
+                    current.RemoteFingerprint);
                 try
                 {
                     await transport.DeleteAsync(
@@ -218,12 +219,14 @@ internal sealed class ArchidektDeckOperations
                 RequireFingerprint(
                     expectedRemoteFingerprint,
                     current.RemoteFingerprint,
-                    "remote-deck-changed");
+                    "remote-deck-changed",
+                    current.RemoteFingerprint);
                 ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current, target);
                 RequireFingerprint(
                     expectedPlanFingerprint,
                     plan.PlanFingerprint,
-                    "push-preview-changed");
+                    "push-preview-changed",
+                    current.RemoteFingerprint);
                 return await ApplyPlanAsync(
                     current,
                     target,
@@ -522,11 +525,15 @@ internal sealed class ArchidektDeckOperations
     /// <summary>
     /// Requires one caller fingerprint to match freshly retrieved evidence.
     /// </summary>
-    private static void RequireFingerprint(string expected, string actual, string reasonCode)
+    private static void RequireFingerprint(
+        string expected,
+        string actual,
+        string reasonCode,
+        string? currentRemoteFingerprint = null)
     {
         if (!string.Equals(expected, actual, StringComparison.Ordinal))
         {
-            throw Conflict(reasonCode, "Provider evidence changed after the preview.");
+            throw Conflict(reasonCode, "Provider evidence changed after the preview.", currentRemoteFingerprint);
         }
     }
 
@@ -555,7 +562,7 @@ internal sealed class ArchidektDeckOperations
 
         List<string> ordered = [entry.PrimaryCategoryName];
         ordered.AddRange(entry.CategoryNames.Where(value =>
-            !string.Equals(value, entry.PrimaryCategoryName, StringComparison.OrdinalIgnoreCase)));
+            !string.Equals(value, entry.PrimaryCategoryName, StringComparison.Ordinal)));
         return ordered;
     }
 
@@ -595,11 +602,17 @@ internal sealed class ArchidektDeckOperations
     /// <summary>
     /// Creates one provider-state conflict without transport details.
     /// </summary>
-    private static ArchidektProviderException Conflict(string reasonCode, string message)
+    private static ArchidektProviderException Conflict(
+        string reasonCode,
+        string message,
+        string? currentRemoteFingerprint = null)
     {
         return new ArchidektProviderException(
             ArchidektFailureKind.Conflict,
             reasonCode,
-            message);
+            message)
+        {
+            CurrentRemoteFingerprint = currentRemoteFingerprint,
+        };
     }
 }

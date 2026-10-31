@@ -29,6 +29,7 @@ public sealed class SpellbookMcpTests
                 cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
             Dictionary<string, string[]> expectedProperties = new(StringComparer.Ordinal)
             {
+                ["spellbook_deck_bracket_facts_get"] = ["deckId", "expectedRevision"],
                 ["spellbook_deck_combos_find"] =
                     ["deckId", "expectedRevision", "groupByCombo", "limit", "offset", "sourceQuery"],
                 ["spellbook_variant_get"] = ["variantId"],
@@ -66,9 +67,9 @@ public sealed class SpellbookMcpTests
             "decks,spellbook",
             SeedAsync,
             TestContext.Current.CancellationToken).ConfigureAwait(false);
-        JsonElement deck = await CallSuccessAsync(
+        JsonElement deck = await WholeDeck.SuccessAsync(
             session,
-            "deck_create",
+            "local_deck_create",
             new Dictionary<string, object?>
             {
                 ["request"] = new
@@ -181,8 +182,8 @@ public sealed class SpellbookMcpTests
             toolName,
             arguments,
             cancellationToken: TestContext.Current.CancellationToken).ConfigureAwait(false);
-        Assert.NotEqual(true, call.IsError);
         JsonElement result = Assert.IsType<JsonElement>(call.StructuredContent);
+        Assert.Equal(!string.Equals(result.GetProperty("kind").GetString(), "success", StringComparison.Ordinal), call.IsError == true);
         Assert.Equal("success", result.GetProperty("kind").GetString());
         return result.GetProperty("data");
     }

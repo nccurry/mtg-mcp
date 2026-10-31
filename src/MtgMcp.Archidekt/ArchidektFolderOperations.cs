@@ -118,7 +118,8 @@ internal sealed class ArchidektFolderOperations
                 RequireFingerprint(
                     request.ExpectedTreeFingerprint,
                     before.TreeFingerprint,
-                    "folder-tree-changed");
+                    "folder-tree-changed",
+                    before.TreeFingerprint);
                 RemoteFolderRecord current = FindFolder(before, request.FolderId);
                 string? requestedParent = null;
                 if (request.UpdateParent)
@@ -183,7 +184,8 @@ internal sealed class ArchidektFolderOperations
                 RequireFingerprint(
                     request.ExpectedTreeFingerprint,
                     before.TreeFingerprint,
-                    "folder-tree-changed");
+                    "folder-tree-changed",
+                    before.TreeFingerprint);
                 string destinationFolderId = ResolveProviderParent(before, request.DestinationFolderId);
                 ArchidektFolderMoveItem[] items = DeduplicateMoveItems(request.Items);
                 int deckCount = items.Count(value => value.Kind == "deck");
@@ -268,7 +270,8 @@ internal sealed class ArchidektFolderOperations
                 RequireFingerprint(
                     request.ExpectedTreeFingerprint,
                     before.TreeFingerprint,
-                    "folder-tree-changed");
+                    "folder-tree-changed",
+                    before.TreeFingerprint);
                 RemoteFolderRecord folder = FindFolder(before, request.FolderId);
                 if (!string.Equals(folder.Name, request.ExpectedName, StringComparison.Ordinal))
                 {
@@ -388,11 +391,15 @@ internal sealed class ArchidektFolderOperations
     /// <summary>
     /// Requires one caller fingerprint to match freshly retrieved evidence.
     /// </summary>
-    private static void RequireFingerprint(string expected, string actual, string reasonCode)
+    private static void RequireFingerprint(
+        string expected,
+        string actual,
+        string reasonCode,
+        string? currentRemoteFingerprint = null)
     {
         if (!string.Equals(expected, actual, StringComparison.Ordinal))
         {
-            throw Conflict(reasonCode, "Provider evidence changed after the preview.");
+            throw Conflict(reasonCode, "Provider evidence changed after the preview.", currentRemoteFingerprint);
         }
     }
 
@@ -473,7 +480,7 @@ internal sealed class ArchidektFolderOperations
     /// <summary>
     /// Deduplicates typed move items while rejecting incompatible duplicate identities.
     /// </summary>
-    private static ArchidektFolderMoveItem[] DeduplicateMoveItems(
+    internal static ArchidektFolderMoveItem[] DeduplicateMoveItems(
         IReadOnlyList<ArchidektFolderMoveItem> items)
     {
         if (items.Count == 0)
@@ -541,7 +548,7 @@ internal sealed class ArchidektFolderOperations
     /// <summary>
     /// Maps the explicit provider visibility vocabulary.
     /// </summary>
-    private static string NormalizeVisibility(string value)
+    internal static string NormalizeVisibility(string value)
     {
         return ArchidektContract.Required(value, nameof(value)).ToLowerInvariant() switch
         {
@@ -607,11 +614,17 @@ internal sealed class ArchidektFolderOperations
     /// <summary>
     /// Creates one provider-state conflict without transport details.
     /// </summary>
-    private static ArchidektProviderException Conflict(string reasonCode, string message)
+    private static ArchidektProviderException Conflict(
+        string reasonCode,
+        string message,
+        string? currentRemoteFingerprint = null)
     {
         return new ArchidektProviderException(
             ArchidektFailureKind.Conflict,
             reasonCode,
-            message);
+            message)
+        {
+            CurrentRemoteFingerprint = currentRemoteFingerprint,
+        };
     }
 }

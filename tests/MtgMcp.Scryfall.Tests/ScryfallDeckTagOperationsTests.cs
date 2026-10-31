@@ -89,6 +89,7 @@ public sealed class ScryfallDeckTagOperationsTests
             dataRoot,
             allowLocalWrites: true,
             "0.9.0-preview.1",
+            ScryfallTestFixture.ResultOptions,
             ScryfallTestFixture.ApiBaseUri,
             TimeSpan.FromHours(24),
             timeProvider: null,

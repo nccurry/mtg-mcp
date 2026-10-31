@@ -24,12 +24,13 @@ public sealed class ScryfallLiveTests
         using ScryfallService service = new(
             temporary.Path,
             allowLocalWrites: true,
-            "0.9.0-preview.1");
+            "0.9.0-preview.1",
+            ScryfallTestFixture.ResultOptions);
 
         ScryfallBulkMetadataResult metadata = RequireSuccess(await service.GetBulkMetadataAsync(
             "refresh",
             TestContext.Current.CancellationToken));
-        ScryfallCardResult card = RequireSuccess(await service.GetCardAsync(
+        ScryfallCardResult card = RequireSuccess(await service.ReadCardAsync(
             new ScryfallCardLookup("exact-name", "Venerable Knight"),
             "refresh",
             includeRaw: true,
@@ -69,7 +70,11 @@ public sealed class ScryfallLiveTests
         dataRoot = Path.GetFullPath(dataRoot);
         Directory.CreateDirectory(dataRoot);
         ScryfallCorpusSyncResult sync;
-        using (ScryfallService writer = new(dataRoot, allowLocalWrites: true, "0.9.0-preview.1"))
+        using (ScryfallService writer = new(
+            dataRoot,
+            allowLocalWrites: true,
+            "0.9.0-preview.1",
+            ScryfallTestFixture.ResultOptions))
         {
             sync = RequireSuccess(await writer.SyncCorpusAsync(
                 "refresh",
@@ -78,7 +83,11 @@ public sealed class ScryfallLiveTests
             Assert.Equal(4, sync.Datasets.Count);
         }
 
-        using (ScryfallService reader = new(dataRoot, allowLocalWrites: false, "0.9.0-preview.1"))
+        using (ScryfallService reader = new(
+            dataRoot,
+            allowLocalWrites: false,
+            "0.9.0-preview.1",
+            ScryfallTestFixture.ResultOptions))
         {
             ScryfallCorpusStatus status = RequireSuccess(await reader.GetCorpusStatusAsync(
                 TestContext.Current.CancellationToken));
@@ -94,7 +103,7 @@ public sealed class ScryfallLiveTests
                 Assert.True(dataset.SourceBytes > 0);
                 Assert.Matches("^[0-9a-f]{64}$", dataset.Checksum);
             });
-            ScryfallCardResult card = RequireSuccess(await reader.GetCardAsync(
+            ScryfallCardResult card = RequireSuccess(await reader.ReadCardAsync(
                 new ScryfallCardLookup("exact-name", "Venerable Knight"),
                 "cache-only",
                 cancellationToken: TestContext.Current.CancellationToken));
@@ -106,7 +115,11 @@ public sealed class ScryfallLiveTests
         bool rollbackExercised = false;
         if (sync.PreviousGenerationId is Guid previous)
         {
-            using ScryfallService writer = new(dataRoot, allowLocalWrites: true, "0.9.0-preview.1");
+            using ScryfallService writer = new(
+                dataRoot,
+                allowLocalWrites: true,
+                "0.9.0-preview.1",
+                ScryfallTestFixture.ResultOptions);
             ScryfallCorpusMutationResult rolledBack = RequireSuccess(await writer.RollbackCorpusAsync(
                 sync.GenerationId,
                 previous,

@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace MtgMcp.Archidekt;
 
 /// <summary>
@@ -5,8 +7,12 @@ namespace MtgMcp.Archidekt;
 /// </summary>
 public sealed record ArchidektDeckCreateRequest(
     string Name,
+    [property: AllowedValues(
+        "standard", "modern", "commander", "edh", "legacy", "vintage", "pauper", "pioneer", "brawl", "historic",
+        "oathbreaker")]
     string Format,
     string? Description = null,
+    [property: AllowedValues("private", "unlisted", "public")]
     string Visibility = "private",
     string? ParentFolderId = null);
 
@@ -20,13 +26,15 @@ public sealed record ArchidektDeckDeleteRequest(
 
 /// <summary>
 /// Carries every immutable guard required to apply a pull preview.
+/// DiscardLocalChanges must equal the value the preview was made with; it takes the Archidekt state over local edits.
 /// </summary>
 public sealed record ArchidektPullApplyRequest(
     string RemoteDeckId,
     Guid? LocalDeckId,
     long? ExpectedLocalRevision,
     string ExpectedRemoteFingerprint,
-    string PreviewFingerprint);
+    string PreviewFingerprint,
+    bool DiscardLocalChanges = false);
 
 /// <summary>
 /// Carries every immutable guard required to apply a push preview.
@@ -42,7 +50,7 @@ public sealed record ArchidektPushApplyRequest(
 /// </summary>
 public sealed record ArchidektFolderCreateRequest(
     string Name,
-    string Visibility,
+    [property: FolderVisibilityValues] string Visibility,
     string? ParentFolderId = null);
 
 /// <summary>
@@ -52,7 +60,7 @@ public sealed record ArchidektFolderUpdateRequest(
     string FolderId,
     string ExpectedTreeFingerprint,
     string? Name = null,
-    string? Visibility = null,
+    [property: FolderVisibilityValues] string? Visibility = null,
     string? ParentFolderId = null,
     bool UpdateParent = false);
 
@@ -60,7 +68,7 @@ public sealed record ArchidektFolderUpdateRequest(
 /// Identifies one exact deck or folder and its expected current parent.
 /// </summary>
 public sealed record ArchidektFolderMoveItem(
-    string Kind,
+    [property: AllowedValues("deck", "folder")] string Kind,
     string Id,
     string? ExpectedParentFolderId);
 

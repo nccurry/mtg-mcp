@@ -4,9 +4,11 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using MtgMcp.App.Archidekt;
 using MtgMcp.App.Capabilities;
+using MtgMcp.App.CardLists;
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Decks;
 using MtgMcp.App.Playgroup;
+using MtgMcp.App.Prompts;
 using MtgMcp.App.Scryfall;
 using MtgMcp.App.Spellbook;
 using MtgMcp.App.Statistics;
@@ -25,11 +27,6 @@ namespace MtgMcp.App.Hosting;
 internal static class FoundationHost
 {
     /// <summary>
-    /// Identifies the only MCP wire revision the server accepts.
-    /// </summary>
-    private const string SupportedProtocolVersion = "2026-07-28";
-
-    /// <summary>
     /// Runs one stdio session until the client disconnects or cancellation is requested.
     /// </summary>
     internal static async Task RunAsync(
@@ -46,12 +43,13 @@ internal static class FoundationHost
             ? new SqliteDeckStore(configuration.DataRoot, FoundationServerIdentity.PackageVersion)
             : null;
         bool scryfallEnabled = configuration.Toolsets.Includes(CapabilityToolset.Scryfall);
-        using ScryfallService? scryfallService = scryfallEnabled || decksEnabled
+        using ScryfallService? scryfallService = scryfallEnabled || decksEnabled || statisticsEnabled
             ? new ScryfallService(
                 configuration.DataRoot,
                 OperationModeGuard.Allows(configuration.Mode, OperationRequirement.LocalWrite),
                 FoundationServerIdentity.PackageVersion,
-                freshnessTtl: configuration.ScryfallFreshnessTtl)
+                freshnessTtl: configuration.ScryfallFreshnessTtl,
+                resultSerializerOptions: ToolCallPolicy.SerializerOptions)
             : null;
         using ArchidektService? archidektService = archidektEnabled
             ? new ArchidektService(configuration.Archidekt, FoundationServerIdentity.PackageVersion)
@@ -70,7 +68,7 @@ internal static class FoundationHost
         IMcpServerBuilder mcpBuilder = builder.Services
             .AddMcpServer(options =>
             {
-                options.ProtocolVersion = SupportedProtocolVersion;
+                options.ServerInstructions = ServerInstructions.Build(configuration.Toolsets, configuration.Mode);
                 options.ServerInfo = new Implementation
                 {
                     Name = FoundationServerIdentity.Name,
@@ -81,23 +79,33 @@ internal static class FoundationHost
             .WithStdioServerTransport()
             .WithMessageFilters(filters =>
                 filters.AddOutgoingFilter(FoundationProtocolPolicy.OmitUnsupportedImplicitCapabilities()))
-            .WithResources(new FoundationResources(configuration));
+            .WithRequestFilters(filters => filters
+                .AddCallToolFilter(ToolCallPolicy.Filter)
+                .AddGetPromptFilter(WorkflowPrompts.ArgumentFilter))
+            .WithResources(new FoundationResources(configuration))
+            .WithPrompts<WorkflowPrompts>();
         if (decksEnabled && deckStore is not null && scryfallService is not null)
         {
             DeckToolsetManifest.Register(mcpBuilder, deckStore, scryfallService, configuration.Mode);
         }
 
+        CardListAccess listAccess = new(
+            decksEnabled ? deckStore : null,
+            archidektService,
+            configuration.Toolsets.FindDisabledReason(CapabilityToolset.Archidekt) ??
+                CardListAccess.ToolsetNotSelected);
         if (scryfallEnabled && scryfallService is not null)
         {
-            ScryfallToolsetManifest.Register(mcpBuilder, scryfallService, configuration.Mode);
+            ScryfallToolsetManifest.Register(mcpBuilder, scryfallService, configuration.Mode, listAccess);
         }
 
-        if (statisticsEnabled && deckStore is not null)
+        if (statisticsEnabled && deckStore is not null && scryfallService is not null)
         {
             StatisticsToolsetManifest.Register(
                 mcpBuilder,
                 deckStore,
-                new ExactStatisticsCalculator(FoundationServerIdentity.PackageVersion));
+                new ExactStatisticsCalculator(FoundationServerIdentity.PackageVersion),
+                scryfallService);
         }
 
         if (archidektService is not null && deckStore is not null)

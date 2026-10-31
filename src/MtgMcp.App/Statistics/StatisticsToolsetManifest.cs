@@ -1,10 +1,11 @@
 using System.Reflection;
 using System.Text.Json.Nodes;
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
-using ModelContextProtocol.Server;
 using MtgMcp.App.Capabilities;
+using MtgMcp.App.CardLists;
+using MtgMcp.App.Hosting;
 using MtgMcp.Decks;
+using MtgMcp.Scryfall;
 using MtgMcp.Statistics;
 
 namespace MtgMcp.App.Statistics;
@@ -40,33 +41,38 @@ internal static class StatisticsToolsetManifest
     internal static CapabilityToolsetDescriptor Descriptor { get; } = new(
         CapabilityToolset.Stats,
         CapabilityToolsetStability.Stable,
-        "Provider-independent exact mathematics over caller-supplied groups and explicitly selected deck populations.",
+        "Exact mathematics over caller-supplied groups and explicitly selected deck populations, plus seeded " +
+        "sampling of caller-stated rules; castability and the on-curve preset also read installed Scryfall card data.",
         [
-            "stats_deck_summary",
+            "stats_castability",
+            "stats_local_deck_summary",
             "stats_hypergeometric",
             "stats_mana_availability",
             "stats_minimum_count",
             "stats_mulligan",
             "stats_multivariate",
             "stats_package_assembly",
+            "stats_simulate",
             "stats_turn_table",
         ],
         [],
         []);
 
     /// <summary>
-    /// Registers exactly eight read-only tools for every operation mode.
+    /// Registers exactly ten read-only tools for every operation mode.
     /// </summary>
     internal static void Register(
         IMcpServerBuilder builder,
         SqliteDeckStore deckStore,
-        ExactStatisticsCalculator calculator)
+        ExactStatisticsCalculator calculator,
+        ScryfallService scryfallService)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(deckStore);
         ArgumentNullException.ThrowIfNull(calculator);
+        ArgumentNullException.ThrowIfNull(scryfallService);
         StatisticsReadTools target = new(new StatisticsDeckResolver(deckStore), calculator);
-        builder.WithTools(
+        builder.WithRegisteredTools(
         [
             Create(nameof(StatisticsReadTools.HypergeometricAsync), target),
             Create(nameof(StatisticsReadTools.MultivariateAsync), target),
@@ -77,27 +83,22 @@ internal static class StatisticsToolsetManifest
             Create(nameof(StatisticsReadTools.MinimumCountAsync), target),
             Create(nameof(StatisticsReadTools.DeckSummaryAsync), target),
         ]);
+        CardListResolver resolver = new(scryfallService, new CardListAccess(deckStore, null));
+        builder.WithRegisteredTools(ToolRegistration.Create(
+            new StatisticsCastabilityTools(new StatisticsCastabilityCoordinator(resolver, calculator))));
+        builder.WithRegisteredTools(ToolRegistration.Create(
+            new StatisticsSimulateTools(new StatisticsSimulateCoordinator(resolver))));
     }
 
     /// <summary>
     /// Creates one explicitly named tool with discriminator descriptions.
     /// </summary>
-    private static McpServerTool Create(string methodName, StatisticsReadTools target)
+    private static RegisteredTool Create(string methodName, StatisticsReadTools target)
     {
         MethodInfo method = typeof(StatisticsReadTools).GetMethod(
             methodName,
             BindingFlags.Instance | BindingFlags.NonPublic)!;
-        return McpServerTool.Create(method, target, new McpServerToolCreateOptions
-        {
-            SchemaCreateOptions = new AIJsonSchemaCreateOptions
-            {
-                TransformSchemaNode = static (_, schema) => DescribeDiscriminator(schema),
-                TransformOptions = new AIJsonSchemaTransformOptions
-                {
-                    TransformSchemaNode = static (_, schema) => DescribeDiscriminator(schema),
-                },
-            },
-        });
+        return ToolRegistration.Create(method, target, describeNode: DescribeDiscriminator);
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using MtgMcp.App.Decks;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
@@ -11,16 +12,19 @@ public sealed class DeckCategorizationTests
 {
     /// <summary>Rejects a source that cannot bind an existing local category.</summary>
     [Fact]
-    public async Task Validate_InvalidInlineCategory_ReturnsInvalidInput()
+    public async Task Preview_WithoutRevision_InvalidInlineCategoryReturnsInvalidInput()
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
-        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1");
+        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1", ToolCallPolicy.SerializerOptions);
         DeckCategorizationCoordinator coordinator = new(store, scryfall);
-        DeckDocument deck = RequireSuccess(await store.CreateAsync(new DeckCreateRequest("Fixture"), TestContext.Current.CancellationToken));
+        DeckDocument deck = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest("Fixture"),
+            TestContext.Current.CancellationToken));
 
-        OperationResult<DeckCategoryRulesPreview> result = await coordinator.ValidateAsync(
+        OperationResult<DeckCategoryRulesPreview> result = await coordinator.PreviewAsync(
             deck.DeckId,
+            null,
             new InlineCategoryRuleSource(new CategoryRuleSet("add-only", [new CategoryRule(Guid.NewGuid(), [], [], [])])),
             "cache-only",
             TestContext.Current.CancellationToken);
@@ -34,7 +38,7 @@ public sealed class DeckCategorizationTests
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
-        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1");
+        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1", ToolCallPolicy.SerializerOptions);
         DeckCategorizationCoordinator coordinator = new(store, scryfall);
         Guid categoryId = Guid.NewGuid();
         DeckDocument deck = RequireSuccess(await store.CreateAsync(new DeckCreateRequest(
@@ -53,41 +57,29 @@ public sealed class DeckCategorizationTests
         Assert.Equal("scryfall-corpus-missing", Assert.IsType<OperationNotCached>(result.Value).ReasonCode);
     }
 
-    /// <summary>Rejects malformed preset role and duplicate binding requests.</summary>
-    [Fact]
-    public async Task Validate_InvalidPresetBindings_ReturnsInvalidInput()
-    {
-        using TemporaryDirectory temporary = new();
-        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
-        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1");
-        DeckCategorizationCoordinator coordinator = new(store, scryfall);
-        Guid categoryId = Guid.NewGuid();
-        DeckDocument deck = RequireSuccess(await store.CreateAsync(new DeckCreateRequest(
-            "Fixture", Categories: [new DeckCategoryDraft("Ramp", CategoryId: categoryId)]), TestContext.Current.CancellationToken));
-        CommonPresetCategoryRuleSource source = new(
-            "common-v1",
-            "add-only",
-            [new CategoryRoleBinding("unknown", categoryId), new CategoryRoleBinding("unknown", categoryId)]);
-
-        OperationResult<DeckCategoryRulesPreview> result = await coordinator.ValidateAsync(
-            deck.DeckId, source, "cache-only", TestContext.Current.CancellationToken);
-
-        Assert.Equal("invalid-category-preset", Assert.IsType<OperationInvalidInput>(result.Value).ReasonCode);
-    }
-
     /// <summary>Rejects a tampered apply token before reading or mutating the deck.</summary>
     [Fact]
     public async Task Apply_TamperedToken_ReturnsInvalidInput()
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
-        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1");
+        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1", ToolCallPolicy.SerializerOptions);
         DeckCategorizationCoordinator coordinator = new(store, scryfall);
-        DeckDocument deck = RequireSuccess(await store.CreateAsync(new DeckCreateRequest("Fixture"), TestContext.Current.CancellationToken));
+        DeckDocument deck = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest("Fixture"),
+            TestContext.Current.CancellationToken));
         CategoryRuleSource source = new InlineCategoryRuleSource(new CategoryRuleSet("add-only", []));
 
-        OperationResult<DeckDocument> result = await coordinator.ApplyAsync(
-            deck.DeckId, deck.Revision, null, source, "cache-only", "fingerprint", "tampered", TestContext.Current.CancellationToken);
+        OperationResult<DeckWriteResult> result = await coordinator.ApplyAsync(
+            deck.DeckId,
+            deck.Revision,
+            null,
+            source,
+            "cache-only",
+            "fingerprint",
+            "tampered",
+            false,
+            TestContext.Current.CancellationToken);
 
         Assert.Equal("invalid-category-apply-token", Assert.IsType<OperationInvalidInput>(result.Value).ReasonCode);
     }
@@ -98,7 +90,7 @@ public sealed class DeckCategorizationTests
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
-        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1");
+        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1", ToolCallPolicy.SerializerOptions);
         DeckCategorizationCoordinator coordinator = new(store, scryfall);
         Guid categoryId = Guid.NewGuid();
         DeckDocument deck = RequireSuccess(await store.CreateAsync(new DeckCreateRequest(
@@ -116,20 +108,45 @@ public sealed class DeckCategorizationTests
         Assert.NotEmpty(preview.ApplyToken);
     }
 
-    /// <summary>Rejects assignment modes outside the closed categorization contract.</summary>
+    /// <summary>Reports the current deck revision when a preview is requested for a stale revision.</summary>
     [Fact]
-    public async Task Validate_InvalidAssignmentMode_ReturnsInvalidInput()
+    public async Task Preview_StaleRevision_ReturnsConflictWithCurrentRevision()
     {
         using TemporaryDirectory temporary = new();
         using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
-        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1");
+        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1", ToolCallPolicy.SerializerOptions);
+        DeckCategorizationCoordinator coordinator = new(store, scryfall);
+        DeckDocument deck = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest("Fixture"),
+            TestContext.Current.CancellationToken));
+
+        OperationResult<DeckCategoryRulesPreview> result = await coordinator.PreviewAsync(
+            deck.DeckId,
+            deck.Revision + 1,
+            new InlineCategoryRuleSource(new CategoryRuleSet("add-only", [])),
+            "cache-only",
+            TestContext.Current.CancellationToken);
+
+        OperationConflict conflict = Assert.IsType<OperationConflict>(result.Value);
+        Assert.Equal("deck-revision-conflict", conflict.ReasonCode);
+        Assert.Equal(new ConflictState(Revision: deck.Revision), conflict.Current);
+    }
+
+    /// <summary>Rejects assignment modes outside the closed categorization contract.</summary>
+    [Fact]
+    public async Task Preview_WithoutRevision_InvalidAssignmentModeReturnsInvalidInput()
+    {
+        using TemporaryDirectory temporary = new();
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        using ScryfallService scryfall = new(temporary.Path, true, "0.9.0-preview.1", ToolCallPolicy.SerializerOptions);
         DeckCategorizationCoordinator coordinator = new(store, scryfall);
         Guid categoryId = Guid.NewGuid();
         DeckDocument deck = RequireSuccess(await store.CreateAsync(new DeckCreateRequest(
             "Fixture", Categories: [new DeckCategoryDraft("Ramp", CategoryId: categoryId)]), TestContext.Current.CancellationToken));
 
-        OperationResult<DeckCategoryRulesPreview> result = await coordinator.ValidateAsync(
+        OperationResult<DeckCategoryRulesPreview> result = await coordinator.PreviewAsync(
             deck.DeckId,
+            null,
             new InlineCategoryRuleSource(new CategoryRuleSet("replace-all", [new CategoryRule(categoryId, [], [], [])])),
             "cache-only",
             TestContext.Current.CancellationToken);

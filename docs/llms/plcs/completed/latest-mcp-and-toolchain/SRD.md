@@ -72,9 +72,9 @@ one current MCP revision. It must not silently support older protocol clients.
 | LMT-004 | Must | Mise and NuGet must lock their reviewed resolved graphs. | `mise.lock` records lockable Mise downloads, each `packages.lock.json` is committed, and normal restore and CI use locked mode. |
 | LMT-005 | Must | GitHub Actions must use exact commit-SHA pins with readable release comments. | Workflow source contains no floating action tag; Dependabot continues to watch the action ecosystem. |
 | LMT-006 | Must | The MCP Registry publisher and CI Mise runner must use exact reviewed versions. | The release workflow invokes the configured publisher through Task or Mise, CI requests the exact Mise version, and neither path downloads `latest`. |
-| LMT-007 | Must | The server must require MCP `2026-07-28`. | `McpServerOptions.ProtocolVersion` uses the host's exact current-protocol constant. |
+| LMT-007 | Must | The server must require MCP `2026-07-28`. (Superseded by focused-agent-tool-surface FIX-001.) | `McpServerOptions.ProtocolVersion` uses the host's exact current-protocol constant. |
 | LMT-008 | Must | The end-to-end client must require MCP `2026-07-28`. | The test helper sets `McpClientOptions.ProtocolVersion` to its exact current-protocol constant. |
-| LMT-009 | Must | Older `initialize` clients must not receive a fallback connection. | A focused end-to-end test proves a client pinned to an older revision receives a protocol failure. |
+| LMT-009 | Must | Older `initialize` clients must not receive a fallback connection. (Superseded by focused-agent-tool-surface FIX-001.) | A focused end-to-end test proves a client pinned to an older revision receives a protocol failure. |
 | LMT-010 | Must | Tool results must keep structured JSON and text, while the capability resource remains JSON text. | Tests and source review show no binary MCP content type was added. |
 | LMT-011 | Must | Changed code must remain clear and use C# 15 only where it reduces code or improves closed-case handling. | Code review finds no mechanical syntax conversion or unnecessary wrapper. |
 | LMT-012 | Must | Documentation must state the current-only protocol policy and the version owners. | The README, toolchain guide, and capability assertions match the code. |

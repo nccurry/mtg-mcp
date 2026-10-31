@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
 using MtgMcp.Decks;
 using MtgMcp.Scryfall;
 
@@ -19,37 +20,27 @@ internal static class DeckToolsetManifest
         CapabilityToolsetStability.Stable,
         "Local deck storage and manual interchange. Toolset selection controls relevance; operation mode separately controls local writes.",
         [
-            "deck_backup_list",
-            "deck_category_rules_preview",
-            "deck_category_rules_validate",
-            "deck_export_bundle",
-            "deck_get",
-            "deck_import_preview",
-            "deck_identity_reconcile_preview",
-            "deck_interchange_formats",
-            "deck_list",
-            "deck_on_curve_estimate",
-            "deck_validate",
+            "local_deck_backup_list",
+            "local_deck_category_rules_preview",
+            "local_deck_duplicates_preview",
+            "local_deck_export_bundle",
+            "local_deck_get",
+            "local_deck_import_preview",
+            "local_deck_identity_reconcile_preview",
+            "local_deck_interchange_formats",
+            "local_deck_list",
+            "local_deck_validate",
         ],
         [
-            "deck_apply_changes",
-            "deck_backup_create",
-            "deck_backup_delete",
-            "deck_backup_restore",
-            "deck_category_assign",
-            "deck_category_create",
-            "deck_category_delete",
-            "deck_category_unassign",
-            "deck_category_update",
-            "deck_category_rules_apply",
-            "deck_create",
-            "deck_delete",
-            "deck_entry_add",
-            "deck_entry_remove",
-            "deck_entry_update",
-            "deck_import_create",
-            "deck_identity_reconcile_apply",
-            "deck_update",
+            "local_deck_apply_changes",
+            "local_deck_backup_create",
+            "local_deck_backup_delete",
+            "local_deck_backup_restore",
+            "local_deck_category_rules_apply",
+            "local_deck_create",
+            "local_deck_delete",
+            "local_deck_import_create",
+            "local_deck_identity_reconcile_apply",
         ],
         []);
 
@@ -69,21 +60,28 @@ internal static class DeckToolsetManifest
         DeckInterchangeService interchangeService = new(deckStore);
         DeckIdentityReconciliationCoordinator identityCoordinator = new(deckStore, scryfallService);
         DeckCategorizationCoordinator categorizationCoordinator = new(deckStore, scryfallService);
-        DeckOnCurveEstimateCoordinator onCurveCoordinator = new(deckStore, scryfallService);
+        DeckCardViewCoordinator cardViewCoordinator = new(deckStore, scryfallService);
+        DeckEntryResolver entryResolver = new(scryfallService);
         builder
-            .WithTools(new DeckReadTools(deckStore))
-            .WithTools(new DeckInterchangeReadTools(interchangeService))
-            .WithTools(new DeckIdentityReconciliationReadTools(identityCoordinator))
-            .WithTools(new DeckOnCurveEstimateTools(onCurveCoordinator));
-        builder.WithTools(new DeckCategorizationReadTools(categorizationCoordinator));
+            .WithRegisteredTools(ToolRegistration.Create(
+                new DeckReadTools(deckStore, cardViewCoordinator, new DeckRuleCoordinator(deckStore, scryfallService)),
+                DeckReadTools.ItemChoices))
+            .WithRegisteredTools(ToolRegistration.Create(new DeckInterchangeReadTools(interchangeService)))
+            .WithRegisteredTools(ToolRegistration.Create(new DeckIdentityReconciliationReadTools(identityCoordinator)))
+            .WithRegisteredTools(ToolRegistration.Create(
+                new DeckDuplicatesReadTools(new DeckDuplicatesCoordinator(deckStore, scryfallService))));
+        builder.WithRegisteredTools(
+            ToolRegistration.Create(new DeckCategorizationReadTools(categorizationCoordinator)));
         if (OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
         {
             builder
-                .WithTools(new DeckWriteTools(deckStore, mode))
-                .WithTools(new DeckInterchangeWriteTools(interchangeService, mode))
-                .WithTools(new DeckIdentityReconciliationWriteTools(identityCoordinator, mode))
-                .WithTools(new DeckCategorizationWriteTools(categorizationCoordinator, mode))
-                .WithTools([DeckBatchWriteTools.Create(deckStore, mode)]);
+                .WithRegisteredTools(ToolRegistration.Create(new DeckWriteTools(deckStore, mode, entryResolver)))
+                .WithRegisteredTools(ToolRegistration.Create(new DeckInterchangeWriteTools(interchangeService, mode)))
+                .WithRegisteredTools(ToolRegistration.Create(
+                    new DeckIdentityReconciliationWriteTools(identityCoordinator, mode)))
+                .WithRegisteredTools(ToolRegistration.Create(
+                    new DeckCategorizationWriteTools(categorizationCoordinator, mode)))
+                .WithRegisteredTools([DeckBatchWriteTools.Create(deckStore, mode, entryResolver)]);
         }
     }
 }

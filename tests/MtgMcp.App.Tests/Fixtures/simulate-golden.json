@@ -1,0 +1,335 @@
+{
+  "sources": [
+    {
+      "side": "deck",
+      "kind": "deck",
+      "deckId": "0193e97a-ef95-7700-8000-0000000000d1",
+      "revision": 1,
+      "entries": 5
+    }
+  ],
+  "seed": "9f3c1a7e5b2d4c60",
+  "randomVersion": "splitmix64-v1",
+  "modelVersion": "simulation-v1",
+  "samples": 4000,
+  "fingerprint": "872468da86f3d2525fd9c83fce97a8ccd7e858f774b2dbbbda27b46f0459a0fe",
+  "appliedRules": {
+    "turns": 4,
+    "openingHand": {
+      "size": 7,
+      "onThePlay": true,
+      "mulligan": {
+        "rule": "london",
+        "freeFirstMulligan": true,
+        "maxMulligans": 2,
+        "keepWhen": {
+          "kind": "count-between",
+          "group": "lands",
+          "min": 2,
+          "max": 5
+        },
+        "bottom": {
+          "preferGroups": [
+            "ramp"
+          ],
+          "otherwise": "random"
+        }
+      }
+    },
+    "groups": [
+      {
+        "id": "lands",
+        "select": {
+          "kind": "category-ids",
+          "ids": [
+            "0193e97a-ef95-7700-8000-000000000021"
+          ]
+        }
+      },
+      {
+        "id": "ramp",
+        "select": {
+          "kind": "entry-ids",
+          "ids": [
+            "0193e97a-ef95-7700-8000-000000000012"
+          ]
+        }
+      }
+    ],
+    "eachTurn": [
+      {
+        "kind": "play",
+        "addsMana": 1,
+        "manaFrom": "same-turn",
+        "group": "lands",
+        "pick": "random",
+        "maxPerTurn": 1
+      },
+      {
+        "kind": "cast-if-able",
+        "cost": 2,
+        "addsMana": 1,
+        "manaFrom": "next-turn",
+        "group": "ramp",
+        "pick": "listed-order",
+        "maxPerTurn": 1
+      }
+    ],
+    "conditions": [
+      {
+        "id": "four-mana",
+        "check": {
+          "kind": "mana-at-least",
+          "amount": 4,
+          "turn": 4
+        }
+      },
+      {
+        "id": "ramp-seen",
+        "check": {
+          "kind": "drawn-at-least",
+          "group": "ramp",
+          "count": 1,
+          "byTurn": 2
+        }
+      }
+    ]
+  },
+  "groups": [
+    {
+      "id": "lands",
+      "entries": 1,
+      "cards": 24
+    },
+    {
+      "id": "ramp",
+      "entries": 1,
+      "cards": 4
+    }
+  ],
+  "skipped": [
+    {
+      "entryId": "0193e97a-ef95-7700-8000-000000000015",
+      "name": "Commander",
+      "group": "lands",
+      "reason": "not-in-main-zone"
+    }
+  ],
+  "results": [
+    {
+      "id": "four-mana",
+      "hits": 3152,
+      "rate": 0.788,
+      "wilson95": [
+        0.77506,
+        0.800387
+      ]
+    },
+    {
+      "id": "ramp-seen",
+      "hits": 1672,
+      "rate": 0.418,
+      "wilson95": [
+        0.402801,
+        0.433357
+      ]
+    }
+  ],
+  "mulligans": {
+    "keptByRule": 3987,
+    "keptAtLimit": 13
+  },
+  "libraryEmpty": 0,
+  "sampleHands": [
+    {
+      "sample": 1,
+      "hands": [
+        {
+          "mulligan": 0,
+          "entryIds": [
+            "0193e97a-ef95-7700-8000-000000000014",
+            "0193e97a-ef95-7700-8000-000000000014",
+            "0193e97a-ef95-7700-8000-000000000014",
+            "0193e97a-ef95-7700-8000-000000000014",
+            "0193e97a-ef95-7700-8000-000000000011",
+            "0193e97a-ef95-7700-8000-000000000014",
+            "0193e97a-ef95-7700-8000-000000000011"
+          ]
+        }
+      ],
+      "kept": [
+        "0193e97a-ef95-7700-8000-000000000014",
+        "0193e97a-ef95-7700-8000-000000000014",
+        "0193e97a-ef95-7700-8000-000000000014",
+        "0193e97a-ef95-7700-8000-000000000014",
+        "0193e97a-ef95-7700-8000-000000000011",
+        "0193e97a-ef95-7700-8000-000000000014",
+        "0193e97a-ef95-7700-8000-000000000011"
+      ],
+      "bottomed": [],
+      "turns": [
+        {
+          "turn": 1,
+          "drawn": [],
+          "moved": [
+            {
+              "rule": 0,
+              "entryId": "0193e97a-ef95-7700-8000-000000000011"
+            }
+          ],
+          "manaAvailable": 1,
+          "manaSpent": 0
+        },
+        {
+          "turn": 2,
+          "drawn": [
+            "0193e97a-ef95-7700-8000-000000000011"
+          ],
+          "moved": [
+            {
+              "rule": 0,
+              "entryId": "0193e97a-ef95-7700-8000-000000000011"
+            }
+          ],
+          "manaAvailable": 2,
+          "manaSpent": 0
+        },
+        {
+          "turn": 3,
+          "drawn": [
+            "0193e97a-ef95-7700-8000-000000000012"
+          ],
+          "moved": [
+            {
+              "rule": 0,
+              "entryId": "0193e97a-ef95-7700-8000-000000000011"
+            },
+            {
+              "rule": 1,
+              "entryId": "0193e97a-ef95-7700-8000-000000000012"
+            }
+          ],
+          "manaAvailable": 3,
+          "manaSpent": 2
+        },
+        {
+          "turn": 4,
+          "drawn": [
+            "0193e97a-ef95-7700-8000-000000000011"
+          ],
+          "moved": [
+            {
+              "rule": 0,
+              "entryId": "0193e97a-ef95-7700-8000-000000000011"
+            }
+          ],
+          "manaAvailable": 5,
+          "manaSpent": 0
+        }
+      ]
+    },
+    {
+      "sample": 2,
+      "hands": [
+        {
+          "mulligan": 0,
+          "entryIds": [
+            "0193e97a-ef95-7700-8000-000000000011",
+            "0193e97a-ef95-7700-8000-000000000011",
+            "0193e97a-ef95-7700-8000-000000000014",
+            "0193e97a-ef95-7700-8000-000000000014",
+            "0193e97a-ef95-7700-8000-000000000011",
+            "0193e97a-ef95-7700-8000-000000000014",
+            "0193e97a-ef95-7700-8000-000000000014"
+          ]
+        }
+      ],
+      "kept": [
+        "0193e97a-ef95-7700-8000-000000000011",
+        "0193e97a-ef95-7700-8000-000000000011",
+        "0193e97a-ef95-7700-8000-000000000014",
+        "0193e97a-ef95-7700-8000-000000000014",
+        "0193e97a-ef95-7700-8000-000000000011",
+        "0193e97a-ef95-7700-8000-000000000014",
+        "0193e97a-ef95-7700-8000-000000000014"
+      ],
+      "bottomed": [],
+      "turns": [
+        {
+          "turn": 1,
+          "drawn": [],
+          "moved": [
+            {
+              "rule": 0,
+              "entryId": "0193e97a-ef95-7700-8000-000000000011"
+            }
+          ],
+          "manaAvailable": 1,
+          "manaSpent": 0
+        },
+        {
+          "turn": 2,
+          "drawn": [
+            "0193e97a-ef95-7700-8000-000000000014"
+          ],
+          "moved": [
+            {
+              "rule": 0,
+              "entryId": "0193e97a-ef95-7700-8000-000000000011"
+            }
+          ],
+          "manaAvailable": 2,
+          "manaSpent": 0
+        },
+        {
+          "turn": 3,
+          "drawn": [
+            "0193e97a-ef95-7700-8000-000000000011"
+          ],
+          "moved": [
+            {
+              "rule": 0,
+              "entryId": "0193e97a-ef95-7700-8000-000000000011"
+            }
+          ],
+          "manaAvailable": 3,
+          "manaSpent": 0
+        },
+        {
+          "turn": 4,
+          "drawn": [
+            "0193e97a-ef95-7700-8000-000000000011"
+          ],
+          "moved": [
+            {
+              "rule": 0,
+              "entryId": "0193e97a-ef95-7700-8000-000000000011"
+            }
+          ],
+          "manaAvailable": 4,
+          "manaSpent": 0
+        }
+      ]
+    }
+  ],
+  "sampleCards": [
+    {
+      "entryId": "0193e97a-ef95-7700-8000-000000000014",
+      "name": "Filler"
+    },
+    {
+      "entryId": "0193e97a-ef95-7700-8000-000000000011",
+      "name": "Forest"
+    },
+    {
+      "entryId": "0193e97a-ef95-7700-8000-000000000012",
+      "name": "Ramp"
+    }
+  ],
+  "limits": [
+    "Groups without produces add colorless mana that pays only generic costs (not {C}).",
+    "Mana is used or lost within its turn; unspent mana does not carry over to the next turn.",
+    "Phyrexian life payment is not modeled; a Phyrexian symbol needs its color.",
+    "Only the stated groups and rules are applied; cards in no group are drawn and held."
+  ]
+}

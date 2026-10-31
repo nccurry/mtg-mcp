@@ -55,13 +55,13 @@ internal enum OperationRequirement
 internal static class OperationModeParser
 {
     /// <summary>
-    /// Parses a configured mode, using local authority when the value is omitted.
+    /// Parses a configured mode, using remote authority when the value is omitted.
     /// </summary>
     internal static OperationResult<OperationMode> Parse(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            return new OperationSuccess<OperationMode>(OperationMode.Local);
+            return new OperationSuccess<OperationMode>(OperationMode.Remote);
         }
 
         string normalized = value.Trim();

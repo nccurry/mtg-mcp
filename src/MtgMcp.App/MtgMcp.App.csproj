@@ -3,9 +3,9 @@
         <ProjectReference Include="..\MtgMcp.Core\MtgMcp.Core.csproj" />
         <ProjectReference Include="..\MtgMcp.Archidekt\MtgMcp.Archidekt.csproj" />
         <ProjectReference Include="..\MtgMcp.Decks\MtgMcp.Decks.csproj" />
-        <ProjectReference Include="..\MtgMcp.OnCurve\MtgMcp.OnCurve.csproj" />
         <ProjectReference Include="..\MtgMcp.Playgroup\MtgMcp.Playgroup.csproj" />
         <ProjectReference Include="..\MtgMcp.Scryfall\MtgMcp.Scryfall.csproj" />
+        <ProjectReference Include="..\MtgMcp.Simulation\MtgMcp.Simulation.csproj" />
         <ProjectReference Include="..\MtgMcp.Spellbook\MtgMcp.Spellbook.csproj" />
         <ProjectReference Include="..\MtgMcp.Statistics\MtgMcp.Statistics.csproj" />
     </ItemGroup>
@@ -27,7 +27,7 @@
         <PackAsTool>true</PackAsTool>
         <ToolCommandName>mtg-mcp</ToolCommandName>
         <PackageId>Nccurry.MtgMcp</PackageId>
-        <Version>0.10.0</Version>
+        <Version>0.13.0</Version>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <Authors>Nick Curry</Authors>
         <Company>Nick Curry</Company>

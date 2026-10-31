@@ -3,6 +3,7 @@ using System.Text.Json;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Capabilities;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Prompts;
 
 namespace MtgMcp.App.Hosting;
 
@@ -15,6 +16,12 @@ internal sealed class FoundationResources
     /// Identifies the one stable foundation resource.
     /// </summary>
     internal const string CapabilityUri = "mtg://server/capabilities";
+
+    /// <summary>
+    /// Every toolset is on by default; the field stays in the resource for clients that read it. A toolset that is off
+    /// because of missing credentials reports that in <c>disabledReason</c>.
+    /// </summary>
+    private const bool DefaultEnabled = true;
 
     /// <summary>
     /// Serializes the deterministic capability contract using web JSON conventions.
@@ -63,7 +70,8 @@ internal sealed class FoundationResources
                 authenticationStatusTool,
                 CapabilityToolsetPolicy.Format(descriptor.Stability),
                 enabled,
-                descriptor.DefaultEnabled,
+                DefaultEnabled,
+                configuration.Toolsets.FindDisabledReason(descriptor.Toolset),
                 enabled ? descriptor.GetVisibleToolCount(configuration.Mode) : 0,
                 descriptor.Description,
                 descriptor.Toolset == CapabilityToolset.Playgroup
@@ -72,13 +80,13 @@ internal sealed class FoundationResources
         }
 
         FoundationCapabilityDocument document = new(
-            7,
+            8,
             new FoundationServerStatus(
                 FoundationServerIdentity.Name,
                 FoundationServerIdentity.PackageVersion,
                 server.NegotiatedProtocolVersion ?? "unavailable"),
             OperationModeParser.Format(configuration.Mode),
-            new FoundationSurfaceStatus(toolCount, 1, 0),
+            new FoundationSurfaceStatus(toolCount, 1, WorkflowPrompts.PromptCount),
             new FoundationToolsetsStatus(
                 configuration.Toolsets.Label,
                 "Toolsets control relevance; operation mode controls authority.",
@@ -110,31 +118,28 @@ internal sealed class FoundationResources
                 CapabilityToolset.Spellbook =>
                 ("not-required", null),
             CapabilityToolset.Archidekt => (
-                IsArchidektConfigured(configuration) ? "configured-unverified" : "not-configured",
+                configuration.Credentials.Archidekt ? "configured-unverified" : "not-configured",
                 "archidekt_auth_status"),
             CapabilityToolset.Playgroup => (
-                IsPlaygroupConfigured(configuration) ? "configured-unverified" : "not-configured",
+                GetPlaygroupCredentialState(configuration),
                 "playgroup_auth_status"),
             _ => ("not-required", null),
         };
     }
 
     /// <summary>
-    /// Reports whether any Archidekt credential source was configured without reading it.
+    /// Reports the Playgroup credential state from setting and file presence only.
     /// </summary>
-    private static bool IsArchidektConfigured(FoundationConfiguration configuration)
+    private static string GetPlaygroupCredentialState(FoundationConfiguration configuration)
     {
-        return !string.IsNullOrWhiteSpace(configuration.Archidekt.Username) ||
-            !string.IsNullOrWhiteSpace(configuration.Archidekt.Password) ||
-            !string.IsNullOrWhiteSpace(configuration.Archidekt.CredentialsFile);
-    }
+        string? gateReason = configuration.Toolsets.FindDisabledReason(CapabilityToolset.Playgroup);
+        if (gateReason == DisabledToolset.CredentialsInvalid)
+        {
+            return "configuration-invalid";
+        }
 
-    /// <summary>
-    /// Reports whether any Playgroup credential source was configured without reading it.
-    /// </summary>
-    private static bool IsPlaygroupConfigured(FoundationConfiguration configuration)
-    {
-        return !string.IsNullOrWhiteSpace(configuration.Playgroup.ApiKey) ||
-            !string.IsNullOrWhiteSpace(configuration.Playgroup.CredentialsFile);
+        return configuration.Credentials.Playgroup
+            ? "configured-unverified"
+            : "not-configured";
     }
 }

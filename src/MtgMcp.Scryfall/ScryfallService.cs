@@ -19,7 +19,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     /// <summary>
     /// Pins the documented provider order vocabulary instead of forwarding invented enum values.
     /// </summary>
-    private static readonly string[] SearchOrders =
+    internal static readonly string[] SearchOrders =
     [
         "name", "set", "released", "rarity", "color", "usd", "tix", "eur", "cmc", "power",
         "toughness", "edhrec", "penny", "artist", "review",
@@ -136,6 +136,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         string? cursor = null,
         int pageSize = 25,
         bool includeRaw = false,
+        ScryfallPageItemCounter? countItems = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(query))
@@ -161,7 +162,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             ("includeExtras", includeExtras),
             ("includeMultilingual", includeMultilingual),
             ("includeVariations", includeVariations),
-            ("operation", "search"),
+            ("operation", ScryfallOperationNames.Search),
             ("order", order),
             ("query", query),
             ("unique", unique));
@@ -172,7 +173,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             $"&include_multilingual={includeMultilingual.ToString().ToLowerInvariant()}" +
             $"&include_variations={includeVariations.ToString().ToLowerInvariant()}";
         OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-            "search",
+            ScryfallOperationNames.Search,
             request,
             freshnessPolicy,
             token => Provider.GetPagedAsync(path, token),
@@ -180,7 +181,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
         {
-            return ForwardFailure<AcquiredSnapshot, ScryfallSearchResult>(acquisition);
+            return OperationFailure.Forward<AcquiredSnapshot, ScryfallSearchResult>(acquisition);
         }
 
         OperationResult<ScryfallPage<ScryfallCard>> page = await CardPageAsync(
@@ -188,13 +189,14 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cursor,
             pageSize,
             includeRaw,
+            countItems,
             cancellationToken).ConfigureAwait(false);
         return page switch
         {
             OperationSuccess<ScryfallPage<ScryfallCard>> value =>
                 new OperationSuccess<ScryfallSearchResult>(
                     new ScryfallSearchResult(value.Data, SnapshotReference(success.Data), success.Data.Warnings)),
-            _ => ForwardFailure<ScryfallPage<ScryfallCard>, ScryfallSearchResult>(page),
+            _ => OperationFailure.Forward<ScryfallPage<ScryfallCard>, ScryfallSearchResult>(page),
         };
     }
 
@@ -216,7 +218,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         OperationResult<ScryfallFreshnessPolicy> policyResult = ParseFreshness(freshnessPolicy);
         if (policyResult is not OperationSuccess<ScryfallFreshnessPolicy> policy)
         {
-            return ForwardFailure<ScryfallFreshnessPolicy, ScryfallCardResult>(policyResult);
+            return OperationFailure.Forward<ScryfallFreshnessPolicy, ScryfallCardResult>(policyResult);
         }
 
         if (policy.Data != ScryfallFreshnessPolicy.Refresh && lookup.Kind != "fuzzy-name")
@@ -233,7 +235,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         SortedDictionary<string, object?> request = Request(
             ("collectorNumber", lookup.CollectorNumber),
             ("kind", lookup.Kind),
-            ("operation", "card-get"),
+            ("operation", ScryfallOperationNames.CardGet),
             ("setCode", lookup.SetCode),
             ("value", lookup.Value));
         string path = BuildCardPath(lookup);
@@ -241,7 +243,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             ? token => Provider.GetPagedAsync(path, token)
             : token => Provider.GetSingleAsync(path, token);
         OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-            "card-get",
+            ScryfallOperationNames.CardGet,
             request,
             freshnessPolicy,
             acquire,
@@ -249,7 +251,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
         {
-            return ForwardFailure<AcquiredSnapshot, ScryfallCardResult>(acquisition);
+            return OperationFailure.Forward<AcquiredSnapshot, ScryfallCardResult>(acquisition);
         }
 
         string? raw = success.Data.Stored.Members.Count > 0 ? success.Data.Stored.Members[0] : null;
@@ -272,6 +274,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         string? cursor = null,
         int pageSize = 25,
         bool includeRaw = false,
+        ScryfallPageItemCounter? countItems = null,
         CancellationToken cancellationToken = default)
     {
         if (lookups is null || lookups.Count is < 1 or > 150)
@@ -290,7 +293,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         OperationResult<ScryfallFreshnessPolicy> policyResult = ParseFreshness(freshnessPolicy);
         if (policyResult is not OperationSuccess<ScryfallFreshnessPolicy> policy)
         {
-            return ForwardFailure<ScryfallFreshnessPolicy, ScryfallCollectionResult>(policyResult);
+            return OperationFailure.Forward<ScryfallFreshnessPolicy, ScryfallCollectionResult>(policyResult);
         }
 
         foreach (ScryfallCardLookup lookup in lookups)
@@ -305,7 +308,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             {
                 return new OperationInvalidInput(
                     "fuzzy-collection-lookup-unsupported",
-                    "Scryfall collection lookup does not support fuzzy names; use card get instead.");
+                    "Scryfall collection lookup does not support fuzzy names; send one fuzzy-name lookup on its own.");
             }
         }
 
@@ -318,6 +321,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                 cursor,
                 pageSize,
                 includeRaw,
+                countItems,
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -355,10 +359,10 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
 
             SortedDictionary<string, object?> request = Request(
                 ("identifiers", identifiers),
-                ("operation", "card-collection"),
+                ("operation", ScryfallOperationNames.CardCollection),
                 ("providerBatchSize", 75));
             OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-                "card-collection",
+                ScryfallOperationNames.CardCollection,
                 request,
                 freshnessPolicy,
                 token => AcquireCollectionBatchesAsync(identifiers, token),
@@ -374,7 +378,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             }
             else
             {
-                return ForwardFailure<AcquiredSnapshot, ScryfallCollectionResult>(acquisition);
+                return OperationFailure.Forward<AcquiredSnapshot, ScryfallCollectionResult>(acquisition);
             }
         }
 
@@ -394,12 +398,14 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             resolution.Checksum,
             missStatus,
             0);
-        return CollectionPage(
+        return await CollectionPageAsync(
             resolution.Rows,
             state,
             pageSize,
             acquired is null ? null : SnapshotReference(acquired),
-            cardDataGenerationId);
+            cardDataGenerationId,
+            countItems,
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -419,7 +425,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         OperationResult<ScryfallFreshnessPolicy> policyResult = ParseFreshness(freshnessPolicy);
         if (policyResult is not OperationSuccess<ScryfallFreshnessPolicy> policy)
         {
-            return ForwardFailure<ScryfallFreshnessPolicy, ScryfallExactCollectionEvidence>(policyResult);
+            return OperationFailure.Forward<ScryfallFreshnessPolicy, ScryfallExactCollectionEvidence>(policyResult);
         }
 
         IReadOnlyList<ScryfallEvidenceLookup> validatedLookups = lookups!;
@@ -436,10 +442,10 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         {
             SortedDictionary<string, object?> request = Request(
                 ("identifiers", providerIdentifiers),
-                ("operation", "card-collection"),
+                ("operation", ScryfallOperationNames.CardCollection),
                 ("providerBatchSize", 75));
             OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-                "card-collection",
+                ScryfallOperationNames.CardCollection,
                 request,
                 freshnessPolicy,
                 token => AcquireCollectionBatchesAsync(providerIdentifiers, token),
@@ -452,7 +458,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             else if (acquisition is not OperationNotCached ||
                      policy.Data != ScryfallFreshnessPolicy.CacheOnly)
             {
-                return ForwardFailure<AcquiredSnapshot, ScryfallExactCollectionEvidence>(acquisition);
+                return OperationFailure.Forward<AcquiredSnapshot, ScryfallExactCollectionEvidence>(acquisition);
             }
         }
 
@@ -504,7 +510,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                 return IdentityEvidenceUnavailable("The required Scryfall request snapshot is no longer retained.");
             }
 
-            if (!string.Equals(snapshot.Header.Operation, "card-collection", StringComparison.Ordinal) ||
+            if (snapshot.Header.Operation != ScryfallOperationNames.CardCollection ||
                 !string.Equals(snapshot.Header.Checksum, snapshotReference.Checksum, StringComparison.Ordinal))
             {
                 return new OperationInvalidInput(
@@ -656,6 +662,23 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             ScryfallEvidenceLookup evidenceLookup = lookups[index];
             StoredCardDataObject? stored = cardDataMatches[index];
             string languageKey = evidenceLookup.RequiredLanguage ?? "-";
+            if (stored is not null && stored.MatchingOracleIdCount > 1)
+            {
+                rows.Add(new ScryfallCollectionRow(
+                    index,
+                    evidenceLookup.Lookup,
+                    "ambiguous",
+                    "corpus",
+                    null,
+                    $"{stored.MatchingOracleIdCount} different cards are named " +
+                    $"'{evidenceLookup.Lookup.Value?.Trim()}'. Give an Oracle ID, or a set code and " +
+                    "collector number."));
+                checksumMembers.Add(
+                    $"{index}|{CollectionKey(evidenceLookup.Lookup)}|{languageKey}|ambiguous|" +
+                    $"{stored.GenerationId:D}|{stored.MatchingOracleIdCount}");
+                continue;
+            }
+
             if (stored is not null)
             {
                 ScryfallCard card = await MapStoredCardAsync(stored, includeRaw, cancellationToken).ConfigureAwait(false);
@@ -715,6 +738,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         string cursor,
         int pageSize,
         bool includeRaw,
+        ScryfallPageItemCounter? countItems,
         CancellationToken cancellationToken)
     {
         if (!ScryfallCursor.TryDecodeCollection(cursor, requestHash, out ScryfallCollectionCursorState? state) ||
@@ -743,7 +767,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                     "The provider snapshot required by this collection cursor is no longer retained.");
             }
 
-            if (!string.Equals(snapshot.Header.Operation, "card-collection", StringComparison.Ordinal) ||
+            if (snapshot.Header.Operation != ScryfallOperationNames.CardCollection ||
                 !string.Equals(snapshot.Header.Checksum, state.SnapshotChecksum, StringComparison.Ordinal))
             {
                 return new OperationInvalidInput("invalid-cursor", "The Scryfall collection cursor evidence does not match.");
@@ -772,12 +796,14 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                 snapshot,
                 IsStale(snapshot.Header.RetrievedAtUtc) ? "stale" : "fresh",
                 []));
-        return CollectionPage(
+        return await CollectionPageAsync(
             resolution.Rows,
             state,
             pageSize,
             snapshotReference,
-            state.CorpusGenerationId);
+            state.CorpusGenerationId,
+            countItems,
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -881,14 +907,17 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     }
 
     /// <summary>
-    /// Projects one bounded collection page and creates the next evidence-bound cursor when needed.
+    /// Projects one bounded collection page, cut to the size budget when a fit is given, and creates the next
+    /// evidence-bound cursor when needed.
     /// </summary>
-    private static OperationResult<ScryfallCollectionResult> CollectionPage(
+    private static async Task<OperationResult<ScryfallCollectionResult>> CollectionPageAsync(
         IReadOnlyList<ScryfallCollectionRow> rows,
         ScryfallCollectionCursorState state,
         int pageSize,
         ScryfallSnapshotReference? snapshot,
-        Guid? cardDataGenerationId)
+        Guid? cardDataGenerationId,
+        ScryfallPageItemCounter? countItems,
+        CancellationToken cancellationToken)
     {
         if (state.Offset > rows.Count)
         {
@@ -896,12 +925,23 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         }
 
         ScryfallCollectionRow[] items = rows.Skip(state.Offset).Take(pageSize).ToArray();
+        ScryfallFormattedCards? formatted = null;
+        if (countItems is not null)
+        {
+            formatted = await countItems(
+                items.Select(row => row.Card).ToArray(),
+                items.Select(row => (object?)(row with { Card = null })).ToArray(),
+                cardDataGenerationId,
+                cancellationToken).ConfigureAwait(false);
+            items = items[..formatted.Views.Count];
+        }
+
         string? next = state.Offset + items.Length < rows.Count
             ? ScryfallCursor.EncodeCollection(state with { Offset = state.Offset + items.Length })
             : null;
         return new OperationSuccess<ScryfallCollectionResult>(
             new ScryfallCollectionResult(
-                new ScryfallPage<ScryfallCollectionRow>(items, rows.Count, next),
+                new ScryfallPage<ScryfallCollectionRow>(items, rows.Count, next) { Formatted = formatted },
                 snapshot,
                 cardDataGenerationId));
     }
@@ -926,7 +966,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         OperationResult<ScryfallFreshnessPolicy> policyResult = ParseFreshness(freshnessPolicy);
         if (policyResult is not OperationSuccess<ScryfallFreshnessPolicy> policy)
         {
-            return ForwardFailure<ScryfallFreshnessPolicy, ScryfallPrintsResult>(policyResult);
+            return OperationFailure.Forward<ScryfallFreshnessPolicy, ScryfallPrintsResult>(policyResult);
         }
 
         if (policy.Data != ScryfallFreshnessPolicy.Refresh)
@@ -944,15 +984,17 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                     OperationSuccess<ScryfallPage<ScryfallCard>> value =>
                         new OperationSuccess<ScryfallPrintsResult>(
                             new ScryfallPrintsResult(value.Data, null, stored.GenerationId)),
-                    _ => ForwardFailure<ScryfallPage<ScryfallCard>, ScryfallPrintsResult>(cardDataPage),
+                    _ => OperationFailure.Forward<ScryfallPage<ScryfallCard>, ScryfallPrintsResult>(cardDataPage),
                 };
             }
         }
 
-        SortedDictionary<string, object?> request = Request(("operation", "card-prints"), ("oracleId", oracleId));
+        SortedDictionary<string, object?> request = Request(
+            ("operation", ScryfallOperationNames.CardPrints),
+            ("oracleId", oracleId));
         string path = $"cards/search?q=oracleid%3A{oracleId:D}&unique=prints&order=released&dir=asc";
         OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-            "card-prints",
+            ScryfallOperationNames.CardPrints,
             request,
             freshnessPolicy,
             token => Provider.GetPagedAsync(path, token),
@@ -960,7 +1002,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
         {
-            return ForwardFailure<AcquiredSnapshot, ScryfallPrintsResult>(acquisition);
+            return OperationFailure.Forward<AcquiredSnapshot, ScryfallPrintsResult>(acquisition);
         }
 
         OperationResult<ScryfallPage<ScryfallCard>> page = await CardPageAsync(
@@ -968,6 +1010,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cursor,
             pageSize,
             includeRaw,
+            null,
             cancellationToken)
             .ConfigureAwait(false);
         return page switch
@@ -975,7 +1018,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             OperationSuccess<ScryfallPage<ScryfallCard>> value =>
                 new OperationSuccess<ScryfallPrintsResult>(
                     new ScryfallPrintsResult(value.Data, SnapshotReference(success.Data), null)),
-            _ => ForwardFailure<ScryfallPage<ScryfallCard>, ScryfallPrintsResult>(page),
+            _ => OperationFailure.Forward<ScryfallPage<ScryfallCard>, ScryfallPrintsResult>(page),
         };
     }
 
@@ -1000,7 +1043,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         OperationResult<ScryfallFreshnessPolicy> policyResult = ParseFreshness(freshnessPolicy);
         if (policyResult is not OperationSuccess<ScryfallFreshnessPolicy> policy)
         {
-            return ForwardFailure<ScryfallFreshnessPolicy, ScryfallRulingsResult>(policyResult);
+            return OperationFailure.Forward<ScryfallFreshnessPolicy, ScryfallRulingsResult>(policyResult);
         }
 
         if (policy.Data != ScryfallFreshnessPolicy.Refresh)
@@ -1018,7 +1061,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                     OperationSuccess<ScryfallPage<ScryfallRuling>> value =>
                         new OperationSuccess<ScryfallRulingsResult>(
                             new ScryfallRulingsResult(value.Data, null, stored.GenerationId)),
-                    _ => ForwardFailure<ScryfallPage<ScryfallRuling>, ScryfallRulingsResult>(cardDataPage),
+                    _ => OperationFailure.Forward<ScryfallPage<ScryfallRuling>, ScryfallRulingsResult>(cardDataPage),
                 };
             }
         }
@@ -1031,11 +1074,11 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         }
 
         SortedDictionary<string, object?> request = Request(
-            ("operation", "card-rulings"),
+            ("operation", ScryfallOperationNames.CardRulings),
             ("oracleId", oracleId),
             ("scryfallCardId", scryfallCardId));
         OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-            "card-rulings",
+            ScryfallOperationNames.CardRulings,
             request,
             freshnessPolicy,
             token => Provider.GetDataArrayAsync($"cards/{scryfallCardId:D}/rulings", token),
@@ -1043,7 +1086,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
         {
-            return ForwardFailure<AcquiredSnapshot, ScryfallRulingsResult>(acquisition);
+            return OperationFailure.Forward<AcquiredSnapshot, ScryfallRulingsResult>(acquisition);
         }
 
         OperationResult<ScryfallPage<ScryfallRuling>> page = RulingPage(
@@ -1056,7 +1099,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             OperationSuccess<ScryfallPage<ScryfallRuling>> value =>
                 new OperationSuccess<ScryfallRulingsResult>(
                     new ScryfallRulingsResult(value.Data, SnapshotReference(success.Data), null)),
-            _ => ForwardFailure<ScryfallPage<ScryfallRuling>, ScryfallRulingsResult>(page),
+            _ => OperationFailure.Forward<ScryfallPage<ScryfallRuling>, ScryfallRulingsResult>(page),
         };
     }
 
@@ -1083,7 +1126,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         }
 
         codeOrId = codeOrId?.Trim();
-        string operation = codeOrId is null ? "sets" : "set-get";
+        string operation = codeOrId is null ? ScryfallOperationNames.Sets : ScryfallOperationNames.SetGet;
         SortedDictionary<string, object?> request = Request(("codeOrId", codeOrId), ("operation", operation));
         Func<CancellationToken, Task<ProviderAcquisition>> acquire = codeOrId is null
             ? token => Provider.GetDataArrayAsync("sets", token)
@@ -1097,7 +1140,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
         {
-            return ForwardFailure<AcquiredSnapshot, ScryfallSetsResult>(acquisition);
+            return OperationFailure.Forward<AcquiredSnapshot, ScryfallSetsResult>(acquisition);
         }
 
         OperationResult<ScryfallPage<ScryfallSet>> page = SetPage(success.Data, cursor, pageSize, includeRaw);
@@ -1105,7 +1148,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         {
             OperationSuccess<ScryfallPage<ScryfallSet>> value =>
                 new OperationSuccess<ScryfallSetsResult>(new ScryfallSetsResult(value.Data, SnapshotReference(success.Data))),
-            _ => ForwardFailure<ScryfallPage<ScryfallSet>, ScryfallSetsResult>(page),
+            _ => OperationFailure.Forward<ScryfallPage<ScryfallSet>, ScryfallSetsResult>(page),
         };
     }
 
@@ -1130,9 +1173,11 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             return pageFailure;
         }
 
-        SortedDictionary<string, object?> request = Request(("catalog", catalog), ("operation", "catalog"));
+        SortedDictionary<string, object?> request = Request(
+            ("catalog", catalog),
+            ("operation", ScryfallOperationNames.Catalog));
         OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-            "catalog",
+            ScryfallOperationNames.Catalog,
             request,
             freshnessPolicy,
             token => Provider.GetDataArrayAsync($"catalog/{Uri.EscapeDataString(catalog)}", token),
@@ -1140,7 +1185,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
         {
-            return ForwardFailure<AcquiredSnapshot, ScryfallCatalogResult>(acquisition);
+            return OperationFailure.Forward<AcquiredSnapshot, ScryfallCatalogResult>(acquisition);
         }
 
         OperationResult<ScryfallPage<string>> page = StringPage(success.Data, cursor, pageSize);
@@ -1149,7 +1194,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             OperationSuccess<ScryfallPage<string>> value =>
                 new OperationSuccess<ScryfallCatalogResult>(
                     new ScryfallCatalogResult(catalog, value.Data, SnapshotReference(success.Data))),
-            _ => ForwardFailure<ScryfallPage<string>, ScryfallCatalogResult>(page),
+            _ => OperationFailure.Forward<ScryfallPage<string>, ScryfallCatalogResult>(page),
         };
     }
 
@@ -1177,13 +1222,13 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
 
         SortedDictionary<string, object?> request = Request(
             ("includeExtras", includeExtras),
-            ("operation", "autocomplete"),
+            ("operation", ScryfallOperationNames.Autocomplete),
             ("query", query));
         string path =
             $"cards/autocomplete?q={Uri.EscapeDataString(query)}" +
             $"&include_extras={includeExtras.ToString().ToLowerInvariant()}";
         OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-            "autocomplete",
+            ScryfallOperationNames.Autocomplete,
             request,
             freshnessPolicy,
             token => Provider.GetDataArrayAsync(path, token),
@@ -1191,7 +1236,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
         {
-            return ForwardFailure<AcquiredSnapshot, ScryfallAutocompleteResult>(acquisition);
+            return OperationFailure.Forward<AcquiredSnapshot, ScryfallAutocompleteResult>(acquisition);
         }
 
         OperationResult<ScryfallPage<string>> page = StringPage(success.Data, cursor, pageSize);
@@ -1200,7 +1245,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             OperationSuccess<ScryfallPage<string>> value =>
                 new OperationSuccess<ScryfallAutocompleteResult>(
                     new ScryfallAutocompleteResult(value.Data, SnapshotReference(success.Data))),
-            _ => ForwardFailure<ScryfallPage<string>, ScryfallAutocompleteResult>(page),
+            _ => OperationFailure.Forward<ScryfallPage<string>, ScryfallAutocompleteResult>(page),
         };
     }
 
@@ -1211,9 +1256,9 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         string freshnessPolicy = "default",
         CancellationToken cancellationToken = default)
     {
-        SortedDictionary<string, object?> request = Request(("operation", "bulk-metadata"));
+        SortedDictionary<string, object?> request = Request(("operation", ScryfallOperationNames.BulkMetadata));
         OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
-            "bulk-metadata",
+            ScryfallOperationNames.BulkMetadata,
             request,
             freshnessPolicy,
             token => Provider.GetDataArrayAsync("bulk-data", token),
@@ -1221,7 +1266,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (acquisition is not OperationSuccess<AcquiredSnapshot> success)
         {
-            return ForwardFailure<AcquiredSnapshot, ScryfallBulkMetadataResult>(acquisition);
+            return OperationFailure.Forward<AcquiredSnapshot, ScryfallBulkMetadataResult>(acquisition);
         }
 
         List<ScryfallBulkData> datasets = [];
@@ -1280,6 +1325,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         string? cursor = null,
         int pageSize = 25,
         bool includeRaw = false,
+        ScryfallPageItemCounter? countItems = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(tagIdentity) ||
@@ -1303,7 +1349,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             cancellationToken).ConfigureAwait(false);
         if (result is not OperationSuccess<StoredCardsByTag> success)
         {
-            return ForwardFailure<StoredCardsByTag, ScryfallCardsByTagResult>(result);
+            return OperationFailure.Forward<StoredCardsByTag, ScryfallCardsByTagResult>(result);
         }
 
         using JsonDocument tagDocument = JsonDocument.Parse(success.Data.TagJson);
@@ -1345,13 +1391,25 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                 includeRaw));
         }
 
+        ScryfallFormattedCards? formatted = null;
+        if (countItems is not null)
+        {
+            formatted = await countItems(
+                [.. cards],
+                [.. assignments.Select(value => (object?)value)],
+                success.Data.GenerationId,
+                cancellationToken).ConfigureAwait(false);
+            cards = cards.GetRange(0, formatted.Views.Count);
+            assignments = assignments.GetRange(0, formatted.Views.Count);
+        }
+
         string? next = offset + cards.Count < success.Data.Assignments.Count
             ? ScryfallCursor.Encode(scope, checksum, offset + cards.Count)
             : null;
         return new OperationSuccess<ScryfallCardsByTagResult>(
             new ScryfallCardsByTagResult(
                 tag,
-                new ScryfallPage<ScryfallCard>(cards, success.Data.Assignments.Count, next),
+                new ScryfallPage<ScryfallCard>(cards, success.Data.Assignments.Count, next) { Formatted = formatted },
                 assignments,
                 success.Data.GenerationId));
     }
@@ -1379,7 +1437,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         OperationResult<ScryfallFreshnessPolicy> policyResult = ParseFreshness(freshnessPolicy);
         if (policyResult is not OperationSuccess<ScryfallFreshnessPolicy> policy)
         {
-            return ForwardFailure<ScryfallFreshnessPolicy, AcquiredSnapshot>(policyResult);
+            return OperationFailure.Forward<ScryfallFreshnessPolicy, AcquiredSnapshot>(policyResult);
         }
 
         string requestJson = JsonSerializer.Serialize(request, SerializerOptions);
@@ -1516,11 +1574,12 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     /// <summary>
     /// Maps one snapshot card page from a checksum-bound cursor.
     /// </summary>
-    private Task<OperationResult<ScryfallPage<ScryfallCard>>> CardPageAsync(
+    private async Task<OperationResult<ScryfallPage<ScryfallCard>>> CardPageAsync(
         AcquiredSnapshot acquired,
         string? cursor,
         int pageSize,
         bool includeRaw,
+        ScryfallPageItemCounter? countItems,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -1528,8 +1587,9 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         string scope = $"snapshot:{header.SnapshotId:D}";
         if (!ScryfallCursor.TryDecode(cursor, scope, header.Checksum, out int offset) || offset > header.TotalCount)
         {
-            return Task.FromResult<OperationResult<ScryfallPage<ScryfallCard>>>(
-                new OperationInvalidInput("invalid-cursor", "The Scryfall result cursor is invalid for this request."));
+            return new OperationInvalidInput(
+                "invalid-cursor",
+                "The Scryfall result cursor is invalid for this request.");
         }
 
         List<ScryfallCard> items = [];
@@ -1538,11 +1598,22 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             items.Add(MapSnapshotCard(raw, header, includeRaw));
         }
 
+        ScryfallFormattedCards? formatted = null;
+        if (countItems is not null)
+        {
+            formatted = await countItems(
+                [.. items],
+                [.. items.Select(_ => (object?)null)],
+                null,
+                cancellationToken).ConfigureAwait(false);
+            items = items.GetRange(0, formatted.Views.Count);
+        }
+
         string? next = offset + items.Count < header.TotalCount
             ? ScryfallCursor.Encode(scope, header.Checksum, offset + items.Count)
             : null;
-        return Task.FromResult<OperationResult<ScryfallPage<ScryfallCard>>>(
-            new OperationSuccess<ScryfallPage<ScryfallCard>>(new ScryfallPage<ScryfallCard>(items, header.TotalCount, next)));
+        return new OperationSuccess<ScryfallPage<ScryfallCard>>(
+            new ScryfallPage<ScryfallCard>(items, header.TotalCount, next) { Formatted = formatted });
     }
 
     /// <summary>
@@ -1927,7 +1998,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     /// <summary>
     /// Validates bounded output pagination.
     /// </summary>
-    private static OperationInvalidInput? ValidatePageSize(int pageSize, bool rawSource)
+    internal static OperationInvalidInput? ValidatePageSize(int pageSize, bool rawSource)
     {
         int maximum = rawSource ? 25 : 100;
         return pageSize is >= 1 && pageSize <= maximum
@@ -1976,23 +2047,6 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         return new OperationUnavailable(
             "local-write-required",
             "This Scryfall operation requires local mode to record coordinated evidence.");
-    }
-
-    /// <summary>
-    /// Preserves a structured failure across result payload types.
-    /// </summary>
-    private static OperationResult<TTarget> ForwardFailure<TSource, TTarget>(OperationResult<TSource> result)
-    {
-        return result switch
-        {
-            OperationSuccess<TSource> => new OperationUnavailable("scryfall-result-mismatch", "Scryfall result could not be projected."),
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-        };
     }
 }
 

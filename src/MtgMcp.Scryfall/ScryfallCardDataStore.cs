@@ -14,6 +14,51 @@ namespace MtgMcp.Scryfall;
 internal sealed class ScryfallCardDataStore
 {
     /// <summary>
+    /// Holds the SQL that is 1 for a printing whose layout is not played in a deck (a token, emblem, art card, or
+    /// other extra object) and 0 for every other printing.
+    /// </summary>
+    private const string NotInDeckLayout =
+        "COALESCE(json_extract(c.raw_json, '$.layout') IN " +
+        "('token', 'double_faced_token', 'emblem', 'art_series', 'vanguard', 'scheme', 'planar', 'augment', " +
+        "'host'), 0)";
+
+    /// <summary>
+    /// Selects the IDs of the printings that carry an exact name as their own name or as the name of one face, as
+    /// two index searches (<c>ix_cards_name</c> and <c>ix_faces_name</c>) joined by UNION, so a lookup reads only the
+    /// printings of that name instead of scanning every card of the generation. The indexes are named because
+    /// SQLite, with no table statistics, otherwise picks the primary key index and reads the whole generation. Uses
+    /// the <c>$generation</c> and <c>$value</c> parameters.
+    /// </summary>
+    private const string NameCandidateIds =
+        "SELECT card_id FROM card_objects INDEXED BY ix_cards_name " +
+        "WHERE generation_id = $generation AND name_key = $value " +
+        "UNION SELECT card_id FROM card_faces INDEXED BY ix_faces_name " +
+        "WHERE generation_id = $generation AND name_key = $value";
+
+    /// <summary>
+    /// Selects the best printing for a name: a card played in a deck beats a token, emblem, or art card; then a
+    /// full-name match beats a face-name match; then English, newest, and set order decide.
+    /// </summary>
+    internal const string NameBestCardSql =
+        "SELECT c.raw_json, g.created_at_utc, d.provider_updated_at_utc FROM card_objects c " +
+        "JOIN corpus_generations g ON g.generation_id = c.generation_id " +
+        "JOIN corpus_datasets d ON d.generation_id = c.generation_id AND d.dataset_type = 'all_cards' " +
+        "WHERE c.generation_id = $generation AND c.card_id IN (" + NameCandidateIds + ") " +
+        "ORDER BY " + NotInDeckLayout + " ASC, c.name_key = $value DESC, c.lang = 'en' DESC, " +
+        "c.released_at DESC, c.set_code, c.collector_number LIMIT 1;";
+
+    /// <summary>
+    /// Counts the different Oracle IDs in the best group of printings of a name, using the same two ranks as
+    /// <see cref="NameBestCardSql"/>.
+    /// </summary>
+    internal const string NameMatchCountSql =
+        "SELECT COUNT(DISTINCT oracle_id) FROM (" +
+        "SELECT " + NotInDeckLayout + " AS not_in_deck, c.name_key = $value AS is_full_name, " +
+        "c.oracle_id AS oracle_id FROM card_objects c " +
+        "WHERE c.generation_id = $generation AND c.card_id IN (" + NameCandidateIds + ")) " +
+        "GROUP BY not_in_deck, is_full_name ORDER BY not_in_deck ASC, is_full_name DESC LIMIT 1;";
+
+    /// <summary>
     /// Stores the shared SQLite connection and schema support.
     /// </summary>
     private readonly ScryfallDatabase database;
@@ -117,8 +162,13 @@ internal sealed class ScryfallCardDataStore
             return null;
         }
 
-        return await FindCardOnConnectionAsync(connection, generationId.Value, lookup, null, cancellationToken)
-            .ConfigureAwait(false);
+        return await FindCardOnConnectionAsync(
+            connection,
+            generationId.Value,
+            lookup,
+            null,
+            countMatches: false,
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -153,6 +203,7 @@ internal sealed class ScryfallCardDataStore
                 generationId,
                 lookup,
                 requiredLanguage,
+                countMatches: false,
                 cancellationToken).ConfigureAwait(false);
     }
 
@@ -184,6 +235,41 @@ internal sealed class ScryfallCardDataStore
                 generationId,
                 lookup.Lookup,
                 lookup.RequiredLanguage,
+                countMatches: true,
+                cancellationToken).ConfigureAwait(false));
+        }
+
+        return matches;
+    }
+
+    /// <summary>
+    /// Finds ordered installed cards from one generation, checking on the same connection that the generation is
+    /// still complete. Returns null when it is not, so a vanished generation is not mistaken for missing cards.
+    /// </summary>
+    internal async Task<List<StoredCardDataObject?>?> FindCardsInCompleteGenerationAsync(
+        IReadOnlyList<ScryfallEvidenceLookup> lookups,
+        Guid generationId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(lookups);
+        await using SqliteConnection? connection =
+            await database.OpenReadAsync(cancellationToken).ConfigureAwait(false);
+        if (connection is null ||
+            !await ContainsCompleteGenerationOnConnectionAsync(connection, generationId, cancellationToken)
+                .ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        List<StoredCardDataObject?> matches = new(lookups.Count);
+        foreach (ScryfallEvidenceLookup lookup in lookups)
+        {
+            matches.Add(await FindCardOnConnectionAsync(
+                connection,
+                generationId,
+                lookup.Lookup,
+                lookup.RequiredLanguage,
+                countMatches: false,
                 cancellationToken).ConfigureAwait(false));
         }
 
@@ -211,13 +297,16 @@ internal sealed class ScryfallCardDataStore
     }
 
     /// <summary>
-    /// Executes one validated card lookup against a caller-selected card-data generation.
+    /// Executes one validated card lookup against a caller-selected card-data generation. An exact-name lookup runs a
+    /// second query for <see cref="StoredCardDataObject.MatchingOracleIdCount"/> only when
+    /// <paramref name="countMatches"/> is true, so a caller that ignores the count does not pay for it.
     /// </summary>
     private static async Task<StoredCardDataObject?> FindCardOnConnectionAsync(
         SqliteConnection connection,
         Guid generationId,
         ScryfallCardLookup lookup,
         string? requiredLanguage,
+        bool countMatches,
         CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
@@ -243,15 +332,7 @@ internal sealed class ScryfallCardDataStore
                 break;
             case "exact-name":
             case "fuzzy-name":
-                command.CommandText =
-                    "SELECT c.raw_json, g.created_at_utc, d.provider_updated_at_utc FROM card_objects c " +
-                    "JOIN corpus_generations g ON g.generation_id = c.generation_id " +
-                    "JOIN corpus_datasets d ON d.generation_id = c.generation_id AND d.dataset_type = 'all_cards' " +
-                    "WHERE c.generation_id = $generation AND (c.name_key = $value OR EXISTS " +
-                    "(SELECT 1 FROM card_faces f WHERE f.generation_id = c.generation_id " +
-                    "AND f.card_id = c.card_id AND f.name_key = $value)) " +
-                    "ORDER BY c.name_key = $value DESC, c.lang = 'en' DESC, c.released_at DESC, " +
-                    "c.set_code, c.collector_number LIMIT 1;";
+                command.CommandText = NameBestCardSql;
                 command.Parameters.AddWithValue("$value", lookup.Value!.Trim().ToUpperInvariant());
                 break;
             case "printing":
@@ -274,14 +355,51 @@ internal sealed class ScryfallCardDataStore
                 return null;
         }
 
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        return await reader.ReadAsync(cancellationToken).ConfigureAwait(false)
-            ? new StoredCardDataObject(
+        StoredCardDataObject? found;
+        await using (SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken)
+            .ConfigureAwait(false))
+        {
+            found = await reader.ReadAsync(cancellationToken).ConfigureAwait(false)
+                ? new StoredCardDataObject(
+                    generationId,
+                    ScryfallSql.ParseUtc(reader.GetString(1)),
+                    ScryfallSql.ParseUtc(reader.GetString(2)),
+                    reader.GetString(0))
+                : null;
+        }
+
+        if (found is null || lookup.Kind != "exact-name" || !countMatches)
+        {
+            return found;
+        }
+
+        return found with
+        {
+            MatchingOracleIdCount = await CountMatchingOracleIdsAsync(
+                connection,
                 generationId,
-                ScryfallSql.ParseUtc(reader.GetString(1)),
-                ScryfallSql.ParseUtc(reader.GetString(2)),
-                reader.GetString(0))
-            : null;
+                lookup.Value!.Trim().ToUpperInvariant(),
+                cancellationToken).ConfigureAwait(false),
+        };
+    }
+
+    /// <summary>
+    /// Counts the different cards (Oracle IDs) that carry an exact name, among the best matches only: a card that is
+    /// played in a deck beats a token, emblem, or art card of the same name, and then a full-name match beats a
+    /// face-name match. More than one means the name does not settle which card is meant.
+    /// </summary>
+    private static async Task<int> CountMatchingOracleIdsAsync(
+        SqliteConnection connection,
+        Guid generationId,
+        string nameKey,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = NameMatchCountSql;
+        command.Parameters.AddWithValue("$generation", ScryfallSql.FormatGuid(generationId));
+        command.Parameters.AddWithValue("$value", nameKey);
+        object? count = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return count is long value ? (int)value : 1;
     }
 
     /// <summary>
@@ -352,6 +470,125 @@ internal sealed class ScryfallCardDataStore
             .Single(value => value.Type == "rulings")
             .ProviderUpdatedAtUtc;
         return new StoredCardDataCollection(generationId.Value, generation.CreatedAtUtc, providerUpdatedAtUtc, items);
+    }
+
+    /// <summary>
+    /// Reads oracle tag slugs and the lowest USD price across English printings for each Oracle ID from one
+    /// generation, with one query for all tags and one for all prices.
+    /// </summary>
+    /// <param name="generationId">The generation to read, or null for the active generation.</param>
+    /// <param name="oracleIds">The Oracle IDs to read.</param>
+    /// <param name="includeTags">Whether to read tag slugs.</param>
+    /// <param name="includePrice">Whether to read the lowest USD price.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    internal async Task<ScryfallInstalledCardFactsRead> ReadInstalledCardFactsAsync(
+        Guid? generationId,
+        IReadOnlyCollection<Guid> oracleIds,
+        bool includeTags,
+        bool includePrice,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(oracleIds);
+        await using SqliteConnection? connection =
+            await database.OpenReadAsync(cancellationToken).ConfigureAwait(false);
+        if (connection is null)
+        {
+            return ScryfallInstalledCardFactsRead.NotInstalled;
+        }
+
+        Guid? generation = generationId ??
+            await ReadStateGuidAsync(connection, "active_generation_id", cancellationToken).ConfigureAwait(false);
+        if (generation is null ||
+            !await ContainsCompleteGenerationOnConnectionAsync(connection, generation.Value, cancellationToken)
+                .ConfigureAwait(false))
+        {
+            return ScryfallInstalledCardFactsRead.NotInstalled;
+        }
+
+        string idList = JsonSerializer.Serialize(oracleIds.Select(ScryfallSql.FormatGuid));
+        Dictionary<Guid, List<string>> tags = includeTags
+            ? await ReadOracleTagSlugsAsync(connection, generation.Value, idList, cancellationToken)
+                .ConfigureAwait(false)
+            : [];
+        Dictionary<Guid, string> prices = includePrice
+            ? await ReadCheapestUsdAsync(connection, generation.Value, idList, cancellationToken)
+                .ConfigureAwait(false)
+            : [];
+        Dictionary<Guid, ScryfallInstalledCardFacts> result = [];
+        foreach (Guid oracleId in oracleIds)
+        {
+            result[oracleId] = new ScryfallInstalledCardFacts(
+                tags.TryGetValue(oracleId, out List<string>? slugs) ? slugs : [],
+                prices.TryGetValue(oracleId, out string? price) ? price : null);
+        }
+
+        return new ScryfallInstalledCardFactsRead(true, result);
+    }
+
+    /// <summary>
+    /// Reads the official oracle tag slugs assigned directly to each listed Oracle ID, sorted by slug.
+    /// </summary>
+    private static async Task<Dictionary<Guid, List<string>>> ReadOracleTagSlugsAsync(
+        SqliteConnection connection,
+        Guid generationId,
+        string oracleIdList,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT DISTINCT a.target_id, t.slug FROM tag_assignments a " +
+            "JOIN tags t ON t.generation_id = a.generation_id AND t.tag_id = a.tag_id " +
+            "WHERE a.generation_id = $generation AND a.target_type = 'oracle' AND t.tag_type = 'oracle' " +
+            "AND a.target_id IN (SELECT value FROM json_each($ids)) ORDER BY a.target_id, t.slug;";
+        command.Parameters.AddWithValue("$generation", ScryfallSql.FormatGuid(generationId));
+        command.Parameters.AddWithValue("$ids", oracleIdList);
+        Dictionary<Guid, List<string>> result = [];
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            Guid oracleId = ScryfallSql.ParseGuid(reader.GetString(0));
+            if (!result.TryGetValue(oracleId, out List<string>? slugs))
+            {
+                slugs = [];
+                result.Add(oracleId, slugs);
+            }
+
+            slugs.Add(reader.GetString(1));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Reads the lowest USD price among the installed English printings of each listed Oracle ID, keeping
+    /// Scryfall's text, with one row per Oracle ID. Non-English printings are skipped before their raw JSON is read,
+    /// and the price is extracted once for each printing. Equal prices are broken by card ID.
+    /// </summary>
+    private static async Task<Dictionary<Guid, string>> ReadCheapestUsdAsync(
+        SqliteConnection connection,
+        Guid generationId,
+        string oracleIdList,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT oracle_id, usd FROM (" +
+            "SELECT oracle_id, usd, ROW_NUMBER() OVER " +
+            "(PARTITION BY oracle_id ORDER BY CAST(usd AS REAL), card_id) AS position FROM (" +
+            "SELECT oracle_id, card_id, json_extract(raw_json, '$.prices.usd') AS usd FROM card_objects " +
+            "WHERE generation_id = $generation AND lang = 'en' " +
+            "AND oracle_id IN (SELECT value FROM json_each($ids))) " +
+            "WHERE usd IS NOT NULL) WHERE position = 1;";
+        command.Parameters.AddWithValue("$generation", ScryfallSql.FormatGuid(generationId));
+        command.Parameters.AddWithValue("$ids", oracleIdList);
+        Dictionary<Guid, string> result = [];
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result[ScryfallSql.ParseGuid(reader.GetString(0))] = reader.GetString(1);
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -486,6 +723,7 @@ internal sealed class ScryfallCardDataStore
                 generationId,
                 lookup,
                 null,
+                countMatches: false,
                 cancellationToken).ConfigureAwait(false);
             if (card is null)
             {
@@ -1736,13 +1974,20 @@ internal sealed class ScryfallCardDataStore
 }
 
 /// <summary>
-/// Carries one lossless card-data object and its generation.
+/// Carries one lossless card-data object and its generation. For an exact-name lookup,
+/// <see cref="MatchingOracleIdCount"/> says how many different cards share the name among the best matches.
 /// </summary>
 internal sealed record StoredCardDataObject(
     Guid GenerationId,
     DateTimeOffset RetrievedAtUtc,
     DateTimeOffset ProviderUpdatedAtUtc,
-    string RawJson);
+    string RawJson)
+{
+    /// <summary>
+    /// Gets the number of different Oracle IDs among the best name matches; 1 for a lookup that names one card.
+    /// </summary>
+    internal int MatchingOracleIdCount { get; init; } = 1;
+}
 
 /// <summary>
 /// Carries one ordered card-data collection with generation details.

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace MtgMcp.Archidekt;
 
@@ -309,6 +310,13 @@ public sealed record ArchidektApplyResult(
     /// </summary>
     public IReadOnlyList<ArchidektOperationStatus> Operations { get; init; } =
         Array.AsReadOnly(Operations.ToArray());
+
+    /// <summary>
+    /// Gets local entry IDs a verified push could not link to provider rows; omitted when all linked.
+    /// The next push removes and recreates these rows instead of duplicating them.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<Guid>? UnlinkedLocalIds { get; init; }
 }
 
 /// <summary>
