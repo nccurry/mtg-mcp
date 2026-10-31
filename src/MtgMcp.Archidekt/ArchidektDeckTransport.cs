@@ -22,6 +22,14 @@ internal sealed class ArchidektDeckTransport
     }
 
     /// <summary>
+    /// Waits for a short pause between provider calls.
+    /// </summary>
+    internal Task PauseAsync(TimeSpan duration, CancellationToken cancellationToken)
+    {
+        return session.PauseAsync(duration, cancellationToken);
+    }
+
+    /// <summary>
     /// Lists one authenticated deck page.
     /// </summary>
     internal async Task<RemoteDeckPage> ListAsync(

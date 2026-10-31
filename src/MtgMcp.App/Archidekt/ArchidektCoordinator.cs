@@ -837,7 +837,12 @@ internal sealed class ArchidektSynchronizationContext
             cancellationToken).ConfigureAwait(false);
         if (verifiedResult is not OperationSuccess<RemoteDeckSnapshot> verified)
         {
-            return OperationFailure.Forward<RemoteDeckSnapshot, ArchidektApplyResult>(verifiedResult);
+            // The writes were sent, so keep their statuses instead of reporting only the failed read.
+            return new OperationSuccess<ArchidektApplyResult>(applied.Data with
+            {
+                Outcome = applied.Data.Outcome == "applied" ? "applied-unverified" : applied.Data.Outcome,
+                Notice = applied.Data.Notice ?? ArchidektApplyResult.UnverifiedNotice,
+            });
         }
 
         DeckProviderBinding binding = state.Data.Binding with

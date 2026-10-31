@@ -334,6 +334,14 @@ public sealed record ArchidektApplyResult(
     IReadOnlyList<ArchidektOperationStatus> Operations)
 {
     /// <summary>
+    /// Tells what to do when the writes were sent but the deck could not be read afterwards.
+    /// </summary>
+    public const string UnverifiedNotice =
+        "The operations were sent, but Archidekt could not be read afterwards, so the result is not verified and " +
+        "the local baseline was not updated. Run archidekt_pull_preview to see the Archidekt deck before pushing " +
+        "again.";
+
+    /// <summary>
     /// Gets immutable operation statuses in attempted order.
     /// </summary>
     public IReadOnlyList<ArchidektOperationStatus> Operations { get; init; } =
@@ -345,7 +353,26 @@ public sealed record ArchidektApplyResult(
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<Guid>? UnlinkedLocalIds { get; init; }
+
+    /// <summary>
+    /// Gets a sentence about the outcome that the operation statuses do not say, such as why the final read failed;
+    /// omitted when there is nothing to add.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Notice { get; init; }
+
+    /// <summary>
+    /// Gets the rows that still differ from the pushed deck when the check after the writes found a difference;
+    /// omitted otherwise. Only the first rows are listed.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ArchidektVerificationDifference>? Differences { get; init; }
 }
+
+/// <summary>
+/// Names one row of the Archidekt deck that still differed from the pushed deck after the writes.
+/// </summary>
+public sealed record ArchidektVerificationDifference(string Kind, string Subject, string Summary);
 
 /// <summary>
 /// Reports one typed folder move result after verification.

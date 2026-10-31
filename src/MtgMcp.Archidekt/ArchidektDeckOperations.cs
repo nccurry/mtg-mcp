@@ -23,6 +23,16 @@ internal sealed class ArchidektDeckOperations
     private const string NotAttemptedMessage = "Not sent: an earlier operation stopped the push.";
 
     /// <summary>
+    /// Gives the most differing rows an apply result lists.
+    /// </summary>
+    private const int MaximumListedDifferences = 25;
+
+    /// <summary>
+    /// Gives the pause before the check after the writes is repeated when it found a difference.
+    /// </summary>
+    private static readonly TimeSpan VerificationSettleTime = TimeSpan.FromSeconds(1);
+
+    /// <summary>
     /// Stores the hard provider request ceiling for standalone operations.
     /// </summary>
     private readonly int maximumRequestsPerOperation;
@@ -399,6 +409,18 @@ internal sealed class ArchidektDeckOperations
                     cancellationToken).ConfigureAwait(false);
                 statuses.Add(Status(operation.Public, "applied", "Archidekt accepted the operation."));
             }
+            catch (ArchidektProviderException exception) when (exception.ReasonCode == "provider-rate-limited")
+            {
+                statuses.Add(Status(operation.Public, "not-sent", $"{NotSentMessage} {exception.Message}"));
+                AddNotAttempted(statuses, plan, index + 1);
+                return new ArchidektApplyResult(
+                    statuses.Any(value => value.Status == "applied") ? "partial" : "not-applied",
+                    LocalDeckId: null,
+                    LocalRevision: null,
+                    current.RemoteId,
+                    FinalRemoteFingerprint: null,
+                    statuses);
+            }
             catch (ArchidektProviderException exception)
                 when (exception.Kind is ArchidektFailureKind.Unavailable or ArchidektFailureKind.Unsupported)
             {
@@ -414,12 +436,36 @@ internal sealed class ArchidektDeckOperations
             }
         }
 
-        RemoteDeckSnapshot verified = await transport.GetAsync(
+        RemoteDeckSnapshot? verified = await ReadForVerificationAsync(
             current.RemoteId,
-            requireAuthentication: true,
             budget,
             cancellationToken).ConfigureAwait(false);
-        ArchidektRemotePlan residual = ArchidektSyncPlanner.PlanRemoteVerification(verified, target);
+        ArchidektRemotePlan? residual = verified is null
+            ? null
+            : ArchidektSyncPlanner.PlanRemoteVerification(verified, target);
+        if (residual is { PlannedOperations.Count: > 0 })
+        {
+            // Archidekt can lag behind its own writes, so one more read decides whether the difference is real.
+            await transport.PauseAsync(VerificationSettleTime, cancellationToken).ConfigureAwait(false);
+            verified = await ReadForVerificationAsync(current.RemoteId, budget, cancellationToken)
+                .ConfigureAwait(false);
+            residual = verified is null ? null : ArchidektSyncPlanner.PlanRemoteVerification(verified, target);
+        }
+
+        if (verified is null || residual is null)
+        {
+            return new ArchidektApplyResult(
+                "applied-unverified",
+                LocalDeckId: null,
+                LocalRevision: null,
+                current.RemoteId,
+                FinalRemoteFingerprint: null,
+                statuses)
+            {
+                Notice = ArchidektApplyResult.UnverifiedNotice,
+            };
+        }
+
         if (residual.PlannedOperations.Count > 0)
         {
             return new ArchidektApplyResult(
@@ -428,7 +474,20 @@ internal sealed class ArchidektDeckOperations
                 LocalRevision: null,
                 current.RemoteId,
                 verified.RemoteFingerprint,
-                statuses);
+                statuses)
+            {
+                Differences =
+                [
+                    .. residual.PlannedOperations
+                        .Take(MaximumListedDifferences)
+                        .Select(value => new ArchidektVerificationDifference(
+                            value.Public.Kind,
+                            value.Public.Subject,
+                            value.Public.Summary)),
+                ],
+                Notice = $"{residual.PlannedOperations.Count} rows of the Archidekt deck still differ from the " +
+                    "pushed deck after a second read.",
+            };
         }
 
         return new ArchidektApplyResult(
@@ -438,6 +497,30 @@ internal sealed class ArchidektDeckOperations
             current.RemoteId,
             verified.RemoteFingerprint,
             statuses);
+    }
+
+    /// <summary>
+    /// Reads the deck again after the writes, or returns null when Archidekt cannot answer, so the statuses of the
+    /// writes that were sent are kept instead of lost.
+    /// </summary>
+    private async Task<RemoteDeckSnapshot?> ReadForVerificationAsync(
+        string deckId,
+        ArchidektOperationBudget budget,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await transport.GetAsync(
+                deckId,
+                requireAuthentication: true,
+                budget,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (ArchidektProviderException exception)
+            when (exception.Kind is ArchidektFailureKind.Unavailable or ArchidektFailureKind.Unsupported)
+        {
+            return null;
+        }
     }
 
     /// <summary>
