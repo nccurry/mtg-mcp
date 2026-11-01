@@ -49,7 +49,7 @@ internal static class RecordedCards
     /// </summary>
     internal static string Raw(string name)
     {
-        return File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "cards", name + ".json"));
+        return File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "recorded", "cards-id", name + ".json"));
     }
 
     /// <summary>

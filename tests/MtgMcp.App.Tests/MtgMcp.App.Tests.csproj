@@ -21,7 +21,7 @@
         <Compile Include="..\MtgMcp.Scryfall.Tests\RecordedCards.cs" Link="Fixtures\RecordedCards.cs" />
         <Compile Include="..\MtgMcp.Scryfall.Tests\ScryfallTestFixture.cs" Link="Fixtures\ScryfallTestFixture.cs" />
         <Compile Include="..\MtgMcp.Archidekt.Tests\ArchidektTestHttpHandler.cs" Link="Fixtures\ArchidektTestHttpHandler.cs" />
-        <None Include="..\MtgMcp.Scryfall.Tests\Fixtures\cards\*.json" Link="Fixtures\cards\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+        <None Include="..\MtgMcp.Scryfall.Tests\Fixtures\recorded\cards-id\*.json" Link="Fixtures\recorded\cards-id\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
         <None Include="Fixtures\commander-rules\*.jsonl" CopyToOutputDirectory="PreserveNewest" />
         <None Include="Fixtures/on-curve-replay.json" CopyToOutputDirectory="PreserveNewest" />
         <None Include="Fixtures/simulate-golden.json" CopyToOutputDirectory="PreserveNewest" />

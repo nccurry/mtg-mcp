@@ -36,3 +36,21 @@ task test:integration
 task test:e2e
 task test
 ```
+
+## Recorded provider fixtures
+
+Each adapter test project keeps real provider responses under
+`Fixtures/recorded/<route>/<case>.json`, listed in `Fixtures/recorded/manifest.json`
+(id, method, URL, route, status, file, capture date, SHA-256, what was scrubbed).
+The shared loader, `ReplayHttpHandler`, and `JsonShape` live in
+`MtgMcp.Core.Tests/Recorded` and are linked into adapter test projects.
+
+- To add a recording: add a manifest entry (leave `sha256` empty; set
+  `trimData` to cap a `data` array), run `task fixtures:refresh`, review
+  the diff, and read it through `ReplayHttpHandler` and `RecordedManifest`.
+  Never edit a recording or hash by hand; a test fails on any mismatch or
+  unlisted file.
+- Refresh only after a provider bug report, before a release, or to add a case.
+  It sends read-only requests, scrubs personal and volatile fields, and the diff
+  shows what moved. `refresh: false` keeps an older recording as it is.
+- Compare shapes with `JsonShape`, not exact bytes.
