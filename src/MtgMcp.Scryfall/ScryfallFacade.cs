@@ -823,6 +823,7 @@ internal sealed class ScryfallSnapshotOperations
             ? null
             : new OperationInvalidInput(
                 "invalid-page-size",
-                $"Page size must be from 1 through {maximum}.");
+                $"Page size must be from 1 through {maximum}.",
+                "pageSize");
     }
 }

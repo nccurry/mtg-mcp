@@ -12,6 +12,8 @@ The production projects. Each project folder may add its own `AGENTS.md`.
   the owning adapter unless Core already has a shared primitive for it.
 - Use `docs/adapters.md` as the shared provider map instead of repeating
   adapter rules in project-level instruction files.
+- Follow `docs/architecture/mcp-surface.md` for tool names, descriptions,
+  parameters, results, and paging.
 - Keep tool annotations, descriptions, and resource URIs accurate when public
   MCP behavior changes.
 - Preserve deterministic sort keys, source metadata, assumptions, warnings,
