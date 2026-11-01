@@ -88,7 +88,7 @@ internal sealed class StatisticsSimulateTools
         "C, or any of W/U/B/R/G); without it a card adds colorless mana for generic costs only. can-cast pays its " +
         "cost plus all mana spent that turn with one assignment; hybrid takes either color; Phyrexian needs its " +
         "color (life is not modeled). Limits: samples x turns x deck cards <= 50,000,000 and a cost estimate " +
-        "<= 400,000,000 (can-cast checks and target-first rules are costly), 1,000 units of mana in play. " +
+        "<= 400,000,000 (can-cast and target-first are costly), 1,000 units of mana in play. " +
         "preset on-curve (for land-count and on-curve questions) replaces groups, openingHand, eachTurn, turns, and " +
         "conditions: one land a turn toward a " +
         "target card, from installed card data." +
