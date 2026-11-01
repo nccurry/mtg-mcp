@@ -317,17 +317,17 @@ Phase 0 (2026-11-01, integration at `9b1279c`):
 
 | Requirement | State | Evidence |
 | --- | --- | --- |
-| REQ-001 | planned | |
-| REQ-002 | planned | |
-| REQ-003 | planned | |
-| REQ-004 | planned | |
-| REQ-005 | planned | |
-| REQ-006 | planned | |
+| REQ-001 | implemented (phase 1, merged `bcbd432`) | `8ec45c9`: seven `local_deck_get` filter tests in `DeckCardViewTests`, including the 347-entry concise Maybeboard read. Unknown zones are refused as `invalid-zones`. |
+| REQ-002 | implemented (phase 2, merged `1d96c13`) | `ca6505e`, `9c75a61`: `DeckPatchEntriesTests` (24 store tests, including a 12-case refusal theory with rollback), `DeckPatchEntriesToolTests`, `PatchDeckEntriesRulesTests`. |
+| REQ-003 | implemented (phase 2) | `9c75a61`: `entryIds` removal of 13 entries, unknown ID, both or neither field. |
+| REQ-004 | implemented (phase 2) | `ca6505e`, `9c75a61`: drafted categories on add and create, and a skipped add assigns nothing. Imports build proposals, not drafts, so they carry no draft categories. A draft naming an unknown category is refused as `invalid-deck-input`. |
+| REQ-005 | implemented (phase 3a, merged `e32c001`) | `f8cab78`: an 18-edit push on a 347-entry fake deck is 36,996 characters full (cut at 17 of 19 rows) and 6,923 characters concise (all 19 rows), with the same fingerprint and apply availability. `responseFormat` also accepts `standard` as an alias of `full`, the shared rule for this parameter. |
+| REQ-006 | partly implemented (phase 3a) | `f8cab78`: `pull-discard-option-mismatch` with no second provider read; previews return `applyOptions`; the `push-removals-unconfirmed` regression test. Still open: showing the expected phrase on `confirmation-required`. |
 | REQ-007 | planned | |
 | REQ-008 | planned | |
 | REQ-009 | planned | |
-| REQ-010 | planned | |
-| REQ-011 | planned | |
+| REQ-010 | implemented with a recorded deviation (phase 2) | `ca6505e`: `zoneCategories` is required on `patch-entries` when it sets a zone. On drafts it is optional and defaults to `leave`, because a draft zone defaults to `main` and an explicit zone cannot be told apart from the default without breaking existing `add-entry`, `local_deck_create`, and Archidekt pull callers. The 13-entry `match` move ends with one zone category on each entry; a missing zone category is created. |
+| REQ-011 | implemented (phase 1) | `8ec45c9`, `c307cce`: `entryId` rows for deck and deck-backup sources; snapshot and Archidekt sources refuse it as `invalid-field`. |
 | REQ-012 | planned | |
 | REQ-013 | planned | |
 | REQ-014 | planned | |
