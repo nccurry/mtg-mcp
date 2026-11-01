@@ -32,3 +32,9 @@ was completed and released as 0.12.0 on 2026-10-29.
 The nine legacy reference packets that used to wait here (Jasmine analysis
 repair packets and product foundation follow-ups) were superseded by the
 rewrite and moved to [`completed/`](../completed/README.md) on 2026-10-27.
+
+## Simulation
+
+[simulate-damage-rules](simulate-damage-rules/README.md) plans caller-stated
+commander-zone, counter, attachment, attack, and damage rules for
+`stats_simulate`. It awaits owner review and is not authorized.
