@@ -37,6 +37,9 @@ See [live acceptance](docs/llms/plcs/completed/rewrite-stabilization-cutover/LIV
 
 ## Start the server
 
+An MCP client keeps the mtg-mcp process it started. After upgrading, restart or reconnect mtg-mcp in the client
+(in Claude Code, `/mcp` or a new session) before relying on new behavior.
+
 Bootstrap the repository, then run the MCP smoke test:
 
 ```powershell
@@ -201,7 +204,11 @@ without `include`, so read every page (pass `nextCursor` back as `cursor`; `page
 length) before you decide what a deck holds. Every page carries deck-wide totals: `entryCount`,
 `cardCount` (counting quantities), and `cardsByZone`. A cut page's `narrow` says it is one page of the deck:
 "This page shows N of M entries; the deck is not missing the rest. Follow nextCursor." Compare the totals
-with the entries you hold before you add a card you think is missing. The summary of every tool that writes a deck
+with the entries you hold before you add a card you think is missing. To check whether named cards are in the deck,
+pass `cardNames` (1 to 100 names, matched ignoring case, a double-faced card by either face): only the matching entries
+come back, `cardNamesNotFound` lists the names with no match, and the totals still cover the whole deck. Pass the same
+`cardNames` with `nextCursor`. `responseFormat: "concise"` returns only `entryId`, `cardName`, `quantity`, `zone`, and
+`categoryNames` for each entry, so a large deck fits in fewer pages; the default `full` is unchanged. The summary of every tool that writes a deck
 carries the same totals (`cardsByZone` with the entry count).
 
 The tools that write a deck (`local_deck_apply_changes`, `local_deck_create`,
@@ -227,6 +234,13 @@ says a push to Archidekt does not need card data: a push uses Archidekt's defaul
 no printing set (see [Synchronize Archidekt](#synchronize-archidekt)). Run `scryfall_card_data_sync` and then
 `local_deck_identity_reconcile_preview` only to fill in the card identity. Entries added by name therefore
 need no `local_deck_identity_reconcile_*` step before an Archidekt push.
+
+An add of a card already in the deck still makes another entry, so a retried batch can pile up copies. Each such add
+is listed in `issues` as `already-in-deck`, naming the existing entry. Basic lands are exempt. Cards match by Oracle
+ID when both entries have one, else by name; printings are not compared. To retry safely, pass an `entryId` on each
+add (a reused ID fails), or set `whenCardPresent: "skip"`: an add whose card is already in the same zone is then left
+out and reported as `skipped`. A batch of only skipped adds succeeds without changing the revision. A later change
+that refers to a skipped add's entry ID refuses the batch with `invalid-deck-change`.
 
 Use `local_deck_category_rules_preview` and `local_deck_category_rules_apply` to
 evaluate caller-owned tag rules. The preview validates the rules first; rules
@@ -421,7 +435,9 @@ These tools return facts only. They never say a deck is legal or illegal.
   eligibility, color identity, copy limits, format legality, Game Changers,
   commander pairing, and companion restrictions.
 - `local_deck_duplicates_preview` finds repeated cards in a deck and plans the
-  removals for a caller-chosen keep order; it changes nothing.
+  removals for a caller-chosen keep order; it changes nothing. Copies that are identical (printing, language, finish,
+  zone, and categories) are settled by keeping the first in deck order (`tieBrokenBy: "identical-entries"`). When
+  copies differ, the group stays `ambiguous`, keeps no entry, and `next` names the field that differs.
 - `playgroup_games_stats_get` totals Playgroup games by deck or player.
 
 ### Worked examples

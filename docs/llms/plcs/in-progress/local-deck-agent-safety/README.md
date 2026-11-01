@@ -10,8 +10,8 @@
   version)
 - Selected work and endpoint: phases 1 to 3 and the upgrade note, merged into
   `main` on this host, audited, released as `0.13.2`, and installed.
-- State: designed; implementation starting.
-- Next action and blocker: phases 1 to 3 run in parallel worktrees. No blocker.
+- State: phases 1 to 3 implemented and merged into `ldas/integ`; docs done; full audit next.
+- Next action and blocker: full audit, then merge to `main`, release `0.13.2`, and install. No blocker.
 - Resume check: `git worktree list` shows the checkouts below.
 
 | Checkout | Branch | Owner | State |
@@ -98,4 +98,8 @@ Each phase: focused tests, then `task ci`, `task test:integration`, and
 
 | Requirement | State | Evidence |
 | --- | --- | --- |
-| REQ-001 to REQ-005 | planned | Report from a live session (deck 27968076 cleanup on 0.13.1); research by reading code. |
+| REQ-001 | implemented; checks on the merged commit pending | `5e573a6`: `ApplyChanges_CardAlreadyInDeck_NoCardData_AddsAndReportsAlreadyInDeck`, `ApplyChanges_CardAlreadyInDeck_WithCardData_MatchesByOracleId`, `ApplyChanges_BasicLandOrOtherCard_GivesNoAlreadyInDeckIssue`, `ApplyChanges_CardAddedTwiceInOneBatch_ReportsTheSecondAdd`. |
+| REQ-002 | implemented; checks on the merged commit pending | `5e573a6`: `ApplyChanges_SkipTwice_IsIdempotent`, `ApplyChanges_SkipWithCardInAnotherZone_AddsAndReportsAlreadyInDeck`, `ApplyChanges_ChangeReferringToASkippedAdd_IsRefusedWithoutAWrite`, `ApplyChanges_UnknownWhenCardPresent_IsRefused`. |
+| REQ-003 | implemented; checks on the merged commit pending | `747a77d`: `Preview_IdenticalCopies_KeepTheFirstInDeckOrder`, `Preview_SeventeenCardsWithFourIdenticalCopies_PlansFiftyOneRemovals`, `Preview_TwoCopiesThatDiffer_AreAmbiguousWithNoKeptEntry`, `Preview_TwoIdenticalCopiesAndOneDifferent_StayAmbiguous`, `Preview_ManyIdenticalCopyGroups_AreCutWithEachGroupsRemovalsTogether`, `Preview_GroupSettledByTheKeepOrder_OmitsTieBrokenBy`. |
+| REQ-004 | implemented; checks on the merged commit pending | `bc70bec`: `Get_CardNames_ReturnsMatchesAndTheNamesNotFound`, `Get_CardNames_AllMissOrInvalid_AreHandled`, `Get_Cursor_RefusesAChangedFilterOrFormat`, `Get_Concise_ReturnsOnlyTheShortEntryFields`, `Get_Concise_LargeSideboardDeckFitsInOneResult`. |
+| REQ-005 | implemented; checks on the merged commit pending | Descriptions in `5e573a6` and `bc70bec` (checked by the 4,096-character architecture test); README, CHANGELOG, and `docs/output-control.md` in the docs commit. |
