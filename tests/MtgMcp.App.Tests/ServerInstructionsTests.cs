@@ -84,7 +84,7 @@ public sealed partial class ServerInstructionsTests
             Find cards (Scryfall syntax, where otag finds oracle tags): scryfall_search.
             Read cards and card details: scryfall_cards_get, scryfall_card_details.
             See a local deck with card data: local_deck_get.
-            Build or edit a local deck (add-entry needs only a card name; zone moves use patch-entries with zoneCategories match): local_deck_create, local_deck_apply_changes.
+            Build or edit a local deck (add-entry needs only a card name; zone moves use patch-entries and set zoneCategories to match or leave): local_deck_create, local_deck_apply_changes.
             Exact math on draws and decks, or sampled games, including land counts and on-curve odds: stats_hypergeometric, stats_turn_table, stats_mana_availability, stats_simulate.
             Summarize a local deck: stats_local_deck_summary.
             Analyze a card list (it groups by subtypes, such as Aura, and by tags): card_list_query, card_lists_compare, stats_castability.

@@ -154,10 +154,7 @@ internal sealed class CardListTools
         [Description("What makes two cards the same card: oracle (any printing, default), printing, or name."),
          AllowedValues("oracle", "printing", "name")]
         string matchBy = "oracle",
-        [Description(
-            "Card format: concise (a few fields, best for large lists), standard (default), or full (adds raw " +
-            "provider objects; at most 25 per page)."),
-         ResponseFormatValues]
+        [Description(ScryfallReadTools.ResponseFormatDescription), ResponseFormatValues]
         string responseFormat = "standard",
         [Description(
             "Only with responseFormat concise: the fields to return instead of the default set. scryfallId, " +
@@ -167,8 +164,8 @@ internal sealed class CardListTools
         [Description("Opaque cursor from nextCursor of a previous call with the same request.")]
         string? cursor = null,
         [Description(
-            "Most cards per page, from 1 through 100, or through 25 for full. A page may hold fewer when it " +
-            "reaches the result size limit. Use 100 for Archidekt sources.")]
+            "Most cards per page, from 1 through 100, or through 25 for full; default 25. A page may hold fewer " +
+            "when it reaches the result size limit. Use 100 for Archidekt sources.")]
         int pageSize = CardListCoordinator.DefaultPageSize,
         CancellationToken cancellationToken = default)
     {
@@ -199,19 +196,21 @@ internal sealed class CardListTools
         "Scryfall: filters, groups, counts, sums, and sorts one card list using installed card data, in one call. " +
         "Use it for the mana curve, type mix, counts by oracle tag, color pips and sources, deck price, and the most " +
         "expensive cards. where holds filters that must all match (ops eq, ne, lt, lte, gt, gte, in, contains); " +
-        "groupBy takes up to two fields, such as subtypes (Aura, Equipment) or tags, and a card with several values (colors, subtypes, tags) counts once in each group. " +
+        "groupBy takes up to two fields, such as subtypes (Aura, Equipment) or tags, and a card with several " +
+        "values (colors, subtypes, tags) counts once in each group. " +
         "metrics: quantity (copies), cards (distinct cards), sum:/avg:/min:/max: plus a number field, pips (colored " +
         "mana symbols by color; a hybrid symbol counts once for each of its colors and also under hybrid; a " +
         "Phyrexian symbol counts for its color and also under phyrexian), and sources (cards whose produced mana " +
         "includes each color; whether a land enters tapped is not modeled). Sums are exact decimal strings and " +
-        "cards with no value are counted in missingValues. A group whose key is JSON null holds the cards with no value " +
-        "for the group field; it is not the same as a real value written none. rows adds a sorted, paged table of " +
-        "cards. Fields: name, manaValue, " +
+        "cards with no value are counted in missingValues. A group whose key is JSON null holds the cards with no " +
+        "value for the group field; it is not the same as a real value written none. rows adds a sorted, paged " +
+        "table of cards. Fields: name, manaValue, " +
         "typeLine, cardTypes, subtypes, supertypes, colors, colorIdentity, keywords, tags, rarity, set, power, " +
         "toughness, loyalty, priceUsd and other price columns, cheapestPriceUsd, edhrecRank (" +
         ScryfallReadTools.EdhrecRankMeaning + "), gameChanger, " +
         "producedMana, oracleText (contains only), legalIn, bannedIn, games, reserved, layout, and for deck sources " +
-        "zone, category, quantity, and entryId (the local deck entry ID, for deck and deck-backup sources). " + SourceNote + UntrustedTextNotes.CardListEntries +
+        "zone, category, quantity, and entryId (the local deck entry ID, for deck and deck-backup sources). " +
+        SourceNote + UntrustedTextNotes.CardListEntries +
         DeckToolExamples.ExamplePrefix + "curve): " + CardListToolExamples.QueryMinimal +
         DeckToolExamples.ExamplePrefix + "pips): " + CardListToolExamples.QueryPips +
         DeckToolExamples.ExamplePrefix + "full): " + CardListToolExamples.QueryFull)]

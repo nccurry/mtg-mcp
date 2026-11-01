@@ -21,9 +21,9 @@ internal sealed class ScryfallReadTools
     /// <summary>
     /// Describes the responseFormat parameter of every card-returning tool.
     /// </summary>
-    private const string ResponseFormatDescription =
-        "Card shape: concise (compact fields for comparing many cards), standard (every card field this server " +
-        "returns; the default), or full (standard plus raw provider objects; pages are limited to 25 rows).";
+    internal const string ResponseFormatDescription =
+        "Card shape: standard (default) returns every card field this server returns; concise returns only the " +
+        "fields in fields, or a compact default set; full adds raw provider objects and limits pages to 25 rows.";
 
     /// <summary>
     /// Describes the fields parameter of every card-returning tool.
@@ -102,7 +102,8 @@ internal sealed class ScryfallReadTools
         [Description("Direction: auto, asc, or desc."), AllowedValues("auto", "asc", "desc")]
         string direction = "auto",
         [Description("Include supplemental objects such as tokens and emblems.")] bool includeExtras = false,
-        [Description("Include cards in every available language rather than only English.")] bool includeMultilingual = false,
+        [Description("Include cards in every available language rather than only English.")]
+        bool includeMultilingual = false,
         [Description("Include variation printings in the provider result.")] bool includeVariations = false,
         [Description("Cache policy: default, cache-only, or refresh."), FreshnessPolicyValues]
         string freshnessPolicy = "default",
@@ -110,8 +111,8 @@ internal sealed class ScryfallReadTools
         [Description(FieldsDescription)] IReadOnlyList<string>? fields = null,
         [Description("Opaque cursor for this immutable result.")] string? cursor = null,
         [Description(
-            "Most items to return, from 1 through 100, or through 25 when responseFormat is full. A page may hold " +
-            "fewer when it reaches the result size limit.")]
+            "Most items to return, from 1 through 100, or through 25 when responseFormat is full; default 25. " +
+            "A page may hold fewer when it reaches the result size limit.")]
         int pageSize = 25,
         CancellationToken cancellationToken = default)
     {
@@ -155,8 +156,8 @@ internal sealed class ScryfallReadTools
         [Description("Opaque continuation cursor bound to the complete ordered request and exact evidence.")]
         string? cursor = null,
         [Description(
-            "Most rows to return, from 1 through 100, or through 25 when responseFormat is full. A page may hold " +
-            "fewer when it reaches the result size limit.")]
+            "Most rows to return, from 1 through 100, or through 25 when responseFormat is full; default 25. " +
+            "A page may hold fewer when it reaches the result size limit.")]
         int pageSize = 25,
         [Description(ResponseFormatDescription), ResponseFormatValues] string responseFormat = "standard",
         [Description(FieldsDescription)] IReadOnlyList<string>? fields = null,
@@ -185,7 +186,7 @@ internal sealed class ScryfallReadTools
         [Description("Cache policy: default, cache-only, or refresh."), FreshnessPolicyValues]
         string freshnessPolicy = "default",
         [Description("Opaque cursor for this immutable result.")] string? cursor = null,
-        [Description("Suggestions to return, from 1 through 100.")] int pageSize = 25,
+        [Description("Suggestions to return, from 1 through 100; default 25.")] int pageSize = 25,
         CancellationToken cancellationToken = default)
     {
         return ScryfallToolExecution.RunAsync(() => service.AutocompleteAsync(
@@ -234,7 +235,7 @@ internal sealed class ScryfallReadTools
         string? tagType = null,
         [Description("Include raw tag objects, which may contain large assignment arrays.")] bool includeRaw = false,
         [Description("Opaque cursor bound to the installed card-data generation.")] string? cursor = null,
-        [Description("Tags to return, from 1 through 100.")] int pageSize = 25,
+        [Description("Tags to return, from 1 through 100; default 25.")] int pageSize = 25,
         CancellationToken cancellationToken = default)
     {
         return ScryfallToolExecution.RunAsync(() =>
@@ -268,10 +269,11 @@ internal sealed class ScryfallReadTools
         [Description("Minimum assignment weight accepted by the official tag dataset.")] string minimumWeight = "weak",
         [Description(ResponseFormatDescription), ResponseFormatValues] string responseFormat = "standard",
         [Description(FieldsDescription)] IReadOnlyList<string>? fields = null,
-        [Description("Opaque cursor bound to the installed card-data generation and tag expression.")] string? cursor = null,
+        [Description("Opaque cursor bound to the installed card-data generation and tag expression.")]
+        string? cursor = null,
         [Description(
-            "Most cards to return, from 1 through 100, or through 25 when responseFormat is full. A page may hold " +
-            "fewer when it reaches the result size limit.")]
+            "Most cards to return, from 1 through 100, or through 25 when responseFormat is full; default 25. " +
+            "A page may hold fewer when it reaches the result size limit.")]
         int pageSize = 25,
         CancellationToken cancellationToken = default)
     {

@@ -31,9 +31,12 @@ internal enum ScryfallFreshnessPolicy
 /// Describes one exact Scryfall card lookup case without fuzzy field inference.
 /// </summary>
 public sealed record ScryfallCardLookup(
-    [property: JsonPropertyName("kind"), Description("Which lookup to run. Printing uses setCode and collectorNumber; every other kind uses value."), AllowedValues("scryfall-id", "oracle-id", "exact-name", "fuzzy-name", "printing")]
+    [property: JsonPropertyName("kind"),
+     Description("Which lookup to run. Printing uses setCode and collectorNumber; every other kind uses value."),
+     AllowedValues("scryfall-id", "oracle-id", "exact-name", "fuzzy-name", "printing")]
     string Kind,
-    [property: JsonPropertyName("value"), Description("The Scryfall ID, Oracle ID, or card name to look up. Leave out for kind printing.")]
+    [property: JsonPropertyName("value"),
+     Description("The Scryfall ID, Oracle ID, or card name to look up. Leave out for kind printing.")]
     string? Value = null,
     [property: JsonPropertyName("setCode"), Description("Set code. Only with kind printing.")]
     string? SetCode = null,
