@@ -10,3 +10,4 @@ evidence up to date as code lands.
 | Packet | Phase | Summary |
 | --- | --- | --- |
 | [local-deck-agent-safety](local-deck-agent-safety/README.md) | In progress | Warn on adding a card already in the deck, skip-if-present adds, settle identical duplicate copies, and card-name and concise reads for local_deck_get. Authorized 2026-10-31. |
+| [recorded-provider-fixtures](recorded-provider-fixtures/README.md) | Phase 1 | Recorded Archidekt and Scryfall response shapes with provenance, one replay handler, mock-deck scenarios, and a contract test for the Archidekt fake. Authorized 2026-11-01. |

@@ -2,15 +2,17 @@
 
 ## Current Work
 
-- Status: Planned
-- Owner: mtg-mcp (owner approval needed before implementation)
-- Last updated: 2026-11-01, `main` at `e522c2e`
+- Status: In progress
+- Owner: mtg-mcp (owner approved 2026-11-01)
+- Last updated: 2026-11-01, `main` at `51c60cf`
 - Selected work and endpoint: phases 1 to 4 below, merged into `main`. No
   release is required; this changes tests, fixtures, one script, and one Task
   target.
-- State: designed; not approved; implementation not started.
-- Next action and blocker: owner approves the plan. No blocker.
-- Resume check: this file is under `docs/llms/plcs/planned/`.
+- State: approved; phase 1 starting.
+- Where: worktree `../mtg-mcp-wt/recorded-provider-fixtures/main`, branch
+  `rpf/main`.
+- Next action and blocker: implement phase 1. No blocker.
+- Resume check: `git -C ../mtg-mcp-wt/recorded-provider-fixtures/main log --oneline main..`.
 
 ## Outcome And Requirements
 
