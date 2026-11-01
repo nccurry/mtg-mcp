@@ -67,7 +67,8 @@ public sealed class ArchidektRecordedTests
     }
 
     /// <summary>
-    /// Verifies the owner's identity and the deck text that names a migration source are absent from the recorded deck.
+    /// Verifies the owner's identity and folder id and the deck text that names a migration source are absent from the
+    /// recorded deck.
     /// </summary>
     [Fact]
     public void Deck_RecordedBody_HoldsNoOwnerIdentity()
@@ -81,6 +82,7 @@ public sealed class ArchidektRecordedTests
         JsonElement owner = document.RootElement.GetProperty("owner");
         Assert.Equal(0, owner.GetProperty("id").GetInt32());
         Assert.Single(owner.EnumerateObject());
+        Assert.Equal(0, document.RootElement.GetProperty("parentFolder").GetInt32());
     }
 
     /// <summary>

@@ -354,18 +354,20 @@ internal sealed class FakeArchidekt : HttpMessageHandler
             });
         }
 
-        JsonNode next = page * SearchPageSize < matches.Count
-            ? JsonValue.Create(
+        JsonNode PageLink(int target)
+        {
+            return JsonValue.Create(
                 $"https://archidekt.com/api/cards/v2/?name={Uri.EscapeDataString(wanted)}" +
                 (exact ? "&exact=true" : string.Empty) +
                 (edition is null ? string.Empty : $"&edition={Uri.EscapeDataString(edition)}") +
-                $"&page={page + 1}&pageSize=25")!
-            : null!;
+                $"&page={target}&pageSize=25")!;
+        }
+
         return Json(new JsonObject
         {
             ["count"] = matches.Count,
-            ["next"] = next,
-            ["previous"] = null,
+            ["next"] = page * SearchPageSize < matches.Count ? PageLink(page + 1) : null,
+            ["previous"] = page > 1 ? PageLink(page - 1) : null,
             ["results"] = results,
         }.ToJsonString());
     }
@@ -460,6 +462,7 @@ internal sealed class FakeArchidekt : HttpMessageHandler
                 ["id"] = category.Id,
                 ["name"] = category.Name,
                 ["includedInDeck"] = category.IncludedInDeck,
+                ["isPremier"] = false,
                 ["includedInPrice"] = true,
                 ["sortOrder"] = (index * 10) + read,
             });
@@ -479,7 +482,8 @@ internal sealed class FakeArchidekt : HttpMessageHandler
 
             cardArray.Add(new JsonObject
             {
-                ["deckRelationId"] = entry.RelationId,
+                ["id"] = entry.RelationId,
+                ["modifier"] = "Normal",
                 ["quantity"] = entry.Quantity,
                 ["order"] = orders[index],
                 ["categories"] = shown,
@@ -511,6 +515,9 @@ internal sealed class FakeArchidekt : HttpMessageHandler
             ["description"] = Description,
             ["deckFormat"] = 3,
             ["private"] = true,
+            ["unlisted"] = false,
+            ["updatedAt"] = "2026-07-04T12:00:00Z",
+            ["parentFolder"] = 9,
             ["categories"] = categoryArray,
             ["cards"] = shuffledCards,
         };

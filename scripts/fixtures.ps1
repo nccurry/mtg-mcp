@@ -83,8 +83,12 @@ function ConvertTo-StableJson {
             }
         }
 
-        # The deck text names the owner's migration source and workspace, so it is replaced; the owner id is zeroed.
+        # The deck text names the owner's migration source and workspace, so it is replaced; the owner id and the owner's folder id are zeroed.
         $root["description"] = ""
+        if ($root["parentFolder"] -is [System.Text.Json.Nodes.JsonValue]) {
+            $root["parentFolder"] = 0
+        }
+
         if ($root["owner"] -is [System.Text.Json.Nodes.JsonObject]) {
             $root["owner"]["id"] = 0
             [void] $root["owner"].Remove("frame")

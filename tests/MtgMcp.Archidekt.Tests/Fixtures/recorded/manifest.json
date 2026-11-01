@@ -35,7 +35,7 @@
       "status": 200,
       "file": "decks-id/22959335.json",
       "capturedAt": "2026-11-01",
-      "sha256": "b5b3db4bf885e41cff4da7e211130a920a276e1450cc498b495e0cd4c019f8ba",
+      "sha256": "e4f60901b8a77d622200ef35edf82ca898585d17ab8aec5424c8b60e8d17ebb1",
       "refresh": true,
       "keepCardNames": [
         "Sam, Loyal Attendant",
@@ -44,7 +44,7 @@
         "Grasp of Fate",
         "Command Tower"
       ],
-      "scrubbed": "cards trimmed to 5 entries, categories kept whole; description emptied; owner id zeroed, username, avatar, frame, affiliate fields removed; prices nulled; view count and comment root removed"
+      "scrubbed": "cards trimmed to 5 entries, categories kept whole; description emptied; owner id and parent folder id zeroed, username, avatar, frame, affiliate fields removed; prices nulled; view count and comment root removed"
     }
   ]
 }
