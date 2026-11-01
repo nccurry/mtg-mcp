@@ -53,6 +53,11 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     private readonly Dictionary<int, FakeCard> catalog = [];
 
     /// <summary>
+    /// Holds recorded search pages by lowercase card name and page number.
+    /// </summary>
+    private readonly Dictionary<(string Name, int Page), string> recordedSearches = [];
+
+    /// <summary>
     /// Counts the deck reads, which seeds the reordering of the next read.
     /// </summary>
     private int reads;
@@ -132,6 +137,27 @@ internal sealed class FakeArchidekt : HttpMessageHandler
             collectorNumber ?? cardId.ToString(System.Globalization.CultureInfo.InvariantCulture));
         catalog[cardId] = card;
         return card;
+    }
+
+    /// <summary>
+    /// Serves a recorded search response for a card name, matched without regard to case, and a page, and makes each printing in it known to the fake so
+    /// it can be added to the deck.
+    /// </summary>
+    internal void ServeRecordedSearch(string cardName, int page, string body)
+    {
+        recordedSearches[(cardName.ToLowerInvariant(), page)] = body;
+        foreach (JsonNode? result in JsonNode.Parse(body)!["results"]!.AsArray())
+        {
+            JsonNode oracle = result!["oracleCard"]!;
+            int id = result["id"]!.GetValue<int>();
+            catalog[id] = new FakeCard(
+                id,
+                oracle["name"]!.GetValue<string>(),
+                Guid.Parse(result["uid"]!.GetValue<string>()),
+                Guid.Parse(oracle["uid"]!.GetValue<string>()),
+                result["edition"]!["editioncode"]!.GetValue<string>(),
+                result["collectorNumber"]!.GetValue<string>());
+        }
     }
 
     /// <summary>
@@ -305,6 +331,11 @@ internal sealed class FakeArchidekt : HttpMessageHandler
         int page = query.TryGetValue("page", out string? pageText)
             ? int.Parse(pageText, System.Globalization.CultureInfo.InvariantCulture)
             : 1;
+        if (edition is null && recordedSearches.TryGetValue((wanted.ToLowerInvariant(), page), out string? recorded))
+        {
+            return Json(recorded);
+        }
+
         List<FakeCard> matches = [.. catalog.Values.Where(value =>
             (exact
                 ? string.Equals(value.Name, wanted, StringComparison.OrdinalIgnoreCase)
@@ -323,18 +354,20 @@ internal sealed class FakeArchidekt : HttpMessageHandler
             });
         }
 
-        JsonNode next = page * SearchPageSize < matches.Count
-            ? JsonValue.Create(
+        JsonNode PageLink(int target)
+        {
+            return JsonValue.Create(
                 $"https://archidekt.com/api/cards/v2/?name={Uri.EscapeDataString(wanted)}" +
                 (exact ? "&exact=true" : string.Empty) +
                 (edition is null ? string.Empty : $"&edition={Uri.EscapeDataString(edition)}") +
-                $"&page={page + 1}&pageSize=25")!
-            : null!;
+                $"&page={target}&pageSize=25")!;
+        }
+
         return Json(new JsonObject
         {
             ["count"] = matches.Count,
-            ["next"] = next,
-            ["previous"] = null,
+            ["next"] = page * SearchPageSize < matches.Count ? PageLink(page + 1) : null,
+            ["previous"] = page > 1 ? PageLink(page - 1) : null,
             ["results"] = results,
         }.ToJsonString());
     }
@@ -429,6 +462,7 @@ internal sealed class FakeArchidekt : HttpMessageHandler
                 ["id"] = category.Id,
                 ["name"] = category.Name,
                 ["includedInDeck"] = category.IncludedInDeck,
+                ["isPremier"] = false,
                 ["includedInPrice"] = true,
                 ["sortOrder"] = (index * 10) + read,
             });
@@ -448,7 +482,8 @@ internal sealed class FakeArchidekt : HttpMessageHandler
 
             cardArray.Add(new JsonObject
             {
-                ["deckRelationId"] = entry.RelationId,
+                ["id"] = entry.RelationId,
+                ["modifier"] = "Normal",
                 ["quantity"] = entry.Quantity,
                 ["order"] = orders[index],
                 ["categories"] = shown,
@@ -480,6 +515,9 @@ internal sealed class FakeArchidekt : HttpMessageHandler
             ["description"] = Description,
             ["deckFormat"] = 3,
             ["private"] = true,
+            ["unlisted"] = false,
+            ["updatedAt"] = "2026-07-04T12:00:00Z",
+            ["parentFolder"] = 9,
             ["categories"] = categoryArray,
             ["cards"] = shuffledCards,
         };

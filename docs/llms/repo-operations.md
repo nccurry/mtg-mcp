@@ -26,6 +26,7 @@ task test:unit
 task test:integration
 task test:e2e
 task benchmark:simulation
+task fixtures:refresh
 task coverage
 task smoke:process
 task smoke:mcp
@@ -37,7 +38,9 @@ task clean
 
 `task test` runs non-live, non-benchmark tests. Use `task benchmark:simulation`
 for the separate fixed Release measurement. Use `task test:live` only when live
-provider validation is explicitly requested and safe.
+provider validation is explicitly requested and safe. Use
+`task fixtures:refresh` only to re-record provider fixtures (read-only provider
+requests, paced); it is never part of `task test` or `task ci`.
 
 `task restore` verifies the committed NuGet graph. After an approved package
 change, use `task restore:lock` to refresh that graph and `task tools:lock` to

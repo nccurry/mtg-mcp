@@ -1,0 +1,50 @@
+{
+  "adapter": "archidekt",
+  "entries": [
+    {
+      "id": "search-sol-ring-page-1",
+      "method": "GET",
+      "url": "https://archidekt.com/api/cards/v2/?name=Sol%20Ring&exact=true&pageSize=25",
+      "route": "/api/cards/v2/",
+      "status": 200,
+      "file": "cards-v2/sol-ring-page-1.json",
+      "capturedAt": "2026-11-01",
+      "sha256": "9a66307e1ce10dd573f77ff9e4e3279e2d2fddada3c55d16f3dbf3e8c12c94e5",
+      "refresh": true,
+      "trimData": 5,
+      "scrubbed": "prices nulled; results trimmed to 5 of 25, count and next kept"
+    },
+    {
+      "id": "search-sol-ring-page-2",
+      "method": "GET",
+      "url": "https://archidekt.com/api/cards/v2/?exact=true&name=Sol+Ring&page=2&pageSize=25",
+      "route": "/api/cards/v2/",
+      "status": 200,
+      "file": "cards-v2/sol-ring-page-2.json",
+      "capturedAt": "2026-11-01",
+      "sha256": "9c2684e4d7f6757b419358422b7faf676e45cc3b0f7c89c78e95778fbad97fb0",
+      "refresh": true,
+      "trimData": 5,
+      "scrubbed": "prices nulled; results trimmed to 5 of 25, count and next kept"
+    },
+    {
+      "id": "deck-22959335",
+      "method": "GET",
+      "url": "https://archidekt.com/api/decks/22959335/",
+      "route": "/api/decks/{deckId}/",
+      "status": 200,
+      "file": "decks-id/22959335.json",
+      "capturedAt": "2026-11-01",
+      "sha256": "e4f60901b8a77d622200ef35edf82ca898585d17ab8aec5424c8b60e8d17ebb1",
+      "refresh": true,
+      "keepCardNames": [
+        "Sam, Loyal Attendant",
+        "Tireless Provisioner",
+        "Ghostly Prison",
+        "Grasp of Fate",
+        "Command Tower"
+      ],
+      "scrubbed": "cards trimmed to 5 entries, categories kept whole; description emptied; owner id and parent folder id zeroed, username, avatar, frame, affiliate fields removed; prices nulled; view count and comment root removed"
+    }
+  ]
+}

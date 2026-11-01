@@ -1,0 +1,1257 @@
+{
+  "id": 22959335,
+  "name": "Frodo / Sam - Food",
+  "createdAt": "2026-05-27T00:18:23.850259Z",
+  "updatedAt": "2026-10-29T19:22:35.735096Z",
+  "deckFormat": 3,
+  "edhBracket": null,
+  "game": 1,
+  "description": "",
+  "featured": "https://card-images.archidekt.com/art/front/c/f/cfdfa303-2578-455b-929c-a217a0261bb3.webp",
+  "customFeatured": "",
+  "hasPrimer": false,
+  "private": false,
+  "unlisted": false,
+  "theorycrafted": false,
+  "points": 0,
+  "userInput": 0,
+  "owner": {
+    "id": 0
+  },
+  "editors": null,
+  "parentFolder": 0,
+  "bookmarked": false,
+  "categories": [
+    {
+      "id": 286116912,
+      "name": "Token Synergy",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116932,
+      "name": "Demon",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286117012,
+      "name": "Counterspell",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116906,
+      "name": "Board Wipe",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116969,
+      "name": "Unblockable",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116975,
+      "name": "+1/+1 Counters",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116779,
+      "name": "Burn Synergy",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116990,
+      "name": "Treasure Synergy",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286117022,
+      "name": "Commander",
+      "isPremier": true,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 286117082,
+      "name": "Attractions",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116776,
+      "name": "Buff",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116784,
+      "name": "Advantage",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 286117141,
+      "name": "Untagged",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116753,
+      "name": "Food Synergy",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116768,
+      "name": "Burn",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116773,
+      "name": "Lifegain",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116785,
+      "name": "Land",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 286117099,
+      "name": "Stickers",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286117132,
+      "name": "Tokens",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116782,
+      "name": "Removal",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116763,
+      "name": "Lifegain Synergy",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116772,
+      "name": "Token",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116777,
+      "name": "Protection",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116778,
+      "name": "Finisher",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116781,
+      "name": "Ramp",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116871,
+      "name": "Ring Synergy",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116960,
+      "name": "Mana Fixing",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286117114,
+      "name": "Planes",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286117067,
+      "name": "Signature Spells",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286117108,
+      "name": "Contraptions",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286117126,
+      "name": "Schemes",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116775,
+      "name": "Reanimate",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116783,
+      "name": "Multiplayer",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116751,
+      "name": "Maybeboard",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": false
+    },
+    {
+      "id": 286116919,
+      "name": "Bomb",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 286117031,
+      "name": "Companion",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": true
+    },
+    {
+      "id": 293931129,
+      "name": "Creature",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 293932797,
+      "name": "Food",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 293938630,
+      "name": "Combo Piece",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 293948934,
+      "name": "Drain",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 294089998,
+      "name": "Sorcery",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 294091974,
+      "name": "Artifact",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 294091981,
+      "name": "Enchantment",
+      "isPremier": false,
+      "includedInDeck": true,
+      "includedInPrice": true
+    },
+    {
+      "id": 286116750,
+      "name": "Sideboard",
+      "isPremier": false,
+      "includedInDeck": false,
+      "includedInPrice": false
+    }
+  ],
+  "deckTags": [
+    {
+      "id": 2544325,
+      "tag": 266,
+      "deck": 22959335,
+      "name": "Food",
+      "position": "M-500000"
+    },
+    {
+      "id": 2544326,
+      "tag": 25,
+      "deck": 22959335,
+      "name": "Lifegain",
+      "position": "M-510000"
+    }
+  ],
+  "playgroupDeckUrl": null,
+  "cardPackage": null,
+  "deckHelp": null,
+  "cards": [
+    {
+      "id": 3131739142,
+      "categories": [
+        "Maybeboard",
+        "Protection"
+      ],
+      "companion": false,
+      "flippedDefault": false,
+      "label": ",#656565",
+      "modifier": "Normal",
+      "quantity": 1,
+      "customCmc": null,
+      "removedCategories": null,
+      "createdAt": "2026-05-27T00:19:24.863374Z",
+      "updatedAt": "2026-10-29T19:22:34.848081Z",
+      "deletedAt": null,
+      "notes": null,
+      "card": {
+        "id": 127997,
+        "artist": "Volkan Baǵa",
+        "tcgProductId": 532988,
+        "ckFoilId": 289851,
+        "ckNormalId": 289841,
+        "cmEd": "",
+        "scgSku": "SGL-MTG-SPG-019-ENN",
+        "scgFoilSku": "SGL-MTG-SPG-019-ENF",
+        "cardTraderSku": "275368",
+        "collectorNumber": "19",
+        "multiverseid": 651677,
+        "mtgoFoilId": 0,
+        "mtgoNormalId": 122868,
+        "uid": "d0ae5ac7-4cd9-40d7-b3a7-e7d493f2bf7a",
+        "displayName": null,
+        "releasedAt": "2024-02-09",
+        "contentWarning": false,
+        "edition": {
+          "editioncode": "spg",
+          "editionname": "Special Guests",
+          "editiondate": "2023-11-17",
+          "editiontype": "masterpiece",
+          "mtgoCode": null
+        },
+        "flavor": "",
+        "games": [],
+        "options": [
+          "Normal",
+          "Foil"
+        ],
+        "scryfallImageHash": "1783912752",
+        "oracleCard": {
+          "id": 6412,
+          "cmc": 3,
+          "colorIdentity": [
+            "White"
+          ],
+          "colors": [
+            "White"
+          ],
+          "edhrecRank": 159,
+          "faces": [],
+          "layout": "normal",
+          "uid": "e828b189-0e8f-43b8-b909-4c23e742e028",
+          "legalities": {
+            "alchemy": "not_legal",
+            "legacy": "legal",
+            "oldschool": "not_legal",
+            "modern": "legal",
+            "vintage": "legal",
+            "oathbreaker": "legal",
+            "1v1": "legal",
+            "historicbrawl": "legal",
+            "competitivebrawl": "legal",
+            "premodern": "not_legal",
+            "historic": "legal",
+            "commander": "legal",
+            "paupercommander": "not_legal",
+            "gladiator": "legal",
+            "explorer": null,
+            "brawl": "not_legal",
+            "penny": "not_legal",
+            "pioneer": "not_legal",
+            "duel": "legal",
+            "pauper": "not_legal",
+            "standard": "not_legal",
+            "future": "not_legal",
+            "predh": "legal",
+            "timeless": "legal",
+            "canlander": "legal",
+            "tlr": "legal"
+          },
+          "manaCost": "{2}{W}",
+          "manaProduction": {
+            "W": null,
+            "U": null,
+            "B": null,
+            "R": null,
+            "G": null,
+            "C": null
+          },
+          "name": "Ghostly Prison",
+          "power": "",
+          "salt": 1.29,
+          "subTypes": [],
+          "superTypes": [],
+          "keywords": [],
+          "oTags": [
+            "tax attack"
+          ],
+          "inheritedTags": [
+            "pillowfort"
+          ],
+          "text": "Creatures can't attack you unless their controller pays {2} for each creature they control that's attacking you.",
+          "tokens": [],
+          "toughness": "",
+          "types": [
+            "Enchantment"
+          ],
+          "loyalty": null,
+          "canlanderPoints": null,
+          "isPDHCommander": false,
+          "defaultCategory": "Protection",
+          "gameChanger": false,
+          "extraTurns": false,
+          "tutor": false,
+          "massLandDenial": false,
+          "twoCardComboSingelton": false,
+          "twoCardComboIds": [],
+          "atomicCombos": [],
+          "potentialCombos": [],
+          "lang": "en"
+        },
+        "owned": 0,
+        "pinnedStatus": 0,
+        "prices": {
+          "ck": null,
+          "ckfoil": null,
+          "ckMinimum": null,
+          "cm": null,
+          "cmfoil": null,
+          "cmMinimum": null,
+          "mtgo": null,
+          "mtgofoil": null,
+          "mtgoMinimum": null,
+          "tcg": null,
+          "tcgfoil": null,
+          "tcgMinimum": null,
+          "scg": null,
+          "scgfoil": null,
+          "scgMinimum": null,
+          "mp": null,
+          "mpfoil": null,
+          "mpMinimum": null,
+          "tcgLand": null,
+          "tcgLandFoil": null,
+          "tcgLandMinimum": null,
+          "cardTrader": null,
+          "cardTraderFoil": null,
+          "cardTraderMinimum": null,
+          "cs": null,
+          "csfoil": null,
+          "csMinimum": null
+        },
+        "rarity": "mythic",
+        "globalCategories": []
+      }
+    },
+    {
+      "id": 3131739148,
+      "categories": [
+        "Food",
+        "Ramp"
+      ],
+      "companion": false,
+      "flippedDefault": false,
+      "label": ",#656565",
+      "modifier": "Normal",
+      "quantity": 1,
+      "customCmc": null,
+      "removedCategories": null,
+      "createdAt": "2026-05-27T00:19:24.863536Z",
+      "updatedAt": "2026-10-29T19:22:34.851762Z",
+      "deletedAt": null,
+      "notes": null,
+      "card": {
+        "id": 145219,
+        "artist": "Josu Hernaiz",
+        "tcgProductId": 636333,
+        "ckFoilId": 315799,
+        "ckNormalId": 315798,
+        "cmEd": null,
+        "scgSku": "SGL-MTG-PRM-SECRET_SLD_2057-ENN",
+        "scgFoilSku": "SGL-MTG-PRM-SECRET_SLD_2057-ENF",
+        "cardTraderSku": "337479",
+        "collectorNumber": "2057",
+        "multiverseid": 0,
+        "mtgoFoilId": 0,
+        "mtgoNormalId": 0,
+        "uid": "7a832060-ecc6-406a-ab06-b371aa952e13",
+        "displayName": null,
+        "releasedAt": "2025-06-16",
+        "contentWarning": false,
+        "edition": {
+          "editioncode": "sld",
+          "editionname": "Secret Lair Drop",
+          "editiondate": "2019-12-02",
+          "editiontype": "box",
+          "mtgoCode": null
+        },
+        "flavor": "She won't let you leave her home with an empty belly!",
+        "games": [],
+        "options": [
+          "Normal",
+          "Foil"
+        ],
+        "scryfallImageHash": "1783906124",
+        "oracleCard": {
+          "id": 23783,
+          "cmc": 3,
+          "colorIdentity": [
+            "Green"
+          ],
+          "colors": [
+            "Green"
+          ],
+          "edhrecRank": 189,
+          "faces": [],
+          "layout": "normal",
+          "uid": "ab8d5f5c-1976-4f77-8ed2-8d28ee666741",
+          "legalities": {
+            "alchemy": "not_legal",
+            "legacy": "legal",
+            "oldschool": "not_legal",
+            "modern": "legal",
+            "vintage": "legal",
+            "oathbreaker": "legal",
+            "1v1": "legal",
+            "historicbrawl": "legal",
+            "competitivebrawl": "legal",
+            "premodern": "not_legal",
+            "historic": "legal",
+            "commander": "legal",
+            "paupercommander": "not_legal",
+            "gladiator": "legal",
+            "explorer": null,
+            "brawl": "not_legal",
+            "penny": "not_legal",
+            "pioneer": "not_legal",
+            "duel": "legal",
+            "pauper": "not_legal",
+            "standard": "not_legal",
+            "future": "not_legal",
+            "predh": "not_legal",
+            "timeless": "legal",
+            "canlander": "legal",
+            "tlr": "legal"
+          },
+          "manaCost": "{2}{G}",
+          "manaProduction": {
+            "W": 1,
+            "U": 1,
+            "B": 1,
+            "R": 1,
+            "G": 1,
+            "C": null
+          },
+          "name": "Tireless Provisioner",
+          "power": "3",
+          "salt": 0.56,
+          "subTypes": [
+            "Elf",
+            "Scout"
+          ],
+          "superTypes": [],
+          "keywords": [
+            "Landfall",
+            "Food",
+            "Treasure"
+          ],
+          "oTags": [
+            "landfall",
+            "mana dork",
+            "refund",
+            "repeatable food",
+            "repeatable treasures",
+            "triggered ability"
+          ],
+          "inheritedTags": [
+            "lands matter",
+            "lifegain",
+            "mana producer",
+            "ramp",
+            "repeatable artifact tokens",
+            "repeatable lifegain",
+            "repeatable noncreature tokens",
+            "repeatable token generator",
+            "thingfall"
+          ],
+          "text": "Landfall — Whenever a land you control enters, create a Food token or a Treasure token. (Food is an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\" Treasure is an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+          "tokens": [
+            "17448",
+            "20220"
+          ],
+          "toughness": "2",
+          "types": [
+            "Creature"
+          ],
+          "loyalty": null,
+          "canlanderPoints": null,
+          "isPDHCommander": true,
+          "defaultCategory": "Ramp",
+          "gameChanger": false,
+          "extraTurns": false,
+          "tutor": false,
+          "massLandDenial": false,
+          "twoCardComboSingelton": false,
+          "twoCardComboIds": [],
+          "atomicCombos": [],
+          "potentialCombos": [],
+          "lang": "en"
+        },
+        "owned": 0,
+        "pinnedStatus": 0,
+        "prices": {
+          "ck": null,
+          "ckfoil": null,
+          "ckMinimum": null,
+          "cm": null,
+          "cmfoil": null,
+          "cmMinimum": null,
+          "mtgo": null,
+          "mtgofoil": null,
+          "mtgoMinimum": null,
+          "tcg": null,
+          "tcgfoil": null,
+          "tcgMinimum": null,
+          "scg": null,
+          "scgfoil": null,
+          "scgMinimum": null,
+          "mp": null,
+          "mpfoil": null,
+          "mpMinimum": null,
+          "tcgLand": null,
+          "tcgLandFoil": null,
+          "tcgLandMinimum": null,
+          "cardTrader": null,
+          "cardTraderFoil": null,
+          "cardTraderMinimum": null,
+          "cs": null,
+          "csfoil": null,
+          "csMinimum": null
+        },
+        "rarity": "rare",
+        "globalCategories": []
+      }
+    },
+    {
+      "id": 3131739165,
+      "categories": [
+        "Land"
+      ],
+      "companion": false,
+      "flippedDefault": false,
+      "label": ",#656565",
+      "modifier": "Foil",
+      "quantity": 1,
+      "customCmc": null,
+      "removedCategories": null,
+      "createdAt": "2026-05-27T00:19:24.863984Z",
+      "updatedAt": "2026-10-29T19:22:34.851082Z",
+      "deletedAt": null,
+      "notes": null,
+      "card": {
+        "id": 153154,
+        "artist": "Victor Adame Minguez",
+        "tcgProductId": 697890,
+        "ckFoilId": 0,
+        "ckNormalId": 0,
+        "cmEd": null,
+        "scgSku": null,
+        "scgFoilSku": null,
+        "cardTraderSku": "396358",
+        "collectorNumber": "2026-13",
+        "multiverseid": 0,
+        "mtgoFoilId": 0,
+        "mtgoNormalId": 0,
+        "uid": "a16e23bf-cff8-4a88-b27e-9de3d5b8703d",
+        "displayName": null,
+        "releasedAt": "2026-06-19",
+        "contentWarning": false,
+        "edition": {
+          "editioncode": "pmei",
+          "editionname": "Media and Collaboration Promos",
+          "editiondate": "1995-01-01",
+          "editiontype": "promo",
+          "mtgoCode": null
+        },
+        "flavor": "\"On today's tour, you will be allowed into my most secured inner sanctum to see, in the flesh, my newest acquisitions: The Guardians of the Galaxy.\"\n—The Collector",
+        "games": [],
+        "options": [
+          "Foil"
+        ],
+        "scryfallImageHash": "1791202305",
+        "oracleCard": {
+          "id": 2993,
+          "cmc": 0,
+          "colorIdentity": [],
+          "colors": [],
+          "edhrecRank": 2,
+          "faces": [],
+          "layout": "normal",
+          "uid": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+          "legalities": {
+            "alchemy": "legal",
+            "legacy": "legal",
+            "oldschool": "not_legal",
+            "modern": "legal",
+            "vintage": "legal",
+            "oathbreaker": "legal",
+            "1v1": "legal",
+            "historicbrawl": "legal",
+            "competitivebrawl": "legal",
+            "premodern": "not_legal",
+            "historic": "legal",
+            "commander": "legal",
+            "paupercommander": "legal",
+            "gladiator": "legal",
+            "explorer": null,
+            "brawl": "legal",
+            "penny": "not_legal",
+            "pioneer": "legal",
+            "duel": "legal",
+            "pauper": "legal",
+            "standard": "not_legal",
+            "future": "not_legal",
+            "predh": "not_legal",
+            "timeless": "legal",
+            "canlander": "legal",
+            "tlr": "legal"
+          },
+          "manaCost": "",
+          "manaProduction": {
+            "W": 1,
+            "U": 1,
+            "B": 1,
+            "R": 1,
+            "G": 1,
+            "C": null
+          },
+          "name": "Command Tower",
+          "power": "",
+          "salt": 0.2,
+          "subTypes": [],
+          "superTypes": [],
+          "keywords": [],
+          "oTags": [
+            "activated ability",
+            "commander identity matters",
+            "rainbow land",
+            "synergy-color-share",
+            "synergy-commander",
+            "tutored by name",
+            "virtual legendary"
+          ],
+          "inheritedTags": [
+            "card names",
+            "commander matters"
+          ],
+          "text": "{T}: Add one mana of any color in your commander's color identity.",
+          "tokens": [],
+          "toughness": "",
+          "types": [
+            "Land"
+          ],
+          "loyalty": null,
+          "canlanderPoints": null,
+          "isPDHCommander": false,
+          "defaultCategory": null,
+          "gameChanger": false,
+          "extraTurns": false,
+          "tutor": false,
+          "massLandDenial": false,
+          "twoCardComboSingelton": false,
+          "twoCardComboIds": [],
+          "atomicCombos": [],
+          "potentialCombos": [],
+          "lang": "en"
+        },
+        "owned": 0,
+        "pinnedStatus": 0,
+        "prices": {
+          "ck": null,
+          "ckfoil": null,
+          "ckMinimum": null,
+          "cm": null,
+          "cmfoil": null,
+          "cmMinimum": null,
+          "mtgo": null,
+          "mtgofoil": null,
+          "mtgoMinimum": null,
+          "tcg": null,
+          "tcgfoil": null,
+          "tcgMinimum": null,
+          "scg": null,
+          "scgfoil": null,
+          "scgMinimum": null,
+          "mp": null,
+          "mpfoil": null,
+          "mpMinimum": null,
+          "tcgLand": null,
+          "tcgLandFoil": null,
+          "tcgLandMinimum": null,
+          "cardTrader": null,
+          "cardTraderFoil": null,
+          "cardTraderMinimum": null,
+          "cs": null,
+          "csfoil": null,
+          "csMinimum": null
+        },
+        "rarity": "rare",
+        "globalCategories": []
+      }
+    },
+    {
+      "id": 3131739166,
+      "categories": [
+        "Removal",
+        "Multiplayer"
+      ],
+      "companion": false,
+      "flippedDefault": false,
+      "label": ",#656565",
+      "modifier": "Normal",
+      "quantity": 1,
+      "customCmc": null,
+      "removedCategories": null,
+      "createdAt": "2026-05-27T00:19:24.864010Z",
+      "updatedAt": "2026-10-29T19:22:34.848180Z",
+      "deletedAt": null,
+      "notes": null,
+      "card": {
+        "id": 123091,
+        "artist": "WFlemming Illustration",
+        "tcgProductId": 512597,
+        "ckFoilId": 0,
+        "ckNormalId": 203370,
+        "cmEd": "",
+        "scgSku": "SGL-MTG-WOT-003-ENN",
+        "scgFoilSku": "SGL-MTG-WOT-003-ENF",
+        "cardTraderSku": "257439",
+        "collectorNumber": "3",
+        "multiverseid": 632431,
+        "mtgoFoilId": 0,
+        "mtgoNormalId": 115830,
+        "uid": "d983b297-e341-40fa-ba9b-b9f87eb25057",
+        "displayName": null,
+        "releasedAt": "2023-09-08",
+        "contentWarning": false,
+        "edition": {
+          "editioncode": "wot",
+          "editionname": "Wilds of Eldraine: Enchanting Tales",
+          "editiondate": "2023-09-08",
+          "editiontype": "masterpiece",
+          "mtgoCode": "wot"
+        },
+        "flavor": "\"The witch wrapped her heart in briar vines, hid it away in the ancient keep in the depths of the forest. If none could find it, the prophecy could never come to pass.\"\n—*Beyond the Great Henge*",
+        "games": [],
+        "options": [
+          "Normal",
+          "Foil"
+        ],
+        "scryfallImageHash": "1783914933",
+        "oracleCard": {
+          "id": 6935,
+          "cmc": 3,
+          "colorIdentity": [
+            "White"
+          ],
+          "colors": [
+            "White"
+          ],
+          "edhrecRank": 1152,
+          "faces": [],
+          "layout": "normal",
+          "uid": "1b26a54f-6c27-4940-b77e-2a66175c5eff",
+          "legalities": {
+            "alchemy": "not_legal",
+            "legacy": "legal",
+            "oldschool": "not_legal",
+            "modern": "not_legal",
+            "vintage": "legal",
+            "oathbreaker": "legal",
+            "1v1": "legal",
+            "historicbrawl": "legal",
+            "competitivebrawl": "legal",
+            "premodern": "not_legal",
+            "historic": "legal",
+            "commander": "legal",
+            "paupercommander": "not_legal",
+            "gladiator": "legal",
+            "explorer": null,
+            "brawl": "not_legal",
+            "penny": "not_legal",
+            "pioneer": "not_legal",
+            "duel": "legal",
+            "pauper": "not_legal",
+            "standard": "not_legal",
+            "future": "not_legal",
+            "predh": "not_legal",
+            "timeless": "legal",
+            "canlander": "legal",
+            "tlr": "legal"
+          },
+          "manaCost": "{1}{W}{W}",
+          "manaProduction": {
+            "W": null,
+            "U": null,
+            "B": null,
+            "R": null,
+            "G": null,
+            "C": null
+          },
+          "name": "Grasp of Fate",
+          "power": "",
+          "salt": 0.4,
+          "subTypes": [],
+          "superTypes": [],
+          "keywords": [],
+          "oTags": [
+            "banish",
+            "multi removal",
+            "multiplayer",
+            "multiple targets",
+            "removal-nonland",
+            "spot removal",
+            "triggered ability"
+          ],
+          "inheritedTags": [
+            "removal",
+            "removal-artifact",
+            "removal-aura",
+            "removal-battle",
+            "removal-creature",
+            "removal-enchantment",
+            "removal-equipment",
+            "removal-exile",
+            "removal-planeswalker",
+            "removal-spacecraft",
+            "removal-vehicle"
+          ],
+          "text": "When this enchantment enters, for each opponent, exile up to one target nonland permanent that player controls until this enchantment leaves the battlefield. (Those permanents return under their owners' control.)",
+          "tokens": [],
+          "toughness": "",
+          "types": [
+            "Enchantment"
+          ],
+          "loyalty": null,
+          "canlanderPoints": null,
+          "isPDHCommander": false,
+          "defaultCategory": "Removal",
+          "gameChanger": false,
+          "extraTurns": false,
+          "tutor": false,
+          "massLandDenial": false,
+          "twoCardComboSingelton": false,
+          "twoCardComboIds": [],
+          "atomicCombos": [],
+          "potentialCombos": [],
+          "lang": "en"
+        },
+        "owned": 0,
+        "pinnedStatus": 0,
+        "prices": {
+          "ck": null,
+          "ckfoil": null,
+          "ckMinimum": null,
+          "cm": null,
+          "cmfoil": null,
+          "cmMinimum": null,
+          "mtgo": null,
+          "mtgofoil": null,
+          "mtgoMinimum": null,
+          "tcg": null,
+          "tcgfoil": null,
+          "tcgMinimum": null,
+          "scg": null,
+          "scgfoil": null,
+          "scgMinimum": null,
+          "mp": null,
+          "mpfoil": null,
+          "mpMinimum": null,
+          "tcgLand": null,
+          "tcgLandFoil": null,
+          "tcgLandMinimum": null,
+          "cardTrader": null,
+          "cardTraderFoil": null,
+          "cardTraderMinimum": null,
+          "cs": null,
+          "csfoil": null,
+          "csMinimum": null
+        },
+        "rarity": "uncommon",
+        "globalCategories": []
+      }
+    },
+    {
+      "id": 3131739514,
+      "categories": [
+        "Commander"
+      ],
+      "companion": false,
+      "flippedDefault": false,
+      "label": ",#656565",
+      "modifier": "Normal",
+      "quantity": 1,
+      "customCmc": null,
+      "removedCategories": null,
+      "createdAt": "2026-05-27T00:19:26.096038Z",
+      "updatedAt": "2026-10-29T19:22:34.851739Z",
+      "deletedAt": null,
+      "notes": null,
+      "card": {
+        "id": 124570,
+        "artist": "Campbell White",
+        "tcgProductId": 517998,
+        "ckFoilId": 279124,
+        "ckNormalId": 277886,
+        "cmEd": "",
+        "scgSku": "SGL-MTG-LTC2-476-ENN",
+        "scgFoilSku": null,
+        "cardTraderSku": "262046",
+        "collectorNumber": "476",
+        "multiverseid": 636439,
+        "mtgoFoilId": 0,
+        "mtgoNormalId": 120042,
+        "uid": "cfdfa303-2578-455b-929c-a217a0261bb3",
+        "displayName": null,
+        "releasedAt": "2023-11-03",
+        "contentWarning": false,
+        "edition": {
+          "editioncode": "ltc",
+          "editionname": "Tales of Middle-earth Commander",
+          "editiondate": "2023-06-23",
+          "editiontype": "commander",
+          "mtgoCode": "ltc"
+        },
+        "flavor": "",
+        "games": [],
+        "options": [
+          "Normal",
+          "Foil"
+        ],
+        "scryfallImageHash": "1783914212",
+        "oracleCard": {
+          "id": 32903,
+          "cmc": 3,
+          "colorIdentity": [
+            "White",
+            "Green"
+          ],
+          "colors": [
+            "White",
+            "Green"
+          ],
+          "edhrecRank": 6559,
+          "faces": [],
+          "layout": "normal",
+          "uid": "2837be10-23ad-49d2-943e-b1e00edbbbd9",
+          "legalities": {
+            "alchemy": "not_legal",
+            "legacy": "legal",
+            "oldschool": "not_legal",
+            "modern": "not_legal",
+            "vintage": "legal",
+            "oathbreaker": "legal",
+            "1v1": "legal",
+            "historicbrawl": "legal",
+            "competitivebrawl": "legal",
+            "premodern": "not_legal",
+            "historic": "legal",
+            "commander": "legal",
+            "paupercommander": "not_legal",
+            "gladiator": "legal",
+            "explorer": null,
+            "brawl": "not_legal",
+            "penny": "not_legal",
+            "pioneer": "not_legal",
+            "duel": "legal",
+            "pauper": "not_legal",
+            "standard": "not_legal",
+            "future": "not_legal",
+            "predh": "not_legal",
+            "timeless": "legal",
+            "canlander": "legal",
+            "tlr": "legal"
+          },
+          "manaCost": "{1}{G}{W}",
+          "manaProduction": {
+            "W": null,
+            "U": null,
+            "B": null,
+            "R": null,
+            "G": null,
+            "C": null
+          },
+          "name": "Sam, Loyal Attendant",
+          "power": "2",
+          "salt": 0.41,
+          "subTypes": [
+            "Peasant",
+            "Halfling"
+          ],
+          "superTypes": [
+            "Legendary"
+          ],
+          "keywords": [
+            "Food",
+            "Partner with",
+            "Partner"
+          ],
+          "oTags": [
+            "cost-reducer-activated-ability",
+            "cycle-ltc-face-commander",
+            "pair-commander",
+            "repeatable food",
+            "synergy-food",
+            "triggered ability",
+            "tutor-to-hand",
+            "tutored by name",
+            "tutors by name"
+          ],
+          "inheritedTags": [
+            "cost reducer",
+            "cycle",
+            "face-commander",
+            "lifegain",
+            "name matters",
+            "repeatable artifact tokens",
+            "repeatable lifegain",
+            "repeatable noncreature tokens",
+            "repeatable token generator",
+            "tutor",
+            "tutor-to"
+          ],
+          "text": "Partner with Frodo, Adventurous Hobbit (When this creature enters, target player may put Frodo into their hand from their library, then shuffle.)\nAt the beginning of combat on your turn, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\nActivated abilities of Foods you control cost {1} less to activate.",
+          "tokens": [
+            "20220"
+          ],
+          "toughness": "4",
+          "types": [
+            "Creature"
+          ],
+          "loyalty": null,
+          "canlanderPoints": null,
+          "isPDHCommander": false,
+          "defaultCategory": "Tokens",
+          "gameChanger": false,
+          "extraTurns": false,
+          "tutor": false,
+          "massLandDenial": false,
+          "twoCardComboSingelton": false,
+          "twoCardComboIds": [],
+          "atomicCombos": [],
+          "potentialCombos": [],
+          "lang": "en"
+        },
+        "owned": 0,
+        "pinnedStatus": 0,
+        "prices": {
+          "ck": null,
+          "ckfoil": null,
+          "ckMinimum": null,
+          "cm": null,
+          "cmfoil": null,
+          "cmMinimum": null,
+          "mtgo": null,
+          "mtgofoil": null,
+          "mtgoMinimum": null,
+          "tcg": null,
+          "tcgfoil": null,
+          "tcgMinimum": null,
+          "scg": null,
+          "scgfoil": null,
+          "scgMinimum": null,
+          "mp": null,
+          "mpfoil": null,
+          "mpMinimum": null,
+          "tcgLand": null,
+          "tcgLandFoil": null,
+          "tcgLandMinimum": null,
+          "cardTrader": null,
+          "cardTraderFoil": null,
+          "cardTraderMinimum": null,
+          "cs": null,
+          "csfoil": null,
+          "csMinimum": null
+        },
+        "rarity": "mythic",
+        "globalCategories": []
+      }
+    }
+  ],
+  "customCards": [],
+  "intentionallySkippedCardData": false
+}

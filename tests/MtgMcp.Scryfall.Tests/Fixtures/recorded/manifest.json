@@ -1,0 +1,140 @@
+{
+  "adapter": "scryfall",
+  "entries": [
+    {
+      "id": "card-lightning-bolt",
+      "method": "GET",
+      "url": "https://api.scryfall.com/cards/7673784e-db4b-43a1-8d55-1bb9fc1e284f",
+      "route": "/cards/{id}",
+      "status": 200,
+      "file": "cards-id/lightning-bolt.json",
+      "capturedAt": "2026-10-27",
+      "sha256": "c61298c865b4ff250472cbc4e06db815ce963d552ca660429c76d83ba1c97607",
+      "refresh": false,
+      "scrubbed": "none; recorded before the manifest, so refresh leaves the bytes unchanged"
+    },
+    {
+      "id": "card-delver-of-secrets-transform",
+      "method": "GET",
+      "url": "https://api.scryfall.com/cards/6904ea20-e504-47da-95a0-08739fdde260",
+      "route": "/cards/{id}",
+      "status": 200,
+      "file": "cards-id/delver-of-secrets-transform.json",
+      "capturedAt": "2026-10-27",
+      "sha256": "00af89bc06ae027854d0bfb27e735a3dd623e18e7394ab44aa7145fe5f0cf023",
+      "refresh": false,
+      "scrubbed": "none; recorded before the manifest, so refresh leaves the bytes unchanged"
+    },
+    {
+      "id": "card-bonecrusher-giant-adventure",
+      "method": "GET",
+      "url": "https://api.scryfall.com/cards/b5b71cd2-de35-451f-b16e-2e3936169407",
+      "route": "/cards/{id}",
+      "status": 200,
+      "file": "cards-id/bonecrusher-giant-adventure.json",
+      "capturedAt": "2026-10-27",
+      "sha256": "ea6ac1f54eb8eb220b51fd7c7d029775375d8a1cd88b070fcdb04c8086f44546",
+      "refresh": false,
+      "scrubbed": "none; recorded before the manifest, so refresh leaves the bytes unchanged"
+    },
+    {
+      "id": "card-jace-the-mind-sculptor-planeswalker",
+      "method": "GET",
+      "url": "https://api.scryfall.com/cards/c8817585-0d32-4d56-9142-0d29512e86a9",
+      "route": "/cards/{id}",
+      "status": 200,
+      "file": "cards-id/jace-the-mind-sculptor-planeswalker.json",
+      "capturedAt": "2026-10-27",
+      "sha256": "38034633db68b1bd5b30c6242c4aef8f0a685e6fdf2a617063ed1a31486f0022",
+      "refresh": false,
+      "scrubbed": "none; recorded before the manifest, so refresh leaves the bytes unchanged"
+    },
+    {
+      "id": "card-adrix-and-nev-reversible",
+      "method": "GET",
+      "url": "https://api.scryfall.com/cards/6adadbc9-4a08-4c1d-adf7-edee73799d9e",
+      "route": "/cards/{id}",
+      "status": 200,
+      "file": "cards-id/adrix-and-nev-reversible.json",
+      "capturedAt": "2026-10-27",
+      "sha256": "7d296a83dfdfa586a8648282fb9cb203cfa6e2ff3cca911e66963baffe01f1b9",
+      "refresh": false,
+      "scrubbed": "none; recorded before the manifest, so refresh leaves the bytes unchanged"
+    },
+    {
+      "id": "card-abandoned-sarcophagus-no-prices",
+      "method": "GET",
+      "url": "https://api.scryfall.com/cards/7dd7d787-b149-492c-bf13-3f5a01507701",
+      "route": "/cards/{id}",
+      "status": 200,
+      "file": "cards-id/abandoned-sarcophagus-no-prices.json",
+      "capturedAt": "2026-10-27",
+      "sha256": "3101e2b24fe551ac10ea76f9831259b32ee463b61ee1692f06ff74a210d80418",
+      "refresh": false,
+      "scrubbed": "none; recorded before the manifest, so refresh leaves the bytes unchanged"
+    },
+    {
+      "id": "search-angel-page-1",
+      "method": "GET",
+      "url": "https://api.scryfall.com/cards/search?q=t%3Aangel&unique=cards&order=name&dir=auto&include_extras=false&include_multilingual=false&include_variations=false",
+      "route": "/cards/search",
+      "status": 200,
+      "file": "cards-search/angel-page-1.json",
+      "capturedAt": "2026-11-01",
+      "sha256": "7d5ad5cbbe411890fad0869c11f0f6154730eb02b67c86ad42cc3f130401fd42",
+      "refresh": true,
+      "trimData": 2,
+      "scrubbed": "data trimmed to 2 cards; removed image_uris, purchase_uris, related_uris, edhrec_rank, penny_rank; set every prices value to null"
+    },
+    {
+      "id": "search-angel-page-2",
+      "method": "GET",
+      "url": "https://api.scryfall.com/cards/search?format=json&include_extras=false&include_multilingual=false&include_variations=false&order=name&page=2&q=t%3Aangel&unique=cards",
+      "route": "/cards/search",
+      "status": 200,
+      "file": "cards-search/angel-page-2.json",
+      "capturedAt": "2026-11-01",
+      "sha256": "f6f01b894d13a6ba930894bbb860b53d3c52e57c18c60c75154d869c2216cc76",
+      "refresh": true,
+      "trimData": 2,
+      "scrubbed": "data trimmed to 2 cards; removed image_uris, purchase_uris, related_uris, edhrec_rank, penny_rank; set every prices value to null"
+    },
+    {
+      "id": "named-lightning-bolt",
+      "method": "GET",
+      "url": "https://api.scryfall.com/cards/named?exact=Lightning%20Bolt",
+      "route": "/cards/named",
+      "status": 200,
+      "file": "cards-named/lightning-bolt.json",
+      "capturedAt": "2026-11-01",
+      "sha256": "1a2290e11158fed25c439322969114f386655368541b47e542f9b554ba956d57",
+      "refresh": true,
+      "scrubbed": "removed image_uris, purchase_uris, related_uris, edhrec_rank, penny_rank; set every prices value to null"
+    },
+    {
+      "id": "named-not-found",
+      "method": "GET",
+      "url": "https://api.scryfall.com/cards/named?exact=Zzzz%20Not%20A%20Card",
+      "route": "/cards/named",
+      "status": 404,
+      "file": "cards-named/not-found.json",
+      "capturedAt": "2026-11-01",
+      "sha256": "c1908ffcebf1a97969a8bd439f5fe99a77cc87322567fcdae2800e4b052a5c28",
+      "refresh": true,
+      "scrubbed": "none"
+    },
+    {
+      "id": "collection-bolt-and-miss",
+      "method": "POST",
+      "url": "https://api.scryfall.com/cards/collection",
+      "requestBody": "{\"identifiers\":[{\"name\":\"Lightning Bolt\"},{\"name\":\"Zzzz Not A Card\"}]}",
+      "route": "/cards/collection",
+      "status": 200,
+      "file": "cards-collection/bolt-and-miss.json",
+      "capturedAt": "2026-11-01",
+      "sha256": "f91cfbb2dcfb6ffc07589b7067cbd691cc662788fccc73b1844ddbb33bdf027d",
+      "refresh": true,
+      "scrubbed": "removed image_uris, purchase_uris, related_uris, edhrec_rank, penny_rank; set every prices value to null; POST is a read-only lookup"
+    }
+  ]
+}

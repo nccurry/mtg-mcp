@@ -184,6 +184,11 @@ tasks:
     cmds:
       - '{{.POWERSHELL}} -File scripts/release.ps1 LiveAcceptance -Version "{{.VERSION}}" -Project "{{.APP_PROJECT}}" -Configuration "{{.CONFIGURATION}}" -ArtifactsDir "{{.ARTIFACTS_DIR}}" -PackageDir "{{.PACKAGE_DIR}}" -PackageId "{{.PACKAGE_ID}}"'
 
+  fixtures:refresh:
+    desc: Re-record provider fixtures with read-only requests (manual; never part of test or ci)
+    cmds:
+      - '{{.POWERSHELL}} -File scripts/fixtures.ps1 Refresh'
+
   benchmark:simulation:
     desc: Run the repeatable seeded-simulation Release benchmark
     deps: [build]
