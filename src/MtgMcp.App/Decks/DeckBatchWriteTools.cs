@@ -24,6 +24,7 @@ internal sealed class DeckBatchWriteTools
         "update-metadata",
         "add-entry",
         "update-entry",
+        "patch-entries",
         "remove-entry",
         "add-category",
         "update-category",
@@ -87,7 +88,11 @@ internal sealed class DeckBatchWriteTools
         "Local deck store: applies an ordered batch of changes to one local deck atomically; any invalid " +
         "change rolls back the whole batch. This is the only tool that edits an existing deck, and a batch of " +
         "one change is a normal use. Each change has a kind: update-metadata (name, description, format), " +
-        "add-entry, update-entry (the complete replacement entry with its entryId), remove-entry, " +
+        "add-entry (which may also give categoryIds, primaryCategoryId, and zoneCategories), update-entry " +
+        "(the complete replacement entry with its entryId), patch-entries (changes only the fields you list on " +
+        "1 to 100 entries, including quantity, zone, sortOrder, finish, language, printing, and category edits; " +
+        "prefer it to update-entry, assign-category, and unassign-category; a zone change needs zoneCategories " +
+        "match, which also sets the zone's category, or leave), remove-entry (entryId, or entryIds for 1 to 100), " +
         "add-category, update-category, remove-category, assign-category, unassign-category, " +
         "upsert-provider-binding, or remove-provider-binding. A new entry or category may carry its own ID, " +
         "so later changes in the same batch can refer to it. An added entry that has only a card name (or a set code " +
@@ -145,7 +150,7 @@ internal sealed class DeckBatchWriteTools
         IReadOnlyList<DeckWriteIssue> issues = [];
         if (before.Data.Revision == expectedRevision)
         {
-            DeckChangeResolution resolution = await resolver.ResolveChangesAsync(mapped, cancellationToken)
+            DeckChangeResolution resolution = await resolver.ResolveChangesAsync(mapped, before.Data, cancellationToken)
                 .ConfigureAwait(false);
             DeckAddPresenceResult presence = DeckAddPresence.Check(
                 before.Data,

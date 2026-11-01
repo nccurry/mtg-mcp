@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using MtgMcp.Core.Decks;
 
@@ -11,6 +12,7 @@ namespace MtgMcp.App.Decks;
 [JsonDerivedType(typeof(UpdateDeckMetadataInput), "update-metadata")]
 [JsonDerivedType(typeof(AddDeckEntryInput), "add-entry")]
 [JsonDerivedType(typeof(UpdateDeckEntryInput), "update-entry")]
+[JsonDerivedType(typeof(PatchDeckEntriesInput), "patch-entries")]
 [JsonDerivedType(typeof(RemoveDeckEntryInput), "remove-entry")]
 [JsonDerivedType(typeof(AddDeckCategoryInput), "add-category")]
 [JsonDerivedType(typeof(UpdateDeckCategoryInput), "update-category")]
@@ -44,15 +46,60 @@ internal sealed record UpdateDeckEntryInput(
     [property: Description(
         "The complete replacement entry, including its existing entryId. Send only the stored entry fields " +
         "(entryId, quantity, cardName, oracleId, printingId, setCode, collectorNumber, language, finish, zone, " +
-        "sortOrder); drop cardData, card, and tags, which local_deck_get adds to entries when you pass include.")]
+        "sortOrder); drop cardData, card, and tags, which local_deck_get adds to entries when you pass include. " +
+        "To change only some fields of one or many entries, use patch-entries instead.")]
     DeckEntry Entry)
     : DeckChangeInput;
 
 /// <summary>
-/// Removes one entry by stable entry identifier.
+/// Patches the listed fields of 1 to 100 entries at once, without restating the rest of each entry.
+/// </summary>
+internal sealed record PatchDeckEntriesInput(
+    [property: Description(
+        "The entries to patch (1 to 100 distinct entry IDs, including entries added earlier in this batch with an " +
+        "entryId). Every listed entry gets the same patch.")] IReadOnlyList<Guid> EntryIds,
+    [property: Description("The new quantity, or omit to keep each entry's quantity.")] int? Quantity = null,
+    [property: Description(
+        "The new zone (main, commander, sideboard, maybeboard, or another code). Requires zoneCategories.")]
+    string? Zone = null,
+    [property: Description("The new sort order, or omit to keep each entry's sort order.")] int? SortOrder = null,
+    [property: Description("The new finish, or omit to keep each entry's finish.")] string? Finish = null,
+    [property: Description("The new language code, or omit to keep each entry's language.")] string? Language = null,
+    [property: Description(
+        "A new printing, resolved against each entry's own card like add-entry: a printingId, or a setCode with a " +
+        "collectorNumber. Omit to keep each entry's printing.")] DeckPrintingInput? Printing = null,
+    [property: Description(
+        "The category that becomes each entry's primary category. A category the entry already has as non-primary " +
+        "becomes primary. The previous primary assignment is removed unless it is also in addCategoryIds.")]
+    Guid? PrimaryCategoryId = null,
+    [property: Description("Categories to assign as non-primary; one the entry already has is left as it is.")]
+    IReadOnlyList<Guid>? AddCategoryIds = null,
+    [property: Description("Categories to unassign from each entry.")] IReadOnlyList<Guid>? RemoveCategoryIds = null,
+    [property: Description(
+        "Required whenever zone is set. match: the zone's category (Commander, Sideboard, or Maybeboard; created " +
+        "if the deck lacks it) becomes each entry's primary category and the entry's other zone categories are " +
+        "removed; for zone main, zone categories are removed and a lost primary needs primaryCategoryId or an " +
+        "entry with no other category. leave: only the zone changes."),
+     AllowedValues(DeckZoneCategories.Match, DeckZoneCategories.Leave)]
+    string? ZoneCategories = null)
+    : DeckChangeInput;
+
+/// <summary>
+/// Names the printing a patch gives each entry.
+/// </summary>
+internal sealed record DeckPrintingInput(
+    [property: Description("The Scryfall printing ID; give it alone.")] Guid? PrintingId = null,
+    [property: Description("The set code; give it with collectorNumber.")] string? SetCode = null,
+    [property: Description("The collector number; give it with setCode.")] string? CollectorNumber = null);
+
+/// <summary>
+/// Removes one entry, or 1 to 100 entries, by stable entry identifier.
 /// </summary>
 internal sealed record RemoveDeckEntryInput(
-    [property: Description("The stable identifier of the entry to remove.")] Guid EntryId)
+    [property: Description("The stable identifier of the entry to remove; give this or entryIds, not both.")]
+    Guid? EntryId = null,
+    [property: Description("The stable identifiers of 1 to 100 distinct entries to remove; give this or entryId, not both.")]
+    IReadOnlyList<Guid>? EntryIds = null)
     : DeckChangeInput;
 
 /// <summary>
@@ -77,10 +124,12 @@ internal sealed record RemoveDeckCategoryInput(
     : DeckChangeInput;
 
 /// <summary>
-/// Assigns an existing category to an existing entry.
+/// Assigns an existing category to an existing entry. To edit the categories of many entries at once, use patch-entries.
 /// </summary>
 internal sealed record AssignDeckCategoryInput(
-    [property: Description("The stable identifier of the entry receiving the category.")] Guid EntryId,
+    [property: Description(
+        "The stable identifier of the entry receiving the category; to edit the categories of many entries at " +
+        "once, use patch-entries instead.")] Guid EntryId,
     [property: Description("The stable identifier of the category to assign.")] Guid CategoryId,
     [property: Description(
         "Whether this assignment becomes the entry's primary category; a previous primary category stays assigned " +
@@ -88,10 +137,12 @@ internal sealed record AssignDeckCategoryInput(
     : DeckChangeInput;
 
 /// <summary>
-/// Removes one category assignment from one entry.
+/// Removes one category assignment from one entry. To edit the categories of many entries at once, use patch-entries.
 /// </summary>
 internal sealed record UnassignDeckCategoryInput(
-    [property: Description("The stable identifier of the entry losing the category.")] Guid EntryId,
+    [property: Description(
+        "The stable identifier of the entry losing the category; to edit the categories of many entries at " +
+        "once, use patch-entries instead.")] Guid EntryId,
     [property: Description("The stable identifier of the category to unassign.")] Guid CategoryId)
     : DeckChangeInput;
 
@@ -133,10 +184,24 @@ internal static class DeckChangeInputMapper
         List<DeckChange> mapped = new(inputs.Count);
         for (int index = 0; index < inputs.Count; index++)
         {
+            if (inputs[index] is RemoveDeckEntryInput removal)
+            {
+                if (TryMapRemoval(removal, mapped) is string required)
+                {
+                    changes = [];
+                    failureMessage = $"Deck change at index {index} with kind 'remove-entry' requires {required}.";
+                    return false;
+                }
+
+                continue;
+            }
+
             if (!TryMapOne(inputs[index], out DeckChange change, out string kind, out string requiredFields))
             {
                 changes = [];
-                failureMessage = $"Deck change at index {index} with kind '{kind}' requires {requiredFields}.";
+                failureMessage = requiredFields.EndsWith('.')
+                    ? $"Deck change at index {index} with kind '{kind}' is invalid: {requiredFields}"
+                    : $"Deck change at index {index} with kind '{kind}' requires {requiredFields}.";
                 return false;
             }
 
@@ -146,6 +211,38 @@ internal static class DeckChangeInputMapper
         changes = mapped.ToArray();
         failureMessage = string.Empty;
         return true;
+    }
+
+    /// <summary>
+    /// Maps a removal of one entry, or of 1 to 100 distinct entries, into one remove change per entry. Returns null on
+    /// success, or what the removal requires when exactly one of the two fields is not given or an ID is unusable.
+    /// </summary>
+    private static string? TryMapRemoval(RemoveDeckEntryInput input, List<DeckChange> mapped)
+    {
+        if ((input.EntryId is null) == (input.EntryIds is null))
+        {
+            return "exactly one of entryId or entryIds";
+        }
+
+        if (input.EntryId == Guid.Empty)
+        {
+            return "a non-empty entryId";
+        }
+
+        IReadOnlyList<Guid> ids = input.EntryIds ?? [input.EntryId!.Value];
+        if (ids.Count is < 1 or > PatchDeckEntriesRules.MaxEntries ||
+            ids.Contains(Guid.Empty) ||
+            ids.Distinct().Count() != ids.Count)
+        {
+            return $"entryIds with 1 to {PatchDeckEntriesRules.MaxEntries} distinct, non-empty IDs";
+        }
+
+        foreach (Guid id in ids)
+        {
+            mapped.Add(new RemoveDeckEntryChange(id));
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -182,11 +279,31 @@ internal static class DeckChangeInputMapper
                 return true;
             case UpdateDeckEntryInput:
                 return Fail("update-entry", "entry", out change, out kind, out requiredFields);
-            case RemoveDeckEntryInput invalidRemoveEntry when invalidRemoveEntry.EntryId == Guid.Empty:
-                return Fail("remove-entry", "a non-empty entryId", out change, out kind, out requiredFields);
-            case RemoveDeckEntryInput removeEntry:
-                change = new RemoveDeckEntryChange(removeEntry.EntryId);
-                kind = "remove-entry";
+            case PatchDeckEntriesInput patch:
+                PatchDeckEntriesChange patchChange = new(
+                    patch.EntryIds ?? [],
+                    patch.Quantity,
+                    patch.Zone,
+                    patch.SortOrder,
+                    patch.Finish,
+                    patch.Language,
+                    patch.Printing is null
+                        ? null
+                        : new DeckPrintingPatch(
+                            patch.Printing.PrintingId,
+                            patch.Printing.SetCode,
+                            patch.Printing.CollectorNumber),
+                    patch.PrimaryCategoryId,
+                    patch.AddCategoryIds,
+                    patch.RemoveCategoryIds,
+                    patch.ZoneCategories?.Trim().ToLowerInvariant());
+                if (PatchDeckEntriesRules.FirstProblem(patchChange) is string problem)
+                {
+                    return Fail("patch-entries", problem, out change, out kind, out requiredFields);
+                }
+
+                change = patchChange;
+                kind = "patch-entries";
                 requiredFields = string.Empty;
                 return true;
             case AddDeckCategoryInput { CategoryDraft: not null } addCategory:

@@ -305,7 +305,7 @@ internal sealed class DeckDuplicatesCoordinator
     {
         return change switch
         {
-            RemoveDeckEntryInput remove => remove.EntryId,
+            RemoveDeckEntryInput remove => remove.EntryId ?? Guid.Empty,
             UpdateDeckEntryInput update => update.Entry.EntryId,
             _ => Guid.Empty,
         };

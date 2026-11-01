@@ -62,10 +62,13 @@ internal sealed class DeckEntryResolver
     }
 
     /// <summary>
-    /// Looks up the identity of every entry that a batch adds, leaving every other change as it was.
+    /// Looks up the identity of every entry that a batch adds, and the printing a patch gives each entry against the
+    /// card of that entry, leaving every other change as it was. The deck gives the card of an entry it holds; an entry
+    /// the batch adds or replaces earlier gives its drafted card.
     /// </summary>
     internal async Task<DeckChangeResolution> ResolveChangesAsync(
         IReadOnlyList<DeckChange> changes,
+        DeckDocument? deck,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(changes);
@@ -79,26 +82,110 @@ internal sealed class DeckEntryResolver
         }
 
         DeckDraftResolution resolution = await ResolveAsync(drafts, cancellationToken).ConfigureAwait(false);
-        if (ReferenceEquals(resolution.Drafts, drafts) && resolution.Issues.Count == 0)
-        {
-            return new DeckChangeResolution(changes, []);
-        }
-
         List<DeckChange> result = new(changes.Count);
         int next = 0;
         foreach (DeckChange change in changes)
         {
-            if (change is AddDeckEntryChange)
+            result.Add(change is AddDeckEntryChange ? new AddDeckEntryChange(resolution.Drafts[next++]) : change);
+        }
+
+        List<DeckWriteIssue> issues = [.. resolution.Issues];
+        await ResolvePatchPrintingsAsync(result, deck, issues, cancellationToken).ConfigureAwait(false);
+        return new DeckChangeResolution(result, issues);
+    }
+
+    /// <summary>
+    /// Replaces each patch that sets a printing with the same patch carrying the printing looked up against each
+    /// listed entry's own card. An entry whose lookup finds nothing keeps the printing as given and is reported.
+    /// </summary>
+    private async Task ResolvePatchPrintingsAsync(
+        List<DeckChange> changes,
+        DeckDocument? deck,
+        List<DeckWriteIssue> issues,
+        CancellationToken cancellationToken)
+    {
+        Dictionary<Guid, DeckEntryDraft> cards = [];
+        foreach (DeckEntry entry in deck?.Entries ?? [])
+        {
+            cards[entry.EntryId] = new DeckEntryDraft(
+                entry.Quantity,
+                entry.CardName,
+                Language: entry.Language,
+                EntryId: entry.EntryId);
+        }
+
+        for (int index = 0; index < changes.Count; index++)
+        {
+            switch (changes[index])
             {
-                result.Add(new AddDeckEntryChange(resolution.Drafts[next++]));
+                case AddDeckEntryChange { Entry.EntryId: Guid added } add:
+                    cards[added] = add.Entry;
+                    break;
+                case UpdateDeckEntryChange update:
+                    cards[update.Entry.EntryId] = new DeckEntryDraft(
+                        update.Entry.Quantity,
+                        update.Entry.CardName,
+                        Language: update.Entry.Language,
+                        EntryId: update.Entry.EntryId);
+                    break;
+                case RemoveDeckEntryChange remove:
+                    cards.Remove(remove.EntryId);
+                    break;
+                case PatchDeckEntriesChange { Printing: not null } patch:
+                    changes[index] = patch with
+                    {
+                        Printings = await LookUpPrintingsAsync(patch, cards, issues, cancellationToken)
+                            .ConfigureAwait(false),
+                    };
+                    break;
             }
-            else
+        }
+    }
+
+    /// <summary>
+    /// Looks up the patch's printing for each listed entry that is known, using the entry's card name and language.
+    /// </summary>
+    private async Task<IReadOnlyList<DeckEntryPrinting>> LookUpPrintingsAsync(
+        PatchDeckEntriesChange patch,
+        Dictionary<Guid, DeckEntryDraft> cards,
+        List<DeckWriteIssue> issues,
+        CancellationToken cancellationToken)
+    {
+        DeckPrintingPatch printing = patch.Printing!;
+        List<DeckEntryDraft> drafts = [];
+        foreach (Guid id in patch.EntryIds)
+        {
+            if (cards.TryGetValue(id, out DeckEntryDraft? card))
             {
-                result.Add(change);
+                drafts.Add(new DeckEntryDraft(
+                    card.Quantity,
+                    card.CardName,
+                    PrintingId: printing.PrintingId,
+                    SetCode: printing.SetCode,
+                    CollectorNumber: printing.CollectorNumber,
+                    Language: patch.Language ?? card.Language,
+                    EntryId: id));
             }
         }
 
-        return new DeckChangeResolution(result, resolution.Issues);
+        DeckDraftResolution resolution = await ResolvePendingAsync(drafts, [.. Enumerable.Range(0, drafts.Count)], cancellationToken)
+            .ConfigureAwait(false);
+        issues.AddRange(resolution.Issues);
+        List<DeckEntryPrinting> resolved = [];
+        foreach (DeckEntryDraft draft in resolution.Drafts)
+        {
+            if (draft.OracleId is not null)
+            {
+                resolved.Add(new DeckEntryPrinting(
+                    draft.EntryId!.Value,
+                    draft.PrintingId,
+                    draft.SetCode,
+                    draft.CollectorNumber,
+                    draft.Language));
+            }
+        }
+
+        return resolved;
     }
 
     /// <summary>
@@ -119,6 +206,18 @@ internal sealed class DeckEntryResolver
             }
         }
 
+        return await ResolvePendingAsync(drafts, pending, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Looks up the drafts at the listed positions, whatever identity they already carry, and returns every draft in
+    /// its original order.
+    /// </summary>
+    private async Task<DeckDraftResolution> ResolvePendingAsync(
+        IReadOnlyList<DeckEntryDraft> drafts,
+        List<int> pending,
+        CancellationToken cancellationToken)
+    {
         if (pending.Count == 0)
         {
             return new DeckDraftResolution(drafts, []);
@@ -206,17 +305,20 @@ internal sealed class DeckEntryResolver
             {
                 issues.Add(Unresolved(
                     draft,
-                    $"No card named '{draft.CardName.Trim()}' was found in installed card data."));
+                    plan.MatchMethod == DeckIdentityReconciliationCoordinator.MatchPrintingId
+                        ? $"Printing {draft.PrintingId} was not found in installed card data."
+                        : $"No card named '{draft.CardName.Trim()}' was found in installed card data."));
                 continue;
             }
 
-            if (plan.MatchMethod == DeckIdentityReconciliationCoordinator.MatchSetCollectorLanguage &&
+            if (plan.MatchMethod is DeckIdentityReconciliationCoordinator.MatchSetCollectorLanguage or
+                    DeckIdentityReconciliationCoordinator.MatchPrintingId &&
                 !NameAgrees(draft.CardName, row.Card))
             {
-                issues.Add(Unresolved(
-                    draft,
-                    $"Set {draft.SetCode} number {draft.CollectorNumber} is '{row.Card.Name}', not " +
-                    $"'{draft.CardName.Trim()}'."));
+                string which = plan.MatchMethod == DeckIdentityReconciliationCoordinator.MatchPrintingId
+                    ? $"Printing {draft.PrintingId}"
+                    : $"Set {draft.SetCode} number {draft.CollectorNumber}";
+                issues.Add(Unresolved(draft, $"{which} is '{row.Card.Name}', not '{draft.CardName.Trim()}'."));
                 continue;
             }
 
