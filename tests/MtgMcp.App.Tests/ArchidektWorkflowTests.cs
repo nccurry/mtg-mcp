@@ -1482,6 +1482,11 @@ public sealed partial class ArchidektWorkflowTests
             "\"zoneCategories\":\"match\"}",
             refused.Message,
             StringComparison.Ordinal);
+        Assert.Contains("its Archidekt categories put it in 'maybeboard'", refused.Message, StringComparison.Ordinal);
+        Assert.EndsWith(
+            "Send one of these as a change in local_deck_apply_changes.",
+            refused.Message,
+            StringComparison.Ordinal);
         DeckDocument fixedDeck = Success(await world.Store.ApplyChangesAsync(
             localDeckId,
             edited.Revision,
@@ -1494,19 +1499,64 @@ public sealed partial class ArchidektWorkflowTests
         ArchidektSyncPreviewView preview = Success(
             await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
 
-        if (matchTheCategories)
-        {
-            Assert.True(preview.ApplyAvailable);
-            ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
-                new ArchidektPushApplyRequest(
-                    localDeckId,
-                    fixedDeck.Revision,
-                    preview.RemoteFingerprint,
-                    preview.PreviewFingerprint),
-                token));
-            Assert.Equal("applied", applied.Outcome);
-            Assert.Contains(applied.Operations, value => value.Kind == "category-create" && value.Subject == "Sideboard");
-        }
+        Assert.True(preview.ApplyAvailable);
+        ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                fixedDeck.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token));
+        Assert.Equal("applied", applied.Outcome);
+        Assert.Equal(
+            matchTheCategories,
+            applied.Operations.Any(value => value.Kind == "category-create" && value.Subject == "Sideboard"));
+    }
+
+    /// <summary>
+    /// Verifies a zone set to main on an entry whose primary category is outside the deck is refused with the leave fix
+    /// only, because matching the categories would not move the entry, and that the leave fix makes the push available.
+    /// </summary>
+    [Fact]
+    public async Task PushPreview_WhenThePrimaryCategoryIsOutsideTheDeck_OffersOnlyTheLeaveFix()
+    {
+        FakeArchidekt fake = new();
+        fake.AddCategory("Ramp");
+        fake.AddCategory("Considering", includedInDeck: false);
+        fake.AddEntry(fake.AddCardToCatalog(601, "Rock"), 1, "Considering");
+        fake.AddEntry(fake.AddCardToCatalog(602, "Bolt"), 1, "Ramp");
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckEntry rock = local.Entries.Single(value => value.CardName == "Rock");
+        Assert.Equal("maybeboard", rock.Zone);
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [new UpdateDeckEntryChange(rock with { Zone = "main" })],
+            token));
+
+        OperationInvalidInput refused = Assert.IsType<OperationInvalidInput>(
+            (await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token)).Value);
+
+        Assert.Equal("entry-zone-contradicts-category", refused.ReasonCode);
+        Assert.Contains(
+            $"{{\"kind\":\"patch-entries\",\"entryIds\":[\"{rock.EntryId}\"],\"zone\":\"maybeboard\"," +
+            "\"zoneCategories\":\"leave\"}",
+            refused.Message,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("\"zoneCategories\":\"match\"", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("change the entry's primary category instead", refused.Message, StringComparison.Ordinal);
+        DeckDocument fixedDeck = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            edited.Revision,
+            [new PatchDeckEntriesChange([rock.EntryId], Zone: "maybeboard", ZoneCategories: "leave")],
+            token));
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        Assert.True(preview.ApplyAvailable);
+        Assert.Equal(fixedDeck.Revision, preview.LocalRevision);
     }
 
     /// <summary>

@@ -818,7 +818,8 @@ public sealed class ArchidektLocalMapperTests
 
         IReadOnlyList<ArchidektZoneContradiction> found = ArchidektSyncPlanner.FindZoneContradictions(
             ArchidektSyncPlanner.PlanRemoteApply(current, target),
-            target);
+            target,
+            IdsOf(wanted));
 
         Assert.Equal(expectedZone is null ? [] : [expectedZone], found.Select(value => value.ExpectedZone));
     }
@@ -955,7 +956,8 @@ public sealed class ArchidektLocalMapperTests
 
         IReadOnlyList<ArchidektZoneContradiction> found = ArchidektSyncPlanner.FindZoneContradictions(
             [entry],
-            [ramp, considering]);
+            [ramp, considering],
+            IdsOf(entry));
 
         Assert.Equal(["maybeboard"], found.Select(value => value.ExpectedZone));
     }
@@ -1004,7 +1006,107 @@ public sealed class ArchidektLocalMapperTests
         RemoteDeckEntry row = parsed.Entries[0] with { Zone = "main", CategoryNames = ["Sideboard"] };
         RemoteDeckSnapshot same = parsed with { Entries = [row] };
 
-        Assert.Empty(ArchidektSyncPlanner.FindZoneContradictions(ArchidektSyncPlanner.PlanRemoteApply(same, same), same));
+        Assert.Empty(ArchidektSyncPlanner.FindZoneContradictions(
+            ArchidektSyncPlanner.PlanRemoteApply(same, same),
+            same,
+            IdsOf(row)));
+    }
+
+    /// <summary>
+    /// Verifies a contradiction names the local entry ID of its row, and that a row with no local entry ID is refused
+    /// instead of reported under an empty ID.
+    /// </summary>
+    [Fact]
+    public void FindZoneContradictions_NamesTheLocalEntryIdAndRefusesARowWithoutOne()
+    {
+        RemoteDeckSnapshot parsed = ParseDeck();
+        RemoteDeckEntry row = parsed.Entries[0] with { Zone = "sideboard", CategoryNames = ["Removal"] };
+        Dictionary<RemoteDeckEntry, Guid> ids = IdsOf(row);
+
+        ArchidektZoneContradiction found = Assert.Single(
+            ArchidektSyncPlanner.FindZoneContradictions([row], parsed.Categories, ids));
+
+        Assert.Equal(ids[row], found.EntryId);
+        Assert.NotEqual(Guid.Empty, found.EntryId);
+        Assert.Throws<ArgumentException>(() => ArchidektSyncPlanner.FindZoneContradictions(
+            [row],
+            parsed.Categories,
+            IdsOf()));
+    }
+
+    /// <summary>
+    /// Verifies the rows built from a different number of local entries are refused when they are paired with their
+    /// entry IDs, so a row never takes another entry's ID.
+    /// </summary>
+    [Fact]
+    public void EntryIdsByRow_WithADifferentNumberOfRows_IsRefused()
+    {
+        RemoteDeckSnapshot parsed = ParseDeck();
+
+        Assert.Throws<ArgumentException>(() => ArchidektLocalMapper.EntryIdsByRow([], parsed.Entries));
+    }
+
+    /// <summary>
+    /// Verifies whether a zone change with categories matched would clear the contradiction, for each way a zone can
+    /// come from the categories: a zone with a zone category always does; the main zone does when what is left after
+    /// removing the zone categories maps to main, needs a new primary category when the primary category is a zone
+    /// category and others remain, and does not when the zone comes from a category the change does not touch (a
+    /// primary category outside the deck, or a premier category).
+    /// </summary>
+    [Theory]
+    [InlineData("sideboard", "Removal", "Removal", "main", ArchidektMatchFix.Clears)]
+    [InlineData("commander", "Removal", "Removal", "main", ArchidektMatchFix.Clears)]
+    [InlineData("main", "Sideboard", "Sideboard", "sideboard", ArchidektMatchFix.Clears)]
+    [InlineData("main", "Removal,Sideboard", "Removal", "sideboard", ArchidektMatchFix.Clears)]
+    [InlineData("main", "Sideboard,Removal", "Sideboard", "sideboard", ArchidektMatchFix.NeedsPrimaryCategory)]
+    [InlineData("main", "Considering", "Considering", "maybeboard", ArchidektMatchFix.DoesNotClear)]
+    [InlineData("main", "Considering,Sideboard", "Considering", "sideboard", ArchidektMatchFix.DoesNotClear)]
+    [InlineData("main", "Partner", "Partner", "commander", ArchidektMatchFix.DoesNotClear)]
+    public void FindZoneContradictions_SaysWhetherMatchingTheCategoriesClearsIt(
+        string zone,
+        string categories,
+        string primary,
+        string expectedZone,
+        ArchidektMatchFix expectedFix)
+    {
+        RemoteDeckSnapshot deck = WithCategories("Removal", "Considering", "Sideboard", "Partner");
+        deck = deck with
+        {
+            Categories =
+            [
+                deck.Categories[0] with { IncludedInDeck = true },
+                deck.Categories[1] with { IncludedInDeck = false },
+                deck.Categories[2],
+                deck.Categories[3] with { IsPremier = true },
+            ],
+        };
+        RemoteDeckEntry entry = ParseDeck().Entries[0] with
+        {
+            Zone = zone,
+            CategoryNames = categories.Split(','),
+            PrimaryCategoryName = primary,
+        };
+
+        ArchidektZoneContradiction found = Assert.Single(
+            ArchidektSyncPlanner.FindZoneContradictions([entry], deck.Categories, IdsOf(entry)));
+
+        Assert.Equal(expectedZone, found.ExpectedZone);
+        Assert.Equal(expectedFix, found.MatchFix);
+    }
+
+    /// <summary>
+    /// Pairs each row with a new local entry ID by reference, the way a push pairs the rows it built with the local
+    /// entries.
+    /// </summary>
+    private static Dictionary<RemoteDeckEntry, Guid> IdsOf(params RemoteDeckEntry[] rows)
+    {
+        Dictionary<RemoteDeckEntry, Guid> ids = new(ReferenceEqualityComparer.Instance);
+        foreach (RemoteDeckEntry row in rows)
+        {
+            ids[row] = Guid.NewGuid();
+        }
+
+        return ids;
     }
 
     /// <summary>

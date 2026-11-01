@@ -742,7 +742,7 @@ public static class ArchidektSyncPlanner
     public static IReadOnlyList<ArchidektZoneContradiction> FindZoneContradictions(
         ArchidektRemotePlan plan,
         RemoteDeckSnapshot target,
-        IReadOnlyDictionary<RemoteDeckEntry, Guid>? entryIds = null)
+        IReadOnlyDictionary<RemoteDeckEntry, Guid> entryIds)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(target);
@@ -756,16 +756,17 @@ public static class ArchidektSyncPlanner
 
     /// <summary>
     /// Finds entries whose zone is not the zone their category names give them among the given categories, by the
-    /// same rule as <see cref="FindZoneContradictions(ArchidektRemotePlan, RemoteDeckSnapshot, IReadOnlyDictionary{RemoteDeckEntry, Guid})"/>. A null entry is
-    /// skipped.
+    /// same rule as <see cref="FindZoneContradictions(ArchidektRemotePlan, RemoteDeckSnapshot, IReadOnlyDictionary{RemoteDeckEntry, Guid})"/>.
+    /// A null entry is skipped. Every other entry must have a local entry ID in <paramref name="entryIds"/>.
     /// </summary>
     public static IReadOnlyList<ArchidektZoneContradiction> FindZoneContradictions(
         IEnumerable<RemoteDeckEntry?> entries,
         IReadOnlyList<RemoteDeckCategory> categories,
-        IReadOnlyDictionary<RemoteDeckEntry, Guid>? entryIds = null)
+        IReadOnlyDictionary<RemoteDeckEntry, Guid> entryIds)
     {
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentNullException.ThrowIfNull(categories);
+        ArgumentNullException.ThrowIfNull(entryIds);
         Dictionary<string, RemoteDeckCategory> byName = CategoryNames.Index(categories, value => value.Name);
         List<ArchidektZoneContradiction> found = [];
         foreach (RemoteDeckEntry? entry in entries)
@@ -779,14 +780,56 @@ public static class ArchidektSyncPlanner
             if (!string.Equals(entry.Zone, expected, StringComparison.Ordinal))
             {
                 found.Add(new ArchidektZoneContradiction(
-                    entryIds?.GetValueOrDefault(entry) ?? Guid.Empty,
+                    entryIds.TryGetValue(entry, out Guid entryId)
+                        ? entryId
+                        : throw new ArgumentException($"Entry '{entry.CardName}' has no local entry ID.", nameof(entryIds)),
                     entry.CardName,
                     entry.Zone,
-                    expected));
+                    expected,
+                    MatchFixFor(entry, byName)));
             }
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// Tells whether a patch-entries change that sets the entry's zone with <c>zoneCategories</c> "match" would clear
+    /// its zone contradiction, by following what that change does to the categories. A zone with a zone category (a
+    /// commander, sideboard, or maybeboard zone) makes that category the only primary one, which a read always maps to
+    /// that zone. The main zone only removes the zone categories, which clears the contradiction when what is left maps
+    /// to main; the change is refused when the primary category is one of them and other categories remain, unless it
+    /// names a new primary category.
+    /// </summary>
+    private static ArchidektMatchFix MatchFixFor(
+        RemoteDeckEntry entry,
+        IReadOnlyDictionary<string, RemoteDeckCategory> byName)
+    {
+        if (DeckZoneCategories.NameForZone(entry.Zone) is not null)
+        {
+            return ArchidektMatchFix.Clears;
+        }
+
+        List<string> remaining = [.. entry.CategoryNames.Where(value => DeckZoneCategories.ZoneForName(value) is null)];
+        if (remaining.Count == entry.CategoryNames.Count)
+        {
+            return ArchidektMatchFix.DoesNotClear;
+        }
+
+        bool primaryIsZoneCategory = entry.PrimaryCategoryName is not null &&
+            DeckZoneCategories.ZoneForName(entry.PrimaryCategoryName) is not null;
+        if (primaryIsZoneCategory && remaining.Count > 0)
+        {
+            return ArchidektMatchFix.NeedsPrimaryCategory;
+        }
+
+        string? primary = primaryIsZoneCategory ? null : entry.PrimaryCategoryName;
+        return string.Equals(
+            ArchidektJsonContract.MapZone(remaining, primary, byName),
+            entry.Zone,
+            StringComparison.Ordinal)
+                ? ArchidektMatchFix.Clears
+                : ArchidektMatchFix.DoesNotClear;
     }
 
     /// <summary>
@@ -1131,9 +1174,39 @@ public sealed record ArchidektPlannedOperation(
     RemoteDeckEntry? CurrentEntry);
 
 /// <summary>
-/// Names one entry whose zone differs from the zone its categories give it.
+/// Names one entry whose zone differs from the zone its categories give it, and says whether setting the categories to
+/// match the zone would clear that.
 /// </summary>
-public sealed record ArchidektZoneContradiction(Guid EntryId, string CardName, string Zone, string ExpectedZone);
+public sealed record ArchidektZoneContradiction(
+    Guid EntryId,
+    string CardName,
+    string Zone,
+    string ExpectedZone,
+    ArchidektMatchFix MatchFix);
+
+/// <summary>
+/// Says whether a patch-entries change that sets the zone of an entry with zoneCategories "match" is accepted and
+/// leaves the zone its categories give equal to the zone set.
+/// </summary>
+public enum ArchidektMatchFix
+{
+    /// <summary>
+    /// The change is accepted and the categories then give the zone that was set.
+    /// </summary>
+    Clears,
+
+    /// <summary>
+    /// The change is refused unless it also names a primary category that is not a zone category, because the primary
+    /// category is one and other categories remain.
+    /// </summary>
+    NeedsPrimaryCategory,
+
+    /// <summary>
+    /// The zone comes from a category the change does not touch, such as a primary category that is not included in the
+    /// deck or a commander category, so the contradiction stays.
+    /// </summary>
+    DoesNotClear,
+}
 
 /// <summary>
 /// Holds what a pull keeps of the local deck: the entries and categories added locally since the last sync, and what
