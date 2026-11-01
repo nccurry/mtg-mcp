@@ -5,7 +5,8 @@ using MtgMcp.Scryfall;
 namespace MtgMcp.App.Decks;
 
 /// <summary>
-/// Describes one deck entry, with the card fields and oracle tags the caller asked for.
+/// Describes one deck entry, with the card fields and oracle tags the caller asked for. A concise entry leaves out
+/// the identity, language, finish, and sort order fields and carries <c>categoryNames</c> instead.
 /// </summary>
 internal sealed record DeckEntryView(
     Guid EntryId,
@@ -15,16 +16,18 @@ internal sealed record DeckEntryView(
     Guid? PrintingId,
     string? SetCode,
     string? CollectorNumber,
-    string Language,
-    string Finish,
+    string? Language,
+    string? Finish,
     string Zone,
-    int SortOrder,
+    int? SortOrder,
     [property: JsonPropertyName("cardData"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? CardData = null,
     [property: JsonPropertyName("card"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     ScryfallConciseCard? Card = null,
     [property: JsonPropertyName("tags"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<string>? Tags = null)
+    IReadOnlyList<string>? Tags = null,
+    [property: JsonPropertyName("categoryNames"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<string>? CategoryNames = null)
 {
     /// <summary>
     /// Copies a stored entry without card data.
@@ -43,6 +46,26 @@ internal sealed record DeckEntryView(
             entry.Finish,
             entry.Zone,
             entry.SortOrder);
+    }
+
+    /// <summary>
+    /// Copies the entry ID, card name, quantity, and zone of a stored entry, with the names of its categories.
+    /// </summary>
+    internal static DeckEntryView Concise(DeckEntry entry, IReadOnlyList<string> categoryNames)
+    {
+        return new DeckEntryView(
+            entry.EntryId,
+            entry.Quantity,
+            entry.CardName,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            entry.Zone,
+            null,
+            CategoryNames: categoryNames);
     }
 }
 
@@ -87,7 +110,15 @@ internal sealed record DeckDocumentView(
     public int? DescriptionLength { get; init; }
 
     /// <summary>
-    /// Gets the number of entries in the whole deck, set only when the result is a page.
+    /// Gets the requested card names that match no entry of the whole deck, set only when the request named cards.
+    /// </summary>
+    [JsonPropertyName("cardNamesNotFound")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? CardNamesNotFound { get; init; }
+
+    /// <summary>
+    /// Gets the number of entries the page reads from: the whole deck, or the matching entries when the request named
+    /// cards. It is set only when the result is a page.
     /// </summary>
     [JsonPropertyName("totalEntries")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

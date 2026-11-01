@@ -37,6 +37,11 @@ internal sealed class DeckCardViewCoordinator
     internal const int MaximumPageSize = 100;
 
     /// <summary>
+    /// Gives the most card names a caller can ask for in one read.
+    /// </summary>
+    internal const int MaximumCardNames = 100;
+
+    /// <summary>
     /// Says why entry card data is missing when no card data is installed.
     /// </summary>
     private const string NotInstalledLimit =
@@ -83,9 +88,11 @@ internal sealed class DeckCardViewCoordinator
         IReadOnlyList<string>? fields,
         string? cursor,
         int? pageSize,
+        IReadOnlyList<string>? cardNames,
+        string? responseFormat,
         CancellationToken cancellationToken)
     {
-        OperationInvalidInput? invalid = Validate(include, fields, cursor, pageSize);
+        OperationInvalidInput? invalid = Validate(include, fields, cursor, pageSize, cardNames, responseFormat);
         if (invalid is not null)
         {
             return invalid;
@@ -98,19 +105,21 @@ internal sealed class DeckCardViewCoordinator
         }
 
         DeckDocument deck = success.Data;
+        bool concise = IsConcise(responseFormat);
+        CardSelection selection = CardSelection.Of(deck, cardNames);
+        string fingerprint = Fingerprint(deckId, include ?? [], fields, cardNames, concise);
         if (include is null)
         {
-            return GetStored(deck, cursor, pageSize);
+            return GetStored(deck, selection, concise, fingerprint, cursor, pageSize);
         }
 
-        string fingerprint = Fingerprint(deckId, include, fields);
-        OperationResult<int> start = ReadStart(cursor, fingerprint, deck);
+        OperationResult<int> start = ReadStart(cursor, fingerprint, deck, selection.Entries.Count);
         if (start is not OperationSuccess<int> offset)
         {
             return OperationFailure.Forward<int, DeckDocumentView>(start);
         }
 
-        List<DeckEntry> slice = [.. deck.Entries.Skip(offset.Data).Take(pageSize ?? DefaultPageSize)];
+        List<DeckEntry> slice = [.. selection.Entries.Skip(offset.Data).Take(pageSize ?? DefaultPageSize)];
         OperationResult<ScryfallInstalledCardViews> read = await ScryfallToolExecution.RunAsync(() =>
             scryfall.ReadInstalledCardViewsAsync(
                 [.. slice.Select(entry => ScryfallEntryLookup.For(
@@ -124,21 +133,23 @@ internal sealed class DeckCardViewCoordinator
             return OperationFailure.Forward<ScryfallInstalledCardViews, DeckDocumentView>(read);
         }
 
-        List<DeckEntryView> entries = [];
+        List<DeckEntryView> entries = ToViews(deck, slice, concise);
         for (int index = 0; index < slice.Count; index++)
         {
             ScryfallInstalledCardView view = views.Data.Cards[index];
-            entries.Add(DeckEntryView.From(slice[index]) with
+            entries[index] = entries[index] with
             {
                 CardData = view.Status,
                 Card = view.Card,
                 Tags = view.Tags,
-            });
+            };
         }
 
         return BuildPage(
             deck,
+            selection,
             entries,
+            concise,
             offset.Data,
             fingerprint,
             views.Data.Installed ? null : [NotInstalledLimit],
@@ -146,34 +157,104 @@ internal sealed class DeckCardViewCoordinator
     }
 
     /// <summary>
-    /// Gets the stored deck. A deck that fits the result size limit comes back whole and unchanged; a larger one is
-    /// paged by entries, with the same cursor and pageSize arguments as a page with card data.
+    /// Gets the stored deck. A deck that fits the result size limit comes back whole and unchanged, unless the caller
+    /// named cards; a larger one, or a read of named cards, is paged by entries, with the same cursor and pageSize
+    /// arguments as a page with card data.
     /// </summary>
-    private static OperationResult<DeckDocumentView> GetStored(DeckDocument deck, string? cursor, int? pageSize)
+    private static OperationResult<DeckDocumentView> GetStored(
+        DeckDocument deck,
+        CardSelection selection,
+        bool concise,
+        string fingerprint,
+        string? cursor,
+        int? pageSize)
     {
-        List<DeckEntryView> all = [.. deck.Entries.Select(DeckEntryView.From)];
-        if (cursor is null && pageSize is null)
+        List<DeckEntryView> all = ToViews(deck, selection.Entries, concise);
+        if (cursor is null && pageSize is null && selection.NotFound is null)
         {
+            IReadOnlyList<DeckCategoryAssignment> rows = AssignmentRows(deck, concise);
             ResultPageSlice whole = ResultPage.Take(
                 all,
                 0,
                 ResultSize.Measure(ToView(deck, [], [])),
-                entry => EntryBytes(entry, deck.CategoryAssignments));
+                entry => EntryBytes(entry, rows));
             if (!whole.More)
             {
-                return new OperationSuccess<DeckDocumentView>(ToView(deck, all, deck.CategoryAssignments));
+                return new OperationSuccess<DeckDocumentView>(ToView(deck, all, rows));
             }
         }
 
-        string fingerprint = Fingerprint(deck.DeckId, [], null);
-        OperationResult<int> start = ReadStart(cursor, fingerprint, deck);
+        OperationResult<int> start = ReadStart(cursor, fingerprint, deck, all.Count);
         if (start is not OperationSuccess<int> offset)
         {
             return OperationFailure.Forward<int, DeckDocumentView>(start);
         }
 
         List<DeckEntryView> slice = [.. all.Skip(offset.Data).Take(pageSize ?? int.MaxValue)];
-        return BuildPage(deck, slice, offset.Data, fingerprint, null, StoredNarrowHint);
+        return BuildPage(deck, selection, slice, concise, offset.Data, fingerprint, null, StoredNarrowHint);
+    }
+
+    /// <summary>
+    /// Tells whether a response format asks for concise entries. Standard and full both give every stored field.
+    /// </summary>
+    private static bool IsConcise(string? responseFormat)
+    {
+        return string.Equals(responseFormat?.Trim(), "concise", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Gives the category assignment rows a result carries: none for concise entries, which name their categories.
+    /// </summary>
+    private static IReadOnlyList<DeckCategoryAssignment> AssignmentRows(DeckDocument deck, bool concise)
+    {
+        return concise ? [] : deck.CategoryAssignments;
+    }
+
+    /// <summary>
+    /// Builds the views of stored entries, full or concise.
+    /// </summary>
+    private static List<DeckEntryView> ToViews(DeckDocument deck, IReadOnlyList<DeckEntry> entries, bool concise)
+    {
+        List<DeckEntryView> views = new(entries.Count);
+        if (!concise)
+        {
+            foreach (DeckEntry entry in entries)
+            {
+                views.Add(DeckEntryView.From(entry));
+            }
+
+            return views;
+        }
+
+        Dictionary<Guid, string> categoryNames = [];
+        foreach (DeckCategory category in deck.Categories)
+        {
+            categoryNames[category.CategoryId] = category.Name;
+        }
+
+        Dictionary<Guid, List<string>> namesByEntry = [];
+        foreach (DeckCategoryAssignment assignment in deck.CategoryAssignments.OrderByDescending(row => row.IsPrimary))
+        {
+            if (!categoryNames.TryGetValue(assignment.CategoryId, out string? name))
+            {
+                continue;
+            }
+
+            if (!namesByEntry.TryGetValue(assignment.EntryId, out List<string>? names))
+            {
+                names = [];
+                namesByEntry[assignment.EntryId] = names;
+            }
+
+            names.Add(name);
+        }
+
+        foreach (DeckEntry entry in entries)
+        {
+            views.Add(DeckEntryView.Concise(entry, namesByEntry.GetValueOrDefault(entry.EntryId) ?? []));
+        }
+
+        return views;
     }
 
     /// <summary>
@@ -183,8 +264,16 @@ internal sealed class DeckCardViewCoordinator
         IReadOnlyList<string>? include,
         IReadOnlyList<string>? fields,
         string? cursor,
-        int? pageSize)
+        int? pageSize,
+        IReadOnlyList<string>? cardNames,
+        string? responseFormat)
     {
+        OperationInvalidInput? shape = ValidateCardNames(cardNames) ?? ValidateResponseFormat(responseFormat);
+        if (shape is not null)
+        {
+            return shape;
+        }
+
         if (include is null)
         {
             return fields is not null
@@ -226,6 +315,51 @@ internal sealed class DeckCardViewCoordinator
     }
 
     /// <summary>
+    /// Checks that the card names, when given, hold 1 through 100 names and none is blank.
+    /// </summary>
+    private static OperationInvalidInput? ValidateCardNames(IReadOnlyList<string>? cardNames)
+    {
+        if (cardNames is null)
+        {
+            return null;
+        }
+
+        if (cardNames.Count is < 1 or > MaximumCardNames)
+        {
+            return new OperationInvalidInput(
+                "invalid-card-names",
+                $"cardNames must name from 1 through {MaximumCardNames} cards. Omit it to read every entry.",
+                "cardNames");
+        }
+
+        for (int index = 0; index < cardNames.Count; index++)
+        {
+            if (string.IsNullOrWhiteSpace(cardNames[index]))
+            {
+                return new OperationInvalidInput(
+                    "invalid-card-names",
+                    "Every card name must have text.",
+                    $"cardNames[{index}]");
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Checks that the response format, when given, is concise, standard, or full.
+    /// </summary>
+    private static OperationInvalidInput? ValidateResponseFormat(string? responseFormat)
+    {
+        return responseFormat?.Trim().ToLowerInvariant() is null or "concise" or "standard" or "full"
+            ? null
+            : new OperationInvalidInput(
+                "invalid-response-format",
+                "responseFormat must be concise, standard, or full.",
+                "responseFormat");
+    }
+
+    /// <summary>
     /// Checks that a page size, when given, is in range.
     /// </summary>
     private static OperationInvalidInput? ValidatePageSize(int? pageSize)
@@ -241,10 +375,28 @@ internal sealed class DeckCardViewCoordinator
     /// <summary>
     /// Fingerprints the request fields that must stay the same from page to page, ignoring their order.
     /// </summary>
-    private static string Fingerprint(Guid deckId, IReadOnlyList<string> include, IReadOnlyList<string>? fields)
+    private static string Fingerprint(
+        Guid deckId,
+        IReadOnlyList<string> include,
+        IReadOnlyList<string>? fields,
+        IReadOnlyList<string>? cardNames,
+        bool concise)
     {
         string text = $"{deckId:D}|{string.Join(',', include.Order(StringComparer.Ordinal))}|" +
             string.Join(',', (fields ?? []).Order(StringComparer.Ordinal));
+        if (cardNames is not null)
+        {
+            text += "|names:" + string.Join(
+                '\n',
+                cardNames.Select(name => name.Trim().ToUpperInvariant()).Distinct(StringComparer.Ordinal)
+                    .Order(StringComparer.Ordinal));
+        }
+
+        if (concise)
+        {
+            text += "|concise";
+        }
+
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..32];
     }
 
@@ -252,7 +404,7 @@ internal sealed class DeckCardViewCoordinator
     /// Reads the first entry position of a page from its cursor. A cursor must belong to this request; only then is
     /// the deck revision compared, and only an unchanged revision makes the entry position meaningful.
     /// </summary>
-    private static OperationResult<int> ReadStart(string? cursor, string fingerprint, DeckDocument deck)
+    private static OperationResult<int> ReadStart(string? cursor, string fingerprint, DeckDocument deck, int total)
     {
         if (cursor is null)
         {
@@ -276,7 +428,7 @@ internal sealed class DeckCardViewCoordinator
                 new ConflictState(deck.Revision));
         }
 
-        return decoded.Offset < 0 || decoded.Offset > deck.Entries.Count
+        return decoded.Offset < 0 || decoded.Offset > total
             ? InvalidCursor()
             : new OperationSuccess<int>(decoded.Offset);
     }
@@ -306,7 +458,7 @@ internal sealed class DeckCardViewCoordinator
         return new OperationInvalidInput(
             "invalid-cursor",
             "The cursor is not valid for this request. Pass nextCursor unchanged with the same deckId, include, " +
-            "and fields, or start again without a cursor.",
+            "fields, cardNames, and responseFormat, or start again without a cursor.",
             "cursor");
     }
 
@@ -315,34 +467,40 @@ internal sealed class DeckCardViewCoordinator
     /// </summary>
     private static OperationResult<DeckDocumentView> BuildPage(
         DeckDocument deck,
+        CardSelection selection,
         List<DeckEntryView> entries,
+        bool concise,
         int offset,
         string fingerprint,
         IReadOnlyList<string>? limits,
         string narrowHint)
     {
+        int total = selection.Entries.Count;
+        IReadOnlyList<DeckCategoryAssignment> rows = AssignmentRows(deck, concise);
+        DeckDocumentView header = PageHeader(deck, offset) with { CardNamesNotFound = selection.NotFound };
         ResultPageSlice slice = ResultPage.Take(
             entries,
             0,
-            ResultSize.Measure(PageHeader(deck, offset)),
-            entry => EntryBytes(entry, deck.CategoryAssignments));
+            ResultSize.Measure(header),
+            entry => EntryBytes(entry, rows));
         int keep = slice.Count;
         bool truncated = keep < entries.Count;
         List<DeckEntryView> kept = entries.GetRange(0, keep);
         HashSet<Guid> keptIds = [.. kept.Select(entry => entry.EntryId)];
         List<DeckCategoryAssignment> assignments =
-            [.. deck.CategoryAssignments.Where(assignment => keptIds.Contains(assignment.EntryId))];
+            [.. rows.Where(assignment => keptIds.Contains(assignment.EntryId))];
         int next = offset + keep;
-        return new OperationSuccess<DeckDocumentView>(PageHeader(deck, offset) with
+        string scope = selection.NotFound is null ? "the deck" : "the matching entries";
+        return new OperationSuccess<DeckDocumentView>(header with
         {
             Entries = kept,
             CategoryAssignments = assignments,
-            TotalEntries = deck.Entries.Count,
-            NextCursor = next < deck.Entries.Count ? EncodeCursor(fingerprint, deck.Revision, next) : null,
+            TotalEntries = total,
+            NextCursor = next < total ? EncodeCursor(fingerprint, deck.Revision, next) : null,
             Limits = limits,
             Truncated = truncated ? true : null,
             Narrow = truncated
-                ? $"This page shows {kept.Count} of {deck.Entries.Count} entries; the deck is not missing the rest. " +
+                ? $"This page shows {kept.Count} of {total} entries; {scope} is not missing the rest. " +
                     $"Follow nextCursor. {narrowHint}"
                 : null,
         });
@@ -416,6 +574,52 @@ internal sealed class DeckCardViewCoordinator
     {
         byte[] payload = JsonSerializer.SerializeToUtf8Bytes(new DeckViewCursor(fingerprint, revision, offset));
         return Convert.ToBase64String(payload).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
+
+    /// <summary>
+    /// Holds the entries a read covers and, when the caller named cards, the names that match no entry.
+    /// </summary>
+    private sealed record CardSelection(IReadOnlyList<DeckEntry> Entries, IReadOnlyList<string>? NotFound)
+    {
+        /// <summary>
+        /// Selects every entry, or only the entries whose card name matches one of the requested names.
+        /// </summary>
+        internal static CardSelection Of(DeckDocument deck, IReadOnlyList<string>? cardNames)
+        {
+            if (cardNames is null)
+            {
+                return new CardSelection(deck.Entries, null);
+            }
+
+            List<string> notFound = [];
+            HashSet<Guid> matched = [];
+            HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+            foreach (string requested in cardNames)
+            {
+                string name = requested.Trim();
+                if (!seen.Add(name))
+                {
+                    continue;
+                }
+
+                bool found = false;
+                foreach (DeckEntry entry in deck.Entries)
+                {
+                    if (CardNames.Match(entry.CardName, name))
+                    {
+                        matched.Add(entry.EntryId);
+                        found = true;
+                    }
+                }
+
+                if (!found)
+                {
+                    notFound.Add(name);
+                }
+            }
+
+            return new CardSelection([.. deck.Entries.Where(entry => matched.Contains(entry.EntryId))], notFound);
+        }
     }
 
     /// <summary>
