@@ -12,9 +12,14 @@ SQLite store (`decks.db`). App holds the tools (`src/MtgMcp.App/Decks/`).
 - An entry (`DeckEntry`) is one row: `entryId`, `quantity`, `cardName`, optional `oracleId` and `printingId`,
   optional `setCode` and `collectorNumber`, `language`, `finish`, `zone`, and `sortOrder`. Quantity must be
   positive. Two entries can hold the same card; they are separate rows.
-- An entry draft (`DeckEntryDraft`) is an entry without a required ID. It has no categories. `add-entry`,
-  `local_deck_create`, imports, and the Archidekt pull all use it. Categories are set afterward through category
-  assignments.
+- An entry draft (`DeckEntryDraft`) is an entry without a required ID. `add-entry`, `local_deck_create`, imports, and
+  the Archidekt pull all use it. It can carry `categoryIds`, `primaryCategoryId`, and `zoneCategories`
+  (`src/MtgMcp.Core/Decks/DeckModels.cs`). The store assigns them in the same transaction right after it inserts the
+  entry (`src/MtgMcp.Decks/DeckDraftCategories.cs`). The IDs name categories the deck already has or an earlier change
+  of the same batch added (a `categoryDraft` with its own `categoryId`, or the `categories` of `local_deck_create`); an
+  unknown one refuses the batch with `invalid-deck-input`. The primary category is assigned as primary even when
+  `categoryIds` does not list it. `DeckContractValidator.Normalize` keeps these fields. Imports build proposals, not
+  drafts, and the Archidekt pull leaves the fields unset, so neither assigns a category this way.
 - A category (`DeckCategory`) has an ID, a name, an optional color, and a sort order. A draft may carry its own
   `categoryId`.
 - A category assignment links one entry to one category and says whether it is the entry's primary category. An
@@ -38,6 +43,46 @@ SQLite store (`decks.db`). App holds the tools (`src/MtgMcp.App/Decks/`).
   selectors. `stats_simulate` resolves the caller's groups to main-zone entries.
 - A zone is local state. Archidekt has no zones. Archidekt tells a deck's zones apart only by category names
   (next section).
+- `local_deck_get` filters entries by `zones` (a known zone code or the call is refused as `invalid-zones`),
+  `categoryNames` (1 to 100 names, ignoring case and surrounding space, against primary and non-primary categories), and
+  `cardNames`. Values inside one filter combine with OR; the filters combine with AND. The values that match no entry of
+  the whole deck come back in `zonesNotFound`, `categoryNamesNotFound`, and `cardNamesNotFound`, and no match is a normal
+  result with no entries. Deck-wide totals ignore the filters. The cursor covers every filter
+  (`src/MtgMcp.App/Decks/DeckCardViewCoordinator.cs`; see [Output control](../output-control.md)).
+- `card_list_query` returns the stored entry ID as the row field `entryId` for local deck and deck backup sources, so a
+  card-property query gives the IDs a patch or removal needs. Other sources refuse it as `invalid-field`
+  (`src/MtgMcp.App/CardLists/CardListCoordinator.cs`). Writes stay keyed by explicit entry IDs; no change targets a
+  filter.
+
+## Zone categories
+
+`DeckZoneCategories` (`src/MtgMcp.Core/Decks/DeckZoneCategories.cs`) is the one definition of the categories that
+stand for a zone: `Commander` for zone `commander`, `Sideboard` for `sideboard`, and `Maybeboard` for `maybeboard`.
+Zone `main` has none. Names match ignoring case and surrounding space. The Archidekt adapter reads the same
+definition for its pull mapping, so the local and Archidekt rules cannot drift. Archidekt-only rules (premier
+categories, "included in deck") stay in the adapter.
+
+A zone and its zone category are two settings. The local store keeps them separate, because a deck from an import
+or another format has zones and no categories. A caller who sets a zone chooses how the categories follow with
+`zoneCategories`:
+
+| Value | What happens |
+| --- | --- |
+| `match` | A non-main zone gives each entry the zone's category as its primary category. The category is created in the same batch when the deck lacks it. The entry's other zone categories are removed, and its other categories stay as non-primary. For zone `main`, every zone category is removed; if one was primary, the change must also give `primaryCategoryId`, or the entry must have no other category, or the change is refused. |
+| `leave` | Only the zone changes; no category is touched. |
+
+Where it applies:
+
+- `patch-entries` requires `zoneCategories` whenever it sets `zone`, so the caller always chooses
+  (`PatchDeckEntriesRules.FirstProblem`). The server never picks a mode. Giving `zoneCategories` without `zone` is
+  refused. `match` for a zone with no zone category (anything besides `commander`, `sideboard`, `maybeboard`, and `main`)
+  is refused; use `leave`. `match` with `primaryCategoryId` for a zone that has a zone category is refused, because the
+  zone category becomes primary.
+- An entry draft (`add-entry`, `local_deck_create`) takes `zoneCategories` as an option, and it defaults to `leave`.
+  This differs from `patch-entries` on purpose: a draft's zone defaults to `main`, and an explicit zone cannot be told
+  from that default without breaking existing `add-entry`, `local_deck_create`, and Archidekt pull callers. A draft that
+  wants the zone category sends `zoneCategories: "match"`.
+- `whenCardPresent: "skip"` skips a draft's categories together with its entry.
 
 ## Archidekt zone categories
 
@@ -58,11 +103,36 @@ category. Before it plans writes, it computes the zone the entry's categories wo
 same mapping. If that zone is not the entry's local zone, the push is refused with
 `entry-zone-contradicts-category` (`ArchidektCoordinator.cs`, `ArchidektSyncPlanner.FindZoneContradictions` in
 `src/MtgMcp.Archidekt/ArchidektSyncPlanner.cs`). The check covers entries a push would add or update. The
-message names each card with its local zone and the zone its categories give. The fix is to change the entry's
-zone or categories, then preview again. `archidekt_push_preview` and `archidekt_push_apply` both return this
-refusal, as does the planner that builds the preview.
+message names each card, its local entry ID, its local zone, and the zone its categories give
+(`ArchidektZoneContradiction` carries the entry ID; `ArchidektSyncNotices.DescribeZoneContradictions` writes the
+text). It offers both fixes as ready `patch-entries` changes and chooses neither: set the zone to what the categories
+give (`zoneCategories: "leave"`), or keep the zone and make the categories match it (`zoneCategories: "match"`, which
+creates a missing zone category). Entries with the same pair of zones share one change, up to 100 entries each.
+`archidekt_push_preview` and `archidekt_push_apply` both return this refusal, as does the planner that builds the
+preview.
 
-So a zone move on a deck bound to Archidekt is two settings that must agree: the zone and the category.
+So a zone move on a deck bound to Archidekt is two settings that must agree: the zone and the category. A single
+`patch-entries` with `zoneCategories: "match"` sets both.
+
+## Pushing cards to Archidekt
+
+Push sends card changes for one deck through `modifyCards/v2`, which takes a list of cards
+(`src/MtgMcp.Archidekt/ArchidektDeckTransport.cs`, `ArchidektDeckOperations.cs`):
+
+- A run of consecutive added entries goes out in one request of up to 25 cards (`ArchidektSyncPlanner.CardBatchSize`).
+  Every other operation is one request. Each card of an accepted batch is matched to its returned relation by
+  `patchId`.
+- Archidekt refuses a batch that holds a bad card as a whole (a 400 that names no card) and changes nothing. After a
+  rejected batch, the push sends that batch's cards one at a time, applies the good ones, and reports the bad card per
+  card. The baseline records what landed.
+- `ArchidektSyncPlanner.OperationRequests` counts one request per batch or other operation, plus the cards of the
+  largest batch again, so the fallback fits in the prediction.
+- `predictedProviderRequests` on the push preview is the figure checked against the limit of 150 requests for one
+  operation (`providerRequestLimit`). It counts the operations, the printing searches already made, the reads the apply
+  makes, and room to retry each read after a rate-limit response. Before this change it counted operations, searches,
+  and one read, so it was smaller for the same push. A push over the limit is refused in the preview and the apply with
+  the limit, the predicted count, how many operations fit, and the advice to apply part of the local changes first
+  (`ArchidektOperationBudget.DescribeOverLimit`).
 
 ## Change kinds
 
@@ -74,8 +144,9 @@ variants. `kind` selects one (`src/MtgMcp.App/Decks/DeckChangeInput.cs`). Each m
 | --- | --- |
 | `update-metadata` | Replaces name, description, and format. All three are sent. |
 | `add-entry` | Adds one entry from an `entryDraft`. A card name or a set and collector number gets its identity from installed card data. A name not found is still added and listed in `issues`. |
-| `update-entry` | Replaces one entry. The whole entry is sent, with its `entryId`. |
-| `remove-entry` | Removes one entry by ID. |
+| `update-entry` | Replaces one entry. The whole entry is sent, with its `entryId`. To change a few fields, or many entries, use `patch-entries`. |
+| `patch-entries` | Changes only the listed fields of 1 to 100 distinct entries by ID (`quantity`, `zone`, `sortOrder`, `finish`, `language`, a `printing`, `primaryCategoryId`, `addCategoryIds`, `removeCategoryIds`, and `zoneCategories`). The patch runs against each entry's state at that point in the batch, so it sees earlier changes and entries added earlier. Card identity (`cardName`, `oracleId`) cannot be patched. |
+| `remove-entry` | Removes one entry by `entryId`, or 1 to 100 distinct entries by `entryIds`; exactly one of the two. |
 | `add-category` | Adds one category from a `categoryDraft`. |
 | `update-category` | Replaces one category. The whole category is sent, with its `categoryId`. |
 | `remove-category` | Removes one category by ID. |
@@ -83,6 +154,21 @@ variants. `kind` selects one (`src/MtgMcp.App/Decks/DeckChangeInput.cs`). Each m
 | `unassign-category` | Removes one assignment. |
 | `upsert-provider-binding` | Creates or replaces a provider binding and its baseline. |
 | `remove-provider-binding` | Removes a provider binding by ID. |
+
+`patch-entries` rules (`src/MtgMcp.Core/Decks/PatchDeckEntriesRules.cs`, applied in
+`src/MtgMcp.Decks/DeckEntryPatcher.cs` inside the batch transaction):
+
+- A field left out stays as it is. A patch with no field besides `entryIds` and `zoneCategories` is refused.
+- The `printing` is a `printingId` alone, or a `setCode` with a `collectorNumber`. App resolves it against each entry's
+  own card as `add-entry` does, and an identity problem is reported in `issues`.
+- `primaryCategoryId` makes that category primary; one the entry already has as non-primary becomes primary. The
+  previous primary assignment is removed, unless that category is also in `addCategoryIds`, which keeps it as
+  non-primary. This differs from `assign-category`, which keeps the previous primary as non-primary.
+- `zone` requires `zoneCategories` (see Zone categories).
+- These are refused with `invalid-deck-change`, the batch is rolled back, and nothing is written: no field; a
+  duplicate, unknown, or empty entry ID; an unknown or empty category ID; the same category in two of the three
+  category fields; and a zone change that breaks the zone category rules.
+- A later `add-entry` with `whenCardPresent: "skip"` compares against the zone and quantity the patch sets.
 
 `whenCardPresent` is a batch option. `add` (default) adds another entry for a card already in the same zone and
 reports `already-in-deck`. `skip` leaves that add out and reports it (`src/MtgMcp.App/Decks/DeckAddPresence.cs`).
