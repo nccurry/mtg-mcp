@@ -2,18 +2,16 @@
 
 ## Current Work
 
-- Status: In progress
+- Status: Complete
 - Owner: mtg-mcp (owner approved 2026-11-01)
-- Last updated: 2026-11-01, `main` at `4754596`
+- Last updated: 2026-11-01, `main` at `fc2f32a`
 - Selected work and endpoint: phases 1 to 4 below, merged into `main`. No
-  release is required; this changes tests, fixtures, one script, and one Task
-  target.
-- State: phases 1 to 4 and audit fixes merged into `main` as `4754596`;
-  the PLC is not complete.
-- Where: worktree `../mtg-mcp-wt/recorded-provider-fixtures/main`, branch
-  `rpf/main`.
-- Next action and blocker: none for REQ-005; remaining PLC acceptance and
-  closing audit.
+  release is required for the fixtures; the Archidekt card-count and
+  subfolder fixes are under `Unreleased` in `CHANGELOG.md`.
+- State: every requirement merged into `main` (`4754596`, `fc2f32a`);
+  `task ci` passed on the merged branch.
+- Where: `main`; the worktree and branch were removed.
+- Next action and blocker: none.
 - Decisions made during implementation:
   - POST is allowed only for Scryfall `/cards/collection`, a read-only lookup.
     Owner confirmed 2026-11-01 (D-3).
@@ -24,7 +22,8 @@
   - Archidekt deck list, folder, and snapshot recordings use the owner's
     login through `auth: true` entries (D-4).
   - `FakeArchidekt` list, folder, and snapshot responses now follow the
-    recorded shapes; the adapter now reads `subfolders` in a folder read.
+    recorded shapes; the adapter now reads `subfolders` in a folder read and
+    takes a deck summary's card count from `size`.
   - The recorded deck's `parentFolder` is zeroed with the owner id.
   - Deck 22959335 is public, so its id identifies the owner; accepted under
     D-1.
@@ -142,6 +141,6 @@ refresh, and `docs/llms/repo-operations.md` with the new target.
 | Requirement | State | Evidence |
 | --- | --- | --- |
 | REQ-001 to REQ-004 | merged (`4754596`) | Phase 1, `fd67b83`: replay helpers, Scryfall recordings, refresh script. REQ-003: POST `/cards/collection` allowed by D-3. Phase 1 reported that a second live refresh left `git diff` empty for Scryfall; Archidekt was not refreshed twice, so the double-refresh criterion is not shown for it. Audit fixes `f5ccce0`: refresh compares against the manifest hash, stages writes, and has offline tests of its helpers. |
-| REQ-005 | done | Phase 2, `1e88926`: Sol Ring search pages and trimmed deck 22959335. Login-only recordings (D-4), 6 more files: deck list (3 of 58 rows), folder tree, folder reads 401005 (nested, parent object, 2 decks) and 397567 (root, 5 subfolders, no decks), snapshot list of 22959335 (4 rows), and snapshot 152482 (5 cards, 44 categories, 37 KB). Scrubbed: owner ids, deck text, folder ids, usernames, avatars, view counts; deck-row edit time, size, and color counts are fixed and rows are kept in id order, because the owner edits decks often. Adapter tests parse each; the adapter did not read `subfolders` in a folder read, now fixed. A second refresh left `git diff` empty. |
+| REQ-005 | merged (`fc2f32a`) | Phase 2, `1e88926`: Sol Ring search pages and trimmed deck 22959335. Login-only recordings (D-4), 6 more files: deck list (3 of 58 rows), folder tree, folder reads 401005 (nested, parent object, 2 decks) and 397567 (root, 5 subfolders, no decks), snapshot list of 22959335 (4 rows), and snapshot 152482 (5 cards, 44 categories, 37 KB). Scrubbed: owner ids, deck text, folder ids, usernames, avatars, view counts; deck-row edit time, size, and color counts are fixed and rows are kept in id order, because the owner edits decks often. Adapter tests parse each; the adapter did not read `subfolders` in a folder read, now fixed. A second refresh left `git diff` empty. |
 | REQ-006 | merged (`4754596`) | Phase 3, `ba55005`: mock-deck scenarios over the recorded Sol Ring search. |
 | REQ-007 | merged (`4754596`) | Phase 4, `d078c2c`: `ArchidektFakeContractTests` compares `FakeArchidekt` output with the recorded search pages and deck by key path, value kind, array-size bucket, paging keys, and category flags; the fake gained `id`, `modifier`, `isPremier`, `unlisted`, `updatedAt`, `parentFolder`, and a `previous` link. Breaking the fake made all three tests fail. `task lint`, `task test:integration`, `task test:e2e`, and `task ci` passed. Login-only follow-up: the fake's deck list now returns `count`, `next`, and `results` with full rows, the folder tree is a root with nested `children` and null leaves, a folder read has `parentFolder`, `owner`, `subfolders`, and full deck rows, the snapshot list is a bare array, and a snapshot read is the flat saved deck with `snapshotMeta`; five new contract tests cover them against the recordings. |
