@@ -232,6 +232,43 @@ public sealed class ArchidektServiceTests
     }
 
     /// <summary>
+    /// Verifies a wrong confirmation names the exact phrase each destructive operation expects and sends nothing.
+    /// </summary>
+    [Fact]
+    public async Task WrongConfirmation_NamesTheExpectedPhraseForEveryDestructiveOperation()
+    {
+        ArchidektTestHttpHandler handler = new();
+        using ArchidektService service = CreateService(handler);
+        CancellationToken token = TestContext.Current.CancellationToken;
+
+        OperationResult<ArchidektApplyResult>[] results =
+        [
+            await service.DeleteDeckAsync(new ArchidektDeckDeleteRequest("42", "x", "nope"), token),
+            await service.DeleteFolderAsync(new ArchidektFolderDeleteRequest("12", "Name", "x", ""), token),
+            await service.DeleteSnapshotAsync(new ArchidektSnapshotDeleteRequest("42", "7", "x", "nope"), token),
+            await service.ApplySnapshotRestoreAsync(
+                new ArchidektSnapshotRestoreApplyRequest("42", "7", "x", "x", "x", "x", "nope"),
+                token),
+        ];
+
+        string[] expected =
+        [
+            "delete 42",
+            "delete folder 12",
+            "delete snapshot 7",
+            "restore snapshot 7",
+        ];
+        for (int index = 0; index < results.Length; index++)
+        {
+            OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(results[index].Value);
+            Assert.Equal("confirmation-required", invalid.ReasonCode);
+            Assert.Equal($"Pass confirmation exactly as: {expected[index]}", invalid.Message);
+        }
+
+        Assert.Empty(handler.Requests);
+    }
+
+    /// <summary>
     /// Verifies folder create, update, move, and empty delete always preflight and verify fresh trees.
     /// </summary>
     [Fact]
