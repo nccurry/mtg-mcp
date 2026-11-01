@@ -23,7 +23,7 @@ internal sealed class ArchidektSnapshotOperations
     private readonly ArchidektDeckOperations deckOperations;
 
     /// <summary>
-    /// Stores the hard provider request ceiling for standalone operations.
+    /// Stores the hard request limit for standalone operations.
     /// </summary>
     private readonly int maximumRequestsPerOperation;
 
@@ -160,7 +160,9 @@ internal sealed class ArchidektSnapshotOperations
         return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             async budget =>
             {
-                RequireConfirmation(request.Confirmation, $"delete snapshot {request.SnapshotId}");
+                ArchidektOperationResults.RequireConfirmation(
+                    request.Confirmation,
+                    $"delete snapshot {request.SnapshotId}");
                 RemoteNamedSnapshot current = await snapshotTransport.GetAsync(
                     request.DeckId,
                     request.SnapshotId,
@@ -248,7 +250,9 @@ internal sealed class ArchidektSnapshotOperations
         return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             async budget =>
             {
-                RequireConfirmation(request.Confirmation, $"restore snapshot {request.SnapshotId}");
+                ArchidektOperationResults.RequireConfirmation(
+                    request.Confirmation,
+                    $"restore snapshot {request.SnapshotId}");
                 (RemoteDeckSnapshot current, RemoteNamedSnapshot snapshot) = await GetRestoreSourcesAsync(
                     request.DeckId,
                     request.SnapshotId,
@@ -361,20 +365,6 @@ internal sealed class ArchidektSnapshotOperations
                 current.ContentFingerprint,
                 target.ContentFingerprint),
         ];
-    }
-
-    /// <summary>
-    /// Requires an exact non-case-folded confirmation phrase.
-    /// </summary>
-    private static void RequireConfirmation(string actual, string expected)
-    {
-        if (!string.Equals(actual, expected, StringComparison.Ordinal))
-        {
-            throw new ArchidektProviderException(
-                ArchidektFailureKind.InvalidInput,
-                "confirmation-required",
-                $"Pass confirmation exactly as: {expected}");
-        }
     }
 
     /// <summary>

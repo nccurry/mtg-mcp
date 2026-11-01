@@ -5,21 +5,63 @@ using MtgMcp.Core.Results;
 namespace MtgMcp.App.Archidekt;
 
 /// <summary>
+/// Names how much of each row a read shows: the concise fields, or every field.
+/// </summary>
+internal enum ArchidektResponseFormat
+{
+    /// <summary>
+    /// Shows the concise fields of an entry, or only the differing fields of a difference row.
+    /// </summary>
+    Concise,
+
+    /// <summary>
+    /// Shows every field of an entry, or the whole value of each side of a difference row.
+    /// </summary>
+    Full,
+}
+
+/// <summary>
 /// Holds what a caller asked for when reading the entries of one deck: which zones, and how many fields per entry.
 /// </summary>
 /// <param name="Zones">The zones to show, or empty for every zone.</param>
-/// <param name="Full">True for every entry field, false for the concise fields.</param>
-internal sealed record ArchidektDeckReadOptions(IReadOnlyList<string> Zones, bool Full)
+/// <param name="Format">The fields to show of each entry.</param>
+internal sealed record ArchidektDeckReadOptions(IReadOnlyList<string> Zones, ArchidektResponseFormat Format)
 {
     /// <summary>
     /// Gets the default read: every zone, concise entries.
     /// </summary>
-    internal static ArchidektDeckReadOptions Default { get; } = new([], Full: false);
+    internal static ArchidektDeckReadOptions Default { get; } = new([], ArchidektResponseFormat.Concise);
+
+    /// <summary>
+    /// Gets whether every entry field is shown.
+    /// </summary>
+    internal bool Full => Format == ArchidektResponseFormat.Full;
 
     /// <summary>
     /// Gets the zone names a read may ask for, in the order entries are shown.
     /// </summary>
     internal static IReadOnlyList<string> ZoneOrder => DeckZoneCounts.ZoneOrder;
+
+    /// <summary>
+    /// Reads the responseFormat a caller passed: concise, or full or its alias standard, ignoring case and surrounding
+    /// space. A missing value is <paramref name="whenOmitted"/>. Any other text is refused with the name of the
+    /// argument.
+    /// </summary>
+    internal static OperationResult<ArchidektResponseFormat> ParseFormat(
+        string? responseFormat,
+        ArchidektResponseFormat whenOmitted)
+    {
+        return responseFormat?.Trim().ToLowerInvariant() switch
+        {
+            null => new OperationSuccess<ArchidektResponseFormat>(whenOmitted),
+            "concise" => new OperationSuccess<ArchidektResponseFormat>(ArchidektResponseFormat.Concise),
+            "standard" or "full" => new OperationSuccess<ArchidektResponseFormat>(ArchidektResponseFormat.Full),
+            _ => new OperationInvalidInput(
+                "invalid-response-format",
+                "responseFormat must be concise, standard, or full.",
+                "responseFormat"),
+        };
+    }
 
     /// <summary>
     /// Checks the zone names and the response format a caller passed and builds the options, or refuses with the name
@@ -29,20 +71,10 @@ internal sealed record ArchidektDeckReadOptions(IReadOnlyList<string> Zones, boo
         IReadOnlyList<string>? zones,
         string? responseFormat)
     {
-        bool full;
-        switch (responseFormat?.Trim().ToLowerInvariant())
+        OperationResult<ArchidektResponseFormat> parsed = ParseFormat(responseFormat, ArchidektResponseFormat.Concise);
+        if (parsed is not OperationSuccess<ArchidektResponseFormat> format)
         {
-            case null or "concise":
-                full = false;
-                break;
-            case "standard" or "full":
-                full = true;
-                break;
-            default:
-                return new OperationInvalidInput(
-                    "invalid-response-format",
-                    "responseFormat must be concise, standard, or full.",
-                    "responseFormat");
+            return OperationFailure.Forward<ArchidektResponseFormat, ArchidektDeckReadOptions>(parsed);
         }
 
         List<string> chosen = [];
@@ -64,7 +96,7 @@ internal sealed record ArchidektDeckReadOptions(IReadOnlyList<string> Zones, boo
             }
         }
 
-        return new OperationSuccess<ArchidektDeckReadOptions>(new ArchidektDeckReadOptions(chosen, full));
+        return new OperationSuccess<ArchidektDeckReadOptions>(new ArchidektDeckReadOptions(chosen, format.Data));
     }
 
     /// <summary>

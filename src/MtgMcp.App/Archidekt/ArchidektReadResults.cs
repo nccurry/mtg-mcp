@@ -377,8 +377,8 @@ internal sealed record ArchidektSyncPreviewView(
     IReadOnlyList<ArchidektDifferenceRow> Differences)
 {
     /// <summary>
-    /// Gets the most provider requests one operation may use, which <c>predictedProviderRequests</c> counts against;
-    /// null for a pull, which makes no such prediction.
+    /// Gets the request limit: the most requests to Archidekt one tool call may send, which
+    /// <c>predictedProviderRequests</c> counts against; null for a pull, which makes no such prediction.
     /// </summary>
     public int? ProviderRequestLimit { get; init; }
 

@@ -955,7 +955,10 @@ public sealed partial class ArchidektWorkflowTests
 
         while (true)
         {
-            OperationResult<ArchidektSyncDiffView> result = await world.Reads.DiffAsync(localDeckId, offset, cancellationToken: token);
+            OperationResult<ArchidektSyncDiffView> result = await world.Reads.DiffAsync(
+                localDeckId,
+                offset,
+                cancellationToken: token);
             ArchidektSyncDiffView page = Success(result);
             Assert.True(
                 JsonLength(result) < MaximumResultCharacters,
@@ -1442,9 +1445,9 @@ public sealed partial class ArchidektWorkflowTests
     }
 
     /// <summary>
-    /// Verifies a zone-only edit that disagrees with the entry's categories is refused with the entry ID and both fixes,
-    /// and that applying either fix makes the push preview available again, including when the deck has no Sideboard
-    /// category (a match change creates it).
+    /// Verifies a zone-only edit that disagrees with the entry's categories is refused with the entry ID and both
+    /// fixes, and that applying either fix makes the push preview available again, including when the deck has no
+    /// Sideboard category (a match change creates it).
     /// </summary>
     [Theory]
     [InlineData(false)]
@@ -1482,6 +1485,11 @@ public sealed partial class ArchidektWorkflowTests
             "\"zoneCategories\":\"match\"}",
             refused.Message,
             StringComparison.Ordinal);
+        Assert.Contains("its Archidekt categories put it in 'maybeboard'", refused.Message, StringComparison.Ordinal);
+        Assert.EndsWith(
+            "Send one of these as a change in local_deck_apply_changes.",
+            refused.Message,
+            StringComparison.Ordinal);
         DeckDocument fixedDeck = Success(await world.Store.ApplyChangesAsync(
             localDeckId,
             edited.Revision,
@@ -1494,25 +1502,71 @@ public sealed partial class ArchidektWorkflowTests
         ArchidektSyncPreviewView preview = Success(
             await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
 
-        if (matchTheCategories)
-        {
-            Assert.True(preview.ApplyAvailable);
-            ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
-                new ArchidektPushApplyRequest(
-                    localDeckId,
-                    fixedDeck.Revision,
-                    preview.RemoteFingerprint,
-                    preview.PreviewFingerprint),
-                token));
-            Assert.Equal("applied", applied.Outcome);
-            Assert.Contains(applied.Operations, value => value.Kind == "category-create" && value.Subject == "Sideboard");
-        }
+        Assert.True(preview.ApplyAvailable);
+        ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                fixedDeck.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token));
+        Assert.Equal("applied", applied.Outcome);
+        Assert.Equal(
+            matchTheCategories,
+            applied.Operations.Any(value => value.Kind == "category-create" && value.Subject == "Sideboard"));
     }
 
     /// <summary>
-    /// Verifies a push whose batch holds a card Archidekt refuses sends the cards one at a time, names the refused card,
-    /// leaves the cards before it on Archidekt, and leaves the baseline and the local deck as they were, so the next
-    /// preview shows what landed as an Archidekt change.
+    /// Verifies a zone set to main on an entry whose primary category is outside the deck is refused with the leave fix
+    /// only, because matching the categories would not move the entry, and that the leave fix makes the push available.
+    /// </summary>
+    [Fact]
+    public async Task PushPreview_WhenThePrimaryCategoryIsOutsideTheDeck_OffersOnlyTheLeaveFix()
+    {
+        FakeArchidekt fake = new();
+        fake.AddCategory("Ramp");
+        fake.AddCategory("Considering", includedInDeck: false);
+        fake.AddEntry(fake.AddCardToCatalog(601, "Rock"), 1, "Considering");
+        fake.AddEntry(fake.AddCardToCatalog(602, "Bolt"), 1, "Ramp");
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckEntry rock = local.Entries.Single(value => value.CardName == "Rock");
+        Assert.Equal("maybeboard", rock.Zone);
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [new UpdateDeckEntryChange(rock with { Zone = "main" })],
+            token));
+
+        OperationInvalidInput refused = Assert.IsType<OperationInvalidInput>(
+            (await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token)).Value);
+
+        Assert.Equal("entry-zone-contradicts-category", refused.ReasonCode);
+        Assert.Contains(
+            $"{{\"kind\":\"patch-entries\",\"entryIds\":[\"{rock.EntryId}\"],\"zone\":\"maybeboard\"," +
+            "\"zoneCategories\":\"leave\"}",
+            refused.Message,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("\"zoneCategories\":\"match\"", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("change the entry's primary category instead", refused.Message, StringComparison.Ordinal);
+        DeckDocument fixedDeck = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            edited.Revision,
+            [new PatchDeckEntriesChange([rock.EntryId], Zone: "maybeboard", ZoneCategories: "leave")],
+            token));
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        Assert.True(preview.ApplyAvailable);
+        Assert.Equal(fixedDeck.Revision, preview.LocalRevision);
+    }
+
+    /// <summary>
+    /// Verifies a push whose batch holds cards Archidekt refuses sends the cards one at a time, applies the good cards
+    /// before and after the refused ones, names the refused cards as not applied, stays within the predicted requests,
+    /// and leaves the baseline and the local deck as they were, so the next preview shows what landed as an Archidekt
+    /// change.
     /// </summary>
     [Fact]
     public async Task ApplyPush_WithABadCardInTheBatch_NamesItAndLeavesTheBaseline()
@@ -1527,8 +1581,11 @@ public sealed partial class ArchidektWorkflowTests
             local.Revision,
             AddSideboardCards(local, "Side Card 01", "Side Card 02", "Side Card 03", "Side Card 04", "Side Card 05"),
             token));
-        fake.RefusedCardIds.Add(5006);
-        fake.RefusedCardIds.Add(5007);
+        foreach (int cardId in new[] { 5006, 5007, 5008, 5009 })
+        {
+            fake.RefusedCardIds.Add(cardId);
+        }
+
         ArchidektSyncPreviewView preview = Success(
             await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
         int before = fake.Requests.Count;
@@ -1545,15 +1602,18 @@ public sealed partial class ArchidektWorkflowTests
 
         Assert.Equal("partial", applied.Outcome);
         Assert.Equal(
-            ["applied", "applied", "unknown", "not-attempted", "not-attempted"],
+            ["applied", "applied", "not-applied", "not-applied", "applied"],
             applied.Operations.Select(value => value.Status));
         Assert.Equal("Side Card 03", applied.Operations[2].Subject);
-        Assert.Equal(1, fake.QuantityOf("Side Card 01"));
-        Assert.Equal(1, fake.QuantityOf("Side Card 02"));
-        Assert.Equal(0, fake.QuantityOf("Side Card 03"));
-        Assert.Equal(4, fake.Requests.Skip(before).Count(value => value.StartsWith("PATCH", StringComparison.Ordinal)));
+        Assert.Equal(
+            [1, 1, 0, 0, 1],
+            Enumerable.Range(1, 5).Select(number => fake.QuantityOf($"Side Card {number:00}")));
+        Assert.Equal(6, fake.Requests.Skip(before).Count(value => value.StartsWith("PATCH", StringComparison.Ordinal)));
+        Assert.True(fake.Requests.Count - before <= preview.PredictedProviderRequests);
+        Assert.Null(applied.LocalRevision);
         Assert.Equal(edited.Revision, Success(await world.Store.GetAsync(localDeckId, token)).Revision);
         Assert.False(after.ApplyAvailable);
+        Assert.Equal(3, after.Differences.Count(value => value.State == "remote-added"));
     }
 
     /// <summary>
@@ -1577,7 +1637,7 @@ public sealed partial class ArchidektWorkflowTests
             await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
 
         Assert.False(preview.ApplyAvailable);
-        Assert.Contains("limit of 20", preview.ApplyNotice, StringComparison.Ordinal);
+        Assert.Contains("20-request limit", preview.ApplyNotice, StringComparison.Ordinal);
         Assert.Contains("would send nothing", preview.ApplyNotice, StringComparison.Ordinal);
         OperationResult<ArchidektApplyResult> refused = await world.Writes.ApplyPushAsync(
             new ArchidektPushApplyRequest(
@@ -1931,7 +1991,7 @@ public sealed partial class ArchidektWorkflowTests
             await world.Reads.PreviewPullAsync("42", edited.DeckId, cancellationToken: token));
 
         Assert.Contains(
-            "'Side Card 01' (zone 'main', but its categories give zone 'sideboard')",
+            "'Side Card 01' (zone 'main', but its Archidekt categories put it in 'sideboard')",
             preview.ApplyNotice,
             StringComparison.Ordinal);
         await AssertPullIsRefusedAsync(world, edited.DeckId, edited.Revision);
@@ -1953,7 +2013,7 @@ public sealed partial class ArchidektWorkflowTests
             await world.Reads.PreviewPullAsync("42", edited.DeckId, cancellationToken: token));
 
         Assert.Contains(
-            "'Side Card 01' (zone 'main', but its categories give zone 'maybeboard')",
+            "'Side Card 01' (zone 'main', but its Archidekt categories put it in 'maybeboard')",
             preview.ApplyNotice,
             StringComparison.Ordinal);
         await AssertPullIsRefusedAsync(world, edited.DeckId, edited.Revision);
@@ -2155,7 +2215,7 @@ public sealed partial class ArchidektWorkflowTests
         Assert.True(preview.HasConflicts);
         Assert.False(preview.ApplyAvailable);
         Assert.Contains(
-            "'Side Card 01' (zone 'main', but its categories give zone 'sideboard')",
+            "'Side Card 01' (zone 'main', but its Archidekt categories put it in 'sideboard')",
             preview.ApplyNotice,
             StringComparison.Ordinal);
     }

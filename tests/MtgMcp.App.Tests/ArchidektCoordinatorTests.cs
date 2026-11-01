@@ -590,7 +590,7 @@ public sealed class ArchidektCoordinatorTests
         try
         {
             QueueHandler handler = new();
-            handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", "{}");
+            handler.AddAcceptedCards("api/decks/42/modifyCards/v2/");
             (ArchidektCoordinator coordinator, SqliteDeckStore store, Guid localDeckId) =
                 await PullRichDeckAsync(handler, root);
             using (store)
@@ -657,7 +657,7 @@ public sealed class ArchidektCoordinatorTests
                 "{ \"count\": 1, \"next\": null, \"results\": [ { \"id\": 9001, " +
                 "\"uid\": \"33333333-3333-3333-3333-333333333309\", \"collectorNumber\": \"9\", " +
                 "\"edition\": { \"editioncode\": \"dmu\" }, \"oracleCard\": { \"name\": \"Shock\" } } ] }");
-            handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", "{}");
+            handler.AddAcceptedCards("api/decks/42/modifyCards/v2/");
             (ArchidektCoordinator coordinator, SqliteDeckStore store, Guid localDeckId) =
                 await PullRichDeckAsync(handler, root);
             using (store)
@@ -1070,7 +1070,7 @@ public sealed class ArchidektCoordinatorTests
                     created.DeckId,
                     discardLocalChanges: true,
                     TestContext.Current.CancellationToken));
-                OperationInvalidInput mismatched = Assert.IsType<OperationInvalidInput>((await coordinator.ApplyPullAsync(
+                OperationResult<ArchidektApplyResult> mismatchedResult = await coordinator.ApplyPullAsync(
                     new ArchidektPullApplyRequest(
                         "42",
                         created.DeckId,
@@ -1078,7 +1078,8 @@ public sealed class ArchidektCoordinatorTests
                         plain.RemoteFingerprint,
                         plain.PreviewFingerprint,
                         DiscardLocalChanges: true),
-                    TestContext.Current.CancellationToken)).Value);
+                    TestContext.Current.CancellationToken);
+                OperationInvalidInput mismatched = Assert.IsType<OperationInvalidInput>(mismatchedResult.Value);
                 ArchidektApplyResult applied = Success(await coordinator.ApplyPullAsync(
                     new ArchidektPullApplyRequest(
                         "42",
@@ -1132,7 +1133,7 @@ public sealed class ArchidektCoordinatorTests
             {
                 if (withEdit)
                 {
-                    handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", "{}");
+                    handler.AddAcceptedCards("api/decks/42/modifyCards/v2/");
                     DeckEntry bolt = created.Entries.First(value => value.CardName == "Bolt");
                     _ = Success(await store.ApplyChangesAsync(
                         created.DeckId,
@@ -1386,7 +1387,7 @@ public sealed class ArchidektCoordinatorTests
             QueueHandler handler = new();
             handler.SetStanding("api/decks/42/", CaseVariantDeck);
             handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
-            handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", "{}");
+            handler.AddAcceptedCards("api/decks/42/modifyCards/v2/");
             using ArchidektService service = CreateService(handler);
             using SqliteDeckStore store = new(root, "test");
             ArchidektCoordinator coordinator = new(service, store);
@@ -1544,8 +1545,8 @@ public sealed class ArchidektCoordinatorTests
         try
         {
             QueueHandler handler = new();
-            handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", "{}");
-            handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", "{}");
+            handler.AddAcceptedCards("api/decks/42/modifyCards/v2/");
+            handler.AddAcceptedCards("api/decks/42/modifyCards/v2/");
             (ArchidektCoordinator coordinator, SqliteDeckStore store, Guid localDeckId) =
                 await PullRichDeckAsync(handler, root);
             using (store)
@@ -2162,7 +2163,8 @@ public sealed class ArchidektCoordinatorTests
         /// <summary>
         /// Stores responses by exact method and path.
         /// </summary>
-        private readonly ConcurrentDictionary<string, Queue<HttpResponseMessage>> responses = new(StringComparer.Ordinal);
+        private readonly ConcurrentDictionary<string, Queue<Func<string, HttpResponseMessage>>> responses =
+            new(StringComparer.Ordinal);
 
         /// <summary>
         /// Gets requests in provider start order.
@@ -2192,13 +2194,32 @@ public sealed class ArchidektCoordinatorTests
         /// </summary>
         internal void Add(HttpMethod method, string path, string json, HttpStatusCode status = HttpStatusCode.OK)
         {
-            Queue<HttpResponseMessage> queue = responses.GetOrAdd(
-                $"{method.Method} {path}",
-                static _ => new Queue<HttpResponseMessage>());
-            queue.Enqueue(new HttpResponseMessage(status)
+            Enqueue(method, path, _ => new HttpResponseMessage(status)
             {
                 Content = new StringContent(json, Encoding.UTF8, "application/json"),
             });
+        }
+
+        /// <summary>
+        /// Queues the answer to accepted card adds, which echoes the patch ID sent with each added card.
+        /// </summary>
+        internal void AddAcceptedCards(string path)
+        {
+            Enqueue(HttpMethod.Patch, path, body => new HttpResponseMessage(HttpStatusCode.Created)
+            {
+                Content = new StringContent(AcceptedCardsAnswer.Build(body), Encoding.UTF8, "application/json"),
+            });
+        }
+
+        /// <summary>
+        /// Queues one response builder, which gets the request body.
+        /// </summary>
+        private void Enqueue(HttpMethod method, string path, Func<string, HttpResponseMessage> build)
+        {
+            Queue<Func<string, HttpResponseMessage>> queue = responses.GetOrAdd(
+                $"{method.Method} {path}",
+                static _ => new Queue<Func<string, HttpResponseMessage>>());
+            queue.Enqueue(build);
         }
 
         /// <inheritdoc/>
@@ -2207,10 +2228,14 @@ public sealed class ArchidektCoordinatorTests
             CancellationToken cancellationToken)
         {
             Requests.Add(request);
-            Bodies.Add(request.Content is null ? string.Empty : request.Content.ReadAsStringAsync(cancellationToken).GetAwaiter().GetResult());
+            string requestBody = request.Content is null
+                ? string.Empty
+                : request.Content.ReadAsStringAsync(cancellationToken).GetAwaiter().GetResult();
+            Bodies.Add(requestBody);
             string key = $"{request.Method.Method} {request.RequestUri!.PathAndQuery.TrimStart('/')}";
             if (standing.TryGetValue(key, out string? body) &&
-                !(responses.TryGetValue(key, out Queue<HttpResponseMessage>? pending) && pending.Count > 0))
+                !(responses.TryGetValue(key, out Queue<Func<string, HttpResponseMessage>>? pending) &&
+                    pending.Count > 0))
             {
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 {
@@ -2219,8 +2244,8 @@ public sealed class ArchidektCoordinatorTests
             }
 
             return Task.FromResult(
-                responses.TryGetValue(key, out Queue<HttpResponseMessage>? queue) && queue.Count > 0
-                    ? queue.Dequeue()
+                responses.TryGetValue(key, out Queue<Func<string, HttpResponseMessage>>? queue) && queue.Count > 0
+                    ? queue.Dequeue()(requestBody)
                     : new HttpResponseMessage(HttpStatusCode.NotFound)
                     {
                         Content = new StringContent("{}", Encoding.UTF8, "application/json"),

@@ -31,9 +31,10 @@ internal sealed class ArchidektReadTools
     /// Describes the responseFormat argument of the tools that return difference rows.
     /// </summary>
     private const string DifferenceFormatDescription =
-        "Difference rows: full or standard (default full: the whole baseline, local, and remote value of each row) or concise (path, " +
-        "state, and fields, each with only the fields whose values differ, as baseline, local, and remote; far " +
-        "smaller). The fingerprints, guards, summary, operations, and apply availability are the same in both.";
+        "Difference rows: full or standard (default full: the whole baseline, local, and remote value of each row) " +
+        "or concise (path, state, and fields, each with only the fields whose values differ, as baseline, local, " +
+        "and remote; far smaller). The fingerprints, guards, summary, operations, and apply availability are the " +
+        "same in both.";
 
     /// <summary>
     /// Gets the allowed item values of the list parameters, published in the tool schema.
@@ -146,32 +147,26 @@ internal sealed class ArchidektReadTools
         string responseFormat = "full",
         CancellationToken cancellationToken = default)
     {
-        if (CheckDifferenceFormat(responseFormat, out bool concise) is { } invalid)
+        OperationResult<ArchidektResponseFormat> format = ParseDifferenceFormat(responseFormat);
+        if (format is not OperationSuccess<ArchidektResponseFormat> chosen)
         {
-            return invalid;
+            return OperationFailure.Forward<ArchidektResponseFormat, ArchidektSyncDiffView>(format);
         }
 
         OperationResult<ArchidektSyncDiff> diff = await coordinator
             .DiffAsync(localDeckId, cancellationToken).ConfigureAwait(false);
         return diff is OperationSuccess<ArchidektSyncDiff> success
-            ? ArchidektResultPaging.PageDiff(success.Data, differenceOffset, concise)
+            ? ArchidektResultPaging.PageDiff(success.Data, differenceOffset, chosen.Data)
             : OperationFailure.Forward<ArchidektSyncDiff, ArchidektSyncDiffView>(diff);
     }
 
     /// <summary>
-    /// Reads the responseFormat of a tool that returns difference rows, or refuses a value that is neither full nor
-    /// concise.
+    /// Reads the responseFormat of a tool that returns difference rows, which is full when it is omitted, or refuses a
+    /// value that is not concise, standard, or full.
     /// </summary>
-    private static OperationInvalidInput? CheckDifferenceFormat(string? responseFormat, out bool concise)
+    private static OperationResult<ArchidektResponseFormat> ParseDifferenceFormat(string? responseFormat)
     {
-        string? format = responseFormat?.Trim().ToLowerInvariant();
-        concise = format == "concise";
-        return concise || format is null or "full" or "standard"
-                ? null
-                : new OperationInvalidInput(
-                    "invalid-response-format",
-                    "responseFormat must be concise, standard, or full.",
-                    "responseFormat");
+        return ArchidektDeckReadOptions.ParseFormat(responseFormat, ArchidektResponseFormat.Full);
     }
 
     /// <summary>
@@ -208,9 +203,10 @@ internal sealed class ArchidektReadTools
         string responseFormat = "full",
         CancellationToken cancellationToken = default)
     {
-        if (CheckDifferenceFormat(responseFormat, out bool concise) is { } invalid)
+        OperationResult<ArchidektResponseFormat> format = ParseDifferenceFormat(responseFormat);
+        if (format is not OperationSuccess<ArchidektResponseFormat> chosen)
         {
-            return invalid;
+            return OperationFailure.Forward<ArchidektResponseFormat, ArchidektSyncPreviewView>(format);
         }
 
         OperationResult<ArchidektSyncPreview> preview = await coordinator
@@ -222,7 +218,7 @@ internal sealed class ArchidektReadTools
             differenceOffset,
             ArchidektApplyAvailability.PullNotice(mode),
             expectedPreviewFingerprint,
-            concise);
+            chosen.Data);
     }
 
     /// <summary>
@@ -259,9 +255,10 @@ internal sealed class ArchidektReadTools
         string responseFormat = "full",
         CancellationToken cancellationToken = default)
     {
-        if (CheckDifferenceFormat(responseFormat, out bool concise) is { } invalid)
+        OperationResult<ArchidektResponseFormat> format = ParseDifferenceFormat(responseFormat);
+        if (format is not OperationSuccess<ArchidektResponseFormat> chosen)
         {
-            return invalid;
+            return OperationFailure.Forward<ArchidektResponseFormat, ArchidektSyncPreviewView>(format);
         }
 
         OperationResult<ArchidektSyncPreview> preview = await coordinator
@@ -272,7 +269,7 @@ internal sealed class ArchidektReadTools
             differenceOffset,
             ArchidektApplyAvailability.PushNotice(mode, ReadAuthStatus()),
             expectedPreviewFingerprint,
-            concise);
+            chosen.Data);
     }
 
     /// <summary>
@@ -298,7 +295,7 @@ internal sealed class ArchidektReadTools
         int differenceOffset,
         string? applyNotice,
         string? expectedPreviewFingerprint,
-        bool concise)
+        ArchidektResponseFormat format)
     {
         return preview is OperationSuccess<ArchidektSyncPreview> success
             ? ArchidektResultPaging.PagePreview(
@@ -307,7 +304,7 @@ internal sealed class ArchidektReadTools
                 differenceOffset,
                 applyNotice,
                 expectedPreviewFingerprint,
-                concise)
+                format)
             : OperationFailure.Forward<ArchidektSyncPreview, ArchidektSyncPreviewView>(preview);
     }
 

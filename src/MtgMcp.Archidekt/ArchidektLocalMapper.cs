@@ -440,13 +440,21 @@ public static class ArchidektLocalMapper
     }
 
     /// <summary>
-    /// Links each row of a target built by <see cref="ToRemoteTarget"/> to the local entry it was made from. That method
-    /// writes one row per local entry in local entry order, so the rows pair up by position.
+    /// Links each row of a target built by <see cref="ToRemoteTarget"/> to the local entry it was made from. That
+    /// method writes one row per local entry in local entry order, so the rows pair up by position. The two lists
+    /// must be the same length, or the rows were not built from those entries and the pairing would be wrong.
     /// </summary>
     public static Dictionary<RemoteDeckEntry, Guid> EntryIdsByRow(
         IReadOnlyList<DeckEntry> local,
         IReadOnlyList<RemoteDeckEntry> rows)
     {
+        ArgumentNullException.ThrowIfNull(local);
+        ArgumentNullException.ThrowIfNull(rows);
+        if (local.Count != rows.Count)
+        {
+            throw new ArgumentException("The rows must be built from the local entries, one row each.", nameof(rows));
+        }
+
         Dictionary<RemoteDeckEntry, Guid> ids = new(ReferenceEqualityComparer.Instance);
         for (int index = 0; index < local.Count; index++)
         {

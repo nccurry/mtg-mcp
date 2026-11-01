@@ -268,13 +268,19 @@ internal sealed class FakeArchidekt : HttpMessageHandler
         {
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
             {
-                Content = new StringContent("""{"error":"Unable to add one or more cards"}""", Encoding.UTF8, "application/json"),
+                Content = new StringContent(
+                    """{"error":"Unable to add one or more cards"}""",
+                    Encoding.UTF8,
+                    "application/json"),
             });
         }
 
         Mutations++;
         Write(request.Method, path, body);
-        return Task.FromResult(Json("{}"));
+        string answer = path == $"api/decks/{DeckId}/modifyCards/v2/"
+            ? AcceptedCardsAnswer.Build(body, nextRelationId - AcceptedCardsAnswer.CountAdds(body))
+            : "{}";
+        return Task.FromResult(Json(answer));
     }
 
     /// <summary>
@@ -702,5 +708,51 @@ internal sealed class FakeArchidekt : HttpMessageHandler
 
         /// <summary>Gets or sets the category names, the primary first.</summary>
         internal List<string> Categories { get; set; } = categories;
+    }
+}
+
+/// <summary>
+/// Builds the answer the real service gives to accepted card requests: one <c>add</c> object per added card in request
+/// order, each echoing the patch ID that was sent.
+/// </summary>
+internal static class AcceptedCardsAnswer
+{
+    /// <summary>
+    /// Counts the cards a card request adds.
+    /// </summary>
+    internal static int CountAdds(string requestBody)
+    {
+        return AddsIn(requestBody).Count;
+    }
+
+    /// <summary>
+    /// Builds the answer to a card request, numbering the added relations from <paramref name="firstRelationId"/>.
+    /// </summary>
+    internal static string Build(string requestBody, int firstRelationId = 9001)
+    {
+        List<JsonNode> cards = AddsIn(requestBody);
+        JsonArray added = [];
+        for (int index = 0; index < cards.Count; index++)
+        {
+            added.Add(new JsonObject
+            {
+                ["deckRelationId"] = firstRelationId + index,
+                ["patchId"] = cards[index]["patchId"]!.GetValue<string>(),
+                ["cardId"] = cards[index]["cardid"]!.GetValue<int>(),
+                ["quantity"] = cards[index]["modifications"]!["quantity"]!.GetValue<int>(),
+            });
+        }
+
+        return new JsonObject { ["add"] = added, ["createdCategories"] = null }.ToJsonString();
+    }
+
+    /// <summary>
+    /// Lists the cards of a card request whose action is add.
+    /// </summary>
+    private static List<JsonNode> AddsIn(string requestBody)
+    {
+        return [.. JsonNode.Parse(requestBody)!["cards"]!.AsArray()
+            .Where(card => card!["action"]!.GetValue<string>() == "add")
+            .Select(card => card!)];
     }
 }

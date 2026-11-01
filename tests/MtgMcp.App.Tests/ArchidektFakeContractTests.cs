@@ -82,7 +82,10 @@ public sealed class ArchidektFakeContractTests
 
         string actual = await GetAsync(fake, "api/decks/42/");
 
-        Assert.Empty(JsonShape.Divergences(Recorded("deck-22959335"), actual, [.. DeckIgnored, .. PrintingIgnoredUnder("$.cards[].card")]));
+        Assert.Empty(JsonShape.Divergences(
+            Recorded("deck-22959335"),
+            actual,
+            [.. DeckIgnored, .. PrintingIgnoredUnder("$.cards[].card")]));
     }
 
     /// <summary>

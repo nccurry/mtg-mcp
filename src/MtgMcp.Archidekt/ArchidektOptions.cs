@@ -61,7 +61,7 @@ public sealed record ArchidektOptions(
             throw new ArgumentOutOfRangeException(
                 nameof(MaximumRequestsPerWindow),
                 MaximumRequestsPerWindow,
-                "Request ceilings must be positive.");
+                "Request limits must be positive.");
         }
 
         if (RequestWindow <= TimeSpan.Zero)

@@ -13,6 +13,11 @@ public static class ArchidektSyncPlanner
     public const string EntryRemoveKind = "entry-remove";
 
     /// <summary>
+    /// Names the planned operation that adds one card relation to the Archidekt deck.
+    /// </summary>
+    public const string EntryAddKind = "entry-add";
+
+    /// <summary>
     /// Computes the three-way comparison for a stored local deck, using the local fingerprints of that deck: the full
     /// one, the one for fields no row shows, and the two orders an earlier version recorded.
     /// </summary>
@@ -507,16 +512,17 @@ public static class ArchidektSyncPlanner
 
     /// <summary>
     /// Counts the entry adds that one request carries from <paramref name="start"/>: the adds that follow one another
-    /// there, up to <see cref="CardBatchSize"/>. An operation that is not an add is one request by itself, so this is 1.
+    /// there, up to <see cref="CardBatchSize"/>. An operation that is not an add is one request by itself, so this is
+    /// 1.
     /// </summary>
     internal static int RequestSize(IReadOnlyList<ArchidektPlannedOperation> operations, int start)
     {
         int size = 1;
-        if (operations[start].Public.Kind == "entry-add")
+        if (operations[start].Public.Kind == EntryAddKind)
         {
             while (start + size < operations.Count &&
                 size < CardBatchSize &&
-                operations[start + size].Public.Kind == "entry-add")
+                operations[start + size].Public.Kind == EntryAddKind)
             {
                 size++;
             }
@@ -527,10 +533,10 @@ public static class ArchidektSyncPlanner
 
     /// <summary>
     /// Counts the requests the operations of a plan send, one for each run of adds up to <see cref="CardBatchSize"/>
-    /// and one for every other operation, plus the cards of the largest batch again: when Archidekt refuses a batch
-    /// without saying which card, the batch is sent again one card at a time.
+    /// and one for every other operation, plus the cards of the largest batch again. That is the reserve for one batch
+    /// that Archidekt refuses without saying which card: the batch is sent again one card at a time, once per push.
     /// </summary>
-    internal static int OperationRequests(IReadOnlyList<ArchidektPlannedOperation> operations)
+    internal static int CountOperationRequests(IReadOnlyList<ArchidektPlannedOperation> operations)
     {
         int requests = 0;
         int largestBatch = 1;
@@ -632,7 +638,11 @@ public static class ArchidektSyncPlanner
             if (currentEntry is null)
             {
                 planned.Add(new ArchidektPlannedOperation(
-                    new ArchidektRemoteOperation(sequence++, "entry-add", targetEntry.CardName, "Add one exact card relation."),
+                    new ArchidektRemoteOperation(
+                        sequence++,
+                        EntryAddKind,
+                        targetEntry.CardName,
+                        "Add one exact card relation."),
                     TargetCategory: null,
                     CurrentCategory: null,
                     targetEntry,
@@ -672,9 +682,10 @@ public static class ArchidektSyncPlanner
         }
 
         int unresolvedAdds = planned.Count(value =>
-            value.Public.Kind == "entry-add" &&
+            value.Public.Kind == EntryAddKind &&
             string.IsNullOrWhiteSpace(value.TargetEntry?.ProviderCardId));
-        int predictedRequests = OperationRequests(planned) + unresolvedAdds + 1;
+        int operationRequestCount = CountOperationRequests(planned);
+        int predictedRequests = operationRequestCount + unresolvedAdds + 1;
         string planFingerprint = ArchidektContract.Fingerprint(new
         {
             current.RemoteFingerprint,
@@ -682,7 +693,7 @@ public static class ArchidektSyncPlanner
             operations = planned.Select(value => value.Public),
             predictedRequests,
         });
-        return new ArchidektRemotePlan(planned, predictedRequests, planFingerprint);
+        return new ArchidektRemotePlan(planned, predictedRequests, planFingerprint, operationRequestCount);
     }
 
     /// <summary>
@@ -732,13 +743,13 @@ public static class ArchidektSyncPlanner
     public static IReadOnlyList<ArchidektZoneContradiction> FindZoneContradictions(
         ArchidektRemotePlan plan,
         RemoteDeckSnapshot target,
-        IReadOnlyDictionary<RemoteDeckEntry, Guid>? entryIds = null)
+        IReadOnlyDictionary<RemoteDeckEntry, Guid> entryIds)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(target);
         return FindZoneContradictions(
             plan.PlannedOperations
-                .Where(operation => operation.Public.Kind is "entry-add" or "entry-update")
+                .Where(operation => operation.Public.Kind is EntryAddKind or "entry-update")
                 .Select(operation => operation.TargetEntry),
             target.Categories,
             entryIds);
@@ -746,16 +757,17 @@ public static class ArchidektSyncPlanner
 
     /// <summary>
     /// Finds entries whose zone is not the zone their category names give them among the given categories, by the
-    /// same rule as <see cref="FindZoneContradictions(ArchidektRemotePlan, RemoteDeckSnapshot, IReadOnlyDictionary{RemoteDeckEntry, Guid})"/>. A null entry is
-    /// skipped.
+    /// same rule as the overload that takes a plan. A null entry is skipped. Every other entry must have a local
+    /// entry ID in <paramref name="entryIds"/>.
     /// </summary>
     public static IReadOnlyList<ArchidektZoneContradiction> FindZoneContradictions(
         IEnumerable<RemoteDeckEntry?> entries,
         IReadOnlyList<RemoteDeckCategory> categories,
-        IReadOnlyDictionary<RemoteDeckEntry, Guid>? entryIds = null)
+        IReadOnlyDictionary<RemoteDeckEntry, Guid> entryIds)
     {
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentNullException.ThrowIfNull(categories);
+        ArgumentNullException.ThrowIfNull(entryIds);
         Dictionary<string, RemoteDeckCategory> byName = CategoryNames.Index(categories, value => value.Name);
         List<ArchidektZoneContradiction> found = [];
         foreach (RemoteDeckEntry? entry in entries)
@@ -769,14 +781,58 @@ public static class ArchidektSyncPlanner
             if (!string.Equals(entry.Zone, expected, StringComparison.Ordinal))
             {
                 found.Add(new ArchidektZoneContradiction(
-                    entryIds?.GetValueOrDefault(entry) ?? Guid.Empty,
+                    entryIds.TryGetValue(entry, out Guid entryId)
+                        ? entryId
+                        : throw new ArgumentException(
+                            $"Entry '{entry.CardName}' has no local entry ID.",
+                            nameof(entryIds)),
                     entry.CardName,
                     entry.Zone,
-                    expected));
+                    expected,
+                    MatchFixFor(entry, byName)));
             }
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// Tells whether a patch-entries change that sets the entry's zone with <c>zoneCategories</c> "match" would clear
+    /// its zone contradiction, by following what that change does to the categories. A zone with a zone category (a
+    /// commander, sideboard, or maybeboard zone) makes that category the only primary one, which a read always maps to
+    /// that zone. The main zone only removes the zone categories, which clears the contradiction when what is left maps
+    /// to main; the change is refused when the primary category is one of them and other categories remain, unless it
+    /// names a new primary category.
+    /// </summary>
+    private static ArchidektMatchFix MatchFixFor(
+        RemoteDeckEntry entry,
+        IReadOnlyDictionary<string, RemoteDeckCategory> byName)
+    {
+        if (DeckZoneCategories.NameForZone(entry.Zone) is not null)
+        {
+            return ArchidektMatchFix.Clears;
+        }
+
+        List<string> remaining = [.. entry.CategoryNames.Where(value => DeckZoneCategories.ZoneForName(value) is null)];
+        if (remaining.Count == entry.CategoryNames.Count)
+        {
+            return ArchidektMatchFix.DoesNotClear;
+        }
+
+        bool primaryIsZoneCategory = entry.PrimaryCategoryName is not null &&
+            DeckZoneCategories.ZoneForName(entry.PrimaryCategoryName) is not null;
+        if (primaryIsZoneCategory && remaining.Count > 0)
+        {
+            return ArchidektMatchFix.NeedsPrimaryCategory;
+        }
+
+        string? primary = primaryIsZoneCategory ? null : entry.PrimaryCategoryName;
+        return string.Equals(
+            ArchidektJsonContract.MapZone(remaining, primary, byName),
+            entry.Zone,
+            StringComparison.Ordinal)
+                ? ArchidektMatchFix.Clears
+                : ArchidektMatchFix.DoesNotClear;
     }
 
     /// <summary>
@@ -1086,10 +1142,16 @@ internal sealed record ArchidektRowLinks(
 /// <summary>
 /// Carries one deterministic internal plan plus its model-facing descriptors and request bound.
 /// </summary>
+/// <param name="PlannedOperations">The operations in execution order.</param>
+/// <param name="PredictedProviderRequests">The requests to Archidekt the push needs in all, with its reads.</param>
+/// <param name="PlanFingerprint">The fingerprint a preview and its apply must share.</param>
+/// <param name="OperationRequestCount">The requests the operations send. It includes the reserve for sending the
+/// largest batch of adds again card by card, which a push may use once.</param>
 public sealed record ArchidektRemotePlan(
     IReadOnlyList<ArchidektPlannedOperation> PlannedOperations,
     int PredictedProviderRequests,
-    string PlanFingerprint)
+    string PlanFingerprint,
+    int OperationRequestCount)
 {
     /// <summary>
     /// Gets immutable internal operations in execution order.
@@ -1102,11 +1164,6 @@ public sealed record ArchidektRemotePlan(
     /// </summary>
     public IReadOnlyList<ArchidektRemoteOperation> PublicOperations =>
         Array.AsReadOnly(PlannedOperations.Select(value => value.Public).ToArray());
-
-    /// <summary>
-    /// Gets the provider requests the operations send, as counted for the prediction.
-    /// </summary>
-    internal int OperationRequests => ArchidektSyncPlanner.OperationRequests(PlannedOperations);
 }
 
 /// <summary>
@@ -1120,9 +1177,39 @@ public sealed record ArchidektPlannedOperation(
     RemoteDeckEntry? CurrentEntry);
 
 /// <summary>
-/// Names one entry whose zone differs from the zone its categories give it.
+/// Names one entry whose zone differs from the zone its categories give it, and says whether setting the categories to
+/// match the zone would clear that.
 /// </summary>
-public sealed record ArchidektZoneContradiction(Guid EntryId, string CardName, string Zone, string ExpectedZone);
+public sealed record ArchidektZoneContradiction(
+    Guid EntryId,
+    string CardName,
+    string Zone,
+    string ExpectedZone,
+    ArchidektMatchFix MatchFix);
+
+/// <summary>
+/// Says whether a patch-entries change that sets the zone of an entry with zoneCategories "match" is accepted and
+/// leaves the zone its categories give equal to the zone set.
+/// </summary>
+public enum ArchidektMatchFix
+{
+    /// <summary>
+    /// The change is accepted and the categories then give the zone that was set.
+    /// </summary>
+    Clears,
+
+    /// <summary>
+    /// The change is refused unless it also names a primary category that is not a zone category, because the primary
+    /// category is one and other categories remain.
+    /// </summary>
+    NeedsPrimaryCategory,
+
+    /// <summary>
+    /// The zone comes from a category the change does not touch, such as a primary category that is not included in the
+    /// deck or a commander category, so the contradiction stays.
+    /// </summary>
+    DoesNotClear,
+}
 
 /// <summary>
 /// Holds what a pull keeps of the local deck: the entries and categories added locally since the last sync, and what

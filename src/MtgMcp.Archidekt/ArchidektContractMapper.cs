@@ -596,7 +596,12 @@ internal static class ArchidektJsonContract
             path,
             childIds,
             decks,
-            CopyUnknown(item, ["id", "name", "private", "unlisted", "parent", "parentFolder", "parent_folder", "path", "children", "decks"])));
+            CopyUnknown(
+                item,
+                [
+                    "id", "name", "private", "unlisted", "parent", "parentFolder", "parent_folder", "path", "children",
+                    "decks",
+                ])));
         foreach (JsonElement child in childElements)
         {
             MapFolderNode(child, folderId, path, destination);

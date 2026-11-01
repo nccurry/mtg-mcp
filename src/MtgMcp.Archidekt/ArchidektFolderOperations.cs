@@ -18,7 +18,7 @@ internal sealed class ArchidektFolderOperations
     private readonly ArchidektDeckTransport deckTransport;
 
     /// <summary>
-    /// Stores the hard provider request ceiling for standalone operations.
+    /// Stores the hard request limit for standalone operations.
     /// </summary>
     private readonly int maximumRequestsPerOperation;
 
@@ -261,7 +261,9 @@ internal sealed class ArchidektFolderOperations
         return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             async budget =>
             {
-                RequireConfirmation(request.Confirmation, $"delete folder {request.FolderId}");
+                ArchidektOperationResults.RequireConfirmation(
+                    request.Confirmation,
+                    $"delete folder {request.FolderId}");
                 RemoteFolderTree before = await folderTransport.ListAsync(
                     budget,
                     cancellationToken).ConfigureAwait(false);
@@ -372,20 +374,6 @@ internal sealed class ArchidektFolderOperations
             decks = value.Decks.Select(deck => deck.RemoteId),
         }));
         return new RemoteFolderTree(items, tree.Evidence, fingerprint);
-    }
-
-    /// <summary>
-    /// Requires an exact non-case-folded confirmation phrase.
-    /// </summary>
-    private static void RequireConfirmation(string actual, string expected)
-    {
-        if (!string.Equals(actual, expected, StringComparison.Ordinal))
-        {
-            throw new ArchidektProviderException(
-                ArchidektFailureKind.InvalidInput,
-                "confirmation-required",
-                $"Pass confirmation exactly as: {expected}");
-        }
     }
 
     /// <summary>

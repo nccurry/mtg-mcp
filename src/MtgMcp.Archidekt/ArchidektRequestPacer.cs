@@ -4,7 +4,7 @@ using System.Net.Http.Headers;
 namespace MtgMcp.Archidekt;
 
 /// <summary>
-/// Tracks the hard provider-request ceiling for one complete MCP tool operation.
+/// Tracks the hard request limit for one complete MCP tool operation.
 /// </summary>
 internal sealed class ArchidektOperationBudget
 {
@@ -14,7 +14,7 @@ internal sealed class ArchidektOperationBudget
     private int requestCount;
 
     /// <summary>
-    /// Creates an empty operation budget with one positive request ceiling.
+    /// Creates an empty operation budget with one positive request limit.
     /// </summary>
     internal ArchidektOperationBudget(int maximumRequests)
     {
@@ -33,44 +33,57 @@ internal sealed class ArchidektOperationBudget
     internal int RequestCount => Volatile.Read(ref requestCount);
 
     /// <summary>
-    /// Rejects a planned total that would exceed this operation's request ceiling before a remote write starts. When
-    /// the plan has <paramref name="operationCount"/> operations that send <paramref name="operationRequests"/> requests
-    /// (the count of operations when zero), the refusal also says how many of them fit and that the push can be split.
+    /// Rejects a planned total of requests to Archidekt that is over this operation's request limit before a remote
+    /// write starts.
     /// </summary>
-    internal void EnsureRequestBound(int predictedRequests, int operationCount = 0, int operationRequests = 0)
+    internal void EnsureRequestBound(int predictedRequests)
     {
         if (predictedRequests > MaximumRequests)
         {
             throw new ArchidektProviderException(
                 ArchidektFailureKind.InvalidInput,
-                "request-limit-exceeded",
-                operationCount > 0
-                    ? $"This push {DescribeOverLimit(predictedRequests, MaximumRequests, operationCount, operationRequests)} No remote " +
-                        "writes were attempted."
-                    : $"The operation needs about {predictedRequests} provider requests, over the limit of " +
-                        $"{MaximumRequests} for one operation; no remote writes were attempted.");
+                ArchidektProviderException.RequestLimitReasonCode,
+                $"The operation needs about {predictedRequests} requests to Archidekt, over the " +
+                    $"{MaximumRequests}-request limit for one call; no remote writes were attempted.");
         }
     }
 
     /// <summary>
-    /// Says that a push needs more requests than the limit, how many of its operations fit, and that it can be split.
-    /// The requests other than the operations (reads and room to retry them) are taken as the same for any part, and
-    /// the operations as needing the same requests each.
+    /// Rejects a push whose planned requests to Archidekt are over this operation's request limit before a remote
+    /// write starts, and says how many of its changes fit and that it can be split.
+    /// </summary>
+    internal void EnsurePushRequestBound(int predictedRequests, int operationCount, int operationRequestCount)
+    {
+        if (predictedRequests > MaximumRequests)
+        {
+            string over = DescribeOverLimit(predictedRequests, MaximumRequests, operationCount, operationRequestCount);
+            throw new ArchidektProviderException(
+                ArchidektFailureKind.InvalidInput,
+                ArchidektProviderException.RequestLimitReasonCode,
+                $"This push {over} No remote writes were attempted.");
+        }
+    }
+
+    /// <summary>
+    /// Says that a push needs more requests to Archidekt than the limit, how many of its changes fit, and that it can
+    /// be split. The requests that are not for changes (reads and room to retry them) are taken as the same for any
+    /// part, and each change as needing the same share of <paramref name="operationRequestCount"/>, the requests the
+    /// changes need including the reserve for sending one batch again card by card.
     /// </summary>
     internal static string DescribeOverLimit(
         int predictedRequests,
         int maximumRequests,
         int operationCount,
-        int operationRequests = 0)
+        int operationRequestCount)
     {
-        operationRequests = operationRequests > 0 ? operationRequests : operationCount;
-        int available = Math.Max(0, maximumRequests - (predictedRequests - operationRequests));
-        int fit = (int)Math.Min(operationCount, (long)operationCount * available / Math.Max(1, operationRequests));
-        return $"needs about {predictedRequests} provider requests, over the limit of {maximumRequests} for one " +
-            $"operation. About {fit} of its {operationCount} operations fit. The push can be split: apply part of " +
-            "the local changes first, then preview and push again for the rest.";
+        int available = Math.Max(0, maximumRequests - (predictedRequests - operationRequestCount));
+        int fit = (int)Math.Min(
+            operationCount,
+            (long)operationCount * available / Math.Max(1, operationRequestCount));
+        return $"needs about {predictedRequests} requests to Archidekt, over the {maximumRequests}-request limit " +
+            $"for one archidekt_push_apply call. About {fit} of the {operationCount} changes fit (an estimate). " +
+            $"Split the push: apply about {fit} changes first, then preview and push the rest.";
     }
-
     /// <summary>
     /// Reserves one request start or fails before another provider call can begin.
     /// </summary>
@@ -82,8 +95,8 @@ internal sealed class ArchidektOperationBudget
             Interlocked.Decrement(ref requestCount);
             throw new ArchidektProviderException(
                 ArchidektFailureKind.InvalidInput,
-                "request-limit-exceeded",
-                "The operation would exceed its provider request limit.");
+                ArchidektProviderException.RequestLimitReasonCode,
+                "The operation would exceed its request limit.");
         }
     }
 }
@@ -340,6 +353,22 @@ internal enum ArchidektFailureKind
 /// </summary>
 internal sealed class ArchidektProviderException : Exception
 {
+    /// <summary>
+    /// Gives the reason code of a request that Archidekt answered with a 400, which it sends for a request it will
+    /// not process and which changed nothing.
+    /// </summary>
+    internal const string RequestRejectedReasonCode = "provider-request-rejected";
+
+    /// <summary>
+    /// Gives the reason code of a request that Archidekt answered with a 429.
+    /// </summary>
+    internal const string RateLimitedReasonCode = "provider-rate-limited";
+
+    /// <summary>
+    /// Gives the reason code of the failure that says an operation has used all its requests to Archidekt.
+    /// </summary>
+    internal const string RequestLimitReasonCode = "request-limit-exceeded";
+
     /// <summary>
     /// Creates one sanitized provider failure.
     /// </summary>

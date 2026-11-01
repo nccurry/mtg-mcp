@@ -70,4 +70,18 @@ internal static class ArchidektOperationResults
                 "The stored Archidekt synchronization baseline is unavailable.");
         }
     }
+
+    /// <summary>
+    /// Requires an exact non-case-folded confirmation phrase, and refuses with the phrase to pass when it differs.
+    /// </summary>
+    internal static void RequireConfirmation(string actual, string expected)
+    {
+        if (!string.Equals(actual, expected, StringComparison.Ordinal))
+        {
+            throw new ArchidektProviderException(
+                ArchidektFailureKind.InvalidInput,
+                "confirmation-required",
+                $"Pass confirmation exactly as: {expected}");
+        }
+    }
 }
