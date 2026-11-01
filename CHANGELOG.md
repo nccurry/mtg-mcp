@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Archidekt folder reads now list child folder IDs; the adapter read only `children`, but real folder reads use
+  `subfolders`.
+- Archidekt deck lists and folder reads now report each deck's card count from Archidekt's `size` field; it was always
+  empty before.
+
 ## 0.13.3 - 2026-11-01
 
 This release carries every change listed under `0.13.2` below: `0.13.2` was tagged but never published, so users

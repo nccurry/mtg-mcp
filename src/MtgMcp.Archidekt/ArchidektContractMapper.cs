@@ -257,7 +257,7 @@ internal static class ArchidektJsonContract
             ?? GetId(item, "parentFolder");
         string? folderName = GetNestedString(item, "folder", "name");
         string? folderPath = GetNestedString(item, "folder", "path");
-        int? cardCount = GetInt32(item, "cardCount");
+        int? cardCount = GetInt32(item, "cardCount") ?? GetInt32(item, "size");
         DateTimeOffset? updated = GetDateTime(item, "updatedAt");
         string fingerprint = ArchidektContract.Fingerprint(new
         {

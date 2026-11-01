@@ -95,6 +95,7 @@ public sealed class ArchidektRecordedTests
         Assert.Equal(results.GetArrayLength(), page.Items.Count);
         Assert.True(root.GetProperty("count").GetInt32() > page.Items.Count);
         Assert.All(page.Items, item => Assert.Equal("0", item.ParentFolderId));
+        Assert.All(page.Items, item => Assert.NotNull(item.CardCount));
         Assert.Equal(
             results.EnumerateArray().Select(row => row.GetProperty("name").GetString()).Order(StringComparer.OrdinalIgnoreCase),
             page.Items.Select(item => item.Name));
