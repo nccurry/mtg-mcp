@@ -13,25 +13,30 @@ client (in Claude Code, /mcp or a new session) before relying on new behavior.
 ### Added
 
 - `local_deck_apply_changes` reports an `add-entry` for a card already in the deck, or added earlier in the same
-  batch, as an issue of the new kind `already-in-deck` (a new issue kind value). The issue names the existing entry,
-  its zone, copies, and categories. The add is still made, and `issueCount` counts the issue. Basic lands are exempt.
+  batch, as an issue of the new kind `already-in-deck`. The issue names the existing entry, its zone, copies, and
+  categories. The add is still made, and `issueCount` counts the issue. Basic lands are exempt from this report only.
   Cards match by Oracle ID when both entries have one, else by name; printings are never compared.
 - `local_deck_apply_changes` takes `whenCardPresent`: `add` (default) or `skip`. With `skip`, an add whose card is
-  already in the same zone is left out and reported as `skipped`, so a retried batch is safe. A later change that
-  refers to a skipped add's entry ID refuses the batch with `invalid-deck-change`. A batch of only skipped adds
-  returns success with no revision change.
+  already in the same zone is left out and reported as `skipped`, so a retried batch is safe. Skip applies to every
+  card, basic lands included, and only when the matching entry is still in that zone after the whole batch. A skipped
+  add that the store would refuse refuses the batch. A later change that refers to a skipped add's entry ID refuses
+  the batch with `invalid-deck-change`, unless the add carried the ID of the entry it matched. A batch of only
+  skipped adds returns success with no revision change.
 - `local_deck_get` takes `cardNames` (1 to 100 names). It returns only the matching entries and lists the names with
-  no match in `cardNamesNotFound`; the deck-wide totals still cover the whole deck.
-- `local_deck_get` takes `responseFormat`: `full` (default, as before) or `concise`, which returns only `entryId`,
+  no match in `cardNamesNotFound`. `totalEntries` and `nextCursor` count the matching entries; `entryCount`,
+  `cardCount`, and `cardsByZone` still cover the whole deck.
+- `local_deck_get` takes `responseFormat`: `full` (default, as before), `standard` (the same as `full`), or `concise`,
+  which returns only `entryId`,
   `cardName`, `quantity`, `zone`, and `categoryNames` for each entry. A 172-entry deck then fits in one page.
 - New reason codes: `invalid-card-names`, `invalid-response-format`, and `invalid-when-card-present`.
 
 ### Fixed
 
 - `local_deck_duplicates_preview` settles copies that are identical (same printing, language, finish, zone, and
-  categories): it keeps the first in deck order, plans the removals, and marks the group `tieBrokenBy:
+  categories, and primary category): it keeps the first in deck order, plans the removals, and marks the group `tieBrokenBy:
   "identical-entries"`.
-- A group that stays `ambiguous` no longer marks a tied entry as kept, and `next` names the field that differs.
+- A group that stays `ambiguous` no longer marks a tied entry as kept. `next` names the fields that differ, and each
+  ambiguous group lists them in `differsIn`.
 
 ## 0.13.1 - 2026-10-31
 

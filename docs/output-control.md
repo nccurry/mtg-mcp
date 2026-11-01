@@ -94,10 +94,11 @@ Every `local_deck_get` page carries deck-wide totals: `entryCount`, `cardCount`,
 get smaller pages (a smaller `pageSize`, or fewer `fields` when the page has card data). The
 `local_deck_apply_changes` summary carries the same totals.
 
-`responseFormat` is `full` (default: every stored entry field plus the category assignment rows) or `concise`
-(`entryId`, `cardName`, `quantity`, `zone`, and `categoryNames` only). With `include`, concise entries still add
+`responseFormat` is `full` or `standard` (default `full`; both give every stored entry field plus the category
+assignment rows) or `concise` (`entryId`, `cardName`, `quantity`, `zone`, and `categoryNames` only). With `include`, concise entries still add
 `cardData`, `card`, and `tags`. `cardNames` (1 to 100 names) returns only the matching entries and lists the names with
-no match in `cardNamesNotFound`; the totals always cover the whole deck, not the matches. The cursor binds `cardNames`
+no match in `cardNamesNotFound`. `totalEntries` and `nextCursor` count the matching entries; `entryCount`,
+`cardCount`, and `cardsByZone` always cover the whole deck. The cursor binds `cardNames`
 and `responseFormat` along with `include` and `fields`, so a cursor with a changed filter or format is refused.
 
 ## Historical: `detailLevel`

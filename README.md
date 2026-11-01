@@ -207,7 +207,8 @@ length) before you decide what a deck holds. Every page carries deck-wide totals
 with the entries you hold before you add a card you think is missing. To check whether named cards are in the deck,
 pass `cardNames` (1 to 100 names, matched ignoring case, a double-faced card by either face): only the matching entries
 come back, `cardNamesNotFound` lists the names with no match, and the totals still cover the whole deck. Pass the same
-`cardNames` with `nextCursor`. `responseFormat: "concise"` returns only `entryId`, `cardName`, `quantity`, `zone`, and
+`cardNames` with `nextCursor`. With `cardNames`, `totalEntries` and `nextCursor` count the matching entries, while
+`entryCount`, `cardCount`, and `cardsByZone` still cover the whole deck. `responseFormat: "concise"` returns only `entryId`, `cardName`, `quantity`, `zone`, and
 `categoryNames` for each entry, so a large deck fits in fewer pages; the default `full` is unchanged. The summary of every tool that writes a deck
 carries the same totals (`cardsByZone` with the entry count).
 
@@ -236,11 +237,14 @@ no printing set (see [Synchronize Archidekt](#synchronize-archidekt)). Run `scry
 need no `local_deck_identity_reconcile_*` step before an Archidekt push.
 
 An add of a card already in the deck still makes another entry, so a retried batch can pile up copies. Each such add
-is listed in `issues` as `already-in-deck`, naming the existing entry. Basic lands are exempt. Cards match by Oracle
-ID when both entries have one, else by name; printings are not compared. To retry safely, pass an `entryId` on each
+is listed in `issues` as `already-in-deck`, naming the existing entry. Basic lands are exempt from this report only.
+Cards match by Oracle ID when both entries have one, else by name; printings are not compared. To retry safely, pass an `entryId` on each
 add (a reused ID fails), or set `whenCardPresent: "skip"`: an add whose card is already in the same zone is then left
-out and reported as `skipped`. A batch of only skipped adds succeeds without changing the revision. A later change
-that refers to a skipped add's entry ID refuses the batch with `invalid-deck-change`.
+out and reported as `skipped`. Skip applies to every card, basic lands included, and only when the matching entry is
+still in that zone after the whole batch (a later remove-entry or zone move of it means the add is made). A batch of
+only skipped adds succeeds without changing the revision. A skipped add that the store would refuse (quantity 0, a
+blank name) refuses the batch. A later change that refers to a skipped add's entry ID refuses the batch with
+`invalid-deck-change`, unless the add carried the ID of the entry it matched.
 
 Use `local_deck_category_rules_preview` and `local_deck_category_rules_apply` to
 evaluate caller-owned tag rules. The preview validates the rules first; rules
@@ -436,8 +440,9 @@ These tools return facts only. They never say a deck is legal or illegal.
   commander pairing, and companion restrictions.
 - `local_deck_duplicates_preview` finds repeated cards in a deck and plans the
   removals for a caller-chosen keep order; it changes nothing. Copies that are identical (printing, language, finish,
-  zone, and categories) are settled by keeping the first in deck order (`tieBrokenBy: "identical-entries"`). When
-  copies differ, the group stays `ambiguous`, keeps no entry, and `next` names the field that differs.
+  zone, categories, and primary category) are settled by keeping the first in deck order (`tieBrokenBy: "identical-entries"`). When
+  copies differ (a different primary category counts), the group stays `ambiguous`, marks no tied entry as kept, and
+  `differsIn` on the group and `next` name the fields that differ.
 - `playgroup_games_stats_get` totals Playgroup games by deck or player.
 
 ### Worked examples

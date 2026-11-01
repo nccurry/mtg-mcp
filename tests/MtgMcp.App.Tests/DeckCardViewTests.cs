@@ -616,6 +616,9 @@ public sealed class DeckCardViewTests
         Assert.Equal(["fixture-ramp-child"], withTags.Entries[0].Tags);
         Assert.Equal(["Ramp"], withTags.Entries[0].CategoryNames);
         Assert.Equal(2, standard.CategoryAssignments.Count);
+        JsonObject fullEntry = JsonSerializer.SerializeToNode(full, ToolCallPolicy.SerializerOptions)!
+            ["entries"]![0]!.AsObject();
+        Assert.All(["language", "finish", "sortOrder"], key => Assert.True(fullEntry.ContainsKey(key), key));
         Assert.Null(standard.Entries[0].CategoryNames);
         Assert.True(JsonNode.DeepEquals(
             JsonSerializer.SerializeToNode(full, ToolCallPolicy.SerializerOptions),
