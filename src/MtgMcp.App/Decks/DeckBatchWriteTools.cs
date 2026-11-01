@@ -94,8 +94,9 @@ internal sealed class DeckBatchWriteTools
         "and collector number) gets its card identity from installed card data; a name that is not found is " +
         "still added and listed in issues. An add of a card already in the deck still makes another entry and is " +
         "listed as already-in-deck; a retried add should pass an entryId or set whenCardPresent to skip, which " +
-        "leaves out an add whose card is already in the same zone. The result is a summary (new revision, counts, IDs of changed entries " +
-        "and categories, issues); pass returnDeck true to also get the whole deck." +
+        "leaves out an add whose card is already in the same zone. The result is a summary (new revision, counts, " +
+        "IDs of changed entries and categories, issues); pass returnDeck true to also get the whole deck." +
+        UntrustedTextNotes.CardListEntries +
         DeckToolExamples.ExamplePrefix + "minimal): " + DeckToolExamples.ApplyChangesMinimal +
         DeckToolExamples.ExamplePrefix + "categorize): " + DeckToolExamples.ApplyChangesCategorize +
         DeckToolExamples.ExamplePrefix + "full): " + DeckToolExamples.ApplyChangesFull)]

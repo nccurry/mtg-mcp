@@ -13,9 +13,9 @@ internal static class DeckContractValidator
     internal static DeckEntry Normalize(DeckEntryDraft value, Func<Guid> createId)
     {
         ArgumentNullException.ThrowIfNull(value);
-        if (value.Quantity <= 0)
+        if (DeckEntryDraftRules.FirstProblem(value) is string problem)
         {
-            throw new DeckInputException("Entry quantity must be positive.");
+            throw new DeckInputException(problem);
         }
 
         return new DeckEntry(

@@ -29,8 +29,14 @@ internal static class DeckAddPresence
     internal const string Skip = "skip";
 
     /// <summary>
+    /// Holds the text a message gives for an entry that has no category.
+    /// </summary>
+    private const string NoCategories = "none";
+
+    /// <summary>
     /// Checks every change in order, as the batch will apply them, and returns the batch without the adds to leave
-    /// out. Skipping applies to every card, basic lands included, because the caller asked for it.
+    /// out. Skipping applies to every card, basic lands included, because the caller asked for it. An add is left
+    /// out only when the entry it matches is still in the same zone after the whole batch.
     /// </summary>
     internal static DeckAddPresenceResult Check(DeckDocument deck, IReadOnlyList<DeckChange> changes, bool skipPresent)
     {
@@ -50,8 +56,9 @@ internal static class DeckAddPresence
 
             if (change is UpdateDeckEntryChange update)
             {
+                Present? before = present.Find(value => value.EntryId == update.Entry.EntryId);
                 present.RemoveAll(value => value.EntryId == update.Entry.EntryId);
-                present.Add(Present.From(update.Entry, []));
+                present.Add(Present.From(update.Entry, before?.Categories ?? NoCategories));
             }
             else if (change is RemoveDeckEntryChange remove)
             {
@@ -65,34 +72,46 @@ internal static class DeckAddPresence
             }
 
             DeckEntryDraft draft = add.Entry;
+            Present added = Present.FromDraft(draft);
             Present? sameZone = skipPresent
-                ? present.Find(value => SameCard(value, draft) && SameZone(value.Zone, draft.Zone))
+                ? present.Find(value => SameCard(value, added) && SameZone(value, added) &&
+                    StaysInZone(changes, index, value, added))
                 : null;
             if (sameZone is not null)
             {
+                if (DeckEntryDraftRules.FirstProblem(draft) is string problem)
+                {
+                    return new DeckAddPresenceResult(
+                        changes,
+                        [],
+                        $"Change {index + 1} is an add-entry that cannot be written: {problem} Nothing was written.");
+                }
+
                 issues.Add(new DeckWriteIssue(
                     DeckWriteIssue.Skipped,
-                    $"'{draft.CardName.Trim()}' is already in zone {sameZone.Zone} as {Describe(sameZone)}; " +
-                    "not added.",
+                    $"'{added.CardName}' is already in zone {sameZone.Zone} as {Describe(sameZone)}; not added.",
                     sameZone.EntryId,
-                    draft.CardName.Trim()));
-                if (draft.EntryId is Guid skippedId)
+                    added.CardName));
+
+                // When the add carried the ID of the entry it matched, a later change that names that ID already
+                // targets the right entry, so there is nothing to refuse.
+                if (draft.EntryId is Guid skippedId && skippedId != sameZone.EntryId)
                 {
-                    skippedById[skippedId] = new Skipped(index + 1, draft.CardName.Trim(), sameZone);
+                    skippedById[skippedId] = new Skipped(index + 1, added.CardName, sameZone);
                 }
 
                 continue;
             }
 
-            Present? other = BasicLandNames.Contains(draft.CardName)
+            Present? other = BasicLandNames.Contains(added.CardName)
                 ? null
-                : present.Find(value => SameCard(value, draft));
+                : present.Find(value => SameCard(value, added));
             if (other is not null)
             {
-                issues.Add(AlreadyInDeck(draft, other));
+                issues.Add(AlreadyInDeck(added, other));
             }
 
-            present.Add(Present.FromDraft(draft));
+            present.Add(added);
             kept.Add(change);
         }
 
@@ -100,20 +119,48 @@ internal static class DeckAddPresence
     }
 
     /// <summary>
+    /// Tells whether an entry is still the same card in the same zone once the changes after the add have run. A
+    /// later remove-entry of it, or an update-entry that moves it out of the zone or makes it another card, means it
+    /// does not stay, so leaving out the add would lose the card.
+    /// </summary>
+    private static bool StaysInZone(IReadOnlyList<DeckChange> changes, int addIndex, Present existing, Present added)
+    {
+        if (existing.EntryId is not Guid id)
+        {
+            return true;
+        }
+
+        bool stays = true;
+        for (int index = addIndex + 1; index < changes.Count; index++)
+        {
+            if (changes[index] is RemoveDeckEntryChange remove && remove.EntryId == id)
+            {
+                stays = false;
+            }
+            else if (changes[index] is UpdateDeckEntryChange update && update.Entry.EntryId == id)
+            {
+                Present updated = Present.From(update.Entry, NoCategories);
+                stays = SameCard(updated, added) && SameZone(updated, added);
+            }
+        }
+
+        return stays;
+    }
+
+    /// <summary>
     /// Builds the issue for an add whose card is already in the deck.
     /// </summary>
-    private static DeckWriteIssue AlreadyInDeck(DeckEntryDraft draft, Present existing)
+    private static DeckWriteIssue AlreadyInDeck(Present added, Present existing)
     {
-        string name = draft.CardName.Trim();
         string fix = existing.EntryId is Guid id
             ? $"to change copies use update-entry on {id}, or remove-entry on the new entry."
             : "to change copies use update-entry on the first add's entry, or remove-entry on the new entry.";
         return new DeckWriteIssue(
             DeckWriteIssue.AlreadyInDeck,
-            $"'{name}' was already in the deck as {Describe(existing)} (zone {existing.Zone}, " +
+            $"'{added.CardName}' was already in the deck as {Describe(existing)} (zone {existing.Zone}, " +
             $"{existing.Quantity} copies, categories: {existing.Categories}). This add made another entry; {fix}",
             existing.EntryId,
-            name);
+            added.CardName);
     }
 
     /// <summary>
@@ -129,10 +176,12 @@ internal static class DeckAddPresence
     /// </summary>
     private static string Refusal(int changeNumber, Skipped skipped)
     {
-        string existing = Describe(skipped.Existing);
+        string fix = skipped.Existing.EntryId is Guid id
+            ? $"Refer to entry {id} instead"
+            : "Give the earlier add an entryId and refer to it";
         return $"Change {changeNumber} refers to the entry of change {skipped.ChangeNumber}, an add-entry for " +
             $"'{skipped.CardName}' that whenCardPresent \"skip\" left out because the card is already in the same " +
-            $"zone as {existing}. Nothing was written. Refer to {existing} instead, or use whenCardPresent \"add\".";
+            $"zone as {Describe(skipped.Existing)}. Nothing was written. {fix}, or use whenCardPresent \"add\".";
     }
 
     /// <summary>
@@ -151,22 +200,22 @@ internal static class DeckAddPresence
     }
 
     /// <summary>
-    /// Tells whether an entry and a new draft are the same card: the same Oracle ID when both have one, otherwise
-    /// the same name. Printings never matter.
+    /// Tells whether two entries are the same card: the same Oracle ID when both have one, otherwise the same name.
+    /// Printings never matter.
     /// </summary>
-    private static bool SameCard(Present value, DeckEntryDraft draft)
+    private static bool SameCard(Present left, Present right)
     {
-        return value.OracleId is Guid left && draft.OracleId is Guid right
-            ? left == right
-            : CardNames.Match(value.CardName, draft.CardName);
+        return left.OracleId is Guid first && right.OracleId is Guid second
+            ? first == second
+            : CardNames.Match(left.CardName, right.CardName);
     }
 
     /// <summary>
-    /// Tells whether two zone names are the same, ignoring case.
+    /// Tells whether two entries are in the same zone, ignoring letter case.
     /// </summary>
-    private static bool SameZone(string left, string right)
+    private static bool SameZone(Present left, Present right)
     {
-        return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(left.Zone, right.Zone, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -174,30 +223,31 @@ internal static class DeckAddPresence
     /// </summary>
     private static List<Present> FromDeck(DeckDocument deck)
     {
-        Dictionary<Guid, string> categoryNames =
-            deck.Categories.ToDictionary(value => value.CategoryId, value => value.Name);
+        Dictionary<Guid, IReadOnlyList<string>> categories = DeckEntryCategories.NamesByEntry(deck);
         List<Present> present = new(deck.Entries.Count);
         foreach (DeckEntry entry in deck.Entries)
         {
-            List<string> names = [];
-            foreach (DeckCategoryAssignment assignment in deck.CategoryAssignments)
-            {
-                if (assignment.EntryId == entry.EntryId &&
-                    categoryNames.TryGetValue(assignment.CategoryId, out string? name))
-                {
-                    names.Add(name);
-                }
-            }
-
-            names.Sort(StringComparer.Ordinal);
-            present.Add(Present.From(entry, names));
+            present.Add(Present.From(
+                entry,
+                categories.TryGetValue(entry.EntryId, out IReadOnlyList<string>? names)
+                    ? string.Join(", ", names)
+                    : NoCategories));
         }
 
         return present;
     }
 
     /// <summary>
-    /// Holds what a message needs to know about one entry that is in the deck or was added earlier in the batch.
+    /// Trims text the way the store does, treating a missing value as empty.
+    /// </summary>
+    private static string Trimmed(string? value)
+    {
+        return value?.Trim() ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Holds what a message needs to know about one entry that is in the deck or was added earlier in the batch. The
+    /// card name and zone are trimmed, as the store trims them.
     /// </summary>
     private sealed record Present(
         Guid? EntryId,
@@ -210,15 +260,15 @@ internal static class DeckAddPresence
         /// <summary>
         /// Builds the record for an entry of the deck.
         /// </summary>
-        internal static Present From(DeckEntry entry, List<string> categories)
+        internal static Present From(DeckEntry entry, string categories)
         {
             return new Present(
                 entry.EntryId,
-                entry.CardName,
+                Trimmed(entry.CardName),
                 entry.OracleId,
-                entry.Zone,
+                Trimmed(entry.Zone),
                 entry.Quantity,
-                categories.Count == 0 ? "none" : string.Join(", ", categories));
+                categories);
         }
 
         /// <summary>
@@ -226,7 +276,13 @@ internal static class DeckAddPresence
         /// </summary>
         internal static Present FromDraft(DeckEntryDraft draft)
         {
-            return new Present(draft.EntryId, draft.CardName, draft.OracleId, draft.Zone, draft.Quantity, "none");
+            return new Present(
+                draft.EntryId,
+                Trimmed(draft.CardName),
+                draft.OracleId,
+                Trimmed(draft.Zone),
+                draft.Quantity,
+                NoCategories);
         }
     }
 
