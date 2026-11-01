@@ -742,7 +742,12 @@ public sealed class FoundationMcpTests
             ["update-metadata"] = ["description", "format", "kind", "name"],
             ["add-entry"] = ["entryDraft", "kind"],
             ["update-entry"] = ["entry", "kind"],
-            ["remove-entry"] = ["entryId", "kind"],
+            ["patch-entries"] =
+            [
+                "addCategoryIds", "entryIds", "finish", "kind", "language", "primaryCategoryId", "printing", "quantity",
+                "removeCategoryIds", "sortOrder", "zone", "zoneCategories",
+            ],
+            ["remove-entry"] = ["entryId", "entryIds", "kind"],
             ["add-category"] = ["categoryDraft", "kind"],
             ["update-category"] = ["category", "kind"],
             ["remove-category"] = ["categoryId", "kind"],
@@ -761,10 +766,10 @@ public sealed class FoundationMcpTests
                 expectedVariants[kind],
                 properties.EnumerateObject().Select(value => value.Name).Order(StringComparer.Ordinal));
             Assert.Equal(
-                expectedVariants[kind].Where(value => value != "kind"),
-                variant.GetProperty("required").EnumerateArray()
-                    .Select(value => value.GetString())
-                    .Order(StringComparer.Ordinal));
+                expectedVariants[kind].Where(value => value != "kind" && !OptionalFields(kind).Contains(value)),
+                variant.TryGetProperty("required", out JsonElement required)
+                    ? required.EnumerateArray().Select(value => value.GetString()!).Order(StringComparer.Ordinal)
+                    : []);
             foreach (JsonProperty property in properties.EnumerateObject())
             {
                 if (!HasDescription(property.Value))
@@ -777,6 +782,23 @@ public sealed class FoundationMcpTests
         Assert.Equal(expectedVariants.Keys.Order(StringComparer.Ordinal), observedKinds.Order(StringComparer.Ordinal));
 
         Assert.True(missing.Count == 0, $"Missing MCP input descriptions: {string.Join(", ", missing)}");
+    }
+
+    /// <summary>
+    /// Lists the fields of a deck change kind that a caller may leave out.
+    /// </summary>
+    private static string[] OptionalFields(string kind)
+    {
+        return kind switch
+        {
+            "patch-entries" =>
+            [
+                "addCategoryIds", "finish", "language", "primaryCategoryId", "printing", "quantity",
+                "removeCategoryIds", "sortOrder", "zone", "zoneCategories",
+            ],
+            "remove-entry" => ["entryId", "entryIds"],
+            _ => [],
+        };
     }
 
     /// <summary>

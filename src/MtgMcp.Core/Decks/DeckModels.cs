@@ -43,7 +43,10 @@ public sealed record DeckEntry(
     int SortOrder);
 
 /// <summary>
-/// Describes caller-supplied values for a new deck entry.
+/// Describes caller-supplied values for a new deck entry. The category IDs name categories the deck already has or an
+/// earlier change of the same batch adds; the primary category is assigned as primary even when it is not listed.
+/// A zone categories mode of match gives a non-main zone its zone category (created when missing) as the primary
+/// one and drops other zone categories; leave or no mode assigns only what the draft lists.
 /// </summary>
 public sealed record DeckEntryDraft(
     int Quantity,
@@ -56,7 +59,10 @@ public sealed record DeckEntryDraft(
     string Finish = "nonfoil",
     string Zone = "main",
     int SortOrder = 0,
-    Guid? EntryId = null);
+    Guid? EntryId = null,
+    IReadOnlyList<Guid>? CategoryIds = null,
+    Guid? PrimaryCategoryId = null,
+    string? ZoneCategories = null);
 
 /// <summary>
 /// Defines one functional category whose assignments never affect deck zones.
