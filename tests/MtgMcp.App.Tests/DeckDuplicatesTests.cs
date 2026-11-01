@@ -166,7 +166,7 @@ public sealed class DeckDuplicatesTests
             preview.Deck.Revision,
             preview.Changes,
             returnDeck: true,
-            TestContext.Current.CancellationToken)).Deck!;
+            cancellationToken: TestContext.Current.CancellationToken)).Deck!;
         Assert.Equal(1, Assert.Single(applied.Entries).Quantity);
     }
 

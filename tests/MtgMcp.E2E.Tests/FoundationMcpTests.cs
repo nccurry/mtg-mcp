@@ -495,7 +495,7 @@ public sealed class FoundationMcpTests
             TestContext.Current.CancellationToken).ConfigureAwait(false);
         Dictionary<string, string[]> expectedProperties = new(StringComparer.Ordinal)
         {
-            ["local_deck_apply_changes"] = ["changes", "deckId", "expectedRevision", "returnDeck"],
+            ["local_deck_apply_changes"] = ["changes", "deckId", "expectedRevision", "returnDeck", "whenCardPresent"],
             ["local_deck_backup_create"] = [],
             ["local_deck_backup_delete"] = ["backupId"],
             ["local_deck_backup_list"] = [],

@@ -29,6 +29,11 @@ internal sealed record DeckWriteIssue(
     /// Names an entry or step that the write left out on purpose.
     /// </summary>
     internal const string Skipped = "skipped";
+
+    /// <summary>
+    /// Names an add whose card was already in the deck, or added earlier in the same batch, and that was still made.
+    /// </summary>
+    internal const string AlreadyInDeck = "already-in-deck";
 }
 
 /// <summary>
