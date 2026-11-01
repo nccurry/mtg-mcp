@@ -94,6 +94,12 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     internal int? DeckReadsThatSucceedAfterWrites { get; set; }
 
     /// <summary>
+    /// Gets the Archidekt card ids the fake refuses to add: a card request that holds one answers 400 and changes
+    /// nothing, as Archidekt answered a batch with one invalid card.
+    /// </summary>
+    internal HashSet<int> RefusedCardIds { get; } = [];
+
+    /// <summary>
     /// Gets or sets an action that runs before the fake answers a read, with the request path; a test uses it to
     /// change something between two steps of a tool call.
     /// </summary>
@@ -258,9 +264,26 @@ internal sealed class FakeArchidekt : HttpMessageHandler
             return Task.FromResult(Read(path));
         }
 
+        if (path == $"api/decks/{DeckId}/modifyCards/v2/" && RefusesAny(body))
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = new StringContent("""{"error":"Unable to add one or more cards"}""", Encoding.UTF8, "application/json"),
+            });
+        }
+
         Mutations++;
         Write(request.Method, path, body);
         return Task.FromResult(Json("{}"));
+    }
+
+    /// <summary>
+    /// Tells whether a card request holds a card the fake refuses.
+    /// </summary>
+    private bool RefusesAny(string body)
+    {
+        return JsonNode.Parse(body)!["cards"]!.AsArray()
+            .Any(card => RefusedCardIds.Contains(card!["cardid"]!.GetValue<int>()));
     }
 
     /// <summary>

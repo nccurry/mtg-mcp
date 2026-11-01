@@ -1173,7 +1173,7 @@ public sealed partial class ArchidektWorkflowTests
 
         Assert.Equal("applied", applied.Outcome);
         Assert.All(applied.Operations, value => Assert.Equal("applied", value.Status));
-        Assert.Equal(27, world.Fake.Mutations);
+        Assert.Equal(2, world.Fake.Mutations);
         Assert.Equal(1, world.Fake.QuantityOf("Assassin's Trophy"));
         Assert.Equal("4000", world.Fake.CardIdOf("Assassin's Trophy"));
 
@@ -1442,6 +1442,121 @@ public sealed partial class ArchidektWorkflowTests
     }
 
     /// <summary>
+    /// Verifies a zone-only edit that disagrees with the entry's categories is refused with the entry ID and both fixes,
+    /// and that applying either fix makes the push preview available again, including when the deck has no Sideboard
+    /// category (a match change creates it).
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PushPreview_AfterAZoneOnlyEdit_NamesBothFixesAndEitherFixClearsIt(bool matchTheCategories)
+    {
+        FakeArchidekt fake = new();
+        fake.AddCategory("Ramp");
+        fake.AddCategory("Maybeboard", includedInDeck: false);
+        fake.AddEntry(fake.AddCardToCatalog(601, "Rock"), 1, "Maybeboard");
+        fake.AddEntry(fake.AddCardToCatalog(602, "Bolt"), 1, "Ramp");
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckEntry rock = local.Entries.Single(value => value.CardName == "Rock");
+        Assert.Equal("maybeboard", rock.Zone);
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [new UpdateDeckEntryChange(rock with { Zone = "sideboard" })],
+            token));
+
+        OperationInvalidInput refused = Assert.IsType<OperationInvalidInput>(
+            (await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token)).Value);
+
+        Assert.Equal("entry-zone-contradicts-category", refused.ReasonCode);
+        Assert.Contains(
+            $"{{\"kind\":\"patch-entries\",\"entryIds\":[\"{rock.EntryId}\"],\"zone\":\"maybeboard\"," +
+            "\"zoneCategories\":\"leave\"}",
+            refused.Message,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            $"{{\"kind\":\"patch-entries\",\"entryIds\":[\"{rock.EntryId}\"],\"zone\":\"sideboard\"," +
+            "\"zoneCategories\":\"match\"}",
+            refused.Message,
+            StringComparison.Ordinal);
+        DeckDocument fixedDeck = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            edited.Revision,
+            [new PatchDeckEntriesChange(
+                [rock.EntryId],
+                Zone: matchTheCategories ? "sideboard" : "maybeboard",
+                ZoneCategories: matchTheCategories ? "match" : "leave")],
+            token));
+
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        if (matchTheCategories)
+        {
+            Assert.True(preview.ApplyAvailable);
+            ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
+                new ArchidektPushApplyRequest(
+                    localDeckId,
+                    fixedDeck.Revision,
+                    preview.RemoteFingerprint,
+                    preview.PreviewFingerprint),
+                token));
+            Assert.Equal("applied", applied.Outcome);
+            Assert.Contains(applied.Operations, value => value.Kind == "category-create" && value.Subject == "Sideboard");
+        }
+    }
+
+    /// <summary>
+    /// Verifies a push whose batch holds a card Archidekt refuses sends the cards one at a time, names the refused card,
+    /// leaves the cards before it on Archidekt, and leaves the baseline and the local deck as they were, so the next
+    /// preview shows what landed as an Archidekt change.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPush_WithABadCardInTheBatch_NamesItAndLeavesTheBaseline()
+    {
+        FakeArchidekt fake = CreateDeckForNameOnlyAdds();
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            AddSideboardCards(local, "Side Card 01", "Side Card 02", "Side Card 03", "Side Card 04", "Side Card 05"),
+            token));
+        fake.RefusedCardIds.Add(5006);
+        fake.RefusedCardIds.Add(5007);
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        int before = fake.Requests.Count;
+
+        ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token));
+        ArchidektSyncPreviewView after = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        Assert.Equal("partial", applied.Outcome);
+        Assert.Equal(
+            ["applied", "applied", "unknown", "not-attempted", "not-attempted"],
+            applied.Operations.Select(value => value.Status));
+        Assert.Equal("Side Card 03", applied.Operations[2].Subject);
+        Assert.Equal(1, fake.QuantityOf("Side Card 01"));
+        Assert.Equal(1, fake.QuantityOf("Side Card 02"));
+        Assert.Equal(0, fake.QuantityOf("Side Card 03"));
+        Assert.Equal(4, fake.Requests.Skip(before).Count(value => value.StartsWith("PATCH", StringComparison.Ordinal)));
+        Assert.Equal(edited.Revision, Success(await world.Store.GetAsync(localDeckId, token)).Revision);
+        Assert.False(after.ApplyAvailable);
+    }
+
+    /// <summary>
     /// Verifies a push whose card lookups would pass the request limit is blocked, with nothing sent.
     /// </summary>
     [Fact]
@@ -1631,7 +1746,7 @@ public sealed partial class ArchidektWorkflowTests
             token));
 
         Assert.Equal("applied", pushed.Outcome);
-        Assert.Equal(3, world.Fake.Mutations);
+        Assert.Equal(1, world.Fake.Mutations);
         Assert.Equal(1, world.Fake.QuantityOf("Side Card 02"));
     }
 

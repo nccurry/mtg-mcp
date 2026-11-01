@@ -466,7 +466,10 @@ public static class ArchidektSyncPlanner
             entries,
             [.. newCategories.Values],
             duplicates,
-            FindZoneContradictions(arrivingRows, shownCategories),
+            FindZoneContradictions(
+                arrivingRows,
+                shownCategories,
+                ArchidektLocalMapper.EntryIdsByRow(entries, arrivingRows)),
             renamedCategories);
     }
 
@@ -495,6 +498,49 @@ public static class ArchidektSyncPlanner
         return (kept.PrintingId is not null && kept.PrintingId == added.PrintingId) ||
             (kept.OracleId is not null && kept.OracleId == added.OracleId) ||
             string.Equals(kept.CardName, added.CardName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Gives the most cards one add request carries.
+    /// </summary>
+    internal const int CardBatchSize = 25;
+
+    /// <summary>
+    /// Counts the entry adds that one request carries from <paramref name="start"/>: the adds that follow one another
+    /// there, up to <see cref="CardBatchSize"/>. An operation that is not an add is one request by itself, so this is 1.
+    /// </summary>
+    internal static int RequestSize(IReadOnlyList<ArchidektPlannedOperation> operations, int start)
+    {
+        int size = 1;
+        if (operations[start].Public.Kind == "entry-add")
+        {
+            while (start + size < operations.Count &&
+                size < CardBatchSize &&
+                operations[start + size].Public.Kind == "entry-add")
+            {
+                size++;
+            }
+        }
+
+        return size;
+    }
+
+    /// <summary>
+    /// Counts the requests the operations of a plan send, one for each run of adds up to <see cref="CardBatchSize"/>
+    /// and one for every other operation, plus the cards of the largest batch again: when Archidekt refuses a batch
+    /// without saying which card, the batch is sent again one card at a time.
+    /// </summary>
+    internal static int OperationRequests(IReadOnlyList<ArchidektPlannedOperation> operations)
+    {
+        int requests = 0;
+        int largestBatch = 1;
+        for (int index = 0; index < operations.Count; index += RequestSize(operations, index))
+        {
+            requests++;
+            largestBatch = Math.Max(largestBatch, RequestSize(operations, index));
+        }
+
+        return largestBatch > 1 ? requests + largestBatch : requests;
     }
 
     /// <summary>
@@ -628,7 +674,7 @@ public static class ArchidektSyncPlanner
         int unresolvedAdds = planned.Count(value =>
             value.Public.Kind == "entry-add" &&
             string.IsNullOrWhiteSpace(value.TargetEntry?.ProviderCardId));
-        int predictedRequests = planned.Count + unresolvedAdds + 1;
+        int predictedRequests = OperationRequests(planned) + unresolvedAdds + 1;
         string planFingerprint = ArchidektContract.Fingerprint(new
         {
             current.RemoteFingerprint,
@@ -685,7 +731,8 @@ public static class ArchidektSyncPlanner
     /// </summary>
     public static IReadOnlyList<ArchidektZoneContradiction> FindZoneContradictions(
         ArchidektRemotePlan plan,
-        RemoteDeckSnapshot target)
+        RemoteDeckSnapshot target,
+        IReadOnlyDictionary<RemoteDeckEntry, Guid>? entryIds = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(target);
@@ -693,17 +740,19 @@ public static class ArchidektSyncPlanner
             plan.PlannedOperations
                 .Where(operation => operation.Public.Kind is "entry-add" or "entry-update")
                 .Select(operation => operation.TargetEntry),
-            target.Categories);
+            target.Categories,
+            entryIds);
     }
 
     /// <summary>
     /// Finds entries whose zone is not the zone their category names give them among the given categories, by the
-    /// same rule as <see cref="FindZoneContradictions(ArchidektRemotePlan, RemoteDeckSnapshot)"/>. A null entry is
+    /// same rule as <see cref="FindZoneContradictions(ArchidektRemotePlan, RemoteDeckSnapshot, IReadOnlyDictionary{RemoteDeckEntry, Guid})"/>. A null entry is
     /// skipped.
     /// </summary>
     public static IReadOnlyList<ArchidektZoneContradiction> FindZoneContradictions(
         IEnumerable<RemoteDeckEntry?> entries,
-        IReadOnlyList<RemoteDeckCategory> categories)
+        IReadOnlyList<RemoteDeckCategory> categories,
+        IReadOnlyDictionary<RemoteDeckEntry, Guid>? entryIds = null)
     {
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentNullException.ThrowIfNull(categories);
@@ -719,7 +768,11 @@ public static class ArchidektSyncPlanner
             string expected = ArchidektJsonContract.MapZone(entry.CategoryNames, entry.PrimaryCategoryName, byName);
             if (!string.Equals(entry.Zone, expected, StringComparison.Ordinal))
             {
-                found.Add(new ArchidektZoneContradiction(entry.CardName, entry.Zone, expected));
+                found.Add(new ArchidektZoneContradiction(
+                    entryIds?.GetValueOrDefault(entry) ?? Guid.Empty,
+                    entry.CardName,
+                    entry.Zone,
+                    expected));
             }
         }
 
@@ -1049,6 +1102,11 @@ public sealed record ArchidektRemotePlan(
     /// </summary>
     public IReadOnlyList<ArchidektRemoteOperation> PublicOperations =>
         Array.AsReadOnly(PlannedOperations.Select(value => value.Public).ToArray());
+
+    /// <summary>
+    /// Gets the provider requests the operations send, as counted for the prediction.
+    /// </summary>
+    internal int OperationRequests => ArchidektSyncPlanner.OperationRequests(PlannedOperations);
 }
 
 /// <summary>
@@ -1064,7 +1122,7 @@ public sealed record ArchidektPlannedOperation(
 /// <summary>
 /// Names one entry whose zone differs from the zone its categories give it.
 /// </summary>
-public sealed record ArchidektZoneContradiction(string CardName, string Zone, string ExpectedZone);
+public sealed record ArchidektZoneContradiction(Guid EntryId, string CardName, string Zone, string ExpectedZone);
 
 /// <summary>
 /// Holds what a pull keeps of the local deck: the entries and categories added locally since the last sync, and what

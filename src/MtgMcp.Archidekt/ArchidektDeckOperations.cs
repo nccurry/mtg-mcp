@@ -268,7 +268,7 @@ internal sealed class ArchidektDeckOperations
                     DescribeOperations(plan, choices),
                     needed,
                     budget.MaximumRequests,
-                    Blocked(choices, needed, budget.MaximumRequests, plan.PlannedOperations.Count),
+                    Blocked(choices, needed, budget.MaximumRequests, plan.PlannedOperations.Count, plan.OperationRequests),
                     choices);
             });
     }
@@ -333,7 +333,8 @@ internal sealed class ArchidektDeckOperations
         ArchidektPrintingChoices choices,
         int neededRequests,
         int maximumRequests,
-        int operationCount)
+        int operationCount,
+        int operationRequests)
     {
         if (choices.StoppedAtRequestLimit)
         {
@@ -361,7 +362,11 @@ internal sealed class ArchidektDeckOperations
         return neededRequests > maximumRequests
             ? new ArchidektPushBlock(
                 "archidekt_push_apply would send nothing: this push " +
-                    ArchidektOperationBudget.DescribeOverLimit(neededRequests, maximumRequests, operationCount),
+                    ArchidektOperationBudget.DescribeOverLimit(
+                        neededRequests,
+                        maximumRequests,
+                        operationCount,
+                        operationRequests),
                 RequestLimitReasonCode)
             : null;
     }
@@ -437,7 +442,8 @@ internal sealed class ArchidektDeckOperations
     {
         budget.EnsureRequestBound(
             budget.RequestCount + plan.PredictedProviderRequests,
-            plan.PlannedOperations.Count);
+            plan.PlannedOperations.Count,
+            plan.OperationRequests);
         ArchidektPrintingChoices choices = new();
         ArchidektApplyResult? refused = await ResolveBeforeWritingAsync(
             current.RemoteId,
@@ -451,27 +457,52 @@ internal sealed class ArchidektDeckOperations
         }
 
         List<ArchidektOperationStatus> statuses = [];
-        for (int index = 0; index < plan.PlannedOperations.Count; index++)
+        int index = 0;
+        int singlesLeft = 0;
+        while (index < plan.PlannedOperations.Count)
         {
-            ArchidektPlannedOperation operation = plan.PlannedOperations[index];
+            int size = singlesLeft > 0 ? 1 : ArchidektSyncPlanner.RequestSize(plan.PlannedOperations, index);
+            singlesLeft = Math.Max(0, singlesLeft - 1);
+            ArchidektPlannedOperation[] sent = [.. plan.PlannedOperations.Skip(index).Take(size)];
             try
             {
-                await ExecutePlannedOperationAsync(
-                    current.RemoteId,
-                    target,
-                    operation,
-                    choices,
-                    budget,
-                    cancellationToken).ConfigureAwait(false);
-                statuses.Add(Status(operation.Public, "applied", "Archidekt accepted the operation."));
+                if (size > 1)
+                {
+                    await transport.SendCardMutationsAsync(
+                        current.RemoteId,
+                        [.. sent.Select(value => (object)CardPayload(current.RemoteId, value, choices))],
+                        budget,
+                        cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    await ExecutePlannedOperationAsync(
+                        current.RemoteId,
+                        target,
+                        sent[0],
+                        choices,
+                        budget,
+                        cancellationToken).ConfigureAwait(false);
+                }
+
+                statuses.AddRange(sent.Select(value => Status(value.Public, "applied", "Archidekt accepted the operation.")));
+                index += size;
+            }
+            catch (ArchidektProviderException exception)
+                when (size > 1 && exception.ReasonCode == "provider-request-rejected")
+            {
+                // Archidekt refuses a whole batch without naming the card, and applies none of it; sending the cards
+                // one at a time applies the good ones and finds the one it refuses.
+                singlesLeft = size;
             }
             catch (ArchidektProviderException exception)
                 when (exception.ReasonCode is "provider-rate-limited" or RequestLimitReasonCode)
             {
                 // The rate limit answered, or the request limit stopped the request before it was sent (a sign-in
                 // again after a 401 can use the last request), so this write did not reach Archidekt.
-                statuses.Add(Status(operation.Public, "not-sent", $"{NotSentMessage} {exception.Message}"));
-                AddNotAttempted(statuses, plan, index + 1);
+                statuses.AddRange(sent.Select(
+                    value => Status(value.Public, "not-sent", $"{NotSentMessage} {exception.Message}")));
+                AddNotAttempted(statuses, plan, index + size);
                 return new ArchidektApplyResult(
                     statuses.Any(value => value.Status == "applied") ? "partial" : "not-applied",
                     LocalDeckId: null,
@@ -483,8 +514,8 @@ internal sealed class ArchidektDeckOperations
             catch (ArchidektProviderException exception)
                 when (exception.Kind is ArchidektFailureKind.Unavailable or ArchidektFailureKind.Unsupported)
             {
-                statuses.Add(Status(operation.Public, "unknown", exception.Message));
-                AddNotAttempted(statuses, plan, index + 1);
+                statuses.AddRange(sent.Select(value => Status(value.Public, "unknown", exception.Message)));
+                AddNotAttempted(statuses, plan, index + size);
                 return new ArchidektApplyResult(
                     "partial",
                     LocalDeckId: null,
@@ -751,15 +782,29 @@ internal sealed class ArchidektDeckOperations
     }
 
     /// <summary>
-    /// Sends one exact single-card add, modify, or remove operation. A new card uses the printing chosen before the
-    /// first write.
+    /// Sends one exact single-card add, modify, or remove operation.
     /// </summary>
-    private async Task ExecuteCardOperationAsync(
+    private Task ExecuteCardOperationAsync(
         string deckId,
         ArchidektPlannedOperation operation,
         ArchidektPrintingChoices choices,
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
+    {
+        return transport.SendCardMutationsAsync(
+            deckId,
+            [CardPayload(deckId, operation, choices)],
+            budget,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Builds the payload of one card operation. A new card uses the printing chosen before the first write.
+    /// </summary>
+    private static Dictionary<string, object?> CardPayload(
+        string deckId,
+        ArchidektPlannedOperation operation,
+        ArchidektPrintingChoices choices)
     {
         RemoteDeckEntry entry = operation.TargetEntry ?? operation.CurrentEntry!;
         string providerCardId = entry.ProviderCardId;
@@ -798,8 +843,7 @@ internal sealed class ArchidektDeckOperations
             payload["deckRelationId"] = ArchidektProviderId.Parse(relationId);
         }
 
-        await transport.SendCardMutationAsync(deckId, payload, budget, cancellationToken)
-            .ConfigureAwait(false);
+        return payload;
     }
 
     /// <summary>

@@ -239,18 +239,18 @@ internal sealed class ArchidektDeckTransport
     }
 
     /// <summary>
-    /// Sends exactly one card-relation mutation through the observed v2 route.
+    /// Sends card-relation mutations for one deck in one request through the observed v2 route.
     /// </summary>
-    internal Task SendCardMutationAsync(
+    internal Task SendCardMutationsAsync(
         string deckId,
-        object payload,
+        IReadOnlyList<object> payloads,
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
         return session.SendMutationAsync(
             HttpMethod.Patch,
             $"api/decks/{Uri.EscapeDataString(deckId)}/modifyCards/v2/",
-            new { cards = new[] { payload } },
+            new { cards = payloads },
             budget,
             cancellationToken);
     }

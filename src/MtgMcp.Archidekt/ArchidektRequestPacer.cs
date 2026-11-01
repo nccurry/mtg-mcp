@@ -34,10 +34,10 @@ internal sealed class ArchidektOperationBudget
 
     /// <summary>
     /// Rejects a planned total that would exceed this operation's request ceiling before a remote write starts. When
-    /// the plan has <paramref name="operationCount"/> operations of one request each, the refusal also says how many of
-    /// them fit and that the push can be split.
+    /// the plan has <paramref name="operationCount"/> operations that send <paramref name="operationRequests"/> requests
+    /// (the count of operations when zero), the refusal also says how many of them fit and that the push can be split.
     /// </summary>
-    internal void EnsureRequestBound(int predictedRequests, int operationCount = 0)
+    internal void EnsureRequestBound(int predictedRequests, int operationCount = 0, int operationRequests = 0)
     {
         if (predictedRequests > MaximumRequests)
         {
@@ -45,7 +45,7 @@ internal sealed class ArchidektOperationBudget
                 ArchidektFailureKind.InvalidInput,
                 "request-limit-exceeded",
                 operationCount > 0
-                    ? $"This push {DescribeOverLimit(predictedRequests, MaximumRequests, operationCount)} No remote " +
+                    ? $"This push {DescribeOverLimit(predictedRequests, MaximumRequests, operationCount, operationRequests)} No remote " +
                         "writes were attempted."
                     : $"The operation needs about {predictedRequests} provider requests, over the limit of " +
                         $"{MaximumRequests} for one operation; no remote writes were attempted.");
@@ -54,11 +54,18 @@ internal sealed class ArchidektOperationBudget
 
     /// <summary>
     /// Says that a push needs more requests than the limit, how many of its operations fit, and that it can be split.
-    /// The requests other than the operations (reads and room to retry them) are taken as the same for any part.
+    /// The requests other than the operations (reads and room to retry them) are taken as the same for any part, and
+    /// the operations as needing the same requests each.
     /// </summary>
-    internal static string DescribeOverLimit(int predictedRequests, int maximumRequests, int operationCount)
+    internal static string DescribeOverLimit(
+        int predictedRequests,
+        int maximumRequests,
+        int operationCount,
+        int operationRequests = 0)
     {
-        int fit = Math.Min(operationCount, Math.Max(0, maximumRequests - (predictedRequests - operationCount)));
+        operationRequests = operationRequests > 0 ? operationRequests : operationCount;
+        int available = Math.Max(0, maximumRequests - (predictedRequests - operationRequests));
+        int fit = (int)Math.Min(operationCount, (long)operationCount * available / Math.Max(1, operationRequests));
         return $"needs about {predictedRequests} provider requests, over the limit of {maximumRequests} for one " +
             $"operation. About {fit} of its {operationCount} operations fit. The push can be split: apply part of " +
             "the local changes first, then preview and push again for the rest.";

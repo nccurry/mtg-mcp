@@ -27,6 +27,11 @@ public static class DeckZoneCategories
     public const string CommanderZone = "commander";
 
     /// <summary>
+    /// Names the local maybeboard zone, whose category is Maybeboard.
+    /// </summary>
+    public const string MaybeboardZone = "maybeboard";
+
+    /// <summary>
     /// Names the local zone that has no zone category.
     /// </summary>
     public const string MainZone = "main";
@@ -48,7 +53,7 @@ public static class DeckZoneCategories
     [
         (CommanderZone, Commander),
         ("sideboard", Sideboard),
-        ("maybeboard", Maybeboard),
+        (MaybeboardZone, Maybeboard),
     ];
 
     /// <summary>

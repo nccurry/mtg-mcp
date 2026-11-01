@@ -368,7 +368,7 @@ public static class ArchidektLocalMapper
                 baselineCategories);
             string providerId = baselineRow?.ProviderCategoryId ?? string.Empty;
             bool isMaybeboard = localCategory.Name.Equals(
-                "maybeboard",
+                DeckZoneCategories.Maybeboard,
                 StringComparison.OrdinalIgnoreCase);
             categories.Add(new RemoteDeckCategory(
                 providerId,
@@ -437,6 +437,23 @@ public static class ArchidektLocalMapper
             ContentFingerprint = contentFingerprint,
             RemoteFingerprint = contentFingerprint,
         };
+    }
+
+    /// <summary>
+    /// Links each row of a target built by <see cref="ToRemoteTarget"/> to the local entry it was made from. That method
+    /// writes one row per local entry in local entry order, so the rows pair up by position.
+    /// </summary>
+    public static Dictionary<RemoteDeckEntry, Guid> EntryIdsByRow(
+        IReadOnlyList<DeckEntry> local,
+        IReadOnlyList<RemoteDeckEntry> rows)
+    {
+        Dictionary<RemoteDeckEntry, Guid> ids = new(ReferenceEqualityComparer.Instance);
+        for (int index = 0; index < local.Count; index++)
+        {
+            ids[rows[index]] = local[index].EntryId;
+        }
+
+        return ids;
     }
 
     /// <summary>

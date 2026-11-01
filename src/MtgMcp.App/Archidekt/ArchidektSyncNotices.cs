@@ -1,4 +1,5 @@
 using MtgMcp.Archidekt;
+using MtgMcp.Core.Decks;
 
 namespace MtgMcp.App.Archidekt;
 
@@ -96,14 +97,41 @@ internal static class ArchidektSyncNotices
     }
 
     /// <summary>
-    /// Explains which entries a push cannot place, and what to change.
+    /// Explains which entries a push cannot place and gives both fixes without choosing one: a patch-entries change
+    /// that sets the zone to what the categories give, and one that sets the categories to match the zone (match
+    /// creates a missing zone category itself). Entries with the same zones share one change, up to the most entries
+    /// one patch may name.
     /// </summary>
     internal static string DescribeZoneContradictions(IReadOnlyList<ArchidektZoneContradiction> contradictions)
     {
+        List<string> groups = [];
+        foreach (IGrouping<(string Zone, string ExpectedZone), ArchidektZoneContradiction> group in
+            contradictions.GroupBy(value => (value.Zone, value.ExpectedZone)))
+        {
+            foreach (ArchidektZoneContradiction[] chunk in group.Chunk(PatchDeckEntriesRules.MaxEntries))
+            {
+                string ids = string.Join(",", chunk.Select(value => $"\"{value.EntryId}\""));
+                string names = ListFirst(chunk, value => $"'{value.CardName}'", ", ");
+                groups.Add(
+                    $"{names} (zone '{group.Key.Zone}', categories give '{group.Key.ExpectedZone}'): either " +
+                    $"{PatchChange(ids, group.Key.ExpectedZone, DeckZoneCategories.Leave)} to follow the categories, or " +
+                    $"{PatchChange(ids, group.Key.Zone, DeckZoneCategories.Match)} to make the categories match the zone");
+            }
+        }
+
         return "Archidekt keeps no zone of its own: a card's zone comes from its categories (a category named " +
             "Commander, Sideboard or Maybeboard, or the commander category; otherwise main, or maybeboard when its " +
             "primary category is not included in the deck). These cards would come back in another zone: " +
-            $"{DescribeContradictionList(contradictions)}. Change the zone, or add or remove the matching category.";
+            $"{string.Join("; ", groups)}. Apply one fix with local_deck_apply_changes.";
+    }
+
+    /// <summary>
+    /// Writes one patch-entries change as JSON for a notice.
+    /// </summary>
+    private static string PatchChange(string entryIds, string zone, string zoneCategories)
+    {
+        return $"{{\"kind\":\"patch-entries\",\"entryIds\":[{entryIds}],\"zone\":\"{zone}\"," +
+            $"\"zoneCategories\":\"{zoneCategories}\"}}";
     }
 
     /// <summary>

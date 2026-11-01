@@ -600,7 +600,10 @@ internal sealed class ArchidektSynchronizationContext
             remote.Data);
         ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(remote.Data, target);
         IReadOnlyList<ArchidektZoneContradiction> contradictions =
-            ArchidektSyncPlanner.FindZoneContradictions(plan, target);
+            ArchidektSyncPlanner.FindZoneContradictions(
+                plan,
+                target,
+                ArchidektLocalMapper.EntryIdsByRow(local.Data.Entries, target.Entries));
         if (contradictions.Count > 0)
         {
             return new OperationInvalidInput(
