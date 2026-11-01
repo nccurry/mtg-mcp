@@ -23,21 +23,19 @@ public sealed class ChangeListArgumentErrorTests : IClassFixture<ToolCatalogFixt
     }
 
     /// <summary>
-    /// Verifies a fractional sort order names the full path of the field in the fourth change. The message names the
-    /// CLR type (System.Int32), not the JSON type ("an integer"); REQ-012 asks for the latter, so this documents the
-    /// current wording.
+    /// Verifies a fractional sort order names the full path of the field in the fourth change and the plain expected type.
     /// </summary>
     [Theory]
     [InlineData("update-entry", "entry", "changes[3].entry.sortOrder")]
     [InlineData("add-entry", "entryDraft", "changes[3].entryDraft.sortOrder")]
-    public void SortOrder_Fractional_NamesTheFullPathButTheClrType(string kind, string property, string path)
+    public void SortOrder_Fractional_NamesTheFullPathAndPlainType(string kind, string property, string path)
     {
         OperationInvalidInput failure = Diagnose(ChangeAt3(Change(kind, property, "1.5")));
 
         Assert.Equal("invalid-arguments", failure.ReasonCode);
         Assert.Equal(path, failure.Path);
         Assert.Equal(
-            "The value at '" + path + "' could not be read: The JSON value could not be converted to System.Int32.",
+            "The value at '" + path + "' must be an integer.",
             failure.Message);
     }
 
@@ -55,22 +53,75 @@ public sealed class ChangeListArgumentErrorTests : IClassFixture<ToolCatalogFixt
     }
 
     /// <summary>
-    /// Verifies an entry identifier that is not a UUID names the full path of the field in the fourth change. The
-    /// message names the CLR type (System.Guid), not "a UUID"; this documents the current wording.
+    /// Verifies an entry identifier that is not a UUID names the full path of the field in the fourth change and "a UUID".
     /// </summary>
     [Theory]
     [InlineData("{ \"kind\": \"remove-entry\", \"entryId\": \"not-a-guid\" }", "changes[3].entryId")]
     [InlineData("{ \"kind\": \"assign-category\", \"entryId\": \"not-a-guid\", \"categoryId\": \"0193e97a-ef95-7700-8000-000000000002\", \"isPrimary\": true }", "changes[3].entryId")]
     [InlineData("{ \"kind\": \"update-entry\", \"entry\": { \"entryId\": \"not-a-guid\", \"quantity\": 1, \"cardName\": \"Sol Ring\", \"zone\": \"mainboard\" } }", "changes[3].entry.entryId")]
-    public void EntryId_MalformedGuid_NamesTheFullPathButTheClrType(string change, string path)
+    public void EntryId_MalformedGuid_NamesTheFullPathAndPlainType(string change, string path)
     {
         OperationInvalidInput failure = Diagnose(ChangeAt3(change));
 
         Assert.Equal("invalid-arguments", failure.ReasonCode);
         Assert.Equal(path, failure.Path);
         Assert.Equal(
-            "The value at '" + path + "' could not be read: The JSON value could not be converted to System.Guid.",
+            "The value at '" + path + "' must be a UUID.",
             failure.Message);
+    }
+
+    /// <summary>
+    /// Verifies a boolean field given text names its full path and "true or false".
+    /// </summary>
+    [Fact]
+    public void IsPrimary_Text_NamesTheFullPathAndBoolean()
+    {
+        OperationInvalidInput failure = Diagnose(ChangeAt3(
+            "{ \"kind\": \"assign-category\", \"entryId\": \"0193e97a-ef95-7700-8000-000000000003\", \"categoryId\": \"0193e97a-ef95-7700-8000-000000000002\", \"isPrimary\": \"yes\" }"));
+
+        Assert.Equal("changes[3].isPrimary", failure.Path);
+        Assert.Equal("The value at 'changes[3].isPrimary' must be true or false.", failure.Message);
+    }
+
+    /// <summary>
+    /// Verifies a text field given a number names its full path and "text".
+    /// </summary>
+    [Fact]
+    public void CardName_Number_NamesTheFullPathAndText()
+    {
+        OperationInvalidInput failure = Diagnose(ChangeAt3(
+            "{ \"kind\": \"add-entry\", \"entryDraft\": { \"quantity\": 1, \"cardName\": 5 } }"));
+
+        Assert.Equal("changes[3].entryDraft.cardName", failure.Path);
+        Assert.Equal("The value at 'changes[3].entryDraft.cardName' must be text.", failure.Message);
+    }
+
+    /// <summary>
+    /// Verifies a list argument given a scalar names its path and "a list".
+    /// </summary>
+    [Fact]
+    public void Changes_Scalar_NamesTheListPath()
+    {
+        Dictionary<string, JsonElement> arguments = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
+            "{ \"deckId\": \"0193e97a-ef95-7700-8000-000000000001\", \"expectedRevision\": 1, \"changes\": 7 }")!;
+
+        OperationInvalidInput failure = Assert.IsType<OperationInvalidInput>(
+            ToolCallPolicy.DiagnoseArguments(catalog, "local_deck_apply_changes", arguments));
+
+        Assert.Equal("changes", failure.Path);
+        Assert.Equal("The value at 'changes' must be a list.", failure.Message);
+    }
+
+    /// <summary>
+    /// Verifies a list item given a scalar instead of an object names the item path and "an object".
+    /// </summary>
+    [Fact]
+    public void ChangeItem_Scalar_NamesTheItemPath()
+    {
+        OperationInvalidInput failure = Diagnose(ChangeAt3("7"));
+
+        Assert.Equal("changes[3]", failure.Path);
+        Assert.Equal("The value at 'changes[3]' must be an object.", failure.Message);
     }
 
     /// <summary>
