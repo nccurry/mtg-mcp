@@ -27,6 +27,11 @@ is complete.
 was completed and released as 0.12.0 on 2026-10-29.
 
 
+[recorded-provider-fixtures](recorded-provider-fixtures/README.md) is planned
+and awaiting owner approval: tests read real Archidekt and Scryfall responses
+recorded with provenance, replay recorded decks offline, and check the
+Archidekt fake against the recordings.
+
 ## Retired Reference Packets
 
 The nine legacy reference packets that used to wait here (Jasmine analysis
