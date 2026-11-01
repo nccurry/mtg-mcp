@@ -199,7 +199,7 @@ internal sealed class CardListTools
         "Scryfall: filters, groups, counts, sums, and sorts one card list using installed card data, in one call. " +
         "Use it for the mana curve, type mix, counts by oracle tag, color pips and sources, deck price, and the most " +
         "expensive cards. where holds filters that must all match (ops eq, ne, lt, lte, gt, gte, in, contains); " +
-        "groupBy takes up to two fields, and a card with several values (colors, tags) counts once in each group. " +
+        "groupBy takes up to two fields, such as subtypes (Aura, Equipment) or tags, and a card with several values (colors, subtypes, tags) counts once in each group. " +
         "metrics: quantity (copies), cards (distinct cards), sum:/avg:/min:/max: plus a number field, pips (colored " +
         "mana symbols by color; a hybrid symbol counts once for each of its colors and also under hybrid; a " +
         "Phyrexian symbol counts for its color and also under phyrexian), and sources (cards whose produced mana " +

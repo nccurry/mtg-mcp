@@ -107,6 +107,8 @@ internal sealed class StatisticsReadTools
     [McpServerTool(Name = "stats_mana_availability", Title = "Exact Mana Availability", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true)]
     [Description(
         "Exact math: calculates exact payment availability from caller-declared source groups and capabilities. " +
+        "It answers land-count and on-curve questions, such as the chance of paying a cost by its turn with a " +
+        "given number of sources. " +
         "Fields of `request`: population, drawCount, sources (group, capabilities), requirement, " +
         "maximumUsableSources." +
         StatisticsToolExamples.Marker + StatisticsToolExamples.ManaAvailability)]
