@@ -74,6 +74,7 @@ internal sealed class StatisticsCastabilityTools
         "fixed), play or draw, and requireLandDrops. With requireLandDrops true, only draws that have seen at least " +
         "as many cards from your declared source groups as the turn number count (Frank Karsten's method), so the " +
         "probability is conditional on that; false counts every draw and equals stats_mana_availability. " +
+        "It answers land-count and on-curve questions for a whole deck. " +
         "Rows are sorted by probability, lowest first, then name. It states no target and no pass; what counts as a " +
         "source and what probability is good enough are your judgments. Cards with no cost (no-mana-cost), X (x-cost), hybrid or " +
         "Phyrexian symbols, other symbols, or two costs (split-card-has-two-costs), a mana value past turn 99, and " +

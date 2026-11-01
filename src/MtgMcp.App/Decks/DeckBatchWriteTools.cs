@@ -95,9 +95,9 @@ internal sealed class DeckBatchWriteTools
         "match, which also sets the zone's category, or leave), remove-entry (entryId, or entryIds for 1 to 100), " +
         "add-category, update-category, remove-category, assign-category, unassign-category, " +
         "upsert-provider-binding, or remove-provider-binding. A new entry or category may carry its own ID, " +
-        "so later changes in the same batch can refer to it. An added entry that has only a card name (or a set code " +
-        "and collector number) gets its card identity from installed card data; a name that is not found is " +
-        "still added and listed in issues. An add of a card already in the deck still makes another entry and is " +
+        "so later changes in the same batch can refer to it. add-entry needs only a card name: installed card " +
+        "data fills in the IDs, and a name that is not found is still added and listed in issues. Give printingId, " +
+        "or setCode and collectorNumber, to choose a printing instead of Archidekt's first-listed one. An add of a card already in the deck still makes another entry and is " +
         "listed as already-in-deck; a retried add should pass an entryId or set whenCardPresent to skip, which " +
         "leaves out an add whose card is already in the same zone. The result is a summary (new revision, counts, " +
         "IDs of changed entries and categories, issues); pass returnDeck true to also get the whole deck." +

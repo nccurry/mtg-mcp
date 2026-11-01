@@ -81,7 +81,7 @@ internal sealed class ArchidektReadTools
         UntrustedTextNotes.Archidekt)]
     internal Task<OperationResult<RemoteDeckPage>> ListDecksAsync(
         [Description("Opaque continuation returned by a prior archidekt_deck_list call.")] string? cursor = null,
-        [Description("Remote deck summaries to return, from 1 through 100.")] int pageSize = 50,
+        [Description("Remote deck summaries to return, from 1 through 100; default 50.")] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
         return coordinator.Service.ListDecksAsync(cursor, pageSize, cancellationToken);
