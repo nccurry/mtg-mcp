@@ -837,6 +837,197 @@ public sealed class DeckCardViewTests
     }
 
     /// <summary>
+    /// Verifies zones returns only entries in the named zones, ignores case, lists the zones with no entry, and keeps
+    /// the deck-wide totals.
+    /// </summary>
+    [Fact]
+    public async Task Get_Zones_ReturnsMatchingEntriesAndTheZonesNotFound()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateMixedDeckAsync();
+
+        DeckDocumentView view = Success(await setup.Get(
+            deck.DeckId, zones: [" Sideboard ", "MAYBEBOARD", "commander"]));
+
+        Assert.Equal(["Island", "Mana Crypt"], view.Entries.Select(entry => entry.CardName).Order());
+        Assert.Equal(["commander"], view.ZonesNotFound);
+        Assert.Null(view.CardNamesNotFound);
+        Assert.Null(view.CategoryNamesNotFound);
+        Assert.Equal(4, view.EntryCount);
+        Assert.Equal(5, view.CardCount);
+        Assert.Equal(2, view.TotalEntries);
+    }
+
+    /// <summary>
+    /// Verifies an unknown zone and an empty zone list are refused with the allowed zone codes.
+    /// </summary>
+    [Fact]
+    public async Task Get_UnknownZone_IsRefusedNamingTheAllowedCodes()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckAsync(1);
+
+        OperationInvalidInput unknown = Assert.IsType<OperationInvalidInput>(
+            (await setup.Get(deck.DeckId, zones: ["main", "graveyard"])).Value);
+        OperationInvalidInput empty = Assert.IsType<OperationInvalidInput>(
+            (await setup.Get(deck.DeckId, zones: [])).Value);
+
+        Assert.Equal("invalid-zones", unknown.ReasonCode);
+        Assert.Equal("zones[1]", unknown.Path);
+        Assert.Contains("commander, main, sideboard, maybeboard", unknown.Message, StringComparison.Ordinal);
+        Assert.Equal("invalid-zones", empty.ReasonCode);
+    }
+
+    /// <summary>
+    /// Verifies categoryNames matches primary and non-primary assignments, trims and ignores case, and lists a name no
+    /// entry is assigned to.
+    /// </summary>
+    [Fact]
+    public async Task Get_CategoryNames_MatchesPrimaryAndNonPrimaryAssignments()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateMixedDeckAsync();
+
+        DeckDocumentView primary = Success(await setup.Get(deck.DeckId, categoryNames: ["  ramp "]));
+        DeckDocumentView secondary = Success(await setup.Get(deck.DeckId, categoryNames: ["Artifacts", "Nothing"]));
+
+        Assert.Equal(["Sol Ring", "Arcane Signet"], primary.Entries.Select(entry => entry.CardName));
+        Assert.Empty(primary.CategoryNamesNotFound!);
+        Assert.Equal(["Sol Ring"], secondary.Entries.Select(entry => entry.CardName));
+        Assert.Equal(["Nothing"], secondary.CategoryNamesNotFound);
+        Assert.Equal(4, secondary.EntryCount);
+        Assert.Equal(1, secondary.TotalEntries);
+    }
+
+    /// <summary>
+    /// Verifies a filter that matches nothing is a normal empty result, and values inside one filter combine with
+    /// OR while filters combine with AND, including with cardNames.
+    /// </summary>
+    [Fact]
+    public async Task Get_CombinedFilters_UseOrWithinAndAcrossFilters()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateMixedDeckAsync();
+
+        DeckDocumentView both = Success(await setup.Get(
+            deck.DeckId, zones: ["main", "sideboard"], categoryNames: ["Ramp", "Lands"]));
+        DeckDocumentView withNames = Success(await setup.Get(
+            deck.DeckId, cardNames: ["Sol Ring", "Island"], zones: ["main"], categoryNames: ["Ramp", "Lands"]));
+        DeckDocumentView none = Success(await setup.Get(deck.DeckId, zones: ["commander"], categoryNames: ["Ramp"]));
+
+        Assert.Equal(["Sol Ring", "Arcane Signet", "Island"], both.Entries.Select(entry => entry.CardName));
+        Assert.Equal(["Sol Ring"], withNames.Entries.Select(entry => entry.CardName));
+        Assert.Empty(none.Entries);
+        Assert.Equal(["commander"], none.ZonesNotFound);
+        Assert.Empty(none.CategoryNamesNotFound!);
+        Assert.Equal(0, none.TotalEntries);
+        Assert.Null(none.NextCursor);
+    }
+
+    /// <summary>
+    /// Verifies include reads card data only for the filtered entries, and a cursor refuses a changed zone or
+    /// category filter.
+    /// </summary>
+    [Fact]
+    public async Task Get_FilterWithInclude_ReadsOnlyMatchesAndTheCursorRefusesAChangedFilter()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: true);
+        DeckDocument deck = await setup.CreateMixedDeckWithCardDataAsync();
+        string[] zones = ["main"];
+        string[] categories = ["ramp"];
+
+        DeckDocumentView first = Success(await setup.Get(
+            deck.DeckId, ["cards"], null, null, 2, zones: zones, categoryNames: categories));
+        DeckDocumentView second = Success(await setup.Get(
+            deck.DeckId, ["cards"], null, first.NextCursor, 2, zones: zones, categoryNames: categories));
+        OperationResult<DeckDocumentView> otherZones = await setup.Get(
+            deck.DeckId, ["cards"], null, first.NextCursor, 2, zones: ["sideboard"], categoryNames: categories);
+        OperationResult<DeckDocumentView> otherCategories = await setup.Get(
+            deck.DeckId, ["cards"], null, first.NextCursor, 2, zones: zones, categoryNames: ["Draw"]);
+        OperationResult<DeckDocumentView> noFilters = await setup.Get(
+            deck.DeckId, ["cards"], null, first.NextCursor, 2);
+        DeckDocumentView sideboard = Success(await setup.Get(deck.DeckId, ["cards"], zones: ["sideboard"]));
+
+        Assert.Equal(3, first.TotalEntries);
+        Assert.Equal(["Entry 000", "Entry 001"], first.Entries.Select(entry => entry.CardName));
+        Assert.Equal(["Entry 002"], second.Entries.Select(entry => entry.CardName));
+        Assert.Null(second.NextCursor);
+        Assert.All(first.Entries, entry => Assert.Equal("found", entry.CardData));
+        Assert.Empty(sideboard.Entries);
+        Assert.Equal(["sideboard"], sideboard.ZonesNotFound);
+        Assert.All(
+            (OperationResult<DeckDocumentView>[])[otherZones, otherCategories, noFilters],
+            result => Assert.Equal("invalid-cursor", Assert.IsType<OperationInvalidInput>(result.Value).ReasonCode));
+    }
+
+    /// <summary>
+    /// Verifies a concise read of a deck with 347 entries and a Maybeboard category returns its 13 entries in one
+    /// page.
+    /// </summary>
+    [Fact]
+    public async Task Get_ConciseCategoryFilterOnALargeDeck_ReturnsTheMaybeboardInOnePage()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
+        Guid maybeboard = Guid.CreateVersion7();
+        List<DeckEntryDraft> entries = [];
+        List<DeckCategoryAssignment> assignments = [];
+        for (int index = 0; index < 347; index++)
+        {
+            Guid entryId = Guid.CreateVersion7();
+            bool maybe = index % 27 == 0;
+            entries.Add(new DeckEntryDraft(
+                1,
+                $"Card With A Long Descriptive Name {index:D3}",
+                Zone: maybe ? "maybeboard" : "main",
+                SortOrder: index,
+                EntryId: entryId));
+            if (maybe)
+            {
+                assignments.Add(new DeckCategoryAssignment(entryId, maybeboard, true));
+            }
+        }
+
+        DeckDocument deck = Success(await setup.Store.CreateAsync(
+            new DeckCreateRequest(
+                "Large",
+                Format: "custom",
+                Entries: entries,
+                Categories: [new DeckCategoryDraft("Maybeboard", CategoryId: maybeboard)],
+                CategoryAssignments: assignments),
+            TestContext.Current.CancellationToken));
+
+        DeckDocumentView view = Success(await setup.Get(
+            deck.DeckId, categoryNames: ["Maybeboard"], responseFormat: "concise"));
+
+        Assert.Equal(13, assignments.Count);
+        Assert.Equal(13, view.Entries.Count);
+        Assert.Equal(13, view.TotalEntries);
+        Assert.Equal(347, view.EntryCount);
+        Assert.Null(view.NextCursor);
+        Assert.Null(view.Truncated);
+        Assert.All(view.Entries, entry => Assert.Equal(["Maybeboard"], entry.CategoryNames));
+    }
+
+    /// <summary>
+    /// Verifies blank and empty category name lists are refused.
+    /// </summary>
+    [Fact]
+    public async Task Get_InvalidCategoryNames_AreRefused()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckAsync(1);
+
+        OperationInvalidInput blank = Assert.IsType<OperationInvalidInput>(
+            (await setup.Get(deck.DeckId, categoryNames: ["Ramp", " "])).Value);
+        OperationInvalidInput empty = Assert.IsType<OperationInvalidInput>(
+            (await setup.Get(deck.DeckId, categoryNames: [])).Value);
+
+        Assert.Equal("invalid-category-names", blank.ReasonCode);
+        Assert.Equal("categoryNames[1]", blank.Path);
+        Assert.Equal("invalid-category-names", empty.ReasonCode);
+    }
+
+    /// <summary>
     /// Owns a deck store, a Scryfall service, and the read and write tools over them.
     /// </summary>
     private sealed class TestSetup : IDisposable
@@ -907,7 +1098,9 @@ public sealed class DeckCardViewTests
             string? cursor = null,
             int? pageSize = null,
             string[]? cardNames = null,
-            string responseFormat = "full")
+            string responseFormat = "full",
+            string[]? zones = null,
+            string[]? categoryNames = null)
         {
             return reads.GetAsync(
                 deckId,
@@ -916,8 +1109,86 @@ public sealed class DeckCardViewTests
                 cursor,
                 pageSize,
                 cardNames,
+                zones,
+                categoryNames,
                 responseFormat,
                 TestContext.Current.CancellationToken);
+        }
+
+        /// <summary>
+        /// Creates a small deck with entries in several zones and categories: Sol Ring and Arcane Signet in main with
+        /// primary Ramp (Sol Ring also has Artifacts), two Islands in the sideboard under Lands, and Mana Crypt in
+        /// the maybeboard with no category.
+        /// </summary>
+        internal async Task<DeckDocument> CreateMixedDeckAsync()
+        {
+            Guid solRing = Guid.CreateVersion7();
+            Guid signet = Guid.CreateVersion7();
+            Guid island = Guid.CreateVersion7();
+            Guid ramp = Guid.CreateVersion7();
+            Guid artifacts = Guid.CreateVersion7();
+            Guid lands = Guid.CreateVersion7();
+            DeckCreateRequest request = new(
+                "Mixed",
+                Format: "custom",
+                Entries:
+                [
+                    new DeckEntryDraft(1, "Sol Ring", SortOrder: 0, EntryId: solRing),
+                    new DeckEntryDraft(1, "Arcane Signet", SortOrder: 1, EntryId: signet),
+                    new DeckEntryDraft(2, "Island", Zone: "sideboard", SortOrder: 2, EntryId: island),
+                    new DeckEntryDraft(1, "Mana Crypt", Zone: "maybeboard", SortOrder: 3),
+                ],
+                Categories:
+                [
+                    new DeckCategoryDraft("Ramp", CategoryId: ramp),
+                    new DeckCategoryDraft("Artifacts", CategoryId: artifacts),
+                    new DeckCategoryDraft("Lands", CategoryId: lands),
+                ],
+                CategoryAssignments:
+                [
+                    new DeckCategoryAssignment(solRing, ramp, true),
+                    new DeckCategoryAssignment(solRing, artifacts, false),
+                    new DeckCategoryAssignment(signet, ramp, true),
+                    new DeckCategoryAssignment(island, lands, true),
+                ]);
+            return Success(await Store.CreateAsync(request, TestContext.Current.CancellationToken));
+        }
+
+        /// <summary>
+        /// Creates a deck of three main-zone Ramp entries and two maybeboard Draw entries, all pointing at the installed
+        /// fixture card.
+        /// </summary>
+        internal async Task<DeckDocument> CreateMixedDeckWithCardDataAsync()
+        {
+            Guid ramp = Guid.CreateVersion7();
+            Guid draw = Guid.CreateVersion7();
+            List<DeckEntryDraft> entries = [];
+            List<DeckCategoryAssignment> assignments = [];
+            for (int index = 0; index < 5; index++)
+            {
+                Guid entryId = Guid.CreateVersion7();
+                entries.Add(new DeckEntryDraft(
+                    1,
+                    $"Entry {index:D3}",
+                    Zone: index < 3 ? "main" : "maybeboard",
+                    OracleId: DeckCategorizationSourceFixture.OracleId,
+                    PrintingId: DeckCategorizationSourceFixture.CardId,
+                    SortOrder: index,
+                    EntryId: entryId));
+                assignments.Add(new DeckCategoryAssignment(entryId, index < 3 ? ramp : draw, true));
+            }
+
+            DeckCreateRequest request = new(
+                "Card view deck",
+                Format: "custom",
+                Entries: entries,
+                Categories:
+                [
+                    new DeckCategoryDraft("Ramp", CategoryId: ramp),
+                    new DeckCategoryDraft("Draw", CategoryId: draw),
+                ],
+                CategoryAssignments: assignments);
+            return Success(await Store.CreateAsync(request, TestContext.Current.CancellationToken));
         }
 
         /// <summary>

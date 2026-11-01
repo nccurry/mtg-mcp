@@ -302,7 +302,8 @@ internal sealed class CardListCoordinator
                 entry.Card.CheapestPriceUsd,
                 entry.Quantity,
                 entry.Zone,
-                entry.Categories)),
+                entry.Categories,
+                IsLocalDeck(list.Data.Sources) ? entry.EntryId : null)),
         ];
         OperationResult<ScryfallListQueryResult> run = ScryfallListQuery.Run(entries, request);
         if (run is not OperationSuccess<ScryfallListQueryResult> answer)
@@ -378,6 +379,14 @@ internal sealed class CardListCoordinator
                     : GroupNarrowHint
                 : null,
         };
+    }
+
+    /// <summary>
+    /// Reports whether the sources are local decks or deck backups, the only lists whose entry IDs are local entry IDs.
+    /// </summary>
+    private static bool IsLocalDeck(IReadOnlyList<CardListSourceInfo> sources)
+    {
+        return sources.All(source => source.Kind is "deck" or "deck-backup");
     }
 
     /// <summary>

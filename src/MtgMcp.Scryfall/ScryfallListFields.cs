@@ -12,13 +12,15 @@ namespace MtgMcp.Scryfall;
 /// <param name="Quantity">The number of copies; 1 for a list that has no quantities.</param>
 /// <param name="Zone">The deck zone of the entry, or null when the list has no zones.</param>
 /// <param name="Categories">The category names of the entry, or null when the list has no categories.</param>
+/// <param name="EntryId">The stored entry ID, or null when the list has no entry IDs.</param>
 public sealed record ScryfallListEntry(
     ScryfallCard Card,
     IReadOnlyList<string> Tags,
     string? CheapestPriceUsd,
     int Quantity = 1,
     string? Zone = null,
-    IReadOnlyList<string>? Categories = null);
+    IReadOnlyList<string>? Categories = null,
+    string? EntryId = null);
 
 /// <summary>
 /// Names the kinds of value a list field holds, which decide the operators it accepts.
@@ -99,6 +101,7 @@ internal static class ScryfallListFields
         TextField("zone", entry => entry.Zone, deckOnly: true),
         ListField("category", entry => entry.Categories, deckOnly: true),
         NumberField("quantity", entry => (decimal)entry.Quantity, deckOnly: true),
+        TextField("entryId", entry => entry.EntryId, deckOnly: true),
         new ScryfallListField(
             "oracleText",
             ScryfallListFieldKind.Text,

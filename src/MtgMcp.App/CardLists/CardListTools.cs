@@ -211,7 +211,7 @@ internal sealed class CardListTools
         "toughness, loyalty, priceUsd and other price columns, cheapestPriceUsd, edhrecRank (" +
         ScryfallReadTools.EdhrecRankMeaning + "), gameChanger, " +
         "producedMana, oracleText (contains only), legalIn, bannedIn, games, reserved, layout, and for deck sources " +
-        "zone, category, and quantity. " + SourceNote + UntrustedTextNotes.CardListEntries +
+        "zone, category, quantity, and entryId (the local deck entry ID, for deck and deck-backup sources). " + SourceNote + UntrustedTextNotes.CardListEntries +
         DeckToolExamples.ExamplePrefix + "curve): " + CardListToolExamples.QueryMinimal +
         DeckToolExamples.ExamplePrefix + "pips): " + CardListToolExamples.QueryPips +
         DeckToolExamples.ExamplePrefix + "full): " + CardListToolExamples.QueryFull)]
