@@ -37,6 +37,12 @@ jobs:
       - name: Verify release artifacts
         run: task release:verify VERSION="${VERSION}"
 
+      - name: Get a short-lived NuGet API key
+        id: nuget-login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: spixy
+
       - name: Publish NuGet package
         shell: bash
         run: |
@@ -44,13 +50,13 @@ jobs:
             mise exec -- dotnet nuget push "${package}" --api-key "${NUGET_API_KEY}" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
           done
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
 
       - name: Wait for NuGet package availability
         shell: bash
         run: |
           package_url="https://api.nuget.org/v3-flatcontainer/nccurry.mtgmcp/${VERSION}/nccurry.mtgmcp.${VERSION}.nupkg"
-          for attempt in {1..20}; do
+          for attempt in {1..60}; do
             if curl --fail --silent --head "${package_url}" > /dev/null; then
               exit 0
             fi
