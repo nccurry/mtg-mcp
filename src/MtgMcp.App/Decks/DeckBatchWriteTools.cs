@@ -97,7 +97,8 @@ internal sealed class DeckBatchWriteTools
         "upsert-provider-binding, or remove-provider-binding. A new entry or category may carry its own ID, " +
         "so later changes in the same batch can refer to it. add-entry needs only a card name: installed card " +
         "data fills in the IDs, and a name that is not found is still added and listed in issues. Give printingId, " +
-        "or setCode and collectorNumber, to choose a printing instead of Archidekt's first-listed one. An add of a card already in the deck still makes another entry and is " +
+        "or setCode and collectorNumber, to choose a printing instead of Archidekt's first-listed one. An add of a " +
+        "card already in the deck still makes another entry and is " +
         "listed as already-in-deck; a retried add should pass an entryId or set whenCardPresent to skip, which " +
         "leaves out an add whose card is already in the same zone. The result is a summary (new revision, counts, " +
         "IDs of changed entries and categories, issues); pass returnDeck true to also get the whole deck." +
@@ -133,9 +134,13 @@ internal sealed class DeckBatchWriteTools
                 "whenCardPresent must be \"add\" or \"skip\".");
         }
 
-        if (!DeckChangeInputMapper.TryMap(changes, out IReadOnlyList<DeckChange> mapped, out string failure))
+        if (!DeckChangeInputMapper.TryMap(
+            changes,
+            out IReadOnlyList<DeckChange> mapped,
+            out IReadOnlyList<int> callerIndexes,
+            out string failure))
         {
-            return new OperationInvalidInput("invalid-deck-change", failure);
+            return new OperationInvalidInput(DeckReasonCodes.InvalidDeckChange, failure);
         }
 
         OperationResult<DeckDocument> read = await store.GetAsync(deckId, cancellationToken).ConfigureAwait(false);
@@ -150,15 +155,24 @@ internal sealed class DeckBatchWriteTools
         IReadOnlyList<DeckWriteIssue> issues = [];
         if (before.Data.Revision == expectedRevision)
         {
-            DeckChangeResolution resolution = await resolver.ResolveChangesAsync(mapped, before.Data, cancellationToken)
-                .ConfigureAwait(false);
+            DeckChangeResolution resolution = await resolver
+                .ResolveChangesAsync(mapped, before.Data, cancellationToken).ConfigureAwait(false);
+            if (resolution.Refusal is not null)
+            {
+                return new OperationInvalidInput(
+                    DeckReasonCodes.InvalidDeckChange,
+                    $"Change {callerIndexes[resolution.Refusal.Position] + 1} is a patch-entries whose printing " +
+                    $"cannot be applied: {resolution.Refusal.Message} Nothing was written.");
+            }
+
             DeckAddPresenceResult presence = DeckAddPresence.Check(
                 before.Data,
                 resolution.Changes,
+                callerIndexes,
                 whenCardPresent == DeckAddPresence.Skip);
             if (presence.Refusal is not null)
             {
-                return new OperationInvalidInput("invalid-deck-change", presence.Refusal);
+                return new OperationInvalidInput(DeckReasonCodes.InvalidDeckChange, presence.Refusal);
             }
 
             issues = [.. resolution.Issues, .. presence.Issues];

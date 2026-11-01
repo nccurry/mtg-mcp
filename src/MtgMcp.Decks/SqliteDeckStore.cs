@@ -581,6 +581,7 @@ public sealed class SqliteDeckStore : IDisposable
     /// <summary>
     /// Refuses a batch that makes two different categories primary for one entry at the same time. A single primary
     /// assignment demotes the entry's earlier primary category, so only a conflict inside one request is an error.
+    /// The primary category of an added entry and of a patch counts as an assignment made by the request.
     /// The entry forgets its remembered primary when the batch unassigns that category, assigns it as non-primary,
     /// removes the category, or removes the entry.
     /// </summary>
@@ -592,7 +593,7 @@ public sealed class SqliteDeckStore : IDisposable
                 if (primaryAssigned.TryGetValue(assignment.EntryId, out Guid current) &&
                     current != assignment.CategoryId)
                 {
-                    throw new DeckInputException("An entry may have only one primary category.");
+                    throw DeckInputException.Refusal("An entry may have only one primary category.");
                 }
 
                 primaryAssigned[assignment.EntryId] = assignment.CategoryId;
@@ -614,10 +615,20 @@ public sealed class SqliteDeckStore : IDisposable
             case RemoveDeckEntryChange removal:
                 primaryAssigned.Remove(removal.EntryId);
                 break;
+            case AddDeckEntryChange { Entry: { EntryId: Guid addedId, PrimaryCategoryId: Guid addedPrimary } }:
+                primaryAssigned[addedId] = addedPrimary;
+                break;
             case PatchDeckEntriesChange patch:
                 foreach (Guid entryId in patch.EntryIds)
                 {
-                    primaryAssigned.Remove(entryId);
+                    if (patch.PrimaryCategoryId is Guid patchPrimary)
+                    {
+                        primaryAssigned[entryId] = patchPrimary;
+                    }
+                    else
+                    {
+                        primaryAssigned.Remove(entryId);
+                    }
                 }
 
                 break;
@@ -771,7 +782,15 @@ public sealed class SqliteDeckStore : IDisposable
         {
             if (added.HasCategories)
             {
-                assignments.AddRange(DeckDraftCategories.Plan(added, categories, createId));
+                (IReadOnlyList<DeckCategoryAssignment> planned, DeckCategory? created) = DeckDraftCategories.Plan(
+                    added,
+                    categories,
+                    createId);
+                assignments.AddRange(planned);
+                if (created is not null)
+                {
+                    categories.Add(created);
+                }
             }
         }
 
@@ -993,7 +1012,7 @@ public sealed class SqliteDeckStore : IDisposable
     /// </summary>
     private static OperationResult<T> Invalid<T>(string message)
     {
-        return new OperationInvalidInput("invalid-deck-input", message);
+        return new OperationInvalidInput(DeckReasonCodes.InvalidDeckInput, message);
     }
 
     /// <summary>

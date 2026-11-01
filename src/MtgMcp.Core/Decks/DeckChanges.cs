@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace MtgMcp.Core.Decks;
 
 /// <summary>
@@ -22,9 +24,9 @@ public sealed record UpdateDeckEntryChange(DeckEntry Entry);
 /// Names the printing a patch gives each entry: a printing ID, or a set code with a collector number.
 /// </summary>
 public sealed record DeckPrintingPatch(
-    Guid? PrintingId = null,
-    string? SetCode = null,
-    string? CollectorNumber = null);
+    [property: Description("The Scryfall printing ID; give it alone.")] Guid? PrintingId = null,
+    [property: Description("The set code; give it with collectorNumber.")] string? SetCode = null,
+    [property: Description("The collector number; give it with setCode.")] string? CollectorNumber = null);
 
 /// <summary>
 /// Holds the printing a patch gives one entry after the card data lookup, so the printing matches that entry's card.

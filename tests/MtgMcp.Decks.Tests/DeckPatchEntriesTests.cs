@@ -136,21 +136,23 @@ public sealed class DeckPatchEntriesTests
     /// valid change of the same batch.
     /// </summary>
     [Theory]
-    [InlineData("none")]
-    [InlineData("same-category")]
-    [InlineData("duplicate-entry")]
-    [InlineData("unknown-entry")]
-    [InlineData("unknown-category")]
-    [InlineData("zone-without-mode")]
-    [InlineData("mode-without-zone")]
-    [InlineData("match-with-primary")]
-    [InlineData("match-unknown-zone")]
-    [InlineData("too-many")]
-    [InlineData("bad-printing")]
-    [InlineData("zero-quantity")]
-    public async Task Patch_Refused_ReturnsInvalidDeckChangeAndWritesNothing(string kind)
+    [InlineData("none", "must set at least one field")]
+    [InlineData("same-category", "is named more than once")]
+    [InlineData("duplicate-entry", "is listed more than once")]
+    [InlineData("unknown-entry", "was not found in this deck")]
+    [InlineData("unknown-category", "was not found in this deck")]
+    [InlineData("zone-without-mode", "must also set zoneCategories")]
+    [InlineData("mode-without-zone", "applies only when the change sets a zone")]
+    [InlineData("match-with-primary", "cannot be set with zoneCategories")]
+    [InlineData("match-unknown-zone", "has no category for zone 'tokens'")]
+    [InlineData("match-main-zone-primary", "names a zone category, but the entry is in zone main")]
+    [InlineData("too-many", "needs 1 to 100 entry IDs")]
+    [InlineData("bad-printing", "printingId alone")]
+    [InlineData("printing-without-lookup", "has no looked-up printing")]
+    [InlineData("zero-quantity", "quantity must be positive")]
+    public async Task Patch_Refused_ReturnsInvalidDeckChangeAndWritesNothing(string kind, string message)
     {
-        using Fixture fixture = await Fixture.CreateAsync(2);
+        using Fixture fixture = await Fixture.CreateAsync(2, maybeboardCategories: true);
         Guid entry = fixture.EntryIds[0];
         PatchDeckEntriesChange patch = kind switch
         {
@@ -170,6 +172,14 @@ public sealed class DeckPatchEntriesTests
                 ZoneCategories: "match",
                 PrimaryCategoryId: fixture.RampId),
             "match-unknown-zone" => new PatchDeckEntriesChange([entry], Zone: "tokens", ZoneCategories: "match"),
+            "match-main-zone-primary" => new PatchDeckEntriesChange(
+                [entry],
+                Zone: "main",
+                ZoneCategories: "match",
+                PrimaryCategoryId: fixture.CategoryId(DeckZoneCategories.Sideboard)),
+            "printing-without-lookup" => new PatchDeckEntriesChange(
+                [entry],
+                Printing: new DeckPrintingPatch(PrintingId: Guid.CreateVersion7())),
             "too-many" => new PatchDeckEntriesChange(
                 [.. Enumerable.Range(0, 101).Select(_ => Guid.CreateVersion7())],
                 Quantity: 2),
@@ -185,6 +195,8 @@ public sealed class DeckPatchEntriesTests
 
         OperationInvalidInput refused = Assert.IsType<OperationInvalidInput>(result.Value);
         Assert.Equal("invalid-deck-change", refused.ReasonCode);
+        Assert.Contains(message, refused.Message, StringComparison.Ordinal);
+        Assert.EndsWith(" Nothing was written.", refused.Message, StringComparison.Ordinal);
         DeckDocument stored = await fixture.ReadAsync();
         Assert.Equal(fixture.Deck.Revision, stored.Revision);
         Assert.Equal(fixture.Deck.Name, stored.Name);
@@ -330,50 +342,53 @@ public sealed class DeckPatchEntriesTests
     }
 
     /// <summary>
-    /// Verifies a printing group with no card data lookup is written as given to the printing fields.
+    /// Verifies a printing group the card data lookup did not resolve for every listed entry is refused, so a raw
+    /// printing is never written over an entry's identity.
     /// </summary>
     [Fact]
-    public async Task Patch_PrintingAsGiven_ReplacesThePrintingFields()
+    public async Task Patch_PrintingWithoutALookupForEveryEntry_IsRefusedAndWritesNothing()
     {
         using Fixture fixture = await Fixture.CreateAsync(2);
-        Guid printing = Guid.CreateVersion7();
 
-        DeckDocument byId = await fixture.ApplyAsync(new PatchDeckEntriesChange(
+        OperationResult<DeckDocument> result = await fixture.TryApplyAsync(new PatchDeckEntriesChange(
             fixture.EntryIds,
-            Printing: new DeckPrintingPatch(PrintingId: printing)));
-        Assert.All(byId.Entries, entry => Assert.Equal(printing, entry.PrintingId));
-        Assert.All(byId.Entries, entry => Assert.Null(entry.SetCode));
-        Assert.All(byId.Entries, entry => Assert.Null(entry.CollectorNumber));
+            Printing: new DeckPrintingPatch(PrintingId: Guid.CreateVersion7()),
+            Printings: [new DeckEntryPrinting(fixture.EntryIds[0], Guid.CreateVersion7(), "abc", "9", "en")]));
 
-        DeckDocument bySet = await fixture.ApplyAsync(new PatchDeckEntriesChange(
-            fixture.EntryIds,
-            Printing: new DeckPrintingPatch(SetCode: "LEA", CollectorNumber: "232")));
-        Assert.All(bySet.Entries, entry => Assert.Null(entry.PrintingId));
-        Assert.All(bySet.Entries, entry => Assert.Equal("lea", entry.SetCode));
-        Assert.All(bySet.Entries, entry => Assert.Equal("232", entry.CollectorNumber));
+        OperationInvalidInput refused = Assert.IsType<OperationInvalidInput>(result.Value);
+        Assert.Equal("invalid-deck-change", refused.ReasonCode);
+        Assert.Contains(
+            $"Entry {fixture.EntryIds[1]} has no looked-up printing",
+            refused.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(fixture.Deck.Entries, (await fixture.ReadAsync()).Entries);
     }
 
     /// <summary>
-    /// Verifies a looked-up printing replaces the given group for its entry, and language follows the printing unless
-    /// the patch sets it.
+    /// Verifies a looked-up printing is written for its entry, and language follows the printing unless the patch
+    /// sets it.
     /// </summary>
     [Fact]
     public async Task Patch_ResolvedPrinting_IsWrittenForItsEntry()
     {
         using Fixture fixture = await Fixture.CreateAsync(2);
-        Guid printing = Guid.CreateVersion7();
         Guid resolved = Guid.CreateVersion7();
+        Guid other = Guid.CreateVersion7();
 
         DeckDocument after = await fixture.ApplyAsync(new PatchDeckEntriesChange(
             fixture.EntryIds,
-            Printing: new DeckPrintingPatch(PrintingId: printing),
-            Printings: [new DeckEntryPrinting(fixture.EntryIds[0], resolved, "abc", "9", "de")]));
+            Printing: new DeckPrintingPatch(PrintingId: resolved),
+            Printings:
+            [
+                new DeckEntryPrinting(fixture.EntryIds[0], resolved, "abc", "9", "de"),
+                new DeckEntryPrinting(fixture.EntryIds[1], other, null, null, null),
+            ]));
 
         DeckEntry first = after.Entries.Single(entry => entry.EntryId == fixture.EntryIds[0]);
         DeckEntry second = after.Entries.Single(entry => entry.EntryId == fixture.EntryIds[1]);
         Assert.Equal(resolved, first.PrintingId);
         Assert.Equal(["abc", "9", "de"], [first.SetCode, first.CollectorNumber, first.Language]);
-        Assert.Equal(printing, second.PrintingId);
+        Assert.Equal(other, second.PrintingId);
         Assert.Null(second.SetCode);
         Assert.Equal("en", second.Language);
     }
@@ -498,7 +513,7 @@ public sealed class DeckPatchEntriesTests
 
         Assert.Equal([first], normalized.CategoryIds);
         Assert.Equal(primary, normalized.PrimaryCategoryId);
-        Assert.Equal("match", normalized.ZoneCategories);
+        Assert.True(DeckZoneCategories.IsMatch(normalized.ZoneCategories));
         Assert.True(normalized.HasCategories);
         Assert.False(DeckContractValidator.Normalize(new DeckEntryDraft(1, "Card"), Guid.CreateVersion7).HasCategories);
         Assert.Throws<DeckInputException>(() => DeckContractValidator.Normalize(
@@ -544,6 +559,151 @@ public sealed class DeckPatchEntriesTests
                 Entries: [new DeckEntryDraft(1, "A", CategoryIds: [Guid.CreateVersion7()])]),
             TestContext.Current.CancellationToken);
         Assert.IsType<OperationInvalidInput>(refused.Value);
+    }
+
+    /// <summary>
+    /// Verifies a draft with match in zone main drops the zone categories it names and keeps the others.
+    /// </summary>
+    [Fact]
+    public async Task AddEntry_WithMatchInMain_StripsZoneCategories()
+    {
+        using Fixture fixture = await Fixture.CreateAsync(1, maybeboardCategories: true);
+        Guid sideboard = fixture.CategoryId(DeckZoneCategories.Sideboard);
+        Guid added = Guid.CreateVersion7();
+
+        DeckDocument after = await fixture.ApplyAsync(new AddDeckEntryChange(new DeckEntryDraft(
+            1,
+            "Added",
+            EntryId: added,
+            CategoryIds: [sideboard, fixture.RampId],
+            ZoneCategories: DeckZoneCategories.Match)));
+
+        Assert.Equal(
+            new DeckCategoryAssignment(added, fixture.RampId, false),
+            Assert.Single(after.CategoryAssignments, value => value.EntryId == added));
+    }
+
+    /// <summary>
+    /// Verifies each contradictory draft is refused as invalid-deck-change with the same words a patch uses, and
+    /// nothing is written.
+    /// </summary>
+    [Theory]
+    [InlineData("main-zone-primary", "names a zone category, but the entry is in zone main")]
+    [InlineData("zone-with-primary", "cannot be set with zoneCategories")]
+    [InlineData("unknown-zone", "has no category for zone 'tokens'")]
+    [InlineData("unknown-category", "was not found in this deck")]
+    public async Task AddEntry_ContradictoryCategories_AreRefusedLikeAPatch(string kind, string message)
+    {
+        using Fixture fixture = await Fixture.CreateAsync(1, maybeboardCategories: true);
+        Guid sideboard = fixture.CategoryId(DeckZoneCategories.Sideboard);
+        DeckEntryDraft draft = kind switch
+        {
+            "main-zone-primary" => new DeckEntryDraft(
+                1, "Added", PrimaryCategoryId: sideboard, ZoneCategories: DeckZoneCategories.Match),
+            "zone-with-primary" => new DeckEntryDraft(
+                1,
+                "Added",
+                Zone: "sideboard",
+                PrimaryCategoryId: fixture.RampId,
+                ZoneCategories: DeckZoneCategories.Match),
+            "unknown-zone" => new DeckEntryDraft(1, "Added", Zone: "tokens", ZoneCategories: DeckZoneCategories.Match),
+            _ => new DeckEntryDraft(1, "Added", CategoryIds: [Guid.CreateVersion7()]),
+        };
+
+        OperationInvalidInput refused = Assert.IsType<OperationInvalidInput>(
+            (await fixture.TryApplyAsync(new AddDeckEntryChange(draft))).Value);
+
+        Assert.Equal("invalid-deck-change", refused.ReasonCode);
+        Assert.Contains(message, refused.Message, StringComparison.Ordinal);
+        Assert.EndsWith(" Nothing was written.", refused.Message, StringComparison.Ordinal);
+        Assert.Equal(fixture.Deck.Entries, (await fixture.ReadAsync()).Entries);
+    }
+
+    /// <summary>
+    /// Verifies a draft whose primary category is also listed in categoryIds gets that category once, as primary.
+    /// </summary>
+    [Fact]
+    public async Task AddEntry_PrimaryAlsoInCategoryIds_IsAssignedOnceAsPrimary()
+    {
+        using Fixture fixture = await Fixture.CreateAsync(1);
+        Guid draw = fixture.CategoryId("Draw");
+        Guid added = Guid.CreateVersion7();
+
+        DeckDocument after = await fixture.ApplyAsync(new AddDeckEntryChange(new DeckEntryDraft(
+            1,
+            "Added",
+            EntryId: added,
+            CategoryIds: [fixture.RampId, draw],
+            PrimaryCategoryId: fixture.RampId)));
+
+        Assert.Equal(
+            [(fixture.RampId, true), (draw, false)],
+            after.CategoryAssignments.Where(value => value.EntryId == added)
+                .OrderByDescending(value => value.IsPrimary)
+                .Select(value => (value.CategoryId, value.IsPrimary)));
+    }
+
+    /// <summary>
+    /// Verifies a later primary assignment is refused after an add-entry draft or a patch made another category
+    /// primary in the same batch, and accepted for the same category or after a patch without a primary.
+    /// </summary>
+    [Fact]
+    public async Task AssignPrimary_AfterAnAddOrPatchPrimaryInTheBatch_IsRefusedWhenItDiffers()
+    {
+        using Fixture fixture = await Fixture.CreateAsync(1);
+        Guid draw = fixture.CategoryId("Draw");
+        Guid added = Guid.CreateVersion7();
+        DeckEntryDraft draft = new(1, "Added", EntryId: added, PrimaryCategoryId: fixture.RampId);
+        Guid existing = fixture.EntryIds[0];
+
+        OperationInvalidInput afterAdd = Assert.IsType<OperationInvalidInput>((await fixture.TryApplyAsync(
+            new AddDeckEntryChange(draft),
+            new AssignDeckCategoryChange(added, draw, true))).Value);
+        OperationInvalidInput afterPatch = Assert.IsType<OperationInvalidInput>((await fixture.TryApplyAsync(
+            new PatchDeckEntriesChange([existing], PrimaryCategoryId: fixture.RampId),
+            new AssignDeckCategoryChange(existing, draw, true))).Value);
+
+        Assert.Contains("only one primary category", afterAdd.Message, StringComparison.Ordinal);
+        Assert.Contains("only one primary category", afterPatch.Message, StringComparison.Ordinal);
+        Assert.Equal("invalid-deck-change", afterAdd.ReasonCode);
+        Assert.Equal(fixture.Deck.Entries, (await fixture.ReadAsync()).Entries);
+
+        DeckDocument same = await fixture.ApplyAsync(
+            new AddDeckEntryChange(draft),
+            new AssignDeckCategoryChange(added, fixture.RampId, true),
+            new PatchDeckEntriesChange([existing], Quantity: 2),
+            new AssignDeckCategoryChange(existing, draw, true));
+        Assert.Contains(new DeckCategoryAssignment(added, fixture.RampId, true), same.CategoryAssignments);
+        Assert.Contains(new DeckCategoryAssignment(existing, draw, true), same.CategoryAssignments);
+    }
+
+    /// <summary>
+    /// Verifies a created deck refuses a drafted primary category that collides with an explicit primary
+    /// assignment of the same entry.
+    /// </summary>
+    [Fact]
+    public async Task Create_DraftedPrimaryWithExplicitPrimaryAssignment_IsRefused()
+    {
+        using TemporaryDeckDirectory temporary = new();
+        using SqliteDeckStore store = new(temporary.Path, "test");
+        Guid ramp = Guid.CreateVersion7();
+        Guid draw = Guid.CreateVersion7();
+        Guid entry = Guid.CreateVersion7();
+
+        OperationResult<DeckDocument> result = await store.CreateAsync(
+            new DeckCreateRequest(
+                "Double",
+                Entries: [new DeckEntryDraft(1, "A", EntryId: entry, PrimaryCategoryId: ramp)],
+                Categories:
+                [
+                    new DeckCategoryDraft("Ramp", CategoryId: ramp),
+                    new DeckCategoryDraft("Draw", CategoryId: draw),
+                ],
+                CategoryAssignments: [new DeckCategoryAssignment(entry, draw, true)]),
+            TestContext.Current.CancellationToken);
+
+        OperationInvalidInput refused = Assert.IsType<OperationInvalidInput>(result.Value);
+        Assert.Contains("only one primary category", refused.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

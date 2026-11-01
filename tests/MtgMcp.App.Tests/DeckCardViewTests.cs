@@ -859,23 +859,27 @@ public sealed class DeckCardViewTests
     }
 
     /// <summary>
-    /// Verifies an unknown zone and an empty zone list are refused with the allowed zone codes.
+    /// Verifies a zone code no entry uses is listed in zonesNotFound, while an empty zone list and a blank code
+    /// are refused.
     /// </summary>
     [Fact]
-    public async Task Get_UnknownZone_IsRefusedNamingTheAllowedCodes()
+    public async Task Get_AnyZoneCode_IsAcceptedAndUnusedCodesAreListed()
     {
         using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
         DeckDocument deck = await setup.CreateDeckAsync(1);
 
-        OperationInvalidInput unknown = Assert.IsType<OperationInvalidInput>(
-            (await setup.Get(deck.DeckId, zones: ["main", "graveyard"])).Value);
+        DeckDocumentView view = Success(await setup.Get(deck.DeckId, zones: ["main", " Graveyard "]));
+        OperationInvalidInput blank = Assert.IsType<OperationInvalidInput>(
+            (await setup.Get(deck.DeckId, zones: ["main", " "])).Value);
         OperationInvalidInput empty = Assert.IsType<OperationInvalidInput>(
             (await setup.Get(deck.DeckId, zones: [])).Value);
 
-        Assert.Equal("invalid-zones", unknown.ReasonCode);
-        Assert.Equal("zones[1]", unknown.Path);
-        Assert.Contains("commander, main, sideboard, maybeboard", unknown.Message, StringComparison.Ordinal);
+        Assert.Equal(["Graveyard"], view.ZonesNotFound);
+        Assert.Single(view.Entries);
+        Assert.Equal("invalid-zones", blank.ReasonCode);
+        Assert.Equal("zones[1]", blank.Path);
         Assert.Equal("invalid-zones", empty.ReasonCode);
+        Assert.Contains("commander, main, sideboard, maybeboard", empty.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

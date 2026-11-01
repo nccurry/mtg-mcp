@@ -34,10 +34,15 @@ public sealed class DeckChangeInputTests
             new RemoveDeckProviderBindingInput(id),
         ];
 
-        bool success = DeckChangeInputMapper.TryMap(inputs, out IReadOnlyList<DeckChange> changes, out string failure);
+        bool success = DeckChangeInputMapper.TryMap(
+            inputs,
+            out IReadOnlyList<DeckChange> changes,
+            out IReadOnlyList<int> callerIndexes,
+            out string failure);
 
         Assert.True(success);
         Assert.Equal(string.Empty, failure);
+        Assert.Equal(Enumerable.Range(0, inputs.Length), callerIndexes);
         Assert.Collection(
             changes,
             value => Assert.IsType<UpdateDeckMetadataChange>(value.Value),
@@ -60,13 +65,18 @@ public sealed class DeckChangeInputTests
     [Fact]
     public void TryMap_InvalidInputs_ReturnBoundedFailure()
     {
-        Assert.False(DeckChangeInputMapper.TryMap(null, out IReadOnlyList<DeckChange> nullChanges, out string nullFailure));
+        Assert.False(DeckChangeInputMapper.TryMap(
+            null,
+            out IReadOnlyList<DeckChange> nullChanges,
+            out _,
+            out string nullFailure));
         Assert.Empty(nullChanges);
         Assert.NotEmpty(nullFailure);
 
         Assert.False(DeckChangeInputMapper.TryMap(
             [new UnsupportedDeckChangeInput()],
             out IReadOnlyList<DeckChange> unknownChanges,
+            out _,
             out string unknownFailure));
         Assert.Empty(unknownChanges);
         Assert.Equal(
@@ -76,6 +86,7 @@ public sealed class DeckChangeInputTests
         Assert.False(DeckChangeInputMapper.TryMap(
             [new RemoveDeckEntryInput(Guid.Empty)],
             out IReadOnlyList<DeckChange> incompleteChanges,
+            out _,
             out string incompleteFailure));
         Assert.Empty(incompleteChanges);
         Assert.Equal(

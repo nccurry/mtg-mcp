@@ -5,11 +5,19 @@ using MtgMcp.Scryfall;
 namespace MtgMcp.App.Decks;
 
 /// <summary>
-/// Holds a batch of deck changes after the entries they add were looked up, and what the lookup could not settle.
+/// Holds a batch of deck changes after the entries they add were looked up, what the lookup could not settle, and a
+/// patch printing that must refuse the batch.
 /// </summary>
 internal sealed record DeckChangeResolution(
     IReadOnlyList<DeckChange> Changes,
-    IReadOnlyList<DeckWriteIssue> Issues);
+    IReadOnlyList<DeckWriteIssue> Issues,
+    DeckChangeRefusal? Refusal = null);
+
+/// <summary>
+/// Says why the printing of one patch cannot be applied, and which change of the batch it is. The position counts
+/// the changes of the resolved batch from zero.
+/// </summary>
+internal sealed record DeckChangeRefusal(int Position, string Message);
 
 /// <summary>
 /// Holds new deck entries after their card identity was looked up, and what the lookup could not settle.
@@ -21,8 +29,9 @@ internal sealed record DeckDraftResolution(
 /// <summary>
 /// Fills in the card identity of a new deck entry from installed Scryfall card data when the caller gave only a
 /// card name, or a set code and collector number, so the entry does not need a separate reconcile step. It uses the
-/// same exact lookups as identity reconciliation and never uses the network. An entry that cannot be resolved is
-/// kept as given and reported, never refused.
+/// same exact lookups as identity reconciliation and never uses the network. An added entry that cannot be resolved is
+/// kept as given and reported, never refused; a printing patch that cannot be checked against each entry's card is
+/// refused, because it would replace a known identity.
 /// </summary>
 internal sealed class DeckEntryResolver
 {
@@ -68,10 +77,11 @@ internal sealed class DeckEntryResolver
     /// </summary>
     internal async Task<DeckChangeResolution> ResolveChangesAsync(
         IReadOnlyList<DeckChange> changes,
-        DeckDocument? deck,
+        DeckDocument deck,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(changes);
+        ArgumentNullException.ThrowIfNull(deck);
         List<DeckEntryDraft> drafts = [];
         foreach (DeckChange change in changes)
         {
@@ -89,23 +99,28 @@ internal sealed class DeckEntryResolver
             result.Add(change is AddDeckEntryChange ? new AddDeckEntryChange(resolution.Drafts[next++]) : change);
         }
 
-        List<DeckWriteIssue> issues = [.. resolution.Issues];
-        await ResolvePatchPrintingsAsync(result, deck, issues, cancellationToken).ConfigureAwait(false);
-        return new DeckChangeResolution(result, issues);
+        DeckChangeRefusal? refusal = await ResolvePatchPrintingsAsync(result, deck, cancellationToken)
+            .ConfigureAwait(false);
+        return new DeckChangeResolution(result, resolution.Issues, refusal);
     }
 
     /// <summary>
     /// Replaces each patch that sets a printing with the same patch carrying the printing looked up against each
-    /// listed entry's own card. An entry whose lookup finds nothing keeps the printing as given and is reported.
+    /// listed entry's own card. Returns the first patch whose printing cannot be looked up for every listed entry
+    /// that the deck or the batch knows, because a printing is never written without that check.
     /// </summary>
-    private async Task ResolvePatchPrintingsAsync(
+    private async Task<DeckChangeRefusal?> ResolvePatchPrintingsAsync(
         List<DeckChange> changes,
-        DeckDocument? deck,
-        List<DeckWriteIssue> issues,
+        DeckDocument deck,
         CancellationToken cancellationToken)
     {
+        if (!changes.Exists(change => change is PatchDeckEntriesChange { Printing: not null }))
+        {
+            return null;
+        }
+
         Dictionary<Guid, DeckEntryDraft> cards = [];
-        foreach (DeckEntry entry in deck?.Entries ?? [])
+        foreach (DeckEntry entry in deck.Entries)
         {
             cards[entry.EntryId] = new DeckEntryDraft(
                 entry.Quantity,
@@ -132,23 +147,31 @@ internal sealed class DeckEntryResolver
                     cards.Remove(remove.EntryId);
                     break;
                 case PatchDeckEntriesChange { Printing: not null } patch:
-                    changes[index] = patch with
+                    (IReadOnlyList<DeckEntryPrinting> printings, string? problem) = await LookUpPrintingsAsync(
+                        patch,
+                        cards,
+                        cancellationToken).ConfigureAwait(false);
+                    if (problem is not null)
                     {
-                        Printings = await LookUpPrintingsAsync(patch, cards, issues, cancellationToken)
-                            .ConfigureAwait(false),
-                    };
+                        return new DeckChangeRefusal(index, problem);
+                    }
+
+                    changes[index] = patch with { Printings = printings };
                     break;
             }
         }
+
+        return null;
     }
 
     /// <summary>
     /// Looks up the patch's printing for each listed entry that is known, using the entry's card name and language.
+    /// Returns the printings found, and a description of every entry whose printing was not found, was another card,
+    /// or could not be checked, or null when every entry has its printing.
     /// </summary>
-    private async Task<IReadOnlyList<DeckEntryPrinting>> LookUpPrintingsAsync(
+    private async Task<(IReadOnlyList<DeckEntryPrinting> Printings, string? Problem)> LookUpPrintingsAsync(
         PatchDeckEntriesChange patch,
         Dictionary<Guid, DeckEntryDraft> cards,
-        List<DeckWriteIssue> issues,
         CancellationToken cancellationToken)
     {
         DeckPrintingPatch printing = patch.Printing!;
@@ -168,24 +191,50 @@ internal sealed class DeckEntryResolver
             }
         }
 
-        DeckDraftResolution resolution = await ResolvePendingAsync(drafts, [.. Enumerable.Range(0, drafts.Count)], cancellationToken)
-            .ConfigureAwait(false);
-        issues.AddRange(resolution.Issues);
+        DeckDraftResolution resolution = await ResolvePendingAsync(
+            drafts,
+            [.. Enumerable.Range(0, drafts.Count)],
+            cancellationToken).ConfigureAwait(false);
         List<DeckEntryPrinting> resolved = [];
+        List<string> problems = [];
         foreach (DeckEntryDraft draft in resolution.Drafts)
         {
-            if (draft.OracleId is not null)
+            if (draft.OracleId is null)
             {
-                resolved.Add(new DeckEntryPrinting(
-                    draft.EntryId!.Value,
-                    draft.PrintingId,
-                    draft.SetCode,
-                    draft.CollectorNumber,
-                    draft.Language));
+                problems.Add(
+                    $"entry {draft.EntryId} ('{draft.CardName.Trim()}'): {WhyUnresolved(resolution.Issues, draft)}");
+                continue;
+            }
+
+            resolved.Add(new DeckEntryPrinting(
+                draft.EntryId!.Value,
+                draft.PrintingId,
+                draft.SetCode,
+                draft.CollectorNumber,
+                draft.Language));
+        }
+
+        return (resolved, problems.Count == 0 ? null : string.Join(" ", problems));
+    }
+
+    /// <summary>
+    /// Says why a patch printing was not found for a draft: the issue of its own lookup, or, when the whole lookup
+    /// was skipped, that card data could not check it.
+    /// </summary>
+    private static string WhyUnresolved(IReadOnlyList<DeckWriteIssue> issues, DeckEntryDraft draft)
+    {
+        foreach (DeckWriteIssue issue in issues)
+        {
+            if (issue.EntryId == draft.EntryId && issue.Kind != DeckWriteIssue.Skipped)
+            {
+                return issue.Message;
             }
         }
 
-        return resolved;
+        return issues.Any(issue => issue.Kind == DeckWriteIssue.Skipped)
+            ? "Scryfall card data is not installed or cannot be read, so the printing cannot be checked against " +
+                "the entry's card; run scryfall_card_data_sync and retry."
+            : "the printing could not be looked up.";
     }
 
     /// <summary>
@@ -303,11 +352,7 @@ internal sealed class DeckEntryResolver
 
             if (row?.Card is null)
             {
-                issues.Add(Unresolved(
-                    draft,
-                    plan.MatchMethod == DeckIdentityReconciliationCoordinator.MatchPrintingId
-                        ? $"Printing {draft.PrintingId} was not found in installed card data."
-                        : $"No card named '{draft.CardName.Trim()}' was found in installed card data."));
+                issues.Add(Unresolved(draft, NotFoundMessage(plan.MatchMethod, draft)));
                 continue;
             }
 
@@ -335,6 +380,21 @@ internal sealed class DeckEntryResolver
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Says what an exact lookup that found no card was looking for.
+    /// </summary>
+    private static string NotFoundMessage(string? matchMethod, DeckEntryDraft draft)
+    {
+        return matchMethod switch
+        {
+            DeckIdentityReconciliationCoordinator.MatchPrintingId =>
+                $"Printing {draft.PrintingId} was not found in installed card data.",
+            DeckIdentityReconciliationCoordinator.MatchSetCollectorLanguage =>
+                $"Set {draft.SetCode} number {draft.CollectorNumber} was not found in installed card data.",
+            _ => $"No card named '{draft.CardName.Trim()}' was found in installed card data.",
+        };
     }
 
     /// <summary>

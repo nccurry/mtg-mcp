@@ -67,7 +67,7 @@ internal sealed record PatchDeckEntriesInput(
     [property: Description("The new language code, or omit to keep each entry's language.")] string? Language = null,
     [property: Description(
         "A new printing, resolved against each entry's own card like add-entry: a printingId, or a setCode with a " +
-        "collectorNumber. Omit to keep each entry's printing.")] DeckPrintingInput? Printing = null,
+        "collectorNumber. Omit to keep each entry's printing.")] DeckPrintingPatch? Printing = null,
     [property: Description(
         "The category that becomes each entry's primary category. A category the entry already has as non-primary " +
         "becomes primary. The previous primary assignment is removed unless it is also in addCategoryIds.")]
@@ -85,20 +85,13 @@ internal sealed record PatchDeckEntriesInput(
     : DeckChangeInput;
 
 /// <summary>
-/// Names the printing a patch gives each entry.
-/// </summary>
-internal sealed record DeckPrintingInput(
-    [property: Description("The Scryfall printing ID; give it alone.")] Guid? PrintingId = null,
-    [property: Description("The set code; give it with collectorNumber.")] string? SetCode = null,
-    [property: Description("The collector number; give it with setCode.")] string? CollectorNumber = null);
-
-/// <summary>
 /// Removes one entry, or 1 to 100 entries, by stable entry identifier.
 /// </summary>
 internal sealed record RemoveDeckEntryInput(
     [property: Description("The stable identifier of the entry to remove; give this or entryIds, not both.")]
     Guid? EntryId = null,
-    [property: Description("The stable identifiers of 1 to 100 distinct entries to remove; give this or entryId, not both.")]
+    [property: Description(
+        "The stable identifiers of 1 to 100 distinct entries to remove; give this or entryId, not both.")]
     IReadOnlyList<Guid>? EntryIds = null)
     : DeckChangeInput;
 
@@ -124,7 +117,8 @@ internal sealed record RemoveDeckCategoryInput(
     : DeckChangeInput;
 
 /// <summary>
-/// Assigns an existing category to an existing entry. To edit the categories of many entries at once, use patch-entries.
+/// Assigns an existing category to an existing entry. To edit the categories of many entries at once, use
+/// patch-entries.
 /// </summary>
 internal sealed record AssignDeckCategoryInput(
     [property: Description(
@@ -137,7 +131,8 @@ internal sealed record AssignDeckCategoryInput(
     : DeckChangeInput;
 
 /// <summary>
-/// Removes one category assignment from one entry. To edit the categories of many entries at once, use patch-entries.
+/// Removes one category assignment from one entry. To edit the categories of many entries at once, use
+/// patch-entries.
 /// </summary>
 internal sealed record UnassignDeckCategoryInput(
     [property: Description(
@@ -167,74 +162,79 @@ internal sealed record RemoveDeckProviderBindingInput(
 internal static class DeckChangeInputMapper
 {
     /// <summary>
-    /// Maps all inputs or returns an indexed invalid-input result without partial execution.
+    /// Maps all inputs or returns an indexed invalid-input result without partial execution. A remove-entry with
+    /// entryIds maps to one change per ID, so callerIndexes gives, for each mapped change, the position of the input
+    /// the caller sent it in.
     /// </summary>
     internal static bool TryMap(
         IReadOnlyList<DeckChangeInput>? inputs,
         out IReadOnlyList<DeckChange> changes,
+        out IReadOnlyList<int> callerIndexes,
         out string failureMessage)
     {
+        changes = [];
+        callerIndexes = [];
         if (inputs is null || inputs.Count == 0)
         {
-            changes = [];
             failureMessage = "At least one deck change is required.";
             return false;
         }
 
         List<DeckChange> mapped = new(inputs.Count);
+        List<int> origins = new(inputs.Count);
         for (int index = 0; index < inputs.Count; index++)
         {
+            ChangeFailure failure;
             if (inputs[index] is RemoveDeckEntryInput removal)
             {
-                if (TryMapRemoval(removal, mapped) is string required)
-                {
-                    changes = [];
-                    failureMessage = $"Deck change at index {index} with kind 'remove-entry' requires {required}.";
-                    return false;
-                }
-
-                continue;
+                failure = MapRemoval(removal, mapped);
+            }
+            else if (TryMapOne(inputs[index], out DeckChange change, out failure))
+            {
+                mapped.Add(change);
             }
 
-            if (!TryMapOne(inputs[index], out DeckChange change, out string kind, out string requiredFields))
+            if (failure.Kind is not null)
             {
-                changes = [];
-                failureMessage = requiredFields.EndsWith('.')
-                    ? $"Deck change at index {index} with kind '{kind}' is invalid: {requiredFields}"
-                    : $"Deck change at index {index} with kind '{kind}' requires {requiredFields}.";
+                failureMessage = $"Deck change at index {index} with kind '{failure.Kind}' {failure.Detail}";
                 return false;
             }
 
-            mapped.Add(change);
+            while (origins.Count < mapped.Count)
+            {
+                origins.Add(index);
+            }
         }
 
         changes = mapped.ToArray();
+        callerIndexes = origins;
         failureMessage = string.Empty;
         return true;
     }
 
     /// <summary>
-    /// Maps a removal of one entry, or of 1 to 100 distinct entries, into one remove change per entry. Returns null on
-    /// success, or what the removal requires when exactly one of the two fields is not given or an ID is unusable.
+    /// Maps a removal of one entry, or of 1 to 100 distinct entries, into one remove change per entry. Returns no
+    /// failure on success, or what the removal requires when exactly one of the two fields is not given or an ID is
+    /// unusable.
     /// </summary>
-    private static string? TryMapRemoval(RemoveDeckEntryInput input, List<DeckChange> mapped)
+    private static ChangeFailure MapRemoval(RemoveDeckEntryInput input, List<DeckChange> mapped)
     {
         if ((input.EntryId is null) == (input.EntryIds is null))
         {
-            return "exactly one of entryId or entryIds";
+            return Requires("remove-entry", "exactly one of entryId or entryIds");
         }
 
         if (input.EntryId == Guid.Empty)
         {
-            return "a non-empty entryId";
+            return Requires("remove-entry", "a non-empty entryId");
         }
 
         IReadOnlyList<Guid> ids = input.EntryIds ?? [input.EntryId!.Value];
-        if (ids.Count is < 1 or > PatchDeckEntriesRules.MaxEntries ||
-            ids.Contains(Guid.Empty) ||
-            ids.Distinct().Count() != ids.Count)
+        if (PatchDeckEntriesRules.EntryIdsProblem(ids) is not null)
         {
-            return $"entryIds with 1 to {PatchDeckEntriesRules.MaxEntries} distinct, non-empty IDs";
+            return Requires(
+                "remove-entry",
+                $"entryIds with 1 to {PatchDeckEntriesRules.MaxEntries} distinct, non-empty IDs");
         }
 
         foreach (Guid id in ids)
@@ -242,7 +242,7 @@ internal static class DeckChangeInputMapper
             mapped.Add(new RemoveDeckEntryChange(id));
         }
 
-        return null;
+        return default;
     }
 
     /// <summary>
@@ -251,8 +251,7 @@ internal static class DeckChangeInputMapper
     private static bool TryMapOne(
         DeckChangeInput? input,
         out DeckChange change,
-        out string kind,
-        out string requiredFields)
+        out ChangeFailure failure)
     {
         switch (input)
         {
@@ -260,25 +259,22 @@ internal static class DeckChangeInputMapper
                 when !string.IsNullOrWhiteSpace(metadata.Name) &&
                      !string.IsNullOrWhiteSpace(metadata.Format):
                 change = new UpdateDeckMetadataChange(metadata.Name, metadata.Description, metadata.Format);
-                kind = "update-metadata";
-                requiredFields = string.Empty;
+                failure = default;
                 return true;
             case UpdateDeckMetadataInput:
-                return Fail("update-metadata", "nonblank name and format", out change, out kind, out requiredFields);
+                return Fail("update-metadata", "nonblank name and format", out change, out failure);
             case AddDeckEntryInput { EntryDraft: not null } addEntry:
                 change = new AddDeckEntryChange(addEntry.EntryDraft);
-                kind = "add-entry";
-                requiredFields = string.Empty;
+                failure = default;
                 return true;
             case AddDeckEntryInput:
-                return Fail("add-entry", "entryDraft", out change, out kind, out requiredFields);
+                return Fail("add-entry", "entryDraft", out change, out failure);
             case UpdateDeckEntryInput { Entry: not null } updateEntry:
                 change = new UpdateDeckEntryChange(updateEntry.Entry);
-                kind = "update-entry";
-                requiredFields = string.Empty;
+                failure = default;
                 return true;
             case UpdateDeckEntryInput:
-                return Fail("update-entry", "entry", out change, out kind, out requiredFields);
+                return Fail("update-entry", "entry", out change, out failure);
             case PatchDeckEntriesInput patch:
                 PatchDeckEntriesChange patchChange = new(
                     patch.EntryIds ?? [],
@@ -287,45 +283,36 @@ internal static class DeckChangeInputMapper
                     patch.SortOrder,
                     patch.Finish,
                     patch.Language,
-                    patch.Printing is null
-                        ? null
-                        : new DeckPrintingPatch(
-                            patch.Printing.PrintingId,
-                            patch.Printing.SetCode,
-                            patch.Printing.CollectorNumber),
+                    patch.Printing,
                     patch.PrimaryCategoryId,
                     patch.AddCategoryIds,
                     patch.RemoveCategoryIds,
-                    patch.ZoneCategories?.Trim().ToLowerInvariant());
+                    patch.ZoneCategories);
                 if (PatchDeckEntriesRules.FirstProblem(patchChange) is string problem)
                 {
-                    return Fail("patch-entries", problem, out change, out kind, out requiredFields);
+                    return FailInvalid("patch-entries", problem, out change, out failure);
                 }
 
                 change = patchChange;
-                kind = "patch-entries";
-                requiredFields = string.Empty;
+                failure = default;
                 return true;
             case AddDeckCategoryInput { CategoryDraft: not null } addCategory:
                 change = new AddDeckCategoryChange(addCategory.CategoryDraft);
-                kind = "add-category";
-                requiredFields = string.Empty;
+                failure = default;
                 return true;
             case AddDeckCategoryInput:
-                return Fail("add-category", "categoryDraft", out change, out kind, out requiredFields);
+                return Fail("add-category", "categoryDraft", out change, out failure);
             case UpdateDeckCategoryInput { Category: not null } updateCategory:
                 change = new UpdateDeckCategoryChange(updateCategory.Category);
-                kind = "update-category";
-                requiredFields = string.Empty;
+                failure = default;
                 return true;
             case UpdateDeckCategoryInput:
-                return Fail("update-category", "category", out change, out kind, out requiredFields);
+                return Fail("update-category", "category", out change, out failure);
             case RemoveDeckCategoryInput invalidRemoveCategory when invalidRemoveCategory.CategoryId == Guid.Empty:
-                return Fail("remove-category", "a non-empty categoryId", out change, out kind, out requiredFields);
+                return Fail("remove-category", "a non-empty categoryId", out change, out failure);
             case RemoveDeckCategoryInput removeCategory:
                 change = new RemoveDeckCategoryChange(removeCategory.CategoryId);
-                kind = "remove-category";
-                requiredFields = string.Empty;
+                failure = default;
                 return true;
             case AssignDeckCategoryInput assignment
                 when assignment.EntryId != Guid.Empty && assignment.CategoryId != Guid.Empty:
@@ -333,73 +320,79 @@ internal static class DeckChangeInputMapper
                     assignment.EntryId,
                     assignment.CategoryId,
                     assignment.IsPrimary);
-                kind = "assign-category";
-                requiredFields = string.Empty;
+                failure = default;
                 return true;
             case AssignDeckCategoryInput:
                 return Fail(
                     "assign-category",
                     "non-empty entryId and categoryId",
-                    out change,
-                    out kind,
-                    out requiredFields);
+                    out change, out failure);
             case UnassignDeckCategoryInput assignment
                 when assignment.EntryId != Guid.Empty && assignment.CategoryId != Guid.Empty:
                 change = new UnassignDeckCategoryChange(assignment.EntryId, assignment.CategoryId);
-                kind = "unassign-category";
-                requiredFields = string.Empty;
+                failure = default;
                 return true;
             case UnassignDeckCategoryInput:
                 return Fail(
                     "unassign-category",
                     "non-empty entryId and categoryId",
-                    out change,
-                    out kind,
-                    out requiredFields);
+                    out change, out failure);
             case UpsertDeckProviderBindingInput { ProviderBinding: not null } binding:
                 change = new UpsertDeckProviderBindingChange(binding.ProviderBinding, binding.CanonicalBaseline);
-                kind = "upsert-provider-binding";
-                requiredFields = string.Empty;
+                failure = default;
                 return true;
             case UpsertDeckProviderBindingInput:
                 return Fail(
                     "upsert-provider-binding",
                     "providerBinding",
-                    out change,
-                    out kind,
-                    out requiredFields);
+                    out change, out failure);
             case RemoveDeckProviderBindingInput invalidRemoveBinding when invalidRemoveBinding.BindingId == Guid.Empty:
                 return Fail(
                     "remove-provider-binding",
                     "a non-empty bindingId",
-                    out change,
-                    out kind,
-                    out requiredFields);
+                    out change, out failure);
             case RemoveDeckProviderBindingInput removeBinding:
                 change = new RemoveDeckProviderBindingChange(removeBinding.BindingId);
-                kind = "remove-provider-binding";
-                requiredFields = string.Empty;
+                failure = default;
                 return true;
             case null:
-                return Fail("null", "a supported non-null change", out change, out kind, out requiredFields);
+                return Fail("null", "a supported non-null change", out change, out failure);
             default:
-                return Fail("unsupported", "a supported change kind", out change, out kind, out requiredFields);
+                return Fail("unsupported", "a supported change kind", out change, out failure);
         }
     }
 
     /// <summary>
-    /// Initializes one bounded semantic-validation failure.
+    /// Initializes one bounded semantic-validation failure that names the fields the change requires.
     /// </summary>
-    private static bool Fail(
-        string failureKind,
-        string failureFields,
-        out DeckChange change,
-        out string kind,
-        out string requiredFields)
+    private static bool Fail(string kind, string fields, out DeckChange change, out ChangeFailure failure)
     {
         change = default;
-        kind = failureKind;
-        requiredFields = failureFields;
+        failure = Requires(kind, fields);
         return false;
     }
+
+    /// <summary>
+    /// Initializes one semantic-validation failure that gives the problem a rule found.
+    /// </summary>
+    private static bool FailInvalid(string kind, string problem, out DeckChange change, out ChangeFailure failure)
+    {
+        change = default;
+        failure = new ChangeFailure(kind, $"is invalid: {problem}");
+        return false;
+    }
+
+    /// <summary>
+    /// Builds the failure of a change that lacks the fields it requires.
+    /// </summary>
+    private static ChangeFailure Requires(string kind, string fields)
+    {
+        return new ChangeFailure(kind, $"requires {fields}.");
+    }
+
+    /// <summary>
+    /// Holds why one input could not be mapped: its kind, and the rest of the message after the kind. The kind is
+    /// null when there was no failure.
+    /// </summary>
+    private readonly record struct ChangeFailure(string? Kind, string Detail);
 }

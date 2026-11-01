@@ -359,9 +359,13 @@ internal sealed class DeckCategorizationWriteTools
     internal Task<OperationResult<DeckWriteResult>> ApplyAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
-        [Description("Scryfall card-data generation returned by the preview, or null when no card evidence was needed.")] Guid? expectedCorpusGeneration,
+        [Description(
+            "Scryfall card-data generation returned by the preview, or null when no card evidence was needed.")]
+        Guid? expectedCorpusGeneration,
         [Description("Inline category rules; repeat the source used for the preview.")] CategoryRuleSource source,
-        [Description("Scryfall evidence policy: default, cache-only, or refresh. Repeat the value used for the preview."), FreshnessPolicyValues]
+        [Description(
+            "Scryfall evidence policy: default, cache-only, or refresh. Repeat the value used for the preview."),
+         FreshnessPolicyValues]
         string freshnessPolicy,
         [Description("Fingerprint returned by local_deck_category_rules_preview.")] string previewFingerprint,
         [Description("Opaque token returned by local_deck_category_rules_preview.")] string applyToken,

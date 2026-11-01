@@ -36,12 +36,19 @@ internal static class DeckAddPresence
     /// <summary>
     /// Checks every change in order, as the batch will apply them, and returns the batch without the adds to leave
     /// out. Skipping applies to every card, basic lands included, because the caller asked for it. An add is left
-    /// out only when the entry it matches is still in the same zone after the whole batch.
+    /// out only when the entry it matches is still in the same zone after the whole batch. The caller indexes give,
+    /// for each change, the position of the input the caller sent it in, so a message names the change the caller
+    /// wrote.
     /// </summary>
-    internal static DeckAddPresenceResult Check(DeckDocument deck, IReadOnlyList<DeckChange> changes, bool skipPresent)
+    internal static DeckAddPresenceResult Check(
+        DeckDocument deck,
+        IReadOnlyList<DeckChange> changes,
+        IReadOnlyList<int> callerIndexes,
+        bool skipPresent)
     {
         ArgumentNullException.ThrowIfNull(deck);
         ArgumentNullException.ThrowIfNull(changes);
+        ArgumentNullException.ThrowIfNull(callerIndexes);
         List<Present> present = FromDeck(deck);
         Dictionary<Guid, Skipped> skippedById = [];
         List<DeckChange> kept = new(changes.Count);
@@ -53,7 +60,7 @@ internal static class DeckAddPresence
             {
                 if (skippedById.TryGetValue(referenced, out Skipped? gone))
                 {
-                    return new DeckAddPresenceResult(changes, [], Refusal(index + 1, gone));
+                    return new DeckAddPresenceResult(changes, [], Refusal(callerIndexes[index] + 1, gone));
                 }
             }
 
@@ -83,7 +90,7 @@ internal static class DeckAddPresence
             Present? sameZone = skipPresent ? FindSkipTarget(present, changes, index, added) : null;
             if (sameZone is not null)
             {
-                string? refusal = LeaveOut(present, skippedById, issues, index + 1, draft, sameZone);
+                string? refusal = LeaveOut(present, skippedById, issues, callerIndexes[index] + 1, draft, sameZone);
                 if (refusal is not null)
                 {
                     return new DeckAddPresenceResult(changes, [], refusal);

@@ -14,7 +14,7 @@ namespace MtgMcp.App.Tests;
 public sealed class DeckPatchEntriesToolTests
 {
     /// <summary>
-    /// Verifies a patch maps to its Core change with the printing group and a normalized zone categories mode.
+    /// Verifies a patch maps to its Core change with the printing group and the zone categories mode as given.
     /// </summary>
     [Fact]
     public void TryMap_Patch_ProducesCoreChange()
@@ -23,15 +23,22 @@ public sealed class DeckPatchEntriesToolTests
         Guid printing = Guid.CreateVersion7();
 
         bool mapped = DeckChangeInputMapper.TryMap(
-            [new PatchDeckEntriesInput([entry], Zone: "sideboard", Printing: new DeckPrintingInput(printing), ZoneCategories: " Match ")],
+            [
+                new PatchDeckEntriesInput(
+                    [entry],
+                    Zone: "sideboard",
+                    Printing: new DeckPrintingPatch(printing),
+                    ZoneCategories: " Match "),
+            ],
             out IReadOnlyList<DeckChange> changes,
+            out _,
             out string failure);
 
         Assert.True(mapped);
         Assert.Equal(string.Empty, failure);
         PatchDeckEntriesChange patch = Assert.IsType<PatchDeckEntriesChange>(Assert.Single(changes).Value);
         Assert.Equal([entry], patch.EntryIds);
-        Assert.Equal("match", patch.ZoneCategories);
+        Assert.True(DeckZoneCategories.IsMatch(patch.ZoneCategories));
         Assert.Equal(printing, patch.Printing!.PrintingId);
     }
 
@@ -44,6 +51,7 @@ public sealed class DeckPatchEntriesToolTests
         bool mapped = DeckChangeInputMapper.TryMap(
             [new UpdateDeckMetadataInput("Deck", null, "custom"), new PatchDeckEntriesInput([Guid.CreateVersion7()])],
             out IReadOnlyList<DeckChange> changes,
+            out _,
             out string failure);
 
         Assert.False(mapped);
@@ -63,7 +71,12 @@ public sealed class DeckPatchEntriesToolTests
     {
         Guid[] ids = [.. Enumerable.Range(0, 3).Select(_ => Guid.CreateVersion7())];
 
-        Assert.True(DeckChangeInputMapper.TryMap([new RemoveDeckEntryInput(EntryIds: ids)], out IReadOnlyList<DeckChange> changes, out _));
+        Assert.True(DeckChangeInputMapper.TryMap(
+            [new RemoveDeckEntryInput(EntryIds: ids)],
+            out IReadOnlyList<DeckChange> changes,
+            out IReadOnlyList<int> origins,
+            out _));
+        Assert.Equal([0, 0, 0], origins);
         Assert.Equal(ids, changes.Select(value => Assert.IsType<RemoveDeckEntryChange>(value.Value).EntryId));
 
         foreach (RemoveDeckEntryInput invalid in new RemoveDeckEntryInput[]
@@ -76,7 +89,11 @@ public sealed class DeckPatchEntriesToolTests
             new(EntryIds: [Guid.Empty]),
         })
         {
-            Assert.False(DeckChangeInputMapper.TryMap([invalid], out IReadOnlyList<DeckChange> none, out string failure));
+            Assert.False(DeckChangeInputMapper.TryMap(
+                [invalid],
+                out IReadOnlyList<DeckChange> none,
+                out _,
+                out string failure));
             Assert.Empty(none);
             Assert.StartsWith("Deck change at index 0 with kind 'remove-entry' requires ", failure, StringComparison.Ordinal);
         }
@@ -235,20 +252,199 @@ public sealed class DeckPatchEntriesToolTests
             new AddDeckEntryInput(new DeckEntryDraft(1, "Lightning Bolt", EntryId: added)),
             new PatchDeckEntriesInput(
                 [fixture.EntryIds[0], added],
-                Printing: new DeckPrintingInput(SetCode: (string)boltOther["set"]!, CollectorNumber: (string)boltOther["collector_number"]!))));
+                Printing: new DeckPrintingPatch(
+                    SetCode: (string)boltOther["set"]!,
+                    CollectorNumber: (string)boltOther["collector_number"]!))));
 
         DeckDocument deck = await fixture.ReadAsync();
         Assert.All(deck.Entries, entry => Assert.Equal(newPrinting, entry.PrintingId));
         Assert.All(deck.Entries, entry => Assert.Equal("tst", entry.SetCode));
         Assert.All(deck.Entries, entry => Assert.Equal((string)boltOther["collector_number"]!, entry.CollectorNumber));
         Assert.Empty(result.Issues ?? []);
+    }
 
-        DeckWriteResult mismatch = Success(await fixture.ApplyAsync(
-            new PatchDeckEntriesInput([fixture.EntryIds[0]], Printing: new DeckPrintingInput(PrintingId: Guid.Parse((string)other["id"]!)))));
+    /// <summary>
+    /// Verifies a printing group that is unresolved, belongs to another card, or names a set that matches nothing
+    /// refuses the whole batch with the entries and the reason, and writes nothing.
+    /// </summary>
+    [Fact]
+    public async Task Patch_PrintingThatDoesNotResolveForEveryEntry_RefusesTheBatch()
+    {
+        Guid oracle = Guid.CreateVersion7();
+        JsonObject bolt = CardJson.Make("Lightning Bolt", oracleId: oracle);
+        JsonObject other = CardJson.Make("Other Card");
+        using CardDataFixture data = await CardDataFixture.CreateAsync([bolt, other]);
+        using ToolFixture fixture = await ToolFixture.CreateAsync(data, 2, names: ["Lightning Bolt", "Other Card"]);
+        DeckDocument before = await fixture.ReadAsync();
+        Guid boltPrinting = CardJson.PrintingOf(bolt);
 
-        DeckWriteIssue issue = Assert.Single(mismatch.Issues!);
-        Assert.Equal(DeckWriteIssue.Unresolved, issue.Kind);
-        Assert.Contains("is 'Other Card', not 'Lightning Bolt'", issue.Message, StringComparison.Ordinal);
+        string mismatch = await RefusedMessageAsync(
+            fixture, new PatchDeckEntriesInput(fixture.EntryIds, Printing: new DeckPrintingPatch(boltPrinting)));
+        string notFound = await RefusedMessageAsync(
+            fixture,
+            new PatchDeckEntriesInput([fixture.EntryIds[0]], Printing: new DeckPrintingPatch(Guid.CreateVersion7())));
+        string noSet = await RefusedMessageAsync(
+            fixture,
+            new PatchDeckEntriesInput(
+                [fixture.EntryIds[0]],
+                Printing: new DeckPrintingPatch(SetCode: "zzz", CollectorNumber: "99")));
+
+        Assert.StartsWith(
+            "Change 1 is a patch-entries whose printing cannot be applied: ",
+            mismatch,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            $"entry {fixture.EntryIds[1]} ('Other Card'): Printing {boltPrinting} is 'Lightning Bolt', not " +
+            "'Other Card'.",
+            mismatch,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain($"entry {fixture.EntryIds[0]}", mismatch, StringComparison.Ordinal);
+        Assert.Contains("was not found in installed card data.", notFound, StringComparison.Ordinal);
+        Assert.Contains("Set zzz number 99 was not found in installed card data.", noSet, StringComparison.Ordinal);
+        Assert.All(
+            [mismatch, notFound, noSet],
+            message => Assert.EndsWith(" Nothing was written.", message, StringComparison.Ordinal));
+        Assert.Equal(before.Entries, (await fixture.ReadAsync()).Entries);
+        Assert.Equal(before.Revision, (await fixture.ReadAsync()).Revision);
+    }
+
+    /// <summary>
+    /// Verifies a printing patch of an entry added earlier in the batch is refused when the printing belongs to
+    /// another card, naming the caller's change number.
+    /// </summary>
+    [Fact]
+    public async Task Patch_PrintingForAnEntryAddedEarlierInTheBatch_IsRefusedOnMismatch()
+    {
+        JsonObject bolt = CardJson.Make("Lightning Bolt");
+        JsonObject other = CardJson.Make("Other Card");
+        using CardDataFixture data = await CardDataFixture.CreateAsync([bolt, other]);
+        using ToolFixture fixture = await ToolFixture.CreateAsync(data, 1, names: ["Lightning Bolt"]);
+        Guid added = Guid.CreateVersion7();
+
+        string message = await RefusedMessageAsync(
+            fixture,
+            new AddDeckEntryInput(new DeckEntryDraft(1, "Other Card", EntryId: added)),
+            new PatchDeckEntriesInput([added], Printing: new DeckPrintingPatch(CardJson.PrintingOf(bolt))));
+
+        Assert.StartsWith("Change 2 is a patch-entries", message, StringComparison.Ordinal);
+        Assert.Contains($"entry {added} ('Other Card')", message, StringComparison.Ordinal);
+        Assert.Single((await fixture.ReadAsync()).Entries);
+    }
+
+    /// <summary>
+    /// Verifies a printing patch is refused when no card data is installed, because it cannot be checked.
+    /// </summary>
+    [Fact]
+    public async Task Patch_PrintingWithoutInstalledCardData_IsRefused()
+    {
+        using ToolFixture fixture = await ToolFixture.CreateAsync(1);
+
+        string message = await RefusedMessageAsync(
+            fixture,
+            new PatchDeckEntriesInput([fixture.EntryIds[0]], Printing: new DeckPrintingPatch(Guid.CreateVersion7())));
+
+        Assert.Contains("Scryfall card data is not installed or cannot be read", message, StringComparison.Ordinal);
+        Assert.Contains($"entry {fixture.EntryIds[0]}", message, StringComparison.Ordinal);
+        Assert.Null((await fixture.ReadAsync()).Entries.Single().PrintingId);
+    }
+
+    /// <summary>
+    /// Verifies a refusal names the change the caller wrote when an earlier remove-entry expands to many changes.
+    /// </summary>
+    [Fact]
+    public async Task Refusal_AfterAThirteenIdRemoval_NamesTheCallersChangeNumbers()
+    {
+        using ToolFixture fixture = await ToolFixture.CreateAsync(14);
+        Guid skippedId = Guid.CreateVersion7();
+
+        OperationResult<DeckWriteResult> result = await fixture.ApplyAsync(
+            DeckAddPresence.Skip,
+            new RemoveDeckEntryInput(EntryIds: [.. fixture.EntryIds.Take(13)]),
+            new AddDeckEntryInput(new DeckEntryDraft(1, "Card 13", EntryId: skippedId)),
+            new PatchDeckEntriesInput([skippedId], Quantity: 2));
+
+        string message = Assert.IsType<OperationInvalidInput>(result.Value).Message;
+        Assert.StartsWith("Change 3 refers to the entry of change 2, ", message, StringComparison.Ordinal);
+        Assert.Equal(14, (await fixture.ReadAsync()).Entries.Count);
+    }
+
+    /// <summary>
+    /// Verifies skipping applies to the zone an entry ends in: a patch before the add that moves the card into the
+    /// zone skips the add, a patch after it that moves the card out keeps the add, and a patch that names both a
+    /// skipped add and an existing entry is refused.
+    /// </summary>
+    [Fact]
+    public async Task Skip_WithPatches_UsesTheZoneTheCardEndsIn()
+    {
+        using ToolFixture fixture = await ToolFixture.CreateAsync(1, names: ["Card 0"]);
+        Guid existing = fixture.EntryIds[0];
+        DeckEntryDraft inSideboard = new(1, "Card 0", Zone: "sideboard");
+        DeckEntryDraft inMain = new(1, "Card 0", Zone: "main");
+
+        DeckWriteResult skipped = Success(await fixture.ApplyAsync(
+            DeckAddPresence.Skip,
+            new PatchDeckEntriesInput([existing], Zone: "sideboard", ZoneCategories: "leave"),
+            new AddDeckEntryInput(inSideboard)));
+        Assert.Equal(1, skipped.EntryCount);
+        Assert.Contains(
+            skipped.Issues!,
+            issue => issue.Message.Contains("is already in zone sideboard", StringComparison.Ordinal));
+
+        DeckWriteResult kept = Success(await fixture.ApplyAsync(
+            DeckAddPresence.Skip,
+            new AddDeckEntryInput(inSideboard),
+            new PatchDeckEntriesInput([existing], Zone: "main", ZoneCategories: "leave")));
+        Assert.Equal(2, kept.EntryCount);
+        Assert.DoesNotContain(
+            kept.Issues ?? [],
+            issue => issue.Message.EndsWith("; not added.", StringComparison.Ordinal));
+
+        Guid skippedId = Guid.CreateVersion7();
+        OperationResult<DeckWriteResult> mixed = await fixture.ApplyAsync(
+            DeckAddPresence.Skip,
+            new AddDeckEntryInput(inMain with { EntryId = skippedId }),
+            new PatchDeckEntriesInput([existing, skippedId], Quantity: 2));
+        Assert.StartsWith(
+            "Change 2 refers to the entry of change 1, ",
+            Assert.IsType<OperationInvalidInput>(mixed.Value).Message,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies remove-entry with only Guid.Empty, a repeated removal across changes, and an unknown ID are refused
+    /// with their reason, while exactly 100 IDs and an entry added earlier in the batch are accepted.
+    /// </summary>
+    [Fact]
+    public async Task RemoveEntry_Boundaries_AreRefusedOrAcceptedWithReasons()
+    {
+        using ToolFixture fixture = await ToolFixture.CreateAsync(100);
+
+        OperationInvalidInput empty = Assert.IsType<OperationInvalidInput>(
+            (await fixture.ApplyAsync(new RemoveDeckEntryInput(EntryIds: [Guid.Empty]))).Value);
+        OperationNotFound twice = Assert.IsType<OperationNotFound>((await fixture.ApplyAsync(
+            new RemoveDeckEntryInput(fixture.EntryIds[0]),
+            new RemoveDeckEntryInput(fixture.EntryIds[0]))).Value);
+        OperationNotFound unknown = Assert.IsType<OperationNotFound>(
+            (await fixture.ApplyAsync(new RemoveDeckEntryInput(Guid.CreateVersion7()))).Value);
+
+        Assert.Equal("invalid-deck-change", empty.ReasonCode);
+        Assert.Equal(
+            "Deck change at index 0 with kind 'remove-entry' requires entryIds with 1 to 100 distinct, non-empty IDs.",
+            empty.Message);
+        Assert.Equal("deck-entry-not-found", twice.ReasonCode);
+        Assert.Equal(twice.ReasonCode, unknown.ReasonCode);
+        Assert.Equal("The deck entry was not found.", unknown.Message);
+        Assert.Equal(100, (await fixture.ReadAsync()).Entries.Count);
+
+        Guid added = Guid.CreateVersion7();
+        DeckWriteResult addedRemoved = Success(await fixture.ApplyAsync(
+            new AddDeckEntryInput(new DeckEntryDraft(1, "Temporary", EntryId: added)),
+            new RemoveDeckEntryInput(added)));
+        Assert.Equal(100, addedRemoved.EntryCount);
+
+        DeckWriteResult all = Success(await fixture.ApplyAsync(new RemoveDeckEntryInput(EntryIds: fixture.EntryIds)));
+        Assert.Equal(0, all.EntryCount);
+        Assert.Equal(100, all.ChangeCounts.EntriesRemoved);
     }
 
     /// <summary>
@@ -279,6 +475,16 @@ public sealed class DeckPatchEntriesToolTests
             new DeckCreateRequest("Unknown", Entries: [new DeckEntryDraft(1, "A", CategoryIds: [Guid.CreateVersion7()])]),
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.IsType<OperationInvalidInput>(refused.Value);
+    }
+
+    /// <summary>
+    /// Applies a batch that must be refused as invalid-deck-change and returns the message.
+    /// </summary>
+    private static async Task<string> RefusedMessageAsync(ToolFixture fixture, params DeckChangeInput[] changes)
+    {
+        OperationInvalidInput refused = Assert.IsType<OperationInvalidInput>((await fixture.ApplyAsync(changes)).Value);
+        Assert.Equal("invalid-deck-change", refused.ReasonCode);
+        return refused.Message;
     }
 
     /// <summary>

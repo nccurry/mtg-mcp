@@ -54,9 +54,9 @@ internal sealed class DeckCardViewCoordinator
         "Run scryfall_card_data_sync to install it.";
 
     /// <summary>
-    /// Lists the zone codes a zones filter accepts.
+    /// Lists the usual zone codes, as examples in a message.
     /// </summary>
-    private static readonly string AllowedZones = string.Join(", ", DeckZoneCounts.ZoneOrder);
+    private static readonly string ZoneExamples = string.Join(", ", DeckZoneCounts.ZoneOrder);
 
     /// <summary>
     /// Says how to change the page when a stored deck is too large for one result.
@@ -261,8 +261,16 @@ internal sealed class DeckCardViewCoordinator
         IReadOnlyList<string>? categoryNames,
         string? responseFormat)
     {
-        OperationInvalidInput? shape = ValidateCardNames(cardNames) ?? ValidateZones(zones) ??
-            ValidateCategoryNames(categoryNames) ?? ValidateResponseFormat(responseFormat);
+        OperationInvalidInput? shape =
+            ValidateNames(cardNames, "cardNames", "invalid-card-names", "card", MaximumCardNames) ??
+            ValidateZones(zones) ??
+            ValidateNames(
+                categoryNames,
+                "categoryNames",
+                "invalid-category-names",
+                "category",
+                MaximumCategoryNames) ??
+            ValidateResponseFormat(responseFormat);
         if (shape is not null)
         {
             return shape;
@@ -309,24 +317,8 @@ internal sealed class DeckCardViewCoordinator
     }
 
     /// <summary>
-    /// Checks that the card names, when given, hold 1 through 100 names and none is blank.
-    /// </summary>
-    private static OperationInvalidInput? ValidateCardNames(IReadOnlyList<string>? cardNames)
-    {
-        return ValidateNames(cardNames, "cardNames", "invalid-card-names", "card", MaximumCardNames);
-    }
-
-    /// <summary>
-    /// Checks that the category names, when given, hold 1 through 100 names and none is blank.
-    /// </summary>
-    private static OperationInvalidInput? ValidateCategoryNames(IReadOnlyList<string>? categoryNames)
-    {
-        return ValidateNames(
-            categoryNames, "categoryNames", "invalid-category-names", "category", MaximumCategoryNames);
-    }
-
-    /// <summary>
-    /// Checks that the zones, when given, hold at least one zone code and every code is a known zone.
+    /// Checks that the zones, when given, hold at least one zone code and no code is blank. A code no entry uses is
+    /// not an error, because a deck may use any zone code.
     /// </summary>
     private static OperationInvalidInput? ValidateZones(IReadOnlyList<string>? zones)
     {
@@ -339,19 +331,15 @@ internal sealed class DeckCardViewCoordinator
         {
             return new OperationInvalidInput(
                 "invalid-zones",
-                $"zones must name at least one zone: {AllowedZones}. Omit it to read every zone.",
+                $"zones must name at least one zone code, such as {ZoneExamples}. Omit it to read every zone.",
                 "zones");
         }
 
         for (int index = 0; index < zones.Count; index++)
         {
-            string zone = zones[index]?.Trim().ToLowerInvariant() ?? string.Empty;
-            if (!DeckZoneCounts.ZoneOrder.Contains(zone, StringComparer.Ordinal))
+            if (string.IsNullOrWhiteSpace(zones[index]))
             {
-                return new OperationInvalidInput(
-                    "invalid-zones",
-                    $"Unknown zone '{zones[index]}'. Allowed zones: {AllowedZones}.",
-                    $"zones[{index}]");
+                return new OperationInvalidInput("invalid-zones", "Every zone code must have text.", $"zones[{index}]");
             }
         }
 
@@ -677,18 +665,18 @@ internal sealed class DeckCardViewCoordinator
                 ? []
                 : DeckEntryCategories.NamesByEntry(deck);
             IReadOnlyList<DeckEntry> entries = deck.Entries;
-            IReadOnlyList<string>? namesNotFound = Narrow(
-                ref entries,
+            (entries, IReadOnlyList<string>? namesNotFound) = Narrow(
+                entries,
                 deck,
                 cardNames,
                 (entry, name) => CardNames.Match(entry.CardName, name));
-            IReadOnlyList<string>? zonesNotFound = Narrow(
-                ref entries,
+            (entries, IReadOnlyList<string>? zonesNotFound) = Narrow(
+                entries,
                 deck,
                 zones,
                 (entry, zone) => string.Equals(entry.Zone, zone, StringComparison.OrdinalIgnoreCase));
-            IReadOnlyList<string>? categoriesNotFound = Narrow(
-                ref entries,
+            (entries, IReadOnlyList<string>? categoriesNotFound) = Narrow(
+                entries,
                 deck,
                 categoryNames,
                 (entry, category) => namesByEntry.TryGetValue(entry.EntryId, out IReadOnlyList<string>? names) &&
@@ -697,18 +685,18 @@ internal sealed class DeckCardViewCoordinator
         }
 
         /// <summary>
-        /// Keeps the entries that match one of the requested values and returns the values that match no entry of the
-        /// whole deck, or null when the filter was not given.
+        /// Keeps the entries that match one of the requested values and returns them with the values that match no
+        /// entry of the whole deck, which is null when the filter was not given.
         /// </summary>
-        private static List<string>? Narrow(
-            ref IReadOnlyList<DeckEntry> entries,
+        private static (IReadOnlyList<DeckEntry> Entries, IReadOnlyList<string>? NotFound) Narrow(
+            IReadOnlyList<DeckEntry> entries,
             DeckDocument deck,
             IReadOnlyList<string>? requested,
             Func<DeckEntry, string, bool> matches)
         {
             if (requested is null)
             {
-                return null;
+                return (entries, null);
             }
 
             List<string> notFound = [];
@@ -738,8 +726,7 @@ internal sealed class DeckCardViewCoordinator
                 }
             }
 
-            entries = [.. entries.Where(entry => matched.Contains(entry.EntryId))];
-            return notFound;
+            return ([.. entries.Where(entry => matched.Contains(entry.EntryId))], notFound);
         }
     }
 

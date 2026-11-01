@@ -10,7 +10,12 @@ internal static class DeckZoneCounts
     /// <summary>
     /// Gets the zones in the order a result shows them. Any other zone follows in name order.
     /// </summary>
-    internal static IReadOnlyList<string> ZoneOrder { get; } = ["commander", "main", "sideboard", "maybeboard"];
+    internal static IReadOnlyList<string> ZoneOrder { get; } = [
+        DeckZoneCategories.CommanderZone,
+        DeckZoneCategories.MainZone,
+        DeckZoneCategories.SideboardZone,
+        DeckZoneCategories.MaybeboardZone,
+    ];
 
     /// <summary>
     /// Adds up the quantities of every entry of a local deck by zone, in zone order. A zone with no entries is left

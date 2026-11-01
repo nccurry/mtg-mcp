@@ -120,9 +120,9 @@ internal sealed class DeckReadTools
             "cardNames with a cursor.")]
         IReadOnlyList<string>? cardNames = null,
         [Description(
-            "Optional zone codes to read: commander, main, sideboard, or maybeboard. Only entries in one of " +
-            "these zones are returned, and zonesNotFound lists the zones with no entry. An unknown zone is " +
-            "refused. Pass the same zones with a cursor.")]
+            "Optional zone codes to read, such as commander, main, sideboard, or maybeboard; the deck may use " +
+            "any zone code. Only entries in one of these zones are returned, and zonesNotFound lists the codes " +
+            "with no entry. An empty list or a blank code is refused. Pass the same zones with a cursor.")]
         IReadOnlyList<string>? zones = null,
         [Description(
             "Optional category names, from 1 through 100. Names match ignoring case and surrounding space, and " +
