@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Decks;
@@ -535,8 +536,8 @@ public sealed class DeckWriteSummaryTests
     public async Task ApplyChanges_RetryWithSkipBesideAnotherCopy_LaterChangesTargetTheAddedEntry(bool addedIsFirst)
     {
         using Setup setup = await Setup.CreateAsync(installCardData: false);
-        Guid low = Guid.CreateVersion7();
-        Guid high = Guid.CreateVersion7();
+        Guid low = Guid.Parse("00000000-0000-7000-8000-000000000001", CultureInfo.InvariantCulture);
+        Guid high = Guid.Parse("00000000-0000-7000-8000-000000000002", CultureInfo.InvariantCulture);
         Guid addedId = addedIsFirst ? low : high;
         DeckDocument deck = await setup.CreateDeckWithAsync(
             new DeckEntryDraft(1, "Sol Ring", EntryId: addedIsFirst ? high : low));
