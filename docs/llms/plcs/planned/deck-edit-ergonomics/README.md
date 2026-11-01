@@ -10,8 +10,9 @@
   installed.
 - State: drafted and reviewed once (independent read-only review, 2026-11-01). Updated the same day with three
   more session reports (see Sources).
-- Next action: the owner answers D-2, D-3, D-5, and D-7. Then the plan moves to `in-progress/` and phase 0 starts.
-- Blocker: the owner's answers to D-2, D-3, and D-5. D-7 also needs owner approval for one live Archidekt probe.
+- Decisions: the owner accepted D-2, D-3, and D-5 and approved the D-7 live probe on 2026-11-01.
+- Next action: the owner's go-ahead to implement; then the plan moves to `in-progress/` and phase 0 starts.
+- Blocker: none.
 - Resume check: this file exists on `main` or on `docs/deck-edit-ergonomics-plc`.
 
 ## Sources
@@ -152,11 +153,11 @@ Inspected at `c4fa0f1` (2026-11-01, read-only):
     the transaction and turns one refusal into several.
   - App resolves the `printing` group with `DeckEntryResolver` before the store runs, using the stored card name,
     or the drafted card name for an entry added earlier in the batch. The store writes the resolved values.
-- **D-2, primary replacement (owner to confirm).**
+- **D-2, primary replacement (accepted by the owner, 2026-11-01).**
   - A new `primaryCategoryId` removes the previous primary's assignment; `addCategoryIds` keeps it as non-primary.
   - Rejected: keeping the old primary, as `assign-category` does. That brings back the extra change this plan
     removes.
-- **D-3, removal lists (owner to confirm).**
+- **D-3, removal lists (accepted by the owner, 2026-11-01).**
   - `remove-entry` takes `entryIds` in place of `entryId`.
   - Rejected: a `remove-entries` kind, which adds a second change kind for one job, and removal inside
     `patch-entries`, which mixes deleting entries with editing them.
@@ -164,7 +165,7 @@ Inspected at `c4fa0f1` (2026-11-01, read-only):
   - `local_deck_category_rules_apply` assigns categories from rules over card data. `patch-entries` assigns
     categories the caller chose to entries the caller named. They answer different questions.
   - `replacePrimary` on `assign-category`, proposed earlier, is dropped: `patch-entries` covers it.
-- **D-5, zone categories are the caller's explicit choice (owner to confirm).**
+- **D-5, zone categories are the caller's explicit choice (accepted by the owner, 2026-11-01).**
   - Whenever a change sets a zone, it must say `zoneCategories: "match"` or `"leave"`. `match` gives Archidekt's
     rule in one change, which is the "move entries to zone X and set the matching category" operation that was
     asked for. A required field keeps the choice with the caller, as the simulation rules do for engine choices.
@@ -176,7 +177,7 @@ Inspected at `c4fa0f1` (2026-11-01, read-only):
   - Local decks are provider-neutral: imports and other formats have zones without categories.
   - Making zones a kind of category would change storage and every deck tool for one provider's convention.
     REQ-010 removes the cost of keeping the two in step.
-- **D-7, batched card mutations (needs a live probe; owner approval required).**
+- **D-7, batched card mutations (live probe approved by the owner, 2026-11-01).**
   - `modifyCards/v2` takes a `cards` list. Phase 0 sends one 2-card and one deliberately half-invalid batch to a
     throwaway Archidekt deck to learn the response shape, whether the batch is all-or-nothing, and any size limit.
   - That is a live provider mutation, so it runs only with the owner's approval, on a deck created for the probe.
@@ -279,7 +280,6 @@ contract. The CHANGELOG names:
 
 ## Risks And Open Questions
 
-- D-2, D-3, and D-5 need the owner's confirmation; D-7 needs approval for one live probe.
 - **Batch size.** A 100-entry patch plus adds can exceed what one result reports. The existing 100-ID budget and
   exact `changeCounts` apply.
 - **Category names in filters.** Archidekt decks can have two categories whose names differ only in case (repaired
