@@ -614,6 +614,13 @@ public sealed class SqliteDeckStore : IDisposable
             case RemoveDeckEntryChange removal:
                 primaryAssigned.Remove(removal.EntryId);
                 break;
+            case PatchDeckEntriesChange patch:
+                foreach (Guid entryId in patch.EntryIds)
+                {
+                    primaryAssigned.Remove(entryId);
+                }
+
+                break;
         }
     }
 
@@ -645,11 +652,32 @@ public sealed class SqliteDeckStore : IDisposable
                     connection, transaction, deckId, value, cancellationToken).ConfigureAwait(false);
                 break;
             case AddDeckEntryChange value:
+                DeckNewEntry added = DeckContractValidator.Normalize(value.Entry, createId);
                 await DeckSql.InsertEntryAsync(
                     connection,
                     transaction,
                     deckId,
-                    DeckContractValidator.Normalize(value.Entry, createId),
+                    added.Entry,
+                    cancellationToken).ConfigureAwait(false);
+                if (added.HasCategories)
+                {
+                    await DeckDraftCategories.ApplyAsync(
+                        connection,
+                        transaction,
+                        deckId,
+                        added,
+                        createId,
+                        cancellationToken).ConfigureAwait(false);
+                }
+
+                break;
+            case PatchDeckEntriesChange value:
+                await DeckEntryPatcher.ApplyAsync(
+                    connection,
+                    transaction,
+                    deckId,
+                    value,
+                    createId,
                     cancellationToken).ConfigureAwait(false);
                 break;
             case UpdateDeckEntryChange value:
@@ -730,16 +758,24 @@ public sealed class SqliteDeckStore : IDisposable
     /// </summary>
     private DeckDocument BuildNewDeck(DeckCreateRequest request, DateTimeOffset now)
     {
-        DeckEntry[] entries = (request.Entries ?? [])
+        DeckNewEntry[] drafted = (request.Entries ?? [])
             .Select(value => DeckContractValidator.Normalize(value, createId))
             .ToArray();
-        DeckCategory[] categories = (request.Categories ?? [])
-            .Select(value => DeckContractValidator.Normalize(value, createId))
-            .ToArray();
+        List<DeckCategory> categories = [.. (request.Categories ?? [])
+            .Select(value => DeckContractValidator.Normalize(value, createId))];
         DeckProviderBinding[] bindings = (request.ProviderBindings ?? [])
             .Select(value => DeckContractValidator.Normalize(value, createId))
             .ToArray();
-        DeckCategoryAssignment[] assignments = (request.CategoryAssignments ?? []).ToArray();
+        List<DeckCategoryAssignment> assignments = [.. request.CategoryAssignments ?? []];
+        foreach (DeckNewEntry added in drafted)
+        {
+            if (added.HasCategories)
+            {
+                assignments.AddRange(DeckDraftCategories.Plan(added, categories, createId));
+            }
+        }
+
+        DeckEntry[] entries = [.. drafted.Select(value => value.Entry)];
         return new DeckDocument(
             DeckContractValidator.NormalizeId(request.DeckId ?? createId(), "deck"),
             DeckContractValidator.Required(request.Name, "Deck name"),
@@ -898,7 +934,7 @@ public sealed class SqliteDeckStore : IDisposable
     {
         return exception switch
         {
-            DeckInputException value => Invalid<T>(value.Message),
+            DeckInputException value => new OperationInvalidInput(value.ReasonCode, value.Message),
             DeckEntityNotFoundException value => new OperationNotFound(
                 value.ReasonCode,
                 value.Message),

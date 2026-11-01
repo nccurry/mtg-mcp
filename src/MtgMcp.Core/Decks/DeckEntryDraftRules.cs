@@ -37,6 +37,16 @@ public static class DeckEntryDraftRules
             return "The printing ID is invalid.";
         }
 
+        if (draft.ZoneCategories is not null && !DeckZoneCategories.IsMode(draft.ZoneCategories))
+        {
+            return "zoneCategories must be \"match\" or \"leave\".";
+        }
+
+        if (draft.PrimaryCategoryId == Guid.Empty || draft.CategoryIds?.Contains(Guid.Empty) == true)
+        {
+            return "A category ID is invalid.";
+        }
+
         return FirstBlank(draft);
     }
 

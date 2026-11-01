@@ -660,7 +660,7 @@ internal static class DeckSql
     /// <summary>
     /// Loads canonically ordered category rows.
     /// </summary>
-    private static async Task<IReadOnlyList<DeckCategory>> ReadCategoriesAsync(
+    internal static async Task<IReadOnlyList<DeckCategory>> ReadCategoriesAsync(
         SqliteConnection connection,
         SqliteTransaction? transaction,
         Guid deckId,
