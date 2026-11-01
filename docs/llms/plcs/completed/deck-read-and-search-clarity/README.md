@@ -4,18 +4,17 @@
 
 - Status: Complete
 - Owner: mtg-mcp (Opus parent session with Sonnet implementation children)
-- Last updated: 2026-10-31, `main` at `b020157` (release `0.13.1`)
+- Last updated: 2026-10-31, `main` at `49757e7` (release `0.13.1`)
 - Implementation authorized: Yes (owner, 2026-10-31)
 - Selected work and endpoint: phases 0 to 7, merged into `main`, audited,
   released as `0.13.1`, and installed.
 - State: delivered. Merged in `0d2536e`; released in `b020157` (tag `0.13.1`;
   NuGet, GitHub Release, and MCP Registry; the release job was rerun once after
   NuGet indexing passed the workflow's wait). Installed globally as `0.13.1`.
-- Open check: Claude Code listing the tools under `2026-07-28` was not observed
-  in a live Claude Code session; the session that installed it held a stale
-  0.13.0 connection that only the owner can reconnect. A stdio probe of the
-  installed `0.13.1` using the `2026-07-28` `server/discover` handshake listed 86
-  tools, every `inputSchema` and `outputSchema` an object.
+- Verified live (2026-10-31): after a reconnect, Claude Code connected to the
+  installed `0.13.1` over protocol `2026-07-28` with no tools/list failure
+  (MCP log 2026-11-01T02-17-01-152Z), listed all 86 tools, and a
+  `scryfall_card_data_status` call returned `kind: success`.
 - Next action and blocker: none. Follow-ups are in Risks.
 - Resume check: `git log --oneline -1 origin/main` is `b020157` or later; no
   `deck-read-and-search-clarity` worktree exists.
