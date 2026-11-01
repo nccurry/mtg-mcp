@@ -251,6 +251,30 @@ public sealed class ArchidektRequestPacerTests
     }
 
     /// <summary>
+    /// Verifies a planned total over the ceiling is refused with the limit and the predicted count, and with how many
+    /// operations fit and the advice to split the push when the plan has operations.
+    /// </summary>
+    [Fact]
+    public void EnsureRequestBound_OverTheLimit_NamesTheLimitTheCountAndTheSplit()
+    {
+        ArchidektOperationBudget budget = new(100);
+
+        ArchidektProviderException plain = Assert.Throws<ArchidektProviderException>(
+            () => budget.EnsureRequestBound(130));
+        ArchidektProviderException split = Assert.Throws<ArchidektProviderException>(
+            () => budget.EnsureRequestBound(130, operationCount: 80));
+
+        Assert.Equal("request-limit-exceeded", split.ReasonCode);
+        Assert.Contains("about 130 provider requests", plain.Message, StringComparison.Ordinal);
+        Assert.Contains("limit of 100", plain.Message, StringComparison.Ordinal);
+        Assert.Contains("about 130 provider requests", split.Message, StringComparison.Ordinal);
+        Assert.Contains("limit of 100", split.Message, StringComparison.Ordinal);
+        Assert.Contains("About 50 of its 80 operations fit", split.Message, StringComparison.Ordinal);
+        Assert.Contains("can be split", split.Message, StringComparison.Ordinal);
+        budget.EnsureRequestBound(100, operationCount: 80);
+    }
+
+    /// <summary>
     /// Verifies cancellation during a pacing delay releases the shared lane for a later caller.
     /// </summary>
     [Fact]

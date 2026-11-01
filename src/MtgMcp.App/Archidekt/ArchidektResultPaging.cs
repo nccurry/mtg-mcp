@@ -124,14 +124,17 @@ internal static class ArchidektResultPaging
 
     /// <summary>
     /// Builds one page of a preview: a summary, then the operations and the differences that fit, starting at the
-    /// given offsets. Operations come first, because they are what the apply tool would run.
+    /// given offsets. Operations come first, because they are what the apply tool would run. The differences are
+    /// shown whole, or as their differing fields when <paramref name="concise"/> is true; the page is cut by the size
+    /// of the rows shown, and nothing else in the result depends on the format.
     /// </summary>
     internal static OperationResult<ArchidektSyncPreviewView> PagePreview(
         ArchidektSyncPreview preview,
         int operationOffset,
         int differenceOffset,
         string? applyNotice,
-        string? expectedPreviewFingerprint)
+        string? expectedPreviewFingerprint,
+        bool concise = false)
     {
         ArgumentNullException.ThrowIfNull(preview);
         if (ResultPage.CheckPage<ArchidektSyncPreviewView>(
@@ -164,22 +167,27 @@ internal static class ArchidektResultPaging
             operationOffset,
             differenceOffset,
             [],
-            []);
+            [])
+        {
+            ProviderRequestLimit = preview.ProviderRequestLimit,
+            ApplyOptions = preview.ApplyOptionsNotice,
+        };
+        IReadOnlyList<ArchidektDifferenceRow> rows = DifferenceRows(preview.Differences, concise);
         (ResultPageSlice operations, ResultPageSlice differences) = ResultPage.TakeTwo(
             preview.Operations,
             operationOffset,
-            preview.Differences,
+            rows,
             differenceOffset,
             ResultSize.Measure(header));
         bool more = operations.More || differences.More;
         return new OperationSuccess<ArchidektSyncPreviewView>(header with
         {
             Operations = operations.Rows(preview.Operations),
-            Differences = differences.Rows(preview.Differences),
+            Differences = differences.Rows(rows),
             Truncated = more ? true : null,
             NextOperationOffset = operations.NextOffsetIf(more),
             NextDifferenceOffset = differences.NextOffsetIf(more),
-            Narrow = more ? TwoListNarrow("the summary and every guard", operations, differences) : null,
+            Narrow = more ? TwoListNarrow("the summary and every guard", operations, differences, concise) : null,
         });
     }
 
@@ -233,9 +241,34 @@ internal static class ArchidektResultPaging
     }
 
     /// <summary>
-    /// Builds one page of the differences between a local deck, its baseline, and the remote deck.
+    /// Picks the form the difference rows are shown in: whole values, or only the fields that differ.
     /// </summary>
-    internal static OperationResult<ArchidektSyncDiffView> PageDiff(ArchidektSyncDiff diff, int differenceOffset)
+    private static IReadOnlyList<ArchidektDifferenceRow> DifferenceRows(
+        IReadOnlyList<ArchidektDifference> differences,
+        bool concise)
+    {
+        if (!concise)
+        {
+            return differences;
+        }
+
+        List<ArchidektDifferenceRow> rows = new(differences.Count);
+        foreach (ArchidektDifference difference in differences)
+        {
+            rows.Add(ArchidektConciseDifferences.From(difference));
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// Builds one page of the differences between a local deck, its baseline, and the remote deck, shown whole or, when
+    /// <paramref name="concise"/> is true, as their differing fields.
+    /// </summary>
+    internal static OperationResult<ArchidektSyncDiffView> PageDiff(
+        ArchidektSyncDiff diff,
+        int differenceOffset,
+        bool concise = false)
     {
         ArgumentNullException.ThrowIfNull(diff);
         if (ResultPage.CheckPage<ArchidektSyncDiffView>(
@@ -256,16 +289,17 @@ internal static class ArchidektResultPaging
             diff.Differences.Count,
             differenceOffset,
             []);
-        ResultPageSlice slice = ResultPage.Take(diff.Differences, differenceOffset, ResultSize.Measure(header));
+        IReadOnlyList<ArchidektDifferenceRow> rows = DifferenceRows(diff.Differences, concise);
+        ResultPageSlice slice = ResultPage.Take(rows, differenceOffset, ResultSize.Measure(header));
         return new OperationSuccess<ArchidektSyncDiffView>(header with
         {
-            Differences = slice.Rows(diff.Differences),
+            Differences = slice.Rows(rows),
             Truncated = slice.More ? true : null,
             NextDifferenceOffset = slice.NextOffset,
             Narrow = slice.More
                 ? $"Differences {differenceOffset} to {slice.Next - 1} of {diff.Differences.Count} are shown to " +
                     $"stay under the size limit. Call archidekt_sync_diff again with differenceOffset {slice.Next} " +
-                    "for the rest."
+                    "for the rest" + (concise ? ", with responseFormat \"concise\" again." : ".")
                 : null,
         });
     }
@@ -329,12 +363,16 @@ internal static class ArchidektResultPaging
     /// <summary>
     /// Says how to read the rows a two-list page left out, and that every page must come from the same preview.
     /// </summary>
-    private static string TwoListNarrow(string covers, ResultPageSlice operations, ResultPageSlice differences)
+    private static string TwoListNarrow(
+        string covers,
+        ResultPageSlice operations,
+        ResultPageSlice differences,
+        bool concise = false)
     {
         return $"Rows were left out to stay under the size limit; {covers} cover the whole preview. Call again " +
             $"with operationOffset {operations.Next}, differenceOffset {differences.Next}, and " +
             "expectedPreviewFingerprint set to the previewFingerprint of this page, so every page comes from the " +
-            "same preview.";
+            "same preview" + (concise ? ", and with responseFormat \"concise\" again." : ".");
     }
 
     /// <summary>

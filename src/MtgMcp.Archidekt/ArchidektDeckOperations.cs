@@ -266,8 +266,9 @@ internal sealed class ArchidektDeckOperations
                     resolved,
                     plan,
                     DescribeOperations(plan, choices),
-                    plan.PredictedProviderRequests + choices.SearchRequests,
-                    Blocked(choices, needed, budget.MaximumRequests),
+                    needed,
+                    budget.MaximumRequests,
+                    Blocked(choices, needed, budget.MaximumRequests, plan.PlannedOperations.Count),
                     choices);
             });
     }
@@ -331,13 +332,16 @@ internal sealed class ArchidektDeckOperations
     private static ArchidektPushBlock? Blocked(
         ArchidektPrintingChoices choices,
         int neededRequests,
-        int maximumRequests)
+        int maximumRequests,
+        int operationCount)
     {
         if (choices.StoppedAtRequestLimit)
         {
             return new ArchidektPushBlock(
                 "archidekt_push_apply would send nothing: looking up printings on Archidekt reached the limit of " +
-                    $"{maximumRequests} provider requests for one operation. Push fewer new cards at a time.",
+                    $"{maximumRequests} provider requests for one operation after {choices.SearchRequests} " +
+                    "searches. The push can be split: apply part of the local changes first (fewer new cards), " +
+                    "then preview and push again for the rest.",
                 RequestLimitReasonCode);
         }
 
@@ -356,8 +360,8 @@ internal sealed class ArchidektDeckOperations
 
         return neededRequests > maximumRequests
             ? new ArchidektPushBlock(
-                $"archidekt_push_apply would send nothing: this push needs about {neededRequests} provider " +
-                    $"requests, over the limit of {maximumRequests} for one operation. Push fewer changes at a time.",
+                "archidekt_push_apply would send nothing: this push " +
+                    ArchidektOperationBudget.DescribeOverLimit(neededRequests, maximumRequests, operationCount),
                 RequestLimitReasonCode)
             : null;
     }
@@ -431,7 +435,9 @@ internal sealed class ArchidektDeckOperations
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
-        budget.EnsureRequestBound(budget.RequestCount + plan.PredictedProviderRequests);
+        budget.EnsureRequestBound(
+            budget.RequestCount + plan.PredictedProviderRequests,
+            plan.PlannedOperations.Count);
         ArchidektPrintingChoices choices = new();
         ArchidektApplyResult? refused = await ResolveBeforeWritingAsync(
             current.RemoteId,

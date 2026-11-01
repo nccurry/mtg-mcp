@@ -791,7 +791,7 @@ public sealed class ArchidektCoordinatorTests
                 Assert.False(discard.HasConflicts);
                 Assert.NotEqual(plain.PreviewFingerprint, discard.PreviewFingerprint);
                 Assert.Contains(discard.Differences, value => value.State.StartsWith("local-", StringComparison.Ordinal));
-                OperationConflict refused = Assert.IsType<OperationConflict>((await coordinator.ApplyPullAsync(
+                OperationInvalidInput refused = Assert.IsType<OperationInvalidInput>((await coordinator.ApplyPullAsync(
                     new ArchidektPullApplyRequest(
                         "42",
                         localDeckId,
@@ -799,7 +799,7 @@ public sealed class ArchidektCoordinatorTests
                         discard.RemoteFingerprint,
                         discard.PreviewFingerprint),
                     TestContext.Current.CancellationToken)).Value);
-                Assert.Equal("pull-conflict", refused.ReasonCode);
+                Assert.Equal("pull-discard-option-mismatch", refused.ReasonCode);
 
                 ArchidektApplyResult applied = Success(await coordinator.ApplyPullAsync(
                     new ArchidektPullApplyRequest(
@@ -1070,7 +1070,7 @@ public sealed class ArchidektCoordinatorTests
                     created.DeckId,
                     discardLocalChanges: true,
                     TestContext.Current.CancellationToken));
-                OperationConflict mismatched = Assert.IsType<OperationConflict>((await coordinator.ApplyPullAsync(
+                OperationInvalidInput mismatched = Assert.IsType<OperationInvalidInput>((await coordinator.ApplyPullAsync(
                     new ArchidektPullApplyRequest(
                         "42",
                         created.DeckId,
@@ -1095,7 +1095,7 @@ public sealed class ArchidektCoordinatorTests
 
                 Assert.False(discard.HasConflicts);
                 Assert.Contains(discard.Differences, value => value.State == "local-changed-unverified");
-                Assert.Equal("pull-preview-changed", mismatched.ReasonCode);
+                Assert.Equal("pull-discard-option-mismatch", mismatched.ReasonCode);
                 Assert.Equal("applied", applied.Outcome);
                 Assert.False(clean.HasConflicts);
                 Assert.Empty(clean.Differences);

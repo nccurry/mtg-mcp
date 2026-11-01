@@ -33,17 +33,35 @@ internal sealed class ArchidektOperationBudget
     internal int RequestCount => Volatile.Read(ref requestCount);
 
     /// <summary>
-    /// Rejects a planned total that would exceed this operation's request ceiling before a remote write starts.
+    /// Rejects a planned total that would exceed this operation's request ceiling before a remote write starts. When
+    /// the plan has <paramref name="operationCount"/> operations of one request each, the refusal also says how many of
+    /// them fit and that the push can be split.
     /// </summary>
-    internal void EnsureRequestBound(int predictedRequests)
+    internal void EnsureRequestBound(int predictedRequests, int operationCount = 0)
     {
         if (predictedRequests > MaximumRequests)
         {
             throw new ArchidektProviderException(
                 ArchidektFailureKind.InvalidInput,
                 "request-limit-exceeded",
-                "The preview exceeds the provider request limit; no remote writes were attempted.");
+                operationCount > 0
+                    ? $"This push {DescribeOverLimit(predictedRequests, MaximumRequests, operationCount)} No remote " +
+                        "writes were attempted."
+                    : $"The operation needs about {predictedRequests} provider requests, over the limit of " +
+                        $"{MaximumRequests} for one operation; no remote writes were attempted.");
         }
+    }
+
+    /// <summary>
+    /// Says that a push needs more requests than the limit, how many of its operations fit, and that it can be split.
+    /// The requests other than the operations (reads and room to retry them) are taken as the same for any part.
+    /// </summary>
+    internal static string DescribeOverLimit(int predictedRequests, int maximumRequests, int operationCount)
+    {
+        int fit = Math.Min(operationCount, Math.Max(0, maximumRequests - (predictedRequests - operationCount)));
+        return $"needs about {predictedRequests} provider requests, over the limit of {maximumRequests} for one " +
+            $"operation. About {fit} of its {operationCount} operations fit. The push can be split: apply part of " +
+            "the local changes first, then preview and push again for the rest.";
     }
 
     /// <summary>
