@@ -1,6 +1,19 @@
 # Changelog
 
-## 0.13.2 - 2026-11-01
+## 0.13.3 - 2026-11-01
+
+This release carries every change listed under `0.13.2` below: `0.13.2` was tagged but never published, so users
+upgrade from `0.13.1` straight to `0.13.3`.
+
+### Changed
+
+- The release workflow publishes to NuGet with trusted publishing (a short-lived key from GitHub OIDC) instead of a
+  stored API key, and waits up to 15 minutes for NuGet to list a new package.
+
+## 0.13.2 - not published (ships in 0.13.3)
+
+> This version was tagged but never published: the release stopped at the NuGet upload because the stored API key had
+> expired. Its changes are part of `0.13.3`.
 
 An agent cleaning up duplicated cards on `0.13.1` hit three agent-safety gaps. A retried add made a second entry for a
 card already in the deck and turned 17 cards into 4 copies each; the duplicates preview left identical copies
