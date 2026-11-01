@@ -9,7 +9,7 @@
   release is required; this changes tests, fixtures, one script, and one Task
   target.
 - State: designed; not approved; implementation not started.
-- Next action and blocker: owner answers D-1 and approves.
+- Next action and blocker: owner approves the plan. No blocker.
 - Resume check: this file is under `docs/llms/plcs/planned/`.
 
 ## Outcome And Requirements
@@ -96,11 +96,10 @@ refresh, and `docs/llms/repo-operations.md` with the new target.
 
 ## Risks And Open Questions
 
-- **D-1 (owner, blocks phase 2):** which Archidekt decks to record. Archidekt
-  publishes no API terms, and its site terms forbid harvesting data about
-  other users. Proposed: record only decks you own (or have the owner's
-  consent for), scrub usernames and avatars, and replace other users' decks
-  with your own copy. Confirm whether 22959335 and 27968076 are yours.
+- **D-1 (owner, answered 2026-11-01):** decks 22959335 and 27968076 are the
+  owner's and may be recorded. Other users' decks stay out, because
+  Archidekt's site terms forbid harvesting data about other users; usernames
+  and avatars are still scrubbed.
 - Scryfall allows use of its API data with attribution, and the repo already
   stores card JSON; confirm against scryfall.com/docs/api before phase 1.
 - Size: deck 22959335 is about 1.3 MB. Keep whole decks when a bug depended on
