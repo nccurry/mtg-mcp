@@ -357,7 +357,7 @@ public sealed class DeckEntryResolverTests
                 new AddDeckEntryInput(new DeckEntryDraft(1, "Another Card")),
             ],
             returnDeck: true,
-            TestContext.Current.CancellationToken));
+            cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal(2, summary.Deck!.Entries.Count);
         Assert.All(summary.Deck.Entries, entry => Assert.Null(entry.OracleId));

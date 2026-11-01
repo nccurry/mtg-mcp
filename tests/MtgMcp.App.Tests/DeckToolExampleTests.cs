@@ -82,7 +82,7 @@ public sealed class DeckToolExampleTests : IClassFixture<ToolCatalogFixture>
             store,
             OperationMode.Local,
             cardData.Resolver)
-            .ApplyChangesAsync(deck.DeckId, deck.Revision, changes, true, TestContext.Current.CancellationToken);
+            .ApplyChangesAsync(deck.DeckId, deck.Revision, changes, true, cancellationToken: TestContext.Current.CancellationToken);
 
         DeckDocument updated = Assert.IsType<OperationSuccess<DeckWriteResult>>(result.Value).Data.Deck!;
         Assert.Equal("Golgari Ramp", updated.Name);
