@@ -46,8 +46,10 @@ are design evidence, not designs to copy; current code and tests win.
   86 tools in `remote` mode (59 in `read-only`, 73 in `local`).
 - Tools use the `local_deck_*`, `scryfall_*`, `archidekt_*`, `playgroup_*`,
   `spellbook_*`, and `stats_*` prefixes, and each description starts with its
-  data source. Assign every stable tool to exactly one toolset. Toolsets choose
-  which tools an LLM sees; they never grant write access.
+  data source. Tool names are snake_case, properties camelCase, and fixed values
+  kebab-case (`docs/architecture/mcp-surface.md`). Assign every stable tool to
+  exactly one toolset. Toolsets choose which tools an LLM sees; they never grant
+  write access.
 - Registration is fixed for an MCP session. Every toolset is on by default; the
   Archidekt and Playgroup toolsets turn on only when their credentials are
   present.
@@ -71,7 +73,7 @@ are design evidence, not designs to copy; current code and tests win.
 | `src/MtgMcp.Scryfall/` | Scryfall API, card data, rulings, tags, and `scryfall.db` |
 | `src/MtgMcp.Archidekt/`, `src/MtgMcp.Playgroup/`, `src/MtgMcp.Spellbook/` | Provider adapters |
 | `tests/` | One test project per production project, plus architecture and E2E tests |
-| `docs/` | Product docs, `architecture.md`, `adapters.md`, and agent docs under `docs/llms/` |
+| `docs/` | Product docs, `architecture/` (design and conventions), `adapters.md`, and agent docs under `docs/llms/` |
 | `scripts/` | Helper scripts that Task calls |
 
 Read the closest folder `AGENTS.md` before changing files in that folder.

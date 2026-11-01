@@ -21,6 +21,9 @@ and PLC packets under `docs/llms/`.
   or `plan`/`apply` behavior as the target architecture.
 - Keep `north-star.md`, `design-goals.md`, and `heuristic-models.md` short,
   consistent with each other, and linked from the architecture docs.
+- Keep `architecture/` pages true to the code on the branch they land on.
+  Name the source file or test that holds each rule, and update the page in
+  the same change as the code.
 - Describe source observations and heuristic outputs with their limits. Do not
   call popularity, community tags, or simulation results universal facts.
 - Do not revive separate Tagger-site scraping, storage, adapter, prefix, or
