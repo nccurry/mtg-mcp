@@ -345,8 +345,9 @@ internal sealed class DeckDuplicatesReadTools
         "plans the edits that keep one copy of each, writing nothing. You choose which copy to keep with " +
         "keepPriority, a list of {zone} or {category} groups, best first; the best-ranked entry is kept (lowered " +
         "with update-entry if it holds more copies than allowed) and the others get remove-entry. " +
-        "When entries tie for the best rank the card is listed in ambiguous with no change; add a more specific " +
-        "group and ask again. matchBy oracle (default) needs installed card data, name and printing do not. " +
+        "When entries tie for the cut and are identical (same printing, language, finish, zone, and categories), " +
+        "the first in deck order is kept and the group says tieBrokenBy identical-entries. Other ties are listed " +
+        "in ambiguous with no kept entry and no change; next names the field that differs. matchBy oracle (default) needs installed card data, name and printing do not. " +
         "exempt commander-singleton-exceptions skips basic lands and keeps as many copies as a card's text allows " +
         "for the rest. Send the changes to local_deck_apply_changes with the returned revision, then archidekt_push_preview " +
         "for a bound deck." + UntrustedTextNotes.CardListEntries +
