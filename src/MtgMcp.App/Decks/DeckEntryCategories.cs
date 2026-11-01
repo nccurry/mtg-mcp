@@ -33,4 +33,25 @@ internal static class DeckEntryCategories
 
         return byEntry;
     }
+
+    /// <summary>
+    /// Maps each entry ID to the name of its primary category. An entry with no primary category is not in the map.
+    /// </summary>
+    internal static Dictionary<Guid, string> PrimaryByEntry(DeckDocument deck)
+    {
+        ArgumentNullException.ThrowIfNull(deck);
+        Dictionary<Guid, string> names = deck.Categories.ToDictionary(
+            category => category.CategoryId,
+            category => category.Name);
+        Dictionary<Guid, string> primaries = [];
+        foreach (DeckCategoryAssignment assignment in deck.CategoryAssignments)
+        {
+            if (assignment.IsPrimary && names.TryGetValue(assignment.CategoryId, out string? name))
+            {
+                primaries[assignment.EntryId] = name;
+            }
+        }
+
+        return primaries;
+    }
 }

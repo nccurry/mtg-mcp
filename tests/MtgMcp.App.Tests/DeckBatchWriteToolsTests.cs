@@ -293,7 +293,7 @@ public sealed class DeckBatchWriteToolsTests
             deck.Revision,
             changes,
             returnDeck: true,
-            TestContext.Current.CancellationToken)).Deck!;
+            cancellationToken: TestContext.Current.CancellationToken)).Deck!;
     }
 
     /// <summary>
@@ -406,7 +406,7 @@ public sealed class DeckBatchWriteToolsTests
                 Deck.Revision,
                 changes,
                 returnDeck: true,
-                TestContext.Current.CancellationToken);
+                cancellationToken: TestContext.Current.CancellationToken);
         }
 
         /// <summary>

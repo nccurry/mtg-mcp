@@ -121,10 +121,11 @@ internal sealed class DeckDuplicatesCoordinator
         }
 
         Dictionary<Guid, IReadOnlyList<string>> categories = DeckEntryCategories.NamesByEntry(deck);
+        Dictionary<Guid, string> primaries = DeckEntryCategories.PrimaryByEntry(deck);
         List<DuplicateCandidate> candidates = [];
         for (int index = 0; index < deck.Entries.Count; index++)
         {
-            candidates.Add(Candidate(deck.Entries[index], cards[index], match, categories));
+            candidates.Add(Candidate(deck.Entries[index], cards[index], match, categories, primaries));
         }
 
         DeckDuplicatesPreview preview = DeckDuplicateFinder.Find(deck, candidates, keepPriority!, exemptExceptions);
@@ -195,7 +196,8 @@ internal sealed class DeckDuplicatesCoordinator
         DeckEntry entry,
         ScryfallCard? card,
         ScryfallMatchBy match,
-        Dictionary<Guid, IReadOnlyList<string>> categories)
+        Dictionary<Guid, IReadOnlyList<string>> categories,
+        Dictionary<Guid, string> primaries)
     {
         IReadOnlyList<string> names = categories.GetValueOrDefault(entry.EntryId) ?? [];
         Guid? oracleId = card is null ? entry.OracleId : ScryfallConciseFieldTable.EffectiveOracleId(card);
@@ -210,7 +212,14 @@ internal sealed class DeckDuplicatesCoordinator
             ScryfallMatchBy.Name => (ScryfallCardSets.NormalizeName(entry.CardName), null),
             _ => PrintingKey(entry),
         };
-        return new DuplicateCandidate(entry, names, key, card, oracleId, reason);
+        return new DuplicateCandidate(
+            entry,
+            names,
+            primaries.GetValueOrDefault(entry.EntryId),
+            key,
+            card,
+            oracleId,
+            reason);
     }
 
     /// <summary>
@@ -345,11 +354,14 @@ internal sealed class DeckDuplicatesReadTools
         "plans the edits that keep one copy of each, writing nothing. You choose which copy to keep with " +
         "keepPriority, a list of {zone} or {category} groups, best first; the best-ranked entry is kept (lowered " +
         "with update-entry if it holds more copies than allowed) and the others get remove-entry. " +
-        "When entries tie for the best rank the card is listed in ambiguous with no change; add a more specific " +
-        "group and ask again. matchBy oracle (default) needs installed card data, name and printing do not. " +
+        "When entries share a rank and only some of them can be kept, identical entries (same printing, language, " +
+        "finish, zone, categories, and primary category) keep the first in deck order and the group says tieBrokenBy " +
+        "identical-entries. Other ties are listed in ambiguous with no tied entry marked as kept and no change; " +
+        "differsIn names the fields that differ. matchBy oracle (default) needs installed card data, name and " +
+        "printing do not. " +
         "exempt commander-singleton-exceptions skips basic lands and keeps as many copies as a card's text allows " +
-        "for the rest. Send the changes to local_deck_apply_changes with the returned revision, then archidekt_push_preview " +
-        "for a bound deck." + UntrustedTextNotes.CardListEntries +
+        "for the rest. Send the changes to local_deck_apply_changes with the returned revision, then " +
+        "archidekt_push_preview for a bound deck." + UntrustedTextNotes.CardListEntries +
         DeckToolExamples.ExamplePrefix + "dedupe): " + Example)]
     internal Task<OperationResult<DeckDuplicatesPreview>> PreviewAsync(
         [Description("Stable local deck UUID.")] Guid deckId,

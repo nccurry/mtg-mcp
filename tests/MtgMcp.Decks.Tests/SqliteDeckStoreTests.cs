@@ -504,6 +504,46 @@ public sealed class SqliteDeckStoreTests
     }
 
     /// <summary>
+    /// Verifies each invalid entry field is refused with the same message the shared draft rules give, so callers who
+    /// check a draft first see the store's own wording.
+    /// </summary>
+    [Theory]
+    [InlineData("quantity")]
+    [InlineData("entry-id")]
+    [InlineData("card-name")]
+    [InlineData("oracle-id")]
+    [InlineData("printing-id")]
+    [InlineData("language")]
+    [InlineData("finish")]
+    [InlineData("zone")]
+    public async Task ApplyChanges_InvalidEntryField_GivesTheSharedRuleMessage(string field)
+    {
+        using TemporaryDeckDirectory temporary = new();
+        using SqliteDeckStore store = CreateStore(temporary.Path);
+        DeckDocument deck = await CreateCommanderAsync(store);
+        DeckEntryDraft draft = field switch
+        {
+            "quantity" => new DeckEntryDraft(0, "Sol Ring"),
+            "entry-id" => new DeckEntryDraft(1, "Sol Ring", EntryId: Guid.Empty),
+            "card-name" => new DeckEntryDraft(1, " "),
+            "oracle-id" => new DeckEntryDraft(1, "Sol Ring", OracleId: Guid.Empty),
+            "printing-id" => new DeckEntryDraft(1, "Sol Ring", PrintingId: Guid.Empty),
+            "language" => new DeckEntryDraft(1, "Sol Ring", Language: " "),
+            "finish" => new DeckEntryDraft(1, "Sol Ring", Finish: " "),
+            _ => new DeckEntryDraft(1, "Sol Ring", Zone: " "),
+        };
+
+        OperationResult<DeckDocument> result = await store.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [new AddDeckEntryChange(draft)],
+            TestContext.Current.CancellationToken);
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(result.Value);
+        Assert.Equal(DeckEntryDraftRules.FirstProblem(draft), invalid.Message);
+    }
+
+    /// <summary>
     /// Verifies the database enforces one primary category per entry and rolls back the batch.
     /// </summary>
     [Fact]

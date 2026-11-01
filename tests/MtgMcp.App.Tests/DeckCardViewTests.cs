@@ -500,6 +500,279 @@ public sealed class DeckCardViewTests
     }
 
     /// <summary>
+    /// Verifies cardNames returns only matching entries, ignores case, finds a double-faced card by one face, lists
+    /// the names with no match, and keeps the deck-wide totals.
+    /// </summary>
+    [Fact]
+    public async Task Get_CardNames_ReturnsMatchesAndTheNamesNotFound()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
+        DeckDocument deck = Success(await setup.Store.CreateAsync(
+            new DeckCreateRequest(
+                "Names",
+                Format: "custom",
+                Entries:
+                [
+                    new DeckEntryDraft(1, "Sol Ring"),
+                    new DeckEntryDraft(2, "Island", Zone: "sideboard"),
+                    new DeckEntryDraft(1, "Delver of Secrets // Insectile Aberration"),
+                    new DeckEntryDraft(1, "Arcane Signet"),
+                ]),
+            TestContext.Current.CancellationToken));
+
+        DeckDocumentView view = Success(await setup.Get(
+            deck.DeckId,
+            cardNames: ["sol ring", "DELVER OF SECRETS", "Mana Crypt", "Island"]));
+
+        Assert.Equal(
+            ["Delver of Secrets // Insectile Aberration", "Sol Ring", "Island"],
+            view.Entries.Select(entry => entry.CardName));
+        Assert.Equal(["Mana Crypt"], view.CardNamesNotFound);
+        Assert.Equal(4, view.EntryCount);
+        Assert.Equal(5, view.CardCount);
+        Assert.Equal(
+            new Dictionary<string, int> { ["main"] = 3, ["sideboard"] = 2 },
+            view.CardsByZone);
+        Assert.Equal(3, view.TotalEntries);
+        Assert.Null(view.NextCursor);
+    }
+
+    /// <summary>
+    /// Verifies a name list with no match gives no entries, and an empty list, too many names, a blank name, and an
+    /// unknown response format are refused.
+    /// </summary>
+    [Fact]
+    public async Task Get_CardNames_AllMissOrInvalid_AreHandled()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckAsync(2);
+
+        DeckDocumentView miss = Success(await setup.Get(deck.DeckId, cardNames: ["Nothing"]));
+        OperationResult<DeckDocumentView> empty = await setup.Get(deck.DeckId, cardNames: []);
+        OperationResult<DeckDocumentView> tooMany = await setup.Get(
+            deck.DeckId,
+            cardNames: [.. Enumerable.Range(0, 101).Select(index => $"Card {index}")]);
+        OperationResult<DeckDocumentView> blank = await setup.Get(deck.DeckId, cardNames: ["Entry 000", " "]);
+        OperationResult<DeckDocumentView> format = await setup.Get(deck.DeckId, responseFormat: "tiny");
+
+        Assert.Empty(miss.Entries);
+        Assert.Equal(["Nothing"], miss.CardNamesNotFound);
+        Assert.Equal("invalid-card-names", Assert.IsType<OperationInvalidInput>(empty.Value).ReasonCode);
+        Assert.Equal("invalid-card-names", Assert.IsType<OperationInvalidInput>(tooMany.Value).ReasonCode);
+        OperationInvalidInput blankFailure = Assert.IsType<OperationInvalidInput>(blank.Value);
+        Assert.Equal("cardNames[1]", blankFailure.Path);
+        Assert.Equal("invalid-response-format", Assert.IsType<OperationInvalidInput>(format.Value).ReasonCode);
+    }
+
+    /// <summary>
+    /// Verifies cardNames works with include, and a cursor refuses a changed name list or response format.
+    /// </summary>
+    [Fact]
+    public async Task Get_Cursor_RefusesAChangedFilterOrFormat()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: true);
+        DeckDocument deck = await setup.CreateDeckAsync(6);
+        string[] names = ["Entry 001", "Entry 003", "Entry 004", "Entry 005"];
+        DeckDocumentView first = Success(await setup.Get(deck.DeckId, ["tags"], null, null, 2, names));
+
+        DeckDocumentView second = Success(await setup.Get(deck.DeckId, ["tags"], null, first.NextCursor, 2, names));
+        OperationResult<DeckDocumentView> otherNames = await setup.Get(
+            deck.DeckId, ["tags"], null, first.NextCursor, 2, ["Entry 001"]);
+        OperationResult<DeckDocumentView> noNames = await setup.Get(deck.DeckId, ["tags"], null, first.NextCursor, 2);
+        OperationResult<DeckDocumentView> otherFormat = await setup.Get(
+            deck.DeckId, ["tags"], null, first.NextCursor, 2, names, "concise");
+
+        Assert.Equal(4, first.TotalEntries);
+        Assert.Equal(["Entry 001", "Entry 003"], first.Entries.Select(entry => entry.CardName));
+        Assert.Equal(["Entry 004", "Entry 005"], second.Entries.Select(entry => entry.CardName));
+        Assert.Null(second.NextCursor);
+        Assert.Equal(["fixture-ramp-child"], first.Entries[0].Tags);
+        Assert.All(
+            (OperationResult<DeckDocumentView>[])[otherNames, noNames, otherFormat],
+            result => Assert.Equal("invalid-cursor", Assert.IsType<OperationInvalidInput>(result.Value).ReasonCode));
+    }
+
+    /// <summary>
+    /// Verifies concise entries hold only the entry ID, card name, quantity, zone, and category names, with no
+    /// assignment rows, include still adds card data to them, and standard gives the same result as full.
+    /// </summary>
+    [Fact]
+    public async Task Get_Concise_ReturnsOnlyTheShortEntryFields()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: true);
+        DeckDocument deck = await setup.CreateDeckAsync(2, withCategories: true);
+
+        DeckDocumentView view = Success(await setup.Get(deck.DeckId, responseFormat: "concise"));
+        DeckDocumentView withTags = Success(await setup.Get(deck.DeckId, ["tags"], responseFormat: "concise"));
+        DeckDocumentView standard = Success(await setup.Get(deck.DeckId, responseFormat: "standard"));
+        DeckDocumentView full = Success(await setup.Get(deck.DeckId));
+
+        JsonNode entry = JsonSerializer.SerializeToNode(view, ToolCallPolicy.SerializerOptions)!["entries"]![0]!;
+        Assert.Equal(
+            ["entryId", "quantity", "cardName", "zone", "categoryNames"],
+            [.. entry.AsObject().Select(property => property.Key)]);
+        Assert.Equal(["Ramp"], view.Entries[0].CategoryNames);
+        Assert.Empty(view.CategoryAssignments);
+        Assert.Equal(["fixture-ramp-child"], withTags.Entries[0].Tags);
+        Assert.Equal(["Ramp"], withTags.Entries[0].CategoryNames);
+        Assert.Equal(2, standard.CategoryAssignments.Count);
+        JsonObject fullEntry = JsonSerializer.SerializeToNode(full, ToolCallPolicy.SerializerOptions)!
+            ["entries"]![0]!.AsObject();
+        Assert.All(["language", "finish", "sortOrder"], key => Assert.True(fullEntry.ContainsKey(key), key));
+        Assert.Null(standard.Entries[0].CategoryNames);
+        Assert.True(JsonNode.DeepEquals(
+            JsonSerializer.SerializeToNode(full, ToolCallPolicy.SerializerOptions),
+            JsonSerializer.SerializeToNode(standard, ToolCallPolicy.SerializerOptions)));
+    }
+
+    /// <summary>
+    /// Verifies a 172-entry deck with 99 sideboard rows and category assignments comes back in one concise result
+    /// under the size limit, while the full read of the same deck is cut into pages.
+    /// </summary>
+    [Fact]
+    public async Task Get_Concise_LargeSideboardDeckFitsInOneResult()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
+        Guid categoryId = Guid.CreateVersion7();
+        List<DeckEntryDraft> drafts = [];
+        List<DeckCategoryAssignment> assignments = [];
+        for (int index = 0; index < 172; index++)
+        {
+            Guid entryId = Guid.CreateVersion7();
+            drafts.Add(new DeckEntryDraft(
+                1,
+                $"Card number {index:D3} of the large deck",
+                OracleId: Guid.CreateVersion7(),
+                PrintingId: Guid.CreateVersion7(),
+                SetCode: "abc",
+                CollectorNumber: index.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                Zone: index < 73 ? "main" : "sideboard",
+                SortOrder: index,
+                EntryId: entryId));
+            assignments.Add(new DeckCategoryAssignment(entryId, categoryId, true));
+        }
+
+        DeckDocument deck = Success(await setup.Store.CreateAsync(
+            new DeckCreateRequest(
+                "Big deck",
+                Format: "commander",
+                Entries: drafts,
+                Categories: [new DeckCategoryDraft("Ramp", CategoryId: categoryId)],
+                CategoryAssignments: assignments),
+            TestContext.Current.CancellationToken));
+
+        OperationResult<DeckDocumentView> concise = await setup.Get(deck.DeckId, responseFormat: "concise");
+        DeckDocumentView full = Success(await setup.Get(deck.DeckId));
+
+        DeckDocumentView page = Success(concise);
+        Assert.Equal(172, page.Entries.Count);
+        Assert.Null(page.NextCursor);
+        Assert.Null(page.Truncated);
+        Assert.True(Bytes(concise) < 40_000, $"concise result has {Bytes(concise)} bytes");
+        Assert.True(full.Truncated);
+    }
+
+    /// <summary>
+    /// Verifies a stored read with cardNames and concise entries, and no include, pages by pageSize, accepts the names
+    /// reordered or in another letter case on the next page, says the page holds matching entries, and refuses a
+    /// changed name list or format.
+    /// </summary>
+    [Fact]
+    public async Task Get_StoredCardNamesAndConcise_PageAndKeepTheCursorFingerprint()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckAsync(6);
+        string[] names = ["Entry 001", "Entry 003", "Entry 005"];
+
+        DeckDocumentView first = Success(await setup.Get(
+            deck.DeckId,
+            pageSize: 2,
+            cardNames: names,
+            responseFormat: "concise"));
+        DeckDocumentView second = Success(await setup.Get(
+            deck.DeckId,
+            cursor: first.NextCursor,
+            pageSize: 2,
+            cardNames: ["ENTRY 005", "entry 001", " Entry 003 "],
+            responseFormat: "concise"));
+        OperationResult<DeckDocumentView> otherNames = await setup.Get(
+            deck.DeckId,
+            cursor: first.NextCursor,
+            cardNames: ["Entry 001"],
+            responseFormat: "concise");
+        OperationResult<DeckDocumentView> otherFormat = await setup.Get(
+            deck.DeckId,
+            cursor: first.NextCursor,
+            cardNames: names);
+
+        Assert.Equal(3, first.TotalEntries);
+        Assert.Equal(["Entry 001", "Entry 003"], first.Entries.Select(entry => entry.CardName));
+        Assert.Equal(["Entry 005"], second.Entries.Select(entry => entry.CardName));
+        Assert.Null(second.NextCursor);
+        Assert.All(
+            (OperationResult<DeckDocumentView>[])[otherNames, otherFormat],
+            result => Assert.Equal("invalid-cursor", Assert.IsType<OperationInvalidInput>(result.Value).ReasonCode));
+    }
+
+    /// <summary>
+    /// Verifies a page cut by size for a read of named cards says it holds matching entries, while the same cut for a
+    /// whole-deck read keeps the whole-deck wording.
+    /// </summary>
+    [Fact]
+    public async Task Get_CardNamesCutBySize_NarrowSaysMatchingEntries()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckAsync(100, withCategories: true);
+
+        DeckDocumentView named = Success(await setup.Get(
+            deck.DeckId,
+            cardNames: [.. Enumerable.Range(0, 100).Select(index => $"Entry {index:D3}")]));
+        DeckDocumentView whole = Success(await setup.Get(deck.DeckId));
+
+        Assert.True(named.Truncated);
+        Assert.Contains(
+            "of 100 matching entries; follow nextCursor for the rest.",
+            named.Narrow,
+            StringComparison.Ordinal);
+        Assert.Contains("the deck is not missing the rest", whole.Narrow, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies concise category names list the primary category first and the others in name order.
+    /// </summary>
+    [Fact]
+    public async Task Get_Concise_ListsThePrimaryCategoryFirst()
+    {
+        using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
+        Guid entryId = Guid.CreateVersion7();
+        Guid alpha = Guid.CreateVersion7();
+        Guid beta = Guid.CreateVersion7();
+        Guid zebra = Guid.CreateVersion7();
+        DeckDocument deck = Success(await setup.Store.CreateAsync(
+            new DeckCreateRequest(
+                "Categories",
+                Format: "custom",
+                Entries: [new DeckEntryDraft(1, "Sol Ring", EntryId: entryId)],
+                Categories:
+                [
+                    new DeckCategoryDraft("Alpha", CategoryId: alpha),
+                    new DeckCategoryDraft("Beta", CategoryId: beta),
+                    new DeckCategoryDraft("Zebra", CategoryId: zebra),
+                ],
+                CategoryAssignments:
+                [
+                    new DeckCategoryAssignment(entryId, alpha, false),
+                    new DeckCategoryAssignment(entryId, zebra, true),
+                    new DeckCategoryAssignment(entryId, beta, false),
+                ]),
+            TestContext.Current.CancellationToken));
+
+        DeckDocumentView view = Success(await setup.Get(deck.DeckId, responseFormat: "concise"));
+
+        Assert.Equal(["Zebra", "Alpha", "Beta"], Assert.Single(view.Entries).CategoryNames);
+    }
+
+    /// <summary>
     /// Reads one list-of-text field value of a concise card.
     /// </summary>
     private static string[] FieldTexts(ScryfallConciseCard card, string name)
@@ -632,9 +905,19 @@ public sealed class DeckCardViewTests
             string[]? include = null,
             string[]? fields = null,
             string? cursor = null,
-            int? pageSize = null)
+            int? pageSize = null,
+            string[]? cardNames = null,
+            string responseFormat = "full")
         {
-            return reads.GetAsync(deckId, include, fields, cursor, pageSize, TestContext.Current.CancellationToken);
+            return reads.GetAsync(
+                deckId,
+                include,
+                fields,
+                cursor,
+                pageSize,
+                cardNames,
+                responseFormat,
+                TestContext.Current.CancellationToken);
         }
 
         /// <summary>

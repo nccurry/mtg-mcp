@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using ModelContextProtocol.Server;
@@ -91,8 +92,11 @@ internal sealed class DeckBatchWriteTools
         "upsert-provider-binding, or remove-provider-binding. A new entry or category may carry its own ID, " +
         "so later changes in the same batch can refer to it. An added entry that has only a card name (or a set code " +
         "and collector number) gets its card identity from installed card data; a name that is not found is " +
-        "still added and listed in issues. The result is a summary (new revision, counts, IDs of changed entries " +
-        "and categories, issues); pass returnDeck true to also get the whole deck." +
+        "still added and listed in issues. An add of a card already in the deck still makes another entry and is " +
+        "listed as already-in-deck; a retried add should pass an entryId or set whenCardPresent to skip, which " +
+        "leaves out an add whose card is already in the same zone. The result is a summary (new revision, counts, " +
+        "IDs of changed entries and categories, issues); pass returnDeck true to also get the whole deck." +
+        UntrustedTextNotes.CardListEntries +
         DeckToolExamples.ExamplePrefix + "minimal): " + DeckToolExamples.ApplyChangesMinimal +
         DeckToolExamples.ExamplePrefix + "categorize): " + DeckToolExamples.ApplyChangesCategorize +
         DeckToolExamples.ExamplePrefix + "full): " + DeckToolExamples.ApplyChangesFull)]
@@ -103,6 +107,11 @@ internal sealed class DeckBatchWriteTools
         IReadOnlyList<DeckChangeInput>? changes,
         [Description("Set true to also return the whole deck after the write. The default summary is much smaller.")]
         bool returnDeck = false,
+        [Description(
+            "What to do with an add-entry whose card is already in the same zone: add (default) makes another " +
+            "entry and reports already-in-deck; skip leaves the add out and reports skipped."),
+         AllowedValues(DeckAddPresence.Add, DeckAddPresence.Skip)]
+        string whenCardPresent = DeckAddPresence.Add,
         CancellationToken cancellationToken = default)
     {
         if (!OperationModeGuard.Allows(mode, OperationRequirement.LocalWrite))
@@ -110,6 +119,13 @@ internal sealed class DeckBatchWriteTools
             return new OperationUnsupported(
                 "operation-mode-denied",
                 "The effective operation mode does not permit local writes.");
+        }
+
+        if (whenCardPresent is not (DeckAddPresence.Add or DeckAddPresence.Skip))
+        {
+            return new OperationInvalidInput(
+                "invalid-when-card-present",
+                "whenCardPresent must be \"add\" or \"skip\".");
         }
 
         if (!DeckChangeInputMapper.TryMap(changes, out IReadOnlyList<DeckChange> mapped, out string failure))
@@ -131,8 +147,24 @@ internal sealed class DeckBatchWriteTools
         {
             DeckChangeResolution resolution = await resolver.ResolveChangesAsync(mapped, cancellationToken)
                 .ConfigureAwait(false);
-            mapped = resolution.Changes;
-            issues = resolution.Issues;
+            DeckAddPresenceResult presence = DeckAddPresence.Check(
+                before.Data,
+                resolution.Changes,
+                whenCardPresent == DeckAddPresence.Skip);
+            if (presence.Refusal is not null)
+            {
+                return new OperationInvalidInput("invalid-deck-change", presence.Refusal);
+            }
+
+            issues = [.. resolution.Issues, .. presence.Issues];
+            if (presence.Changes.Count == 0)
+            {
+                // Every change was a skipped add, so nothing is written and the revision stays as it is.
+                return new OperationSuccess<DeckWriteResult>(
+                    DeckWriteResults.After(before.Data, before.Data, issues, returnDeck));
+            }
+
+            mapped = presence.Changes;
         }
 
         OperationResult<DeckDocument> applied = await store

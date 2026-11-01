@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Decks;
@@ -78,7 +79,7 @@ public sealed class DeckWriteSummaryTests
             summary.Revision,
             [new UpdateDeckMetadataInput("Renamed", null, "custom")],
             returnDeck: true,
-            TestContext.Current.CancellationToken));
+            cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal(299, whole.Deck!.Entries.Count);
         Assert.Equal("Renamed", whole.Deck.Name);
@@ -127,7 +128,7 @@ public sealed class DeckWriteSummaryTests
                 new AddDeckEntryInput(new DeckEntryDraft(1, "Set Mismatch", SetCode: "tst", CollectorNumber: "1")),
             ],
             returnDeck: true,
-            TestContext.Current.CancellationToken));
+            cancellationToken: TestContext.Current.CancellationToken));
 
         DeckEntry byName = summary.Deck!.Entries[0];
         Assert.Equal("Fixture Ramp Card", byName.CardName);
@@ -138,11 +139,12 @@ public sealed class DeckWriteSummaryTests
         Assert.Equal("tst", byPrinting.SetCode);
         DeckEntry unknown = summary.Deck.Entries.Single(entry => entry.EntryId == unknownId);
         Assert.Null(unknown.OracleId);
-        Assert.Equal(2, summary.IssueCount);
+        Assert.Equal(3, summary.IssueCount);
         Assert.Contains(
             summary.Issues!,
             issue => issue.EntryId == unknownId && issue.Kind == DeckWriteIssue.Unresolved);
         Assert.Contains(summary.Issues!, issue => issue.CardName == "Set Mismatch");
+        Assert.Single(summary.Issues!, issue => issue.Kind == DeckWriteIssue.AlreadyInDeck);
         Assert.Equal(4, summary.EntryCount);
     }
 
@@ -184,7 +186,7 @@ public sealed class DeckWriteSummaryTests
             [new AddDeckEntryInput(
                 new DeckEntryDraft(1, "Sol Ring")), new AddDeckEntryInput(new DeckEntryDraft(1, "Island"))],
             returnDeck: true,
-            TestContext.Current.CancellationToken));
+            cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal(2, summary.Deck!.Entries.Count);
         Assert.All(summary.Deck.Entries, entry => Assert.Null(entry.OracleId));
@@ -225,6 +227,533 @@ public sealed class DeckWriteSummaryTests
         DeckDocument after = Success(await setup.Store.GetAsync(deck.DeckId, TestContext.Current.CancellationToken));
         Assert.Equal(summary.Revision, after.Revision);
         Assert.Equal(2, after.Entries.Count);
+    }
+
+    /// <summary>
+    /// Verifies that without card data an add of a card already in the deck, matched by name, is still made and
+    /// reported as already-in-deck with the existing entry, its zone, copies, and categories, and that the issue
+    /// is counted.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_CardAlreadyInDeck_NoCardData_AddsAndReportsAlreadyInDeck()
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckWithAsync(new DeckEntryDraft(2, "Sol Ring"));
+
+        DeckWriteResult summary = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [new AddDeckEntryInput(new DeckEntryDraft(1, "sol ring", Zone: "sideboard"))],
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(2, summary.EntryCount);
+        Assert.Equal(2, summary.IssueCount);
+        DeckWriteIssue issue = Assert.Single(summary.Issues!, value => value.Kind == DeckWriteIssue.AlreadyInDeck);
+        Guid existing = deck.Entries[0].EntryId;
+        Assert.Equal(existing, issue.EntryId);
+        Assert.Equal("sol ring", issue.CardName);
+        Assert.Equal(
+            $"'sol ring' was already in the deck as entry {existing} (zone main, 2 copies, categories: Ramp). " +
+            $"This add made another entry; to change copies use update-entry on {existing}, or remove-entry on the " +
+            "new entry.",
+            issue.Message);
+    }
+
+    /// <summary>
+    /// Verifies that with card data the match uses the Oracle ID, so a differently named entry of the same card is
+    /// found even when the printings differ.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_CardAlreadyInDeck_WithCardData_MatchesByOracleId()
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: true);
+        DeckDocument deck = await setup.CreateDeckWithAsync(new DeckEntryDraft(
+            1,
+            "Older Name",
+            OracleId: DeckCategorizationSourceFixture.OracleId,
+            PrintingId: Guid.CreateVersion7()));
+
+        DeckWriteResult summary = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [new AddDeckEntryInput(new DeckEntryDraft(1, "Fixture Ramp Card"))],
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        DeckWriteIssue issue = Assert.Single(summary.Issues!);
+        Assert.Equal(DeckWriteIssue.AlreadyInDeck, issue.Kind);
+        Assert.Equal(deck.Entries[0].EntryId, issue.EntryId);
+        Assert.Equal(1, summary.IssueCount);
+        Assert.Equal(2, summary.EntryCount);
+    }
+
+    /// <summary>
+    /// Verifies basic lands may be added again without an issue, and a different card is not matched.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_BasicLandOrOtherCard_GivesNoAlreadyInDeckIssue()
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckWithAsync(new DeckEntryDraft(5, "Forest"));
+
+        DeckWriteResult summary = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [
+                new AddDeckEntryInput(new DeckEntryDraft(1, "Forest")),
+                new AddDeckEntryInput(new DeckEntryDraft(1, "Snow-Covered Forest")),
+                new AddDeckEntryInput(new DeckEntryDraft(1, "Cultivate")),
+            ],
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(4, summary.EntryCount);
+        Assert.DoesNotContain(summary.Issues!, value => value.Kind == DeckWriteIssue.AlreadyInDeck);
+    }
+
+    /// <summary>
+    /// Verifies a card added twice in one batch is reported on the second add, naming the first add's entry.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_CardAddedTwiceInOneBatch_ReportsTheSecondAdd()
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckAsync(0);
+        Guid first = Guid.CreateVersion7();
+
+        DeckWriteResult summary = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [
+                new AddDeckEntryInput(new DeckEntryDraft(1, "Sol Ring", EntryId: first)),
+                new AddDeckEntryInput(new DeckEntryDraft(1, "Sol Ring")),
+                new AddDeckEntryInput(new DeckEntryDraft(1, "Arcane Signet")),
+            ],
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(3, summary.EntryCount);
+        DeckWriteIssue issue = Assert.Single(summary.Issues!, value => value.Kind == DeckWriteIssue.AlreadyInDeck);
+        Assert.Equal(first, issue.EntryId);
+        Assert.Equal(2, summary.IssueCount);
+    }
+
+    /// <summary>
+    /// Verifies the skip choice leaves out an add whose card is already in the zone, so a retried batch changes
+    /// nothing and keeps the revision.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_SkipTwice_IsIdempotent()
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckAsync(0);
+        DeckChangeInput[] batch =
+        [
+            new AddDeckEntryInput(new DeckEntryDraft(1, "Sol Ring")),
+            new AddDeckEntryInput(new DeckEntryDraft(1, "Sol Ring")),
+        ];
+
+        DeckWriteResult first = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            batch,
+            whenCardPresent: "skip",
+            cancellationToken: TestContext.Current.CancellationToken));
+        DeckWriteResult second = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            first.Revision,
+            batch,
+            whenCardPresent: "skip",
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(1, first.EntryCount);
+        Assert.Equal(1, first.ChangeCounts.EntriesAdded);
+        Assert.Contains(
+            first.Issues!,
+            value => value.Kind == DeckWriteIssue.Skipped &&
+                value.Message.Contains(
+                    "is already in zone main as an earlier add in this batch; not added.",
+                    StringComparison.Ordinal));
+        Assert.Equal(first.Revision, second.Revision);
+        Assert.Equal(1, second.EntryCount);
+        Assert.Equal(0, second.ChangeCounts.EntriesAdded);
+        Assert.Equal(3, second.IssueCount);
+        Guid existing = Success(await setup.Store.GetAsync(deck.DeckId, TestContext.Current.CancellationToken))
+            .Entries.Single().EntryId;
+        Assert.Equal(
+            2,
+            second.Issues!.Count(value => value.Kind == DeckWriteIssue.Skipped && value.CardName is not null));
+        Assert.All(
+            second.Issues!.Where(value => value.CardName is not null),
+            value => Assert.Equal(
+                $"'Sol Ring' is already in zone main as entry {existing}; not added.",
+                value.Message));
+    }
+
+    /// <summary>
+    /// Verifies the skip choice still adds a card that is in another zone, and reports it as already-in-deck.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_SkipWithCardInAnotherZone_AddsAndReportsAlreadyInDeck()
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckWithAsync(new DeckEntryDraft(1, "Sol Ring"));
+
+        DeckWriteResult summary = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [new AddDeckEntryInput(new DeckEntryDraft(1, "Sol Ring", Zone: "sideboard"))],
+            whenCardPresent: "skip",
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(2, summary.EntryCount);
+        Assert.Contains(summary.Issues!, value => value.Kind == DeckWriteIssue.AlreadyInDeck);
+        Assert.DoesNotContain(
+            summary.Issues!,
+            value => value.Kind == DeckWriteIssue.Skipped && value.CardName == "Sol Ring");
+    }
+
+    /// <summary>
+    /// Verifies a later change that refers to the entry of a skipped add refuses the whole batch, names both
+    /// changes, and writes nothing.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_ChangeReferringToASkippedAdd_IsRefusedWithoutAWrite()
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckWithAsync(new DeckEntryDraft(1, "Sol Ring"));
+        Guid skipped = Guid.CreateVersion7();
+
+        OperationResult<DeckWriteResult> result = await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [
+                new AddDeckEntryInput(new DeckEntryDraft(1, "Arcane Signet")),
+                new AddDeckEntryInput(new DeckEntryDraft(1, "Sol Ring", EntryId: skipped)),
+                new RemoveDeckEntryInput(skipped),
+            ],
+            whenCardPresent: "skip",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(result.Value);
+        Assert.Equal("invalid-deck-change", invalid.ReasonCode);
+        Assert.Contains("Change 3", invalid.Message, StringComparison.Ordinal);
+        Assert.Contains("change 2", invalid.Message, StringComparison.Ordinal);
+        DeckDocument after = Success(await setup.Store.GetAsync(deck.DeckId, TestContext.Current.CancellationToken));
+        Assert.Equal(deck.Revision, after.Revision);
+        Assert.Single(after.Entries);
+    }
+
+    /// <summary>
+    /// Verifies a value other than add or skip is refused.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_UnknownWhenCardPresent_IsRefused()
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckAsync(1);
+
+        OperationResult<DeckWriteResult> result = await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [new AddDeckEntryInput(new DeckEntryDraft(1, "Sol Ring"))],
+            whenCardPresent: "merge",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal("invalid-when-card-present", Assert.IsType<OperationInvalidInput>(result.Value).ReasonCode);
+    }
+
+    /// <summary>
+    /// Verifies a skip never drops the only copy of a card: when a remove-entry or a zone move of the matching entry
+    /// comes before or after the add in the same batch, the add is made and nothing is reported as skipped.
+    /// </summary>
+    [Theory]
+    [InlineData("remove-then-add", 1)]
+    [InlineData("move-then-add", 2)]
+    [InlineData("add-then-remove", 1)]
+    [InlineData("add-then-move", 2)]
+    [InlineData("add-then-rename", 2)]
+    public async Task ApplyChanges_SkipAfterRemoveOrZoneMoveInSameBatch_StillAdds(string order, int entryCount)
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckWithAsync(new DeckEntryDraft(1, "Sol Ring"));
+        DeckEntry stored = deck.Entries[0];
+        DeckChangeInput add = new AddDeckEntryInput(
+            new DeckEntryDraft(1, "Sol Ring", PrintingId: Guid.CreateVersion7()));
+        DeckChangeInput away = order switch
+        {
+            "remove-then-add" or "add-then-remove" => new RemoveDeckEntryInput(stored.EntryId),
+            "add-then-rename" => new UpdateDeckEntryInput(stored with { CardName = "Arcane Signet" }),
+            _ => new UpdateDeckEntryInput(stored with { Zone = "sideboard" }),
+        };
+        DeckChangeInput[] batch = order.EndsWith("add", StringComparison.Ordinal) ? [away, add] : [add, away];
+
+        DeckWriteResult summary = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            batch,
+            whenCardPresent: "skip",
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.DoesNotContain(
+            summary.Issues ?? [],
+            value => value.Kind == DeckWriteIssue.Skipped && value.CardName is not null);
+        Assert.NotEqual(deck.Revision, summary.Revision);
+        DeckDocument after = Success(await setup.Store.GetAsync(deck.DeckId, TestContext.Current.CancellationToken));
+        Assert.Equal(entryCount, after.Entries.Count);
+        Assert.Contains(after.Entries, entry => entry.Zone == "main" && entry.EntryId != stored.EntryId);
+    }
+
+    /// <summary>
+    /// Verifies a skip still applies when a later change does not take the matching entry away: an update that keeps
+    /// the card in the zone, or a change to another entry.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_SkipWithLaterChangeThatKeepsTheEntry_StillSkips()
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckWithAsync(new DeckEntryDraft(1, "Sol Ring"));
+        DeckEntry stored = deck.Entries[0];
+
+        DeckWriteResult summary = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [
+                new AddDeckEntryInput(new DeckEntryDraft(1, "Sol Ring")),
+                new UpdateDeckEntryInput(stored with { Quantity = 2 }),
+            ],
+            whenCardPresent: "skip",
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Single(summary.Issues!, value => value.Kind == DeckWriteIssue.Skipped && value.CardName is not null);
+        Assert.Equal(1, summary.EntryCount);
+    }
+
+    /// <summary>
+    /// Verifies a retry with skip still reaches the entry its first attempt made when another entry of the same card
+    /// and zone already sorts before or after it, whichever way the entry IDs order.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ApplyChanges_RetryWithSkipBesideAnotherCopy_LaterChangesTargetTheAddedEntry(bool addedIsFirst)
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        Guid low = Guid.Parse("00000000-0000-7000-8000-000000000001", CultureInfo.InvariantCulture);
+        Guid high = Guid.Parse("00000000-0000-7000-8000-000000000002", CultureInfo.InvariantCulture);
+        Guid addedId = addedIsFirst ? low : high;
+        DeckDocument deck = await setup.CreateDeckWithAsync(
+            new DeckEntryDraft(1, "Sol Ring", EntryId: addedIsFirst ? high : low));
+        Guid categoryId = deck.Categories[0].CategoryId;
+        DeckChangeInput[] batch =
+        [
+            new AddDeckEntryInput(new DeckEntryDraft(1, "Sol Ring", EntryId: addedId)),
+            new AssignDeckCategoryInput(addedId, categoryId, false),
+        ];
+
+        DeckWriteResult first = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            batch,
+            whenCardPresent: "add",
+            cancellationToken: TestContext.Current.CancellationToken));
+        DeckWriteResult retry = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            first.Revision,
+            batch,
+            whenCardPresent: "skip",
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(2, retry.EntryCount);
+        Assert.Contains(retry.Issues!, value => value.Kind == DeckWriteIssue.Skipped && value.EntryId == addedId);
+    }
+
+    /// <summary>
+    /// Verifies a skipped add whose entry ID belongs to a different entry of the deck is refused, as the store would
+    /// refuse it, and nothing is written.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_SkippedAddWithAnotherEntrysId_IsRefused()
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckWithAsync(
+            new DeckEntryDraft(1, "Sol Ring"),
+            new DeckEntryDraft(1, "Arcane Signet"));
+        Guid otherId = deck.Entries.Single(entry => entry.CardName == "Arcane Signet").EntryId;
+
+        OperationResult<DeckWriteResult> result = await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [new AddDeckEntryInput(new DeckEntryDraft(1, "Sol Ring", EntryId: otherId))],
+            whenCardPresent: "skip",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Contains("already belongs to another entry", Assert.IsType<OperationInvalidInput>(result.Value).Message);
+        DeckDocument after = Success(await setup.Store.GetAsync(deck.DeckId, TestContext.Current.CancellationToken));
+        Assert.Equal(deck.Revision, after.Revision);
+    }
+
+    /// <summary>
+    /// Verifies a retried batch that adds an entry with its own ID and then assigns a category to that ID still works
+    /// with skip: the add is left out and the assignment reaches the entry the first attempt made.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_RetryWithEntryIdAndSkip_LaterChangesTargetTheExistingEntry()
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckWithAsync(new DeckEntryDraft(1, "Arcane Signet"));
+        Guid categoryId = deck.Categories[0].CategoryId;
+        Guid entryId = Guid.CreateVersion7();
+        DeckChangeInput[] batch =
+        [
+            new AddDeckEntryInput(new DeckEntryDraft(1, "Sol Ring", EntryId: entryId)),
+            new AssignDeckCategoryInput(entryId, categoryId, false),
+        ];
+
+        DeckWriteResult first = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            batch,
+            whenCardPresent: "skip",
+            cancellationToken: TestContext.Current.CancellationToken));
+        DeckWriteResult retry = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            first.Revision,
+            batch,
+            whenCardPresent: "skip",
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(2, retry.EntryCount);
+        Assert.Contains(retry.Issues!, value => value.Kind == DeckWriteIssue.Skipped && value.EntryId == entryId);
+        DeckDocument after = Success(await setup.Store.GetAsync(deck.DeckId, TestContext.Current.CancellationToken));
+        Assert.Single(after.CategoryAssignments, value => value.EntryId == entryId);
+    }
+
+    /// <summary>
+    /// Verifies a card name or zone with spaces around it is matched as the store will keep it.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_SkipWithPaddedNameAndZone_StillSkips()
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckWithAsync(new DeckEntryDraft(1, "Sol Ring"));
+
+        DeckWriteResult summary = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [new AddDeckEntryInput(new DeckEntryDraft(1, " Sol Ring ", Zone: " Main "))],
+            whenCardPresent: "skip",
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        DeckWriteIssue issue = Assert.Single(
+            summary.Issues!,
+            value => value.Kind == DeckWriteIssue.Skipped && value.CardName is not null);
+        Assert.Equal("Sol Ring", issue.CardName);
+        Assert.Equal(deck.Revision, summary.Revision);
+    }
+
+    /// <summary>
+    /// Verifies the already-in-deck message for an entry that an earlier update in the batch changed still lists the
+    /// entry's categories.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_AddAfterAnUpdateOfTheMatch_ReportsItsCategories()
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckWithAsync(new DeckEntryDraft(1, "Sol Ring"));
+
+        DeckWriteResult summary = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [
+                new UpdateDeckEntryInput(deck.Entries[0] with { Quantity = 3 }),
+                new AddDeckEntryInput(new DeckEntryDraft(1, "Sol Ring")),
+            ],
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        DeckWriteIssue issue = Assert.Single(summary.Issues!, value => value.Kind == DeckWriteIssue.AlreadyInDeck);
+        Assert.Contains("(zone main, 3 copies, categories: Ramp)", issue.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies skip refuses an add the store would refuse, instead of reporting it as skipped.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_SkipOfAnInvalidAdd_IsRefusedWithoutAWrite()
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckWithAsync(new DeckEntryDraft(1, "Sol Ring"));
+
+        OperationResult<DeckWriteResult> result = await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [new AddDeckEntryInput(new DeckEntryDraft(0, "Sol Ring"))],
+            whenCardPresent: "skip",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(result.Value);
+        Assert.Equal("invalid-deck-change", invalid.ReasonCode);
+        Assert.Contains("Change 1", invalid.Message, StringComparison.Ordinal);
+        Assert.Contains("Entry quantity must be positive.", invalid.Message, StringComparison.Ordinal);
+        Assert.Equal(
+            deck.Revision,
+            Success(await setup.Store.GetAsync(deck.DeckId, TestContext.Current.CancellationToken)).Revision);
+    }
+
+    /// <summary>
+    /// Verifies a change that names the entry of a skipped add is refused whatever its kind.
+    /// </summary>
+    [Theory]
+    [InlineData("update-entry")]
+    [InlineData("assign-category")]
+    [InlineData("unassign-category")]
+    public async Task ApplyChanges_AnyChangeReferringToASkippedAdd_IsRefused(string kind)
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckWithAsync(new DeckEntryDraft(1, "Sol Ring"));
+        Guid skipped = Guid.CreateVersion7();
+        Guid categoryId = deck.Categories[0].CategoryId;
+        DeckChangeInput reference = kind switch
+        {
+            "update-entry" => new UpdateDeckEntryInput(deck.Entries[0] with { EntryId = skipped }),
+            "assign-category" => new AssignDeckCategoryInput(skipped, categoryId, false),
+            _ => new UnassignDeckCategoryInput(skipped, categoryId),
+        };
+
+        OperationResult<DeckWriteResult> result = await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [new AddDeckEntryInput(new DeckEntryDraft(1, "Sol Ring", EntryId: skipped)), reference],
+            whenCardPresent: "skip",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(result.Value);
+        Assert.Equal("invalid-deck-change", invalid.ReasonCode);
+        Assert.Contains("Change 2", invalid.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            $"refer to entry {deck.Entries[0].EntryId} instead",
+            invalid.Message,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Verifies skip applies to basic lands too, and a batch that is all skipped adds writes nothing and still
+    /// returns the whole deck when asked.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_SkipOfBasicLandsOnly_WritesNothingAndReturnsTheDeck()
+    {
+        using Setup setup = await Setup.CreateAsync(installCardData: false);
+        DeckDocument deck = await setup.CreateDeckWithAsync(new DeckEntryDraft(5, "Forest"));
+
+        DeckWriteResult summary = Success(await setup.Batch.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [new AddDeckEntryInput(new DeckEntryDraft(1, "Forest"))],
+            returnDeck: true,
+            whenCardPresent: "skip",
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(deck.Revision, summary.Revision);
+        Assert.Single(summary.Issues!, value => value.Kind == DeckWriteIssue.Skipped && value.CardName is not null);
+        Assert.Single(summary.Deck!.Entries);
     }
 
     /// <summary>
@@ -317,6 +846,24 @@ public sealed class DeckWriteSummaryTests
                     SortOrder: index))];
             return Success(await Store.CreateAsync(
                 new DeckCreateRequest("Summary deck", Format: "custom", Entries: entries),
+                TestContext.Current.CancellationToken));
+        }
+
+        /// <summary>
+        /// Creates a deck whose first entry is assigned to a category named Ramp.
+        /// </summary>
+        internal async Task<DeckDocument> CreateDeckWithAsync(params DeckEntryDraft[] drafts)
+        {
+            DeckEntryDraft entry = drafts[0];
+            Guid entryId = entry.EntryId ?? Guid.CreateVersion7();
+            Guid categoryId = Guid.CreateVersion7();
+            return Success(await Store.CreateAsync(
+                new DeckCreateRequest(
+                    "Presence deck",
+                    Format: "custom",
+                    Entries: [entry with { EntryId = entryId }, .. drafts.Skip(1)],
+                    Categories: [new DeckCategoryDraft("Ramp", CategoryId: categoryId)],
+                    CategoryAssignments: [new DeckCategoryAssignment(entryId, categoryId, true)]),
                 TestContext.Current.CancellationToken));
         }
 
