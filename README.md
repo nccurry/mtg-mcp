@@ -209,7 +209,7 @@ pass `cardNames` (1 to 100 names, matched ignoring case, a double-faced card by 
 come back, `cardNamesNotFound` lists the names with no match, and the totals still cover the whole deck. Pass the same
 `cardNames` with `nextCursor`. With `cardNames`, `totalEntries` and `nextCursor` count the matching entries, while
 `entryCount`, `cardCount`, and `cardsByZone` still cover the whole deck. To read one part of a deck, also pass
-`zones` (any of `commander`, `main`, `sideboard`, `maybeboard`; an unknown zone is refused) and `categoryNames` (1 to
+`zones` (any non-empty zone codes, such as `commander`, `main`, `sideboard`, `maybeboard`; a code with no entry is listed in `zonesNotFound`) and `categoryNames` (1 to
 100 names, matched ignoring case against an entry's primary and other categories). Values in one filter combine with
 OR and the filters combine with AND; `zonesNotFound` and `categoryNamesNotFound` list the values that match no entry of
 the deck, and no match is a normal result with no entries. The cursor covers every filter, so pass the same ones with
@@ -724,13 +724,16 @@ folders, and named snapshots. Apply operations require current revisions,
 fingerprints, and preview evidence. The MCP never chooses a conflict winner.
 
 Requests start at least two seconds apart per configured account. The adapter
-allows at most 30 starts in 60 seconds and 150 requests per tool invocation.
+allows at most 30 starts in 60 seconds and 150 requests to Archidekt per tool call (for a push, per `archidekt_push_apply` call).
 It stops on `403` and `429`. Ambiguous mutations are not retried. A push sends added cards in
 batches of up to 25 cards per request; other operations, and every card after a rejected batch,
-are one request each. `archidekt_push_preview` shows `predictedProviderRequests` (the
-operations, printing searches, reads, and room to retry the reads and a rejected batch) beside
-`providerRequestLimit`. A push predicted over the limit is refused in the preview and the apply, naming how
-many of its operations fit. Apply part of the local changes first, then preview and push again for the rest.
+are one request each. A rejected batch of adds is resent one card at a time, once per push: a refused card is
+`not-applied` and the push continues (outcome `partial`, baseline unchanged, and the next preview shows what landed); a
+second rejected batch is `not-sent`, so push again. Each added card is confirmed by the `patchId` Archidekt echoes;
+a `403` or `422` leaves the operation `unknown`. `archidekt_push_preview` shows `predictedProviderRequests` (the
+operations, printing searches, reads, and room to retry the reads and one batch fallback) beside
+`providerRequestLimit`. A push predicted over the limit is refused in the preview and the apply, naming an
+estimate of how many of its operations fit. Apply part of the local changes first, then preview and push again for the rest.
 
 Results are cut to fit the client. Claude Code saves a tool result longer than
 50,000 characters to a file and shows the agent only the path, so these tools aim
@@ -822,7 +825,8 @@ make those entries show as local changes. A push that would send a card whose zo
 with `entry-zone-contradicts-category`, naming each card and local entry ID and giving both fixes as ready
 `patch-entries` changes: set the zone to what the categories give (`zoneCategories: "leave"`), or keep the zone and
 make the categories match it (`zoneCategories: "match"`, which creates a missing Sideboard, Maybeboard, or Commander
-category). The server chooses neither. To move cards between zones on a bound deck, send `patch-entries` with
+category; offered only when it is accepted and clears the contradiction, else the message says what else to change).
+The server chooses neither. To move cards between zones on a bound deck, send `patch-entries` with
 `zoneCategories: "match"` and then push.
 
 A difference where the local deck and Archidekt changed the same field to the

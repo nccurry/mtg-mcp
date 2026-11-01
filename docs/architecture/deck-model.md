@@ -17,7 +17,7 @@ SQLite store (`decks.db`). App holds the tools (`src/MtgMcp.App/Decks/`).
   (`src/MtgMcp.Core/Decks/DeckModels.cs`). The store assigns them in the same transaction right after it inserts the
   entry (`src/MtgMcp.Decks/DeckDraftCategories.cs`). The IDs name categories the deck already has or an earlier change
   of the same batch added (a `categoryDraft` with its own `categoryId`, or the `categories` of `local_deck_create`); an
-  unknown one refuses the batch with `invalid-deck-input`. The primary category is assigned as primary even when
+  unknown one refuses the batch with `invalid-deck-change`, the same code a patch uses. Draft and patch zone-category refusals share that code, end "Nothing was written.", and name the caller's change number. The primary category is assigned as primary even when
   `categoryIds` does not list it. `DeckContractValidator.Normalize` keeps these fields. Imports build proposals, not
   drafts, and the Archidekt pull leaves the fields unset, so neither assigns a category this way.
 - A category (`DeckCategory`) has an ID, a name, an optional color, and a sort order. A draft may carry its own
@@ -105,7 +105,7 @@ same mapping. If that zone is not the entry's local zone, the push is refused wi
 `src/MtgMcp.Archidekt/ArchidektSyncPlanner.cs`). The check covers entries a push would add or update. The
 message names each card, its local entry ID, its local zone, and the zone its categories give
 (`ArchidektZoneContradiction` carries the entry ID; `ArchidektSyncNotices.DescribeZoneContradictions` writes the
-text). It offers both fixes as ready `patch-entries` changes and chooses neither: set the zone to what the categories
+text). It offers ready `patch-entries` changes and chooses neither: the `leave` fix always, and the `match` fix only when it is accepted and clears the contradiction (otherwise the message says what else to change): set the zone to what the categories
 give (`zoneCategories: "leave"`), or keep the zone and make the categories match it (`zoneCategories: "match"`, which
 creates a missing zone category). Entries with the same pair of zones share one change, up to 100 entries each.
 `archidekt_push_preview` and `archidekt_push_apply` both return this refusal, as does the planner that builds the
@@ -123,15 +123,18 @@ Push sends card changes for one deck through `modifyCards/v2`, which takes a lis
   Every other operation is one request. Each card of an accepted batch is matched to its returned relation by
   `patchId`.
 - Archidekt refuses a batch that holds a bad card as a whole (a 400 that names no card) and changes nothing. After a
-  rejected batch, the push sends that batch's cards one at a time, applies the good ones, and reports the bad card per
-  card. The baseline records what landed.
+  rejected batch of adds, the push sends that batch's cards one at a time, once per push. A card Archidekt refuses is
+  `not-applied` and the push continues; the outcome is `partial`, the baseline stays as it was, and the next preview
+  shows what landed. A second rejected batch is not resent (`not-sent`; push again). A `429` stops the push, and a
+  `403` or `422` leaves the operation `unknown`. Each added card is confirmed by the `patchId` Archidekt echoes (adds
+  only); an add that does not come back is `unknown`.
 - `ArchidektSyncPlanner.OperationRequests` counts one request per batch or other operation, plus the cards of the
   largest batch again, so the fallback fits in the prediction.
 - `predictedProviderRequests` on the push preview is the figure checked against the limit of 150 requests for one
-  operation (`providerRequestLimit`). It counts the operations, the printing searches already made, the reads the apply
-  makes, and room to retry each read after a rate-limit response. Before this change it counted operations, searches,
+  call of `archidekt_push_apply` (`providerRequestLimit`, requests to Archidekt). It counts the operations, the printing searches already made, the reads the apply
+  makes, room to retry each read after a rate-limit response, and the reserve for one batch fallback. Before this change it counted operations, searches,
   and one read, so it was smaller for the same push. A push over the limit is refused in the preview and the apply with
-  the limit, the predicted count, how many operations fit, and the advice to apply part of the local changes first
+  the limit, the predicted count, an estimate of how many operations fit, and the advice to apply part of the local changes first
   (`ArchidektOperationBudget.DescribeOverLimit`).
 
 ## Change kinds
@@ -160,7 +163,7 @@ variants. `kind` selects one (`src/MtgMcp.App/Decks/DeckChangeInput.cs`). Each m
 
 - A field left out stays as it is. A patch with no field besides `entryIds` and `zoneCategories` is refused.
 - The `printing` is a `printingId` alone, or a `setCode` with a `collectorNumber`. App resolves it against each entry's
-  own card as `add-entry` does, and an identity problem is reported in `issues`.
+  own card as `add-entry` does. A printing that cannot be verified (unresolved, mismatched to the entry's card, set not found, or card data not installed) refuses the batch with `invalid-deck-change`, and nothing is written.
 - `primaryCategoryId` makes that category primary; one the entry already has as non-primary becomes primary. The
   previous primary assignment is removed, unless that category is also in `addCategoryIds`, which keeps it as
   non-primary. This differs from `assign-category`, which keeps the previous primary as non-primary.

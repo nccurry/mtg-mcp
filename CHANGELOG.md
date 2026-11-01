@@ -20,17 +20,26 @@ client (in Claude Code, /mcp or a new session) before relying on new behavior.
   The tool shape is the same; only what the number means changed.
 - A push sends added cards to Archidekt in batches of up to 25 cards per request (one `modifyCards/v2` call) instead
   of one card per request, so a 40-card push makes 2 card requests, not 40. Archidekt refuses a batch with a bad
-  card as a whole and names no card, so after a rejected batch the push sends that batch's cards one at a time, applies
-  the good ones, and reports the bad card as before. The request prediction counts that fallback.
-- A request-limit refusal on a push preview or apply names the limit, the predicted count, how many of the
-  operations fit, and that the push can be split by applying part of the local changes first.
+  card as a whole and names no card, so after a rejected batch of adds the push sends that batch's cards one at a
+  time, once per push. A card Archidekt refuses is reported `not-applied` and the push continues; the outcome is
+  `partial`, the local baseline stays as it was, and the next push preview shows what landed. A second rejected batch
+  is not sent again: its cards are `not-sent`, so push again. A `429` stops the push, and a `403` or `422` leaves the
+  operation `unknown`. Each added card is confirmed by the `patchId` Archidekt echoes (adds only). `predictedProviderRequests`
+  includes the reserve for one batch fallback.
+- A request-limit refusal on a push preview or apply names the limit (per `archidekt_push_apply` call, counting
+  requests to Archidekt), the predicted count, an estimate of how many of the operations fit, and that the push can be
+  split by applying part of the local changes first.
 - Argument errors name the expected type in plain words: "The value at 'changes[3].entry.sortOrder' must be an
-  integer." and "... must be a UUID", not `System.Int32` or `System.Guid`. This also covers values inside the change
-  list and nested drafts.
+  integer." and "... must be a UUID", not `System.Int32` or `System.Guid`. The message comes from the bound parameter
+  type, so it also covers values inside the change list and nested drafts.
+- The `stats_simulate`, `stats_castability`, and `stats_mana_availability` descriptions say they answer land-count and
+  on-curve questions, the server instructions say a zone move sets `zoneCategories` to `match` or `leave`, and the
+  Scryfall tool descriptions state the `pageSize` default and that `responseFormat` defaults to `standard`.
 - The refusal for an entry whose zone disagrees with its Archidekt categories (`entry-zone-contradicts-category`)
   names each local entry ID and offers both fixes as ready `patch-entries` changes: set the zone to what the
   categories give (`zoneCategories: "leave"`), or keep the zone and make the categories match it
-  (`zoneCategories: "match"`). The server chooses neither.
+  (`zoneCategories: "match"`). The server chooses neither. The `match` fix is offered only when that change is accepted
+  and clears the contradiction; otherwise the message says what else to change, such as a primary category.
 - A wrong confirmation phrase on `archidekt_snapshot_restore_apply`, `archidekt_snapshot_delete`,
   `archidekt_folder_delete`, and `archidekt_deck_delete` (`confirmation-required`) now shows the exact phrase to pass,
   such as `restore snapshot <snapshotId>`.
@@ -46,7 +55,7 @@ client (in Claude Code, /mcp or a new session) before relying on new behavior.
 - `local_deck_apply_changes` has a new change kind, `patch-entries`. It takes `entryIds` (1 to 100, no duplicates,
   including entries added earlier in the same batch) and only the fields that change: `quantity`, `zone`,
   `sortOrder`, `finish`, `language`, a `printing` (a `printingId`, or a `setCode` with a `collectorNumber`, resolved
-  against each entry's own card as `add-entry` resolves them), and the category edits `primaryCategoryId`,
+  against each entry's own card as `add-entry` resolves them; a printing that cannot be verified (unresolved, mismatched to the entry's card, set not found, or card data not installed) refuses the batch with `invalid-deck-change` and writes nothing), and the category edits `primaryCategoryId`,
   `addCategoryIds`, and `removeCategoryIds`. A field left out stays as it is. A new primary category removes the
   previous primary assignment unless that category is in `addCategoryIds`. A patch with no field, a duplicate or
   unknown entry or category ID, or the same category in two category fields is refused with `invalid-deck-change` and
@@ -62,12 +71,13 @@ client (in Claude Code, /mcp or a new session) before relying on new behavior.
   `local_deck_create` entry can be categorized in the same call. A draft can name a category added earlier in the
   same batch by its `categoryId`. On a draft `zoneCategories` is optional and defaults to `leave`, because a draft's
   zone defaults to `main` and an explicit zone cannot be told from the default. `whenCardPresent: "skip"` skips the
-  categories together with the add. A draft that names an unknown category is refused with `invalid-deck-input`.
+  categories together with the add. A draft that names an unknown category is refused with `invalid-deck-change`, as a patch that names one is, and a zone-category refusal has the same code for a draft and a patch. A refusal ends "Nothing was written." and names the change number of the caller's change.
 - `local_deck_get` takes `zones` (`commander`, `main`, `sideboard`, `maybeboard`) and `categoryNames` (1 to 100
   names, matched ignoring case against primary and non-primary categories), beside `cardNames`. Values in one filter
   combine with OR and the filters combine with AND. Values that match no entry of the whole deck are listed in
   `zonesNotFound` and `categoryNamesNotFound`, as `cardNamesNotFound` already is; no match is a normal result with no
-  entries. An unknown zone is refused as `invalid-zones`, and a bad category list as `invalid-category-names`. The
+  entries. `zones` takes any non-empty zone code; a code with no entry goes to `zonesNotFound`. An empty list or a blank
+  code is refused as `invalid-zones`, and a bad category list as `invalid-category-names`. The
   cursor covers both filters, so a cursor with a changed filter is refused. Deck-wide totals are unchanged.
 - `card_list_query` has `entryId` as a field for local deck and deck backup sources (in rows, filters, groups, and
   sorts), so a card-property query ("every Aura in the maybeboard") returns the IDs an edit needs. An Archidekt

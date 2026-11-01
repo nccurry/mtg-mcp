@@ -57,8 +57,8 @@ pass-through names and values. Both are empty today.
   (`ToolSchemaSurfaceTests.ChoiceFields_PublishEnum`).
 - A merged tool picks its job with one required field (`kind` or `include`). A field that applies to only
   some choices has a description that starts with "Only with" (`ToolSurfaceRulesTests.MergedTools_*`).
-- Every input field, including fields inside request objects and list items, has a description. Some tools
-  still lack nested descriptions; `ToolInputDescriptionTests` names them.
+- Every input field, including fields inside request objects and list items, has a description
+  (`ToolInputDescriptionTests`).
 
 ## Parameters
 
@@ -67,7 +67,7 @@ pass-through names and values. Both are empty today.
 - A whole number written as `328.0` or `3.28e2` is read as `328`
   (`src/MtgMcp.App/Hosting/WholeNumberArguments.cs`).
 - A binding error names the JSON path of the value it could not read and the type it expected in plain words:
-  "The value at 'changes[3].entry.sortOrder' must be an integer." The words are "an integer", "a number",
+  "The value at 'changes[3].entry.sortOrder' must be an integer." The type is read from the bound parameter type, so a nested value gets the same words. The words are "an integer", "a number",
   "true or false", "text", "a UUID", "a date and time", "a list", "an object", or "one of:" with the allowed values
   of an enum (`ToolCallPolicy.DescribeExpectedType`). It also names a path inside a change list and a nested draft. For
   a union, the error lists the allowed kinds.

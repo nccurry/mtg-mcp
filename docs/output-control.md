@@ -103,8 +103,8 @@ and `responseFormat` along with `include` and `fields`, so a cursor with a chang
 
 `zones` and `categoryNames` filter the same way and join the cursor binding (`DeckCardViewCoordinator`):
 
-- `zones` takes zone codes (`commander`, `main`, `sideboard`, `maybeboard`). An empty list or an unknown code is refused
-  as `invalid-zones`, naming the allowed codes.
+- `zones` takes zone codes (`commander`, `main`, `sideboard`, `maybeboard`). Any non-empty code is accepted; a code that matches no
+  entry is listed in `zonesNotFound`. An empty list or a blank code is refused as `invalid-zones`.
 - `categoryNames` takes 1 to 100 names, matched ignoring case and surrounding space against an entry's primary and
   non-primary categories. A bad list is refused as `invalid-category-names`.
 - Values inside one filter combine with OR, and the three filters (`cardNames`, `zones`, `categoryNames`) combine
