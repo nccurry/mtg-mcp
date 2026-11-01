@@ -257,7 +257,7 @@ internal static class ArchidektJsonContract
             ?? GetId(item, "parentFolder");
         string? folderName = GetNestedString(item, "folder", "name");
         string? folderPath = GetNestedString(item, "folder", "path");
-        int? cardCount = GetInt32(item, "cardCount");
+        int? cardCount = GetInt32(item, "cardCount") ?? GetInt32(item, "size");
         DateTimeOffset? updated = GetDateTime(item, "updatedAt");
         string fingerprint = ArchidektContract.Fingerprint(new
         {
@@ -564,7 +564,9 @@ internal static class ArchidektJsonContract
             ?? (inheritedPath is null ? name : $"{inheritedPath}/{name}");
         List<string> childIds = [];
         List<JsonElement> childElements = [];
-        if (item.TryGetProperty("children", out JsonElement children) &&
+        // A folder tree nests folders under children; a single folder read lists them under subfolders.
+        if ((item.TryGetProperty("children", out JsonElement children) ||
+            item.TryGetProperty("subfolders", out children)) &&
             children.ValueKind == JsonValueKind.Array)
         {
             foreach (JsonElement child in children.EnumerateArray())
@@ -597,7 +599,7 @@ internal static class ArchidektJsonContract
             path,
             childIds,
             decks,
-            CopyUnknown(item, ["id", "name", "private", "unlisted", "parent", "parentFolder", "parent_folder", "path", "children", "decks"])));
+            CopyUnknown(item, ["id", "name", "private", "unlisted", "parent", "parentFolder", "parent_folder", "path", "children", "subfolders", "decks"])));
         foreach (JsonElement child in childElements)
         {
             MapFolderNode(child, folderId, path, destination);

@@ -53,6 +53,12 @@ The shared loader, `ReplayHttpHandler`, and `JsonShape` live in
 - Refresh only after a provider bug report, before a release, or to add a case.
   It sends read-only requests, scrubs personal and volatile fields, and the diff
   shows what moved. `refresh: false` keeps an older recording as it is.
+- An entry marked `auth: true` (Archidekt deck list, folders, snapshots) needs
+  the owner's Archidekt login: the refresh reads
+  `MTGMCP__ARCHIDEKT__CREDENTIALS_FILE`, else `~/.mtg-mcp/archidekt.json`, logs in
+  once, and sends the adapter's `Authorization: JWT` header. The login response,
+  token, and credentials are never recorded or printed. Use `{username}` in such
+  a URL; the script fills it in so the owner's name stays out of the manifest.
 - Compare shapes with `JsonShape`, not exact bytes.
 - The linked `Recorded` helpers are compiled into several test projects, so
   they must stay dependency-free.

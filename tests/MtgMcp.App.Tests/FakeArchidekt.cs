@@ -280,12 +280,12 @@ internal sealed class FakeArchidekt : HttpMessageHandler
 
         if (path == "api/decks/folderTree/")
         {
-            return Json(new JsonObject { ["results"] = new JsonArray(SerializeFolder()) }.ToJsonString());
+            return Json(SerializeFolderTree().ToJsonString());
         }
 
         if (path.StartsWith("api/decks/folders/", StringComparison.Ordinal))
         {
-            return Json(new JsonObject { ["folder"] = SerializeFolder() }.ToJsonString());
+            return Json(SerializeFolder().ToJsonString());
         }
 
         if (path == $"api/decks/{DeckId}/snapshots/")
@@ -524,70 +524,131 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     }
 
     /// <summary>
-    /// Writes a list of decks the owner has, one of them the fake deck, to show how a long list reads.
+    /// Writes a deck list the way the real service does: a count, a next link, and one summary row per deck, one of
+    /// them the fake deck.
     /// </summary>
     private JsonObject SerializeDeckList()
     {
         JsonArray decks = [];
         for (int index = 0; index < ListedDecks; index++)
         {
-            decks.Add(new JsonObject
-            {
-                ["id"] = index == 0 ? 42 : 5000 + index,
-                ["name"] = index == 0 ? DeckName : $"Listed deck {index:000}",
-                ["description"] = "A deck in the owner's list.",
-                ["deckFormat"] = 3,
-                ["private"] = true,
-                ["cardCount"] = 100,
-                ["updatedAt"] = "2026-07-04T12:00:00Z",
-                ["folder"] = new JsonObject { ["id"] = 9, ["name"] = "Tests", ["path"] = "Root/Tests" },
-            });
+            decks.Add(SerializeDeckRow(
+                index == 0 ? 42 : 5000 + index,
+                index == 0 ? DeckName : $"Listed deck {index:000}"));
         }
 
-        return new JsonObject { ["decks"] = decks };
+        return new JsonObject { ["count"] = ListedDecks, ["next"] = null, ["results"] = decks };
     }
 
     /// <summary>
-    /// Writes one folder that holds the fake deck and many child folders.
+    /// Writes one deck summary row the way a deck list or folder read shows it.
     /// </summary>
-    private JsonObject SerializeFolder()
+    private static JsonObject SerializeDeckRow(int id, string name)
+    {
+        return new JsonObject
+        {
+            ["id"] = id,
+            ["name"] = name,
+            ["size"] = 100,
+            ["cardCount"] = 100,
+            ["updatedAt"] = "2026-07-04T12:00:00Z",
+            ["createdAt"] = "2026-07-04T12:00:00Z",
+            ["deckFormat"] = 3,
+            ["edhBracket"] = null,
+            ["featured"] = string.Empty,
+            ["customFeatured"] = string.Empty,
+            ["comments"] = 0,
+            ["private"] = true,
+            ["unlisted"] = false,
+            ["theorycrafted"] = false,
+            ["game"] = null,
+            ["tags"] = new JsonArray(),
+            ["parentFolderId"] = 9,
+            ["parentFolderName"] = null,
+            ["parentFolderCreatedAt"] = null,
+            ["hasPrimer"] = false,
+            ["description"] = null,
+            ["owner"] = new JsonObject
+            {
+                ["id"] = 0,
+                ["moderator"] = false,
+                ["pledgeLevel"] = null,
+                ["roles"] = new JsonArray(),
+            },
+            ["colors"] = new JsonObject { ["W"] = 0, ["U"] = 0, ["B"] = 0, ["R"] = 0, ["G"] = 0 },
+            ["cardPackage"] = null,
+            ["deckHelp"] = null,
+            ["contest"] = null,
+        };
+    }
+
+    /// <summary>
+    /// Writes the folder tree the way the real service does: the root folder with nested <c>children</c>, a leaf
+    /// having <c>children</c> of null, and no deck rows.
+    /// </summary>
+    private static JsonObject SerializeFolderTree()
     {
         JsonArray children = [];
-        JsonArray decks = [new JsonObject { ["id"] = 42, ["name"] = DeckName, ["deckFormat"] = 3, ["private"] = true }];
         for (int index = 0; index < ListedDecks; index++)
         {
             children.Add(new JsonObject
             {
                 ["id"] = 100 + index,
                 ["name"] = $"Child folder {index:000}",
-                ["parent"] = 9,
-                ["children"] = new JsonArray(),
-                ["decks"] = new JsonArray(),
-            });
-            decks.Add(new JsonObject
-            {
-                ["id"] = 5000 + index,
-                ["name"] = $"Foldered deck {index:000}",
-                ["deckFormat"] = 3,
+                ["children"] = index == 0
+                    ? new JsonArray(new JsonObject
+                    {
+                        ["id"] = 99,
+                        ["name"] = "Grandchild folder",
+                        ["children"] = null,
+                        ["private"] = true,
+                    })
+                    : null,
                 ["private"] = true,
             });
+        }
+
+        return new JsonObject { ["id"] = 9, ["name"] = "Tests", ["children"] = children, ["private"] = true };
+    }
+
+    /// <summary>
+    /// Writes one folder read the way the real service does: its parent, owner, <c>subfolders</c>, and deck rows
+    /// beside a count and a next link.
+    /// </summary>
+    private JsonObject SerializeFolder()
+    {
+        JsonArray subfolders = [];
+        JsonArray decks = [SerializeDeckRow(42, DeckName)];
+        for (int index = 0; index < ListedDecks; index++)
+        {
+            subfolders.Add(new JsonObject
+            {
+                ["id"] = 100 + index,
+                ["name"] = $"Child folder {index:000}",
+                ["createdAt"] = "2026-07-04T12:00:00Z",
+                ["private"] = true,
+            });
+            decks.Add(SerializeDeckRow(5000 + index, $"Foldered deck {index:000}"));
         }
 
         return new JsonObject
         {
             ["id"] = 9,
             ["name"] = "Tests",
+            ["parentFolder"] = new JsonObject { ["id"] = 1, ["name"] = "Home" },
             ["private"] = true,
-            ["path"] = "Tests",
+            ["owner"] = new JsonObject { ["id"] = 0 },
+            ["subfolders"] = subfolders,
             ["decks"] = decks,
-            ["children"] = children,
+            ["count"] = decks.Count,
+            ["next"] = null,
         };
     }
 
     /// <summary>
-    /// Writes the named snapshots of the fake deck.
+    /// Writes the named snapshots of the fake deck as the bare array the real service returns.
     /// </summary>
-    private static JsonObject SerializeSnapshotList()
+    private static JsonArray SerializeSnapshotList()
     {
         JsonArray rows = [];
         for (int index = 0; index < ListedSnapshots; index++)
@@ -595,18 +656,20 @@ internal sealed class FakeArchidekt : HttpMessageHandler
             rows.Add(new JsonObject
             {
                 ["id"] = 77 + index,
-                ["deck"] = 42,
+                ["createdAt"] = "2026-07-04T12:00:00Z",
+                ["updatedAt"] = "2026-07-04T12:00:00Z",
                 ["name"] = $"Snapshot {index:000}",
                 ["description"] = "A named snapshot.",
-                ["createdAt"] = "2026-07-04T12:00:00Z",
             });
         }
 
-        return new JsonObject { ["results"] = rows };
+        return rows;
     }
 
     /// <summary>
-    /// Writes one named snapshot whose saved deck holds one more of every card than the deck now does.
+    /// Writes one named snapshot the way the real service does: the saved deck flattened beside the snapshot's own
+    /// name and dates, with its parent deck named in <c>snapshotMeta</c>. Its saved deck holds one more of every card
+    /// than the deck now does.
     /// </summary>
     private JsonObject SerializeSnapshot()
     {
@@ -620,12 +683,23 @@ internal sealed class FakeArchidekt : HttpMessageHandler
         {
             ["id"] = 77,
             ["name"] = "Snapshot 000",
-            ["description"] = "A named snapshot.",
             ["createdAt"] = "2026-07-04T12:00:00Z",
-            ["deck"] = deck,
+            ["updatedAt"] = "2026-07-04T12:00:00Z",
+            ["deckFormat"] = 3,
+            ["description"] = "A named snapshot.",
+            ["customFeatured"] = string.Empty,
+            ["cards"] = deck["cards"]!.DeepClone(),
+            ["customCards"] = new JsonArray(),
+            ["owner"] = new JsonObject { ["id"] = 0 },
+            ["categories"] = deck["categories"]!.DeepClone(),
+            ["snapshotMeta"] = new JsonObject
+            {
+                ["parentDeckId"] = 42,
+                ["parentDeckName"] = DeckName,
+                ["description"] = "A named snapshot.",
+            },
         };
     }
-
     /// <summary>
     /// Builds one JSON response.
     /// </summary>
