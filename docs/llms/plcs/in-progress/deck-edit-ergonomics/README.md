@@ -2,7 +2,7 @@
 
 ## Current Work
 
-- Status: In progress (phases 0 to 5 merged into integration except 3b; phase 3b running)
+- Status: In progress (phases 0 to 5 merged into integration at `12bfbb9`; phase 6 running)
 - Owner: mtg-mcp (owner session)
 - Last updated: 2026-11-01, branch `deck-edit-ergonomics/integration` at `645ff5b`
 - Implementation authorized: Yes (owner, 2026-11-01: "Start implementing")
@@ -322,15 +322,15 @@ Phase 0 (2026-11-01, integration at `9b1279c`):
 | REQ-003 | implemented (phase 2) | `9c75a61`: `entryIds` removal of 13 entries, unknown ID, both or neither field. |
 | REQ-004 | implemented (phase 2) | `ca6505e`, `9c75a61`: drafted categories on add and create, and a skipped add assigns nothing. Imports build proposals, not drafts, so they carry no draft categories. A draft naming an unknown category is refused as `invalid-deck-input`. |
 | REQ-005 | implemented (phase 3a, merged `e32c001`) | `f8cab78`: an 18-edit push on a 347-entry fake deck is 36,996 characters full (cut at 17 of 19 rows) and 6,923 characters concise (all 19 rows), with the same fingerprint and apply availability. `responseFormat` also accepts `standard` as an alias of `full`, the shared rule for this parameter. |
-| REQ-006 | partly implemented (phase 3a) | `f8cab78`: `pull-discard-option-mismatch` with no second provider read; previews return `applyOptions`; the `push-removals-unconfirmed` regression test. Still open: showing the expected phrase on `confirmation-required`. |
-| REQ-007 | planned | |
+| REQ-006 | implemented (phases 3a and 3b) | `f8cab78`: `pull-discard-option-mismatch` with no second provider read; previews return `applyOptions`; the `push-removals-unconfirmed` regression test. `2a6d92b`: restore and every delete tool say "Pass confirmation exactly as: <phrase>". |
+| REQ-007 | implemented (phase 3b, merged `12bfbb9`) | `b02a011`: `ArchidektZoneContradiction` carries the local entry ID; the notice groups entries by fix and gives both `patch-entries` changes (`leave` with the zone the categories give, or `match` with the current zone; `match` creates a missing zone category). `PushPreview_AfterAZoneOnlyEdit_NamesBothFixesAndEitherFixClearsIt` covers a deck with no Sideboard category. Known gap for the audit: a contradiction from a primary category that is not included in the deck, with local zone `main`, is not fixed by `match`. |
 | REQ-008 | planned | |
 | REQ-009 | planned | |
 | REQ-010 | implemented with a recorded deviation (phase 2) | `ca6505e`: `zoneCategories` is required on `patch-entries` when it sets a zone. On drafts it is optional and defaults to `leave`, because a draft zone defaults to `main` and an explicit zone cannot be told apart from the default without breaking existing `add-entry`, `local_deck_create`, and Archidekt pull callers. The 13-entry `match` move ends with one zone category on each entry; a missing zone category is created. |
 | REQ-011 | implemented (phase 1) | `8ec45c9`, `c307cce`: `entryId` rows for deck and deck-backup sources; snapshot and Archidekt sources refuse it as `invalid-field`. |
 | REQ-012 | implemented (phase 4, merged `5353e31`) | `d30adcb`: messages read "The value at 'changes[3].entry.sortOrder' must be an integer." and "... must be a UUID", including nullable targets; the 11 `ChangeListArgumentErrorTests` cover a bool, text, a list, and an object. No registered tool binds an enum argument, so the enum wording has no public-surface test. A string `"2"` for `sortOrder` stays accepted. |
 | REQ-013 | implemented (phase 3a) | `f8cab78`: an over-limit push preview and apply name the limit, the predicted count, how many operations fit, and the split advice. The preview shows `providerRequestLimit`, and `predictedProviderRequests` now includes the retry reserve, the figure checked against the limit; the CHANGELOG must name this changed meaning. |
-| REQ-014 | planned | |
+| REQ-014 | implemented (phase 3b) | `b02a011`: consecutive card adds go in batches of up to 25 (`ArchidektSyncPlanner.CardBatchSize`); modifies and removes stay single, since the probe covered adds only. A 400 on a batch resends its cards one at a time. The prediction counts batches plus the largest batch again as the fallback reserve. 40 adds make 2 requests (`ArchidektPrintingResolverTests`); `ApplyPush_WithABadCardInTheBatch_NamesItAndLeavesTheBaseline`. Open for the audit: two rejected batches in one push can exceed the reserve and end as `not-sent`. |
 | REQ-015 | planned | |
 | REQ-016 | implemented (phase 5) | `378c134`, `f32c320`: `docs/architecture/` with `README.md` (moved), `mcp-surface.md`, `deck-model.md`, `code-style.md`. Links updated in `AGENTS.md`, `llms.txt`, `docs/AGENTS.md`, `src/AGENTS.md`, `.codex/project-instructions.md`; 0 broken links over the 9 changed docs. Phase 6 updates the pages for phases 1 to 3. |
 | REQ-017 | implemented (phase 5) | `be1d4e9`: `ToolNamingRuleTests` (in App.Tests, where registered tools can be listed) checks tool names, every input and output schema property, serializer property names, discriminators, and enum values. It found no violations; the provider allowlists are empty. |
