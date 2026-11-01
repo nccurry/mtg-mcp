@@ -301,7 +301,7 @@ internal sealed class ArchidektSession : IDisposable
                 .ConfigureAwait(false);
             throw new ArchidektProviderException(
                 ArchidektFailureKind.Unavailable,
-                "provider-rate-limited",
+                ArchidektProviderException.RateLimitedReasonCode,
                 retriedRead
                     ? $"Archidekt rate-limited the read, and it still refused after {MaximumRateLimitRetries} retries."
                     : "Archidekt rate-limited the operation; no automatic retry was attempted.");
@@ -323,7 +323,7 @@ internal sealed class ArchidektSession : IDisposable
                 "The requested Archidekt entity was not found."),
             HttpStatusCode.BadRequest => new ArchidektProviderException(
                 ArchidektFailureKind.Unavailable,
-                "provider-request-rejected",
+                ArchidektProviderException.RequestRejectedReasonCode,
                 "Archidekt rejected the request; the adapter did not infer why."),
             _ => new ArchidektProviderException(
                 ArchidektFailureKind.Unavailable,

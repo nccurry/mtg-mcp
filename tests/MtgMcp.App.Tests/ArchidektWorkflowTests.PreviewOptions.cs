@@ -360,7 +360,7 @@ public sealed partial class ArchidektWorkflowTests
     }
 
     /// <summary>
-    /// Verifies a push preview over the request limit says the limit, the predicted count, how many operations fit, and
+    /// Verifies a push preview over the request limit says the limit, the predicted count, how many changes fit, and
     /// that the push can be split, and that the summary of any preview shows the prediction beside the limit.
     /// </summary>
     [Fact]
@@ -388,13 +388,19 @@ public sealed partial class ArchidektWorkflowTests
         Assert.False(over.ApplyAvailable);
         int operations = over.Summary.OperationCount;
         int fit = limit - (over.PredictedProviderRequests - operations);
-        Assert.Contains($"limit of {limit}", over.ApplyNotice, StringComparison.Ordinal);
+        Assert.Contains($"over the {limit}-request limit", over.ApplyNotice, StringComparison.Ordinal);
         Assert.Contains(
-            $"needs about {over.PredictedProviderRequests} provider requests",
+            $"needs about {over.PredictedProviderRequests} requests to Archidekt",
             over.ApplyNotice,
             StringComparison.Ordinal);
-        Assert.Contains($"About {fit} of its {operations} operations fit", over.ApplyNotice, StringComparison.Ordinal);
-        Assert.Contains("can be split: apply part of the local changes first", over.ApplyNotice, StringComparison.Ordinal);
+        Assert.Contains(
+            $"About {fit} of the {operations} changes fit (an estimate).",
+            over.ApplyNotice,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            $"Split the push: apply about {fit} changes first, then preview and push the rest.",
+            over.ApplyNotice,
+            StringComparison.Ordinal);
         Assert.Null(pull.ProviderRequestLimit);
     }
 
@@ -421,8 +427,8 @@ public sealed partial class ArchidektWorkflowTests
 
         OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(refused.Value);
         Assert.Equal("request-limit-exceeded", invalid.ReasonCode);
-        Assert.Contains("limit of 60", invalid.Message, StringComparison.Ordinal);
-        Assert.Contains("operations fit", invalid.Message, StringComparison.Ordinal);
+        Assert.Contains("over the 60-request limit for one archidekt_push_apply call", invalid.Message, StringComparison.Ordinal);
+        Assert.Contains("changes fit (an estimate)", invalid.Message, StringComparison.Ordinal);
         Assert.Equal(0, world.Fake.Mutations);
     }
 

@@ -13,6 +13,11 @@ public static class ArchidektSyncPlanner
     public const string EntryRemoveKind = "entry-remove";
 
     /// <summary>
+    /// Names the planned operation that adds one card relation to the Archidekt deck.
+    /// </summary>
+    public const string EntryAddKind = "entry-add";
+
+    /// <summary>
     /// Computes the three-way comparison for a stored local deck, using the local fingerprints of that deck: the full
     /// one, the one for fields no row shows, and the two orders an earlier version recorded.
     /// </summary>
@@ -512,11 +517,11 @@ public static class ArchidektSyncPlanner
     internal static int RequestSize(IReadOnlyList<ArchidektPlannedOperation> operations, int start)
     {
         int size = 1;
-        if (operations[start].Public.Kind == "entry-add")
+        if (operations[start].Public.Kind == EntryAddKind)
         {
             while (start + size < operations.Count &&
                 size < CardBatchSize &&
-                operations[start + size].Public.Kind == "entry-add")
+                operations[start + size].Public.Kind == EntryAddKind)
             {
                 size++;
             }
@@ -527,10 +532,10 @@ public static class ArchidektSyncPlanner
 
     /// <summary>
     /// Counts the requests the operations of a plan send, one for each run of adds up to <see cref="CardBatchSize"/>
-    /// and one for every other operation, plus the cards of the largest batch again: when Archidekt refuses a batch
-    /// without saying which card, the batch is sent again one card at a time.
+    /// and one for every other operation, plus the cards of the largest batch again. That is the reserve for one batch
+    /// that Archidekt refuses without saying which card: the batch is sent again one card at a time, once per push.
     /// </summary>
-    internal static int OperationRequests(IReadOnlyList<ArchidektPlannedOperation> operations)
+    internal static int CountOperationRequests(IReadOnlyList<ArchidektPlannedOperation> operations)
     {
         int requests = 0;
         int largestBatch = 1;
@@ -632,7 +637,11 @@ public static class ArchidektSyncPlanner
             if (currentEntry is null)
             {
                 planned.Add(new ArchidektPlannedOperation(
-                    new ArchidektRemoteOperation(sequence++, "entry-add", targetEntry.CardName, "Add one exact card relation."),
+                    new ArchidektRemoteOperation(
+                        sequence++,
+                        EntryAddKind,
+                        targetEntry.CardName,
+                        "Add one exact card relation."),
                     TargetCategory: null,
                     CurrentCategory: null,
                     targetEntry,
@@ -672,9 +681,10 @@ public static class ArchidektSyncPlanner
         }
 
         int unresolvedAdds = planned.Count(value =>
-            value.Public.Kind == "entry-add" &&
+            value.Public.Kind == EntryAddKind &&
             string.IsNullOrWhiteSpace(value.TargetEntry?.ProviderCardId));
-        int predictedRequests = OperationRequests(planned) + unresolvedAdds + 1;
+        int operationRequestCount = CountOperationRequests(planned);
+        int predictedRequests = operationRequestCount + unresolvedAdds + 1;
         string planFingerprint = ArchidektContract.Fingerprint(new
         {
             current.RemoteFingerprint,
@@ -682,7 +692,7 @@ public static class ArchidektSyncPlanner
             operations = planned.Select(value => value.Public),
             predictedRequests,
         });
-        return new ArchidektRemotePlan(planned, predictedRequests, planFingerprint);
+        return new ArchidektRemotePlan(planned, predictedRequests, planFingerprint, operationRequestCount);
     }
 
     /// <summary>
@@ -738,7 +748,7 @@ public static class ArchidektSyncPlanner
         ArgumentNullException.ThrowIfNull(target);
         return FindZoneContradictions(
             plan.PlannedOperations
-                .Where(operation => operation.Public.Kind is "entry-add" or "entry-update")
+                .Where(operation => operation.Public.Kind is EntryAddKind or "entry-update")
                 .Select(operation => operation.TargetEntry),
             target.Categories,
             entryIds);
@@ -1086,10 +1096,16 @@ internal sealed record ArchidektRowLinks(
 /// <summary>
 /// Carries one deterministic internal plan plus its model-facing descriptors and request bound.
 /// </summary>
+/// <param name="PlannedOperations">The operations in execution order.</param>
+/// <param name="PredictedProviderRequests">The requests to Archidekt the push needs in all, with its reads.</param>
+/// <param name="PlanFingerprint">The fingerprint a preview and its apply must share.</param>
+/// <param name="OperationRequestCount">The requests the operations send. It includes the reserve for sending the
+/// largest batch of adds again card by card, which a push may use once.</param>
 public sealed record ArchidektRemotePlan(
     IReadOnlyList<ArchidektPlannedOperation> PlannedOperations,
     int PredictedProviderRequests,
-    string PlanFingerprint)
+    string PlanFingerprint,
+    int OperationRequestCount)
 {
     /// <summary>
     /// Gets immutable internal operations in execution order.
@@ -1102,11 +1118,6 @@ public sealed record ArchidektRemotePlan(
     /// </summary>
     public IReadOnlyList<ArchidektRemoteOperation> PublicOperations =>
         Array.AsReadOnly(PlannedOperations.Select(value => value.Public).ToArray());
-
-    /// <summary>
-    /// Gets the provider requests the operations send, as counted for the prediction.
-    /// </summary>
-    internal int OperationRequests => ArchidektSyncPlanner.OperationRequests(PlannedOperations);
 }
 
 /// <summary>

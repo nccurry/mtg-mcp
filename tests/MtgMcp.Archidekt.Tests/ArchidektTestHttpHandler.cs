@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace MtgMcp.Archidekt.Tests;
 
@@ -10,9 +12,10 @@ namespace MtgMcp.Archidekt.Tests;
 internal sealed class ArchidektTestHttpHandler : HttpMessageHandler
 {
     /// <summary>
-    /// Stores queued responses by exact method and relative URI.
+    /// Stores queued response builders by exact method and relative URI. A builder gets the request body.
     /// </summary>
-    private readonly ConcurrentDictionary<string, Queue<HttpResponseMessage>> responses = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Queue<Func<string, HttpResponseMessage>>> responses =
+        new(StringComparer.Ordinal);
 
     /// <summary>
     /// Gets captured requests in provider start order.
@@ -34,6 +37,59 @@ internal sealed class ArchidektTestHttpHandler : HttpMessageHandler
         HttpStatusCode statusCode = HttpStatusCode.OK,
         string? retryAfter = null)
     {
+        Enqueue(method, path, _ => Response(json, statusCode, retryAfter));
+    }
+
+    /// <summary>
+    /// Adds the answer Archidekt gives to accepted card adds: 201 with one <c>add</c> object per added card in request
+    /// order, each echoing the patch ID that was sent. A card at <paramref name="omitIndex"/> among the added cards is
+    /// left out of the answer.
+    /// </summary>
+    internal void AddAcceptedCards(HttpMethod method, string path, int? omitIndex = null)
+    {
+        Enqueue(method, path, body => Response(AcceptedCardsBody(body, omitIndex), HttpStatusCode.Created, null));
+    }
+
+    /// <summary>
+    /// Builds the answer to a card request from the patch IDs it carried.
+    /// </summary>
+    private static string AcceptedCardsBody(string requestBody, int? omitIndex)
+    {
+        using JsonDocument document = JsonDocument.Parse(requestBody);
+        JsonArray added = [];
+        int number = 0;
+        foreach (JsonElement card in document.RootElement.GetProperty("cards").EnumerateArray())
+        {
+            if (card.GetProperty("action").GetString() != "add")
+            {
+                continue;
+            }
+
+            if (number++ != omitIndex)
+            {
+                added.Add(new JsonObject
+                {
+                    ["deckRelationId"] = 9000 + number,
+                    ["patchId"] = card.GetProperty("patchId").GetString(),
+                    ["categories"] = null,
+                    ["quantity"] = 1,
+                    ["companion"] = false,
+                    ["flippedDefault"] = false,
+                    ["modifier"] = "Normal",
+                    ["cardId"] = card.GetProperty("cardid").GetInt32(),
+                    ["createdAt"] = "2026-01-01T00:00:00.000000-06:00",
+                });
+            }
+        }
+
+        return new JsonObject { ["add"] = added, ["createdCategories"] = null }.ToJsonString();
+    }
+
+    /// <summary>
+    /// Builds one JSON response.
+    /// </summary>
+    private static HttpResponseMessage Response(string json, HttpStatusCode statusCode, string? retryAfter)
+    {
         HttpResponseMessage response = new(statusCode)
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json"),
@@ -43,10 +99,20 @@ internal sealed class ArchidektTestHttpHandler : HttpMessageHandler
             response.Headers.TryAddWithoutValidation("Retry-After", retryAfter);
         }
 
-        Queue<HttpResponseMessage> queue = responses.GetOrAdd(Key(method, path), static _ => new Queue<HttpResponseMessage>());
+        return response;
+    }
+
+    /// <summary>
+    /// Queues one response builder for an exact route.
+    /// </summary>
+    private void Enqueue(HttpMethod method, string path, Func<string, HttpResponseMessage> build)
+    {
+        Queue<Func<string, HttpResponseMessage>> queue = responses.GetOrAdd(
+            Key(method, path),
+            static _ => new Queue<Func<string, HttpResponseMessage>>());
         lock (queue)
         {
-            queue.Enqueue(response);
+            queue.Enqueue(build);
         }
     }
 
@@ -65,7 +131,7 @@ internal sealed class ArchidektTestHttpHandler : HttpMessageHandler
             body,
             request.Headers.Authorization?.Scheme,
             request.Headers.Authorization?.Parameter));
-        if (!responses.TryGetValue(Key(request.Method, path), out Queue<HttpResponseMessage>? queue))
+        if (!responses.TryGetValue(Key(request.Method, path), out Queue<Func<string, HttpResponseMessage>>? queue))
         {
             return new HttpResponseMessage(HttpStatusCode.NotFound)
             {
@@ -76,7 +142,7 @@ internal sealed class ArchidektTestHttpHandler : HttpMessageHandler
         lock (queue)
         {
             return queue.Count > 0
-                ? queue.Dequeue()
+                ? queue.Dequeue()(body)
                 : new HttpResponseMessage(HttpStatusCode.InternalServerError)
                 {
                     Content = new StringContent("{}", Encoding.UTF8, "application/json"),

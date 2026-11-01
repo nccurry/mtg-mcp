@@ -295,8 +295,8 @@ public sealed record ArchidektSyncPreview(
     int PredictedProviderRequests)
 {
     /// <summary>
-    /// Gets the most provider requests one operation may use, which <see cref="PredictedProviderRequests"/> counts
-    /// against; null when the preview makes no such prediction.
+    /// Gets the request limit: the most requests to Archidekt one tool call may send, which
+    /// <see cref="PredictedProviderRequests"/> counts against; null when the preview makes no such prediction.
     /// </summary>
     public int? ProviderRequestLimit { get; init; }
 

@@ -13,7 +13,7 @@ public sealed class ArchidektService : IDisposable
     private readonly ArchidektSession session;
 
     /// <summary>
-    /// Stores the hard provider request ceiling for each composed operation scope.
+    /// Stores the hard request limit for each composed operation scope.
     /// </summary>
     private readonly int maximumRequestsPerOperation;
 

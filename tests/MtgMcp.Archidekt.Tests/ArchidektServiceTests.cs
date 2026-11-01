@@ -625,9 +625,9 @@ public sealed class ArchidektServiceTests
         handler.Add(HttpMethod.Patch, "api/decks/category/10/", "{}");
         handler.Add(HttpMethod.Post, "api/decks/createCategory/", "{}");
         handler.Add(HttpMethod.Delete, "api/decks/category/11/", "{}", HttpStatusCode.NoContent);
-        handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", "{}");
-        handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", "{}");
-        handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", "{}");
+        handler.AddAcceptedCards(HttpMethod.Patch, "api/decks/42/modifyCards/v2/");
+        handler.AddAcceptedCards(HttpMethod.Patch, "api/decks/42/modifyCards/v2/");
+        handler.AddAcceptedCards(HttpMethod.Patch, "api/decks/42/modifyCards/v2/");
         handler.Add(HttpMethod.Get, "api/decks/42/", finalJson);
         using ArchidektService service = CreateService(handler);
 
@@ -645,7 +645,7 @@ public sealed class ArchidektServiceTests
     }
 
     /// <summary>
-    /// Verifies the hard operation ceiling counts login and provider reads on one shared budget.
+    /// Verifies the hard operation limit counts login and provider reads on one shared budget.
     /// </summary>
     [Fact]
     public async Task OperationBudget_CountsLoginAndRequestTogether()
