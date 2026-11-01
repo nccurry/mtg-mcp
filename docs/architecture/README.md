@@ -1,5 +1,17 @@
 # Architecture
 
+## Pages
+
+Read the page that matches the change you plan to make.
+
+- [MCP surface](mcp-surface.md): tool names, descriptions, parameters, results, paging, errors, preview and apply
+  pairs, operation modes, and annotations.
+- [Deck model](deck-model.md): entries, zones, categories, Archidekt zone categories, change kinds, and batches.
+- [Code style](code-style.md): where the C# and test rules live.
+- [Adapters](../adapters.md): provider rules for Scryfall, Archidekt, Playgroup, and Commander Spellbook.
+- [Output control](../output-control.md): response formats and the result size limit.
+- [Toolsets](../toolsets.md): toolset selection, credential gating, and tool counts.
+
 ## Purpose
 
 `mtg-mcp` is an evidence and workflow server. It returns card facts, provider
@@ -37,7 +49,7 @@ The server uses stdio and registers static tools for one session. It exposes:
 - three workflow prompts (`audit-deck`, `build-from-commander`, and `compare-decks`).
 
 Toolsets choose which tools appear. Modes control what the server may change.
-See [Toolsets](toolsets.md).
+See [Toolsets](../toolsets.md).
 
 ## Data
 
@@ -106,8 +118,10 @@ Stable `0.9.0` does not provide:
 ## Validation
 
 Architecture tests enforce project references, exact tool registration, toolset
-membership, operation-mode visibility, and absence of forbidden legacy tools.
+membership, operation-mode visibility, and absence of forbidden legacy tools. Surface tests
+(`tests/MtgMcp.App.Tests`) enforce the naming rule, description rules, and schema rules in
+[MCP surface](mcp-surface.md).
 Each production assembly must maintain at least 90 percent line coverage.
 
-Read [North Star](north-star.md), [Design Goals](design-goals.md), and the
-[rewrite guide](rewrite-guide.md) for product constraints.
+Read [North Star](../north-star.md), [Design Goals](../design-goals.md), and the
+[rewrite guide](../rewrite-guide.md) for product constraints.

@@ -7,6 +7,9 @@
   `read-only`/`local`/`remote` modes and no advisor, intent, recommendation,
   weak-card, blended-score, or strategic-simulation surface.
 - Use `Taskfile.yml` for common development workflows.
+- Read `docs/architecture/mcp-surface.md` before changing a tool name,
+  description, parameter, or result, and `docs/architecture/deck-model.md`
+  before changing deck entries, zones, categories, or change kinds.
 - Keep dependency-light domain logic in `MtgMcp.Core`.
 - Keep MCP host, tool, resource, prompt, operation-mode, and server-info logic
   in `MtgMcp.App`.

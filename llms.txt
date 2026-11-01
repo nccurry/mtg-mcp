@@ -20,7 +20,10 @@ status log.
 
 ## Architecture
 
-- [Architecture](docs/architecture.md): Project, data, evidence, and write boundaries.
+- [Architecture](docs/architecture/README.md): Project, data, evidence, and write boundaries, with the pages below.
+- [MCP surface](docs/architecture/mcp-surface.md): Tool naming rule, descriptions, parameters, results, paging, errors, preview and apply pairs, modes, and annotations.
+- [Deck model](docs/architecture/deck-model.md): Entries, zones, categories, Archidekt zone categories, change kinds, and batch semantics.
+- [Code style](docs/architecture/code-style.md): Where the C# and test rules live.
 - [Adapters](docs/adapters.md): Scryfall, Archidekt, Playgroup, Spellbook, and Moxfield boundaries.
 - [Toolsets](docs/toolsets.md): Tool-group selection, credential gating, operation modes, common profiles, and the workflow prompts.
 - [Output control](docs/output-control.md): Card response formats (`concise`, `standard`, `full`), the 40,000-byte result size limit, and the historical `detailLevel` levels.
