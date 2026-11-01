@@ -58,22 +58,22 @@ internal static class ArchidektResultPaging
         ShownText name = ResultText.Name(deck.Name);
         ShownText description = ResultText.Description(deck.Description, first);
         ArchidektDeckView header = new(
-            ArchidektDeckFacts.Summarize(deck),
-            deck.RemoteId,
-            deck.RemoteUri,
-            name.Text,
-            description.Text,
-            deck.Format,
-            deck.Visibility,
-            deck.ParentFolderId,
-            deck.ContentFingerprint,
-            deck.RemoteFingerprint,
-            deck.Evidence,
-            offset,
-            chosen.Count,
-            first ? deck.Categories : [],
-            [],
-            first && !omitExtensions
+            Summary: ArchidektDeckFacts.Summarize(deck),
+            RemoteId: deck.RemoteId,
+            RemoteUri: deck.RemoteUri,
+            Name: name.Text,
+            Description: description.Text,
+            Format: deck.Format,
+            Visibility: deck.Visibility,
+            ParentFolderId: deck.ParentFolderId,
+            ContentFingerprint: deck.ContentFingerprint,
+            RemoteFingerprint: deck.RemoteFingerprint,
+            Evidence: deck.Evidence,
+            Offset: offset,
+            ShownEntryCount: chosen.Count,
+            Categories: first ? deck.Categories : [],
+            Entries: [],
+            Extensions: first && !omitExtensions
                 ? deck.Extensions
                 : new Dictionary<string, System.Text.Json.JsonElement>())
         {
@@ -125,8 +125,8 @@ internal static class ArchidektResultPaging
     /// <summary>
     /// Builds one page of a preview: a summary, then the operations and the differences that fit, starting at the
     /// given offsets. Operations come first, because they are what the apply tool would run. The differences are
-    /// shown whole, or as their differing fields when <paramref name="concise"/> is true; the page is cut by the size
-    /// of the rows shown, and nothing else in the result depends on the format.
+    /// shown whole, or as their differing fields when <paramref name="format"/> is concise; the page is cut by the
+    /// size of the rows shown, and nothing else in the result depends on the format.
     /// </summary>
     internal static OperationResult<ArchidektSyncPreviewView> PagePreview(
         ArchidektSyncPreview preview,
@@ -134,7 +134,7 @@ internal static class ArchidektResultPaging
         int differenceOffset,
         string? applyNotice,
         string? expectedPreviewFingerprint,
-        bool concise = false)
+        ArchidektResponseFormat format = ArchidektResponseFormat.Full)
     {
         ArgumentNullException.ThrowIfNull(preview);
         if (ResultPage.CheckPage<ArchidektSyncPreviewView>(
@@ -172,7 +172,7 @@ internal static class ArchidektResultPaging
             ProviderRequestLimit = preview.ProviderRequestLimit,
             ApplyOptions = preview.ApplyOptionsNotice,
         };
-        IReadOnlyList<ArchidektDifferenceRow> rows = DifferenceRows(preview.Differences, concise);
+        IReadOnlyList<ArchidektDifferenceRow> rows = DifferenceRows(preview.Differences, format);
         (ResultPageSlice operations, ResultPageSlice differences) = ResultPage.TakeTwo(
             preview.Operations,
             operationOffset,
@@ -187,7 +187,7 @@ internal static class ArchidektResultPaging
             Truncated = more ? true : null,
             NextOperationOffset = operations.NextOffsetIf(more),
             NextDifferenceOffset = differences.NextOffsetIf(more),
-            Narrow = more ? TwoListNarrow("the summary and every guard", operations, differences, concise) : null,
+            Narrow = more ? TwoListNarrow("the summary and every guard", operations, differences, format) : null,
         });
     }
 
@@ -241,34 +241,13 @@ internal static class ArchidektResultPaging
     }
 
     /// <summary>
-    /// Picks the form the difference rows are shown in: whole values, or only the fields that differ.
-    /// </summary>
-    private static IReadOnlyList<ArchidektDifferenceRow> DifferenceRows(
-        IReadOnlyList<ArchidektDifference> differences,
-        bool concise)
-    {
-        if (!concise)
-        {
-            return differences;
-        }
-
-        List<ArchidektDifferenceRow> rows = new(differences.Count);
-        foreach (ArchidektDifference difference in differences)
-        {
-            rows.Add(ArchidektConciseDifferences.From(difference));
-        }
-
-        return rows;
-    }
-
-    /// <summary>
     /// Builds one page of the differences between a local deck, its baseline, and the remote deck, shown whole or, when
-    /// <paramref name="concise"/> is true, as their differing fields.
+    /// <paramref name="format"/> is concise, as their differing fields.
     /// </summary>
     internal static OperationResult<ArchidektSyncDiffView> PageDiff(
         ArchidektSyncDiff diff,
         int differenceOffset,
-        bool concise = false)
+        ArchidektResponseFormat format = ArchidektResponseFormat.Full)
     {
         ArgumentNullException.ThrowIfNull(diff);
         if (ResultPage.CheckPage<ArchidektSyncDiffView>(
@@ -289,7 +268,7 @@ internal static class ArchidektResultPaging
             diff.Differences.Count,
             differenceOffset,
             []);
-        IReadOnlyList<ArchidektDifferenceRow> rows = DifferenceRows(diff.Differences, concise);
+        IReadOnlyList<ArchidektDifferenceRow> rows = DifferenceRows(diff.Differences, format);
         ResultPageSlice slice = ResultPage.Take(rows, differenceOffset, ResultSize.Measure(header));
         return new OperationSuccess<ArchidektSyncDiffView>(header with
         {
@@ -299,7 +278,9 @@ internal static class ArchidektResultPaging
             Narrow = slice.More
                 ? $"Differences {differenceOffset} to {slice.Next - 1} of {diff.Differences.Count} are shown to " +
                     $"stay under the size limit. Call archidekt_sync_diff again with differenceOffset {slice.Next} " +
-                    "for the rest" + (concise ? ", with responseFormat \"concise\" again." : ".")
+                    "for the rest" + (format == ArchidektResponseFormat.Concise
+                        ? ", with responseFormat \"concise\" again."
+                        : ".")
                 : null,
         });
     }
@@ -367,12 +348,35 @@ internal static class ArchidektResultPaging
         string covers,
         ResultPageSlice operations,
         ResultPageSlice differences,
-        bool concise = false)
+        ArchidektResponseFormat format = ArchidektResponseFormat.Full)
     {
         return $"Rows were left out to stay under the size limit; {covers} cover the whole preview. Call again " +
             $"with operationOffset {operations.Next}, differenceOffset {differences.Next}, and " +
             "expectedPreviewFingerprint set to the previewFingerprint of this page, so every page comes from the " +
-            "same preview" + (concise ? ", and with responseFormat \"concise\" again." : ".");
+            "same preview" + (format == ArchidektResponseFormat.Concise
+                ? ", and with responseFormat \"concise\" again."
+                : ".");
+    }
+
+    /// <summary>
+    /// Picks the form the difference rows are shown in: whole values, or only the fields that differ.
+    /// </summary>
+    private static IReadOnlyList<ArchidektDifferenceRow> DifferenceRows(
+        IReadOnlyList<ArchidektDifference> differences,
+        ArchidektResponseFormat format)
+    {
+        if (format == ArchidektResponseFormat.Full)
+        {
+            return differences;
+        }
+
+        List<ArchidektDifferenceRow> rows = new(differences.Count);
+        foreach (ArchidektDifference difference in differences)
+        {
+            rows.Add(ArchidektConciseDifference.From(difference));
+        }
+
+        return rows;
     }
 
     /// <summary>

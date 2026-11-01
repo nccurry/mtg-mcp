@@ -72,7 +72,8 @@ public sealed record ArchidektFolderUpdateRequest(
     [property: Description("The treeFingerprint from a fresh archidekt_folders_get.")] string ExpectedTreeFingerprint,
     [property: Description("The new name; omit to keep it.")] string? Name = null,
     [property: Description("The new visibility; omit to keep it."), FolderVisibilityValues] string? Visibility = null,
-    [property: Description("The new parent folder ID; null moves the folder to the root. Used only when updateParent is true.")]
+    [property: Description(
+        "The new parent folder ID; null moves the folder to the root. Used only when updateParent is true.")]
     string? ParentFolderId = null,
     [property: Description("Set true to move the folder to parentFolderId; default false leaves the parent as it is.")]
     bool UpdateParent = false);

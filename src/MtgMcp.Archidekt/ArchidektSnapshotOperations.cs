@@ -160,7 +160,9 @@ internal sealed class ArchidektSnapshotOperations
         return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             async budget =>
             {
-                ArchidektOperationResults.RequireConfirmation(request.Confirmation, $"delete snapshot {request.SnapshotId}");
+                ArchidektOperationResults.RequireConfirmation(
+                    request.Confirmation,
+                    $"delete snapshot {request.SnapshotId}");
                 RemoteNamedSnapshot current = await snapshotTransport.GetAsync(
                     request.DeckId,
                     request.SnapshotId,
@@ -248,7 +250,9 @@ internal sealed class ArchidektSnapshotOperations
         return ArchidektOperationResults.ExecuteAsync(maximumRequestsPerOperation,
             async budget =>
             {
-                ArchidektOperationResults.RequireConfirmation(request.Confirmation, $"restore snapshot {request.SnapshotId}");
+                ArchidektOperationResults.RequireConfirmation(
+                    request.Confirmation,
+                    $"restore snapshot {request.SnapshotId}");
                 (RemoteDeckSnapshot current, RemoteNamedSnapshot snapshot) = await GetRestoreSourcesAsync(
                     request.DeckId,
                     request.SnapshotId,

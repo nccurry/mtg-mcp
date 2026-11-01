@@ -30,7 +30,10 @@ public sealed partial class ArchidektSyncNoticesTests
                 (moved.EntryId, "sideboard", "match"),
                 (stuck.EntryId, "maybeboard", "leave"),
             ],
-            changes.Select(value => (Guid.Parse(value.GetProperty("entryIds")[0].GetString()!), Zone(value), Mode(value))));
+            changes.Select(value => (
+                Guid.Parse(value.GetProperty("entryIds")[0].GetString()!),
+                Zone(value),
+                Mode(value))));
         Assert.Contains("'Rock' (zone 'sideboard', but its Archidekt categories put it in 'main')", text);
         Assert.Contains("'Bolt' (zone 'main', but its Archidekt categories put it in 'maybeboard')", text);
         Assert.DoesNotContain("categories give", text, StringComparison.Ordinal);

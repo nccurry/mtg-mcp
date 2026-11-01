@@ -23,13 +23,16 @@ public sealed class ArchidektConciseDifferenceTests
           "cards": [
             { "deckRelationId": 101, "quantity": 1, "order": 0, "categories": ["Removal", "Ramp"],
               "card": { "id": 501, "uid": "33333333-3333-3333-3333-333333333301", "edition": { "editioncode": "dmu" },
-                "collectorNumber": "1", "oracleCard": { "uid": "44444444-4444-4444-4444-444444444401", "name": "Bolt" } } },
+                "collectorNumber": "1",
+                "oracleCard": { "uid": "44444444-4444-4444-4444-444444444401", "name": "Bolt" } } },
             { "deckRelationId": 102, "quantity": 2, "order": 1, "categories": ["Ramp"],
               "card": { "id": 502, "uid": "33333333-3333-3333-3333-333333333302", "edition": { "editioncode": "dmu" },
-                "collectorNumber": "2", "oracleCard": { "uid": "44444444-4444-4444-4444-444444444402", "name": "Anger" } } },
+                "collectorNumber": "2",
+                "oracleCard": { "uid": "44444444-4444-4444-4444-444444444402", "name": "Anger" } } },
             { "deckRelationId": 103, "quantity": 1, "order": 2, "categories": ["Removal"],
               "card": { "id": 503, "uid": "33333333-3333-3333-3333-333333333303", "edition": { "editioncode": "dmu" },
-                "collectorNumber": "3", "oracleCard": { "uid": "44444444-4444-4444-4444-444444444403", "name": "Charm" } } }
+                "collectorNumber": "3",
+                "oracleCard": { "uid": "44444444-4444-4444-4444-444444444403", "name": "Charm" } } }
           ]
         }
         """;
@@ -45,12 +48,13 @@ public sealed class ArchidektConciseDifferenceTests
         added["cards"]!.AsArray().Add(JsonNode.Parse("""
             { "deckRelationId": 104, "quantity": 3, "order": 3, "categories": ["Ramp"],
               "card": { "id": 504, "uid": "33333333-3333-3333-3333-333333333304", "edition": { "editioncode": "dmu" },
-                "collectorNumber": "4", "oracleCard": { "uid": "44444444-4444-4444-4444-444444444404", "name": "Dart" } } }
+                "collectorNumber": "4",
+                "oracleCard": { "uid": "44444444-4444-4444-4444-444444444404", "name": "Dart" } } }
             """));
 
         ArchidektDifference row = Assert.Single(
             Diff(baseline, baseline, Parse(added.ToJsonString()), localChanged: false).Differences);
-        ArchidektConciseDifference concise = ArchidektConciseDifferences.From(row);
+        ArchidektConciseDifference concise = ArchidektConciseDifference.From(row);
 
         Assert.Equal("remote-added", concise.State);
         Assert.Equal(row.Path, concise.Path);
@@ -78,7 +82,7 @@ public sealed class ArchidektConciseDifferenceTests
 
         ArchidektDifference row = Assert.Single(
             Diff(baseline, baseline, Parse(removed.ToJsonString()), localChanged: false).Differences);
-        ArchidektConciseDifference concise = ArchidektConciseDifferences.From(row);
+        ArchidektConciseDifference concise = ArchidektConciseDifference.From(row);
 
         Assert.Equal("remote-removed", concise.State);
         Assert.All(concise.Fields, field =>
@@ -104,15 +108,19 @@ public sealed class ArchidektConciseDifferenceTests
 
         ArchidektDifference row = Assert.Single(
             Diff(baseline, Parse(moved.ToJsonString()), baseline, localChanged: true).Differences);
-        ArchidektConciseDifference concise = ArchidektConciseDifferences.From(row);
+        ArchidektConciseDifference concise = ArchidektConciseDifference.From(row);
 
         Assert.Equal("local-changed", concise.State);
-        Assert.Equal(["categoryNames", "primaryCategoryName", "zone"], concise.Fields.Select(value => value.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["categoryNames", "primaryCategoryName", "zone"],
+            concise.Fields.Select(value => value.Name).Order(StringComparer.Ordinal));
         ArchidektDifferenceField zone = Field(concise, "zone");
         Assert.Equal("main", zone.Baseline!.Value.GetString());
         Assert.Equal("sideboard", zone.Local!.Value.GetString());
         Assert.Equal("main", zone.Remote!.Value.GetString());
-        Assert.Equal(["Sideboard"], Field(concise, "categoryNames").Local!.Value.EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal(
+            ["Sideboard"],
+            Field(concise, "categoryNames").Local!.Value.EnumerateArray().Select(value => value.GetString()));
     }
 
     /// <summary>
@@ -127,7 +135,7 @@ public sealed class ArchidektConciseDifferenceTests
         RemoteDeckSnapshot remote = Parse(WithQuantity(103, 3));
 
         ArchidektSyncDiff diff = Diff(baseline, local, remote, localChanged: true);
-        ArchidektConciseDifference concise = ArchidektConciseDifferences.From(Assert.Single(diff.Differences));
+        ArchidektConciseDifference concise = ArchidektConciseDifference.From(Assert.Single(diff.Differences));
 
         Assert.True(diff.HasConflicts);
         Assert.Equal("concurrent-changed", concise.State);
@@ -146,7 +154,7 @@ public sealed class ArchidektConciseDifferenceTests
     {
         ArchidektDifference row = new("/metadata/name", "local-changed", "Old", "New", "Old");
 
-        ArchidektDifferenceField field = Assert.Single(ArchidektConciseDifferences.From(row).Fields);
+        ArchidektDifferenceField field = Assert.Single(ArchidektConciseDifference.From(row).Fields);
 
         Assert.Equal("name", field.Name);
         Assert.Equal("Old", field.Baseline!.Value.GetString());
@@ -154,6 +162,132 @@ public sealed class ArchidektConciseDifferenceTests
         Assert.Equal("Old", field.Remote!.Value.GetString());
     }
 
+    /// <summary>
+    /// Verifies a category only Archidekt added lists its fields from the remote side alone.
+    /// </summary>
+    [Fact]
+    public void AddedCategory_ListsItsFieldsFromTheSideThatHoldsIt()
+    {
+        RemoteDeckSnapshot baseline = Parse(BaseDeck);
+        JsonNode added = JsonNode.Parse(BaseDeck)!;
+        added["categories"]!.AsArray().Add(JsonNode.Parse("""
+            { "id": 13, "name": "Draw", "includedInDeck": true, "includedInPrice": true, "sortOrder": 3 }
+            """));
+
+        ArchidektDifference row = Assert.Single(
+            Diff(baseline, baseline, Parse(added.ToJsonString()), localChanged: false).Differences);
+        ArchidektConciseDifference concise = ArchidektConciseDifference.From(row);
+
+        Assert.StartsWith("/categories/", concise.Path, StringComparison.Ordinal);
+        Assert.Equal("remote-added", concise.State);
+        Assert.All(concise.Fields, field =>
+        {
+            Assert.Null(field.Baseline);
+            Assert.Null(field.Local);
+            Assert.NotNull(field.Remote);
+        });
+        Assert.Equal("Draw", Field(concise, "name").Remote!.Value.GetString());
+    }
+
+    /// <summary>
+    /// Verifies a category Archidekt renamed lists only its name, with the old and new value, and no rank, which is
+    /// renumbered without an edit.
+    /// </summary>
+    [Fact]
+    public void RenamedCategory_ListsOnlyTheName()
+    {
+        RemoteDeckSnapshot baseline = Parse(BaseDeck);
+        JsonNode renamed = JsonNode.Parse(BaseDeck)!;
+        renamed["categories"]!.AsArray()[1]!["name"] = "Mana";
+        renamed["categories"]!.AsArray()[1]!["sortOrder"] = 7;
+
+        ArchidektDifference row = Diff(baseline, baseline, Parse(renamed.ToJsonString()), localChanged: false)
+            .Differences.Single(value => value.Path.StartsWith("/categories/", StringComparison.Ordinal));
+        ArchidektConciseDifference concise = ArchidektConciseDifference.From(row);
+
+        Assert.Equal("remote-changed", concise.State);
+        ArchidektDifferenceField name = Assert.Single(concise.Fields);
+        Assert.Equal("name", name.Name);
+        Assert.Equal("Ramp", name.Baseline!.Value.GetString());
+        Assert.Equal("Ramp", name.Local!.Value.GetString());
+        Assert.Equal("Mana", name.Remote!.Value.GetString());
+    }
+
+    /// <summary>
+    /// Verifies a category Archidekt removed lists the fields of the baseline and local side and no remote value.
+    /// </summary>
+    [Fact]
+    public void RemovedCategory_ListsTheFieldsOfTheSidesThatHoldIt()
+    {
+        RemoteDeckSnapshot baseline = Parse(BaseDeck);
+        JsonNode removed = JsonNode.Parse(BaseDeck)!;
+        removed["categories"]!.AsArray().RemoveAt(2);
+
+        ArchidektDifference row = Assert.Single(
+            Diff(baseline, baseline, Parse(removed.ToJsonString()), localChanged: false).Differences);
+        ArchidektConciseDifference concise = ArchidektConciseDifference.From(row);
+
+        Assert.StartsWith("/categories/", concise.Path, StringComparison.Ordinal);
+        Assert.Equal("remote-removed", concise.State);
+        Assert.All(concise.Fields, field =>
+        {
+            Assert.NotNull(field.Baseline);
+            Assert.NotNull(field.Local);
+            Assert.Null(field.Remote);
+        });
+        Assert.Equal("Sideboard", Field(concise, "name").Baseline!.Value.GetString());
+    }
+
+    /// <summary>
+    /// Verifies a metadata row the planner makes, a local rename of the deck, lists the one value under its name.
+    /// </summary>
+    [Fact]
+    public void MetadataRow_FromThePlanner_ListsTheNameWithItsThreeValues()
+    {
+        RemoteDeckSnapshot baseline = Parse(BaseDeck);
+        RemoteDeckSnapshot renamed = Parse(
+            BaseDeck.Replace("\"name\": \"Compare\"", "\"name\": \"Renamed\"", StringComparison.Ordinal));
+
+        ArchidektDifference row = Assert.Single(Diff(baseline, renamed, baseline, localChanged: true).Differences);
+        ArchidektConciseDifference concise = ArchidektConciseDifference.From(row);
+
+        Assert.Equal("/metadata/name", concise.Path);
+        Assert.Equal("local-changed", concise.State);
+        ArchidektDifferenceField name = Assert.Single(concise.Fields);
+        Assert.Equal("name", name.Name);
+        Assert.Equal("Compare", name.Baseline!.Value.GetString());
+        Assert.Equal("Renamed", name.Local!.Value.GetString());
+        Assert.Equal("Compare", name.Remote!.Value.GetString());
+    }
+
+    /// <summary>
+    /// Verifies a stale zone move, a remote change whose local side is not compared, lists only the field that moved
+    /// and shows the local side as the baseline row, so it does not read as a local removal of the entry.
+    /// </summary>
+    [Fact]
+    public void StaleZoneMove_DoesNotLookLikeALocalRemoval()
+    {
+        RemoteDeckSnapshot remote = Parse(BaseDeck);
+        RemoteDeckSnapshot baseline = remote with
+        {
+            Entries =
+            [
+                .. remote.Entries.Select(
+                    value => value.CardName == "Charm" ? value with { Zone = "sideboard" } : value),
+            ],
+        };
+
+        ArchidektDifference row = Assert.Single(ArchidektSyncPlanner.FindStaleZoneMoves(baseline, remote));
+        ArchidektConciseDifference concise = ArchidektConciseDifference.From(row);
+
+        Assert.Null(row.LocalValue);
+        Assert.Equal("remote-changed", concise.State);
+        ArchidektDifferenceField zone = Assert.Single(concise.Fields);
+        Assert.Equal("zone", zone.Name);
+        Assert.Equal("sideboard", zone.Baseline!.Value.GetString());
+        Assert.Equal("sideboard", zone.Local!.Value.GetString());
+        Assert.Equal("main", zone.Remote!.Value.GetString());
+    }
     /// <summary>
     /// Verifies the field-level form of a row is much smaller than the whole values it came from.
     /// </summary>
@@ -166,7 +300,7 @@ public sealed class ArchidektConciseDifferenceTests
 
         int full = JsonSerializer.Serialize<ArchidektDifferenceRow>(row, ArchidektContract.JsonOptions).Length;
         int concise = JsonSerializer.Serialize<ArchidektDifferenceRow>(
-            ArchidektConciseDifferences.From(row),
+            ArchidektConciseDifference.From(row),
             ArchidektContract.JsonOptions).Length;
 
         Assert.True(concise * 2 < full, $"concise {concise} full {full}");

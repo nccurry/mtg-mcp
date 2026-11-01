@@ -1070,7 +1070,7 @@ public sealed class ArchidektCoordinatorTests
                     created.DeckId,
                     discardLocalChanges: true,
                     TestContext.Current.CancellationToken));
-                OperationInvalidInput mismatched = Assert.IsType<OperationInvalidInput>((await coordinator.ApplyPullAsync(
+                OperationResult<ArchidektApplyResult> mismatchedResult = await coordinator.ApplyPullAsync(
                     new ArchidektPullApplyRequest(
                         "42",
                         created.DeckId,
@@ -1078,7 +1078,8 @@ public sealed class ArchidektCoordinatorTests
                         plain.RemoteFingerprint,
                         plain.PreviewFingerprint,
                         DiscardLocalChanges: true),
-                    TestContext.Current.CancellationToken)).Value);
+                    TestContext.Current.CancellationToken);
+                OperationInvalidInput mismatched = Assert.IsType<OperationInvalidInput>(mismatchedResult.Value);
                 ArchidektApplyResult applied = Success(await coordinator.ApplyPullAsync(
                     new ArchidektPullApplyRequest(
                         "42",

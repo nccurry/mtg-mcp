@@ -512,7 +512,8 @@ public static class ArchidektSyncPlanner
 
     /// <summary>
     /// Counts the entry adds that one request carries from <paramref name="start"/>: the adds that follow one another
-    /// there, up to <see cref="CardBatchSize"/>. An operation that is not an add is one request by itself, so this is 1.
+    /// there, up to <see cref="CardBatchSize"/>. An operation that is not an add is one request by itself, so this is
+    /// 1.
     /// </summary>
     internal static int RequestSize(IReadOnlyList<ArchidektPlannedOperation> operations, int start)
     {
@@ -756,8 +757,8 @@ public static class ArchidektSyncPlanner
 
     /// <summary>
     /// Finds entries whose zone is not the zone their category names give them among the given categories, by the
-    /// same rule as <see cref="FindZoneContradictions(ArchidektRemotePlan, RemoteDeckSnapshot, IReadOnlyDictionary{RemoteDeckEntry, Guid})"/>.
-    /// A null entry is skipped. Every other entry must have a local entry ID in <paramref name="entryIds"/>.
+    /// same rule as the overload that takes a plan. A null entry is skipped. Every other entry must have a local
+    /// entry ID in <paramref name="entryIds"/>.
     /// </summary>
     public static IReadOnlyList<ArchidektZoneContradiction> FindZoneContradictions(
         IEnumerable<RemoteDeckEntry?> entries,
@@ -782,7 +783,9 @@ public static class ArchidektSyncPlanner
                 found.Add(new ArchidektZoneContradiction(
                     entryIds.TryGetValue(entry, out Guid entryId)
                         ? entryId
-                        : throw new ArgumentException($"Entry '{entry.CardName}' has no local entry ID.", nameof(entryIds)),
+                        : throw new ArgumentException(
+                            $"Entry '{entry.CardName}' has no local entry ID.",
+                            nameof(entryIds)),
                     entry.CardName,
                     entry.Zone,
                     expected,

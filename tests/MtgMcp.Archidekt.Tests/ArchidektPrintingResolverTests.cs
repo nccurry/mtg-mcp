@@ -525,7 +525,8 @@ public sealed class ArchidektPrintingResolverTests
         CapturedArchidektRequest[] sent = [.. handler.Requests.Where(value => value.Method == HttpMethod.Patch)];
         Assert.Equal(2, sent.Length);
         Assert.Equal([25, 15], sent.Select(value => CardsIn(value).Count));
-        List<string?> patchIds = [.. sent.SelectMany(CardsIn).Select(value => value.GetProperty("patchId").GetString())];
+        List<string?> patchIds =
+            [.. sent.SelectMany(CardsIn).Select(value => value.GetProperty("patchId").GetString())];
         Assert.Equal(40, patchIds.Distinct().Count());
         Assert.All(result.Operations, value => Assert.NotEqual("unknown", value.Status));
         Assert.Equal(40, result.Operations.Count(value => value.Status == "applied"));

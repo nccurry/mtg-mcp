@@ -955,7 +955,10 @@ public sealed partial class ArchidektWorkflowTests
 
         while (true)
         {
-            OperationResult<ArchidektSyncDiffView> result = await world.Reads.DiffAsync(localDeckId, offset, cancellationToken: token);
+            OperationResult<ArchidektSyncDiffView> result = await world.Reads.DiffAsync(
+                localDeckId,
+                offset,
+                cancellationToken: token);
             ArchidektSyncDiffView page = Success(result);
             Assert.True(
                 JsonLength(result) < MaximumResultCharacters,
@@ -1442,9 +1445,9 @@ public sealed partial class ArchidektWorkflowTests
     }
 
     /// <summary>
-    /// Verifies a zone-only edit that disagrees with the entry's categories is refused with the entry ID and both fixes,
-    /// and that applying either fix makes the push preview available again, including when the deck has no Sideboard
-    /// category (a match change creates it).
+    /// Verifies a zone-only edit that disagrees with the entry's categories is refused with the entry ID and both
+    /// fixes, and that applying either fix makes the push preview available again, including when the deck has no
+    /// Sideboard category (a match change creates it).
     /// </summary>
     [Theory]
     [InlineData(false)]

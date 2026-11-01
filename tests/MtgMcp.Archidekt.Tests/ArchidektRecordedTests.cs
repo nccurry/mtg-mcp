@@ -58,7 +58,11 @@ public sealed class ArchidektRecordedTests
             return;
         }
 
-        RemoteDeckSnapshot deck = ArchidektDeckContractMapper.MapDeck(root, entry.ReadText(), DateTimeOffset.UnixEpoch, entry.Route);
+        RemoteDeckSnapshot deck = ArchidektDeckContractMapper.MapDeck(
+            root,
+            entry.ReadText(),
+            DateTimeOffset.UnixEpoch,
+            entry.Route);
         Assert.Equal("22959335", deck.RemoteId);
         foreach (JsonElement card in root.GetProperty("cards").EnumerateArray())
         {

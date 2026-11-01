@@ -291,9 +291,9 @@ public sealed class ArchidektRequestPacerTests
         Assert.Equal(41, plan.OperationRequestCount);
         Assert.Equal("request-limit-exceeded", refused.ReasonCode);
         Assert.Equal(
-            "This push needs about 160 requests to Archidekt, over the 150-request limit for one archidekt_push_apply " +
-            "call. About 302 of the 400 changes fit (an estimate). Split the push: apply about 302 changes first, " +
-            "then preview and push the rest. No remote writes were attempted.",
+            "This push needs about 160 requests to Archidekt, over the 150-request limit for one " +
+            "archidekt_push_apply call. About 302 of the 400 changes fit (an estimate). Split the push: apply about " +
+            "302 changes first, then preview and push the rest. No remote writes were attempted.",
             refused.Message);
         budget.EnsurePushRequestBound(150, plan.PlannedOperations.Count, plan.OperationRequestCount);
     }

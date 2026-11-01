@@ -268,13 +268,19 @@ internal sealed class FakeArchidekt : HttpMessageHandler
         {
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
             {
-                Content = new StringContent("""{"error":"Unable to add one or more cards"}""", Encoding.UTF8, "application/json"),
+                Content = new StringContent(
+                    """{"error":"Unable to add one or more cards"}""",
+                    Encoding.UTF8,
+                    "application/json"),
             });
         }
 
         Mutations++;
         Write(request.Method, path, body);
-        return Task.FromResult(Json(path == $"api/decks/{DeckId}/modifyCards/v2/" ? AcceptedCardsAnswer.Build(body, nextRelationId - AcceptedCardsAnswer.CountAdds(body)) : "{}"));
+        string answer = path == $"api/decks/{DeckId}/modifyCards/v2/"
+            ? AcceptedCardsAnswer.Build(body, nextRelationId - AcceptedCardsAnswer.CountAdds(body))
+            : "{}";
+        return Task.FromResult(Json(answer));
     }
 
     /// <summary>
