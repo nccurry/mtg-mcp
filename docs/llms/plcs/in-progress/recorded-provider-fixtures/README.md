@@ -4,22 +4,19 @@
 
 - Status: In progress
 - Owner: mtg-mcp (owner approved 2026-11-01)
-- Last updated: 2026-11-01, `main` at `ce2f488`
+- Last updated: 2026-11-01, `main` at `4754596`
 - Selected work and endpoint: phases 1 to 4 below, merged into `main`. No
   release is required; this changes tests, fixtures, one script, and one Task
   target.
-- State: phases 1 to 4 implemented on `rpf/main` (`fd67b83`, `1e88926`,
-  `ba55005`, `d078c2c`, `8337581`) plus audit fixes (`f5ccce0`,
-  `ed85f71`) and the commit that records them; not merged, and the PLC is
-  not complete.
+- State: phases 1 to 4 and audit fixes merged into `main` as `4754596`;
+  the PLC is not complete.
 - Where: worktree `../mtg-mcp-wt/recorded-provider-fixtures/main`, branch
   `rpf/main`.
-- Next action and blocker: owner decisions below (POST for
-  `/cards/collection`, login-only Archidekt recordings), then the full audit
-  and merge.
+- Next action and blocker: owner decision on the login-only Archidekt
+  recordings (deck list, folder, snapshots).
 - Decisions made during implementation:
   - POST is allowed only for Scryfall `/cards/collection`, a read-only lookup.
-    Proposed; awaiting owner confirmation.
+    Owner confirmed 2026-11-01 (D-3).
   - Sol Ring replaces Assassin's Trophy as the paging recording, because
     paging needs more than 25 printings.
   - Six legacy Scryfall card fixtures keep their prices and use
@@ -52,7 +49,7 @@ provenance, and the hand-written Archidekt fake is checked against them.
 | --- | --- | --- |
 | REQ-001 | Recorded responses live in the adapter test project that owns the provider, under `Fixtures/recorded/<route>/<case>.json`, with one `manifest.json` per adapter. Each entry records id, method, source URL, route, status, file, capture date, SHA-256 of the stored bytes, and what was trimmed or scrubbed. | A test hashes every file against its manifest entry and fails on any mismatch or unlisted file. |
 | REQ-002 | One `ReplayHttpHandler` serves recordings by method, path, and sorted decoded query (host ignored), records every request, and throws on an unmatched request with the request and the known routes. Tests may add a synthetic response (for example a 429) per route. | Handler unit tests: a match, a miss listing routes, query order ignored, an override. |
-| REQ-003 | `scripts/fixtures.ps1 Refresh` re-fetches every manifest entry with GET only (refuses other methods; POST `/cards/collection` is a proposed read-only exception awaiting owner confirmation), paces requests, scrubs personal fields (usernames, avatars, profile data) and volatile fields (Scryfall `prices`, image URIs), writes deterministic LF-formatted JSON, and rewrites the hashes. `task fixtures:refresh` calls it. It never runs in `task test` or CI. | Running it twice with no provider change leaves `git diff` empty; a scrub test finds no usernames in Archidekt recordings. |
+| REQ-003 | `scripts/fixtures.ps1 Refresh` re-fetches every manifest entry with GET only (refuses other methods, except POST to Scryfall `/cards/collection`, a read-only lookup; D-3), paces requests, scrubs personal fields (usernames, avatars, profile data) and volatile fields (Scryfall `prices`, image URIs), writes deterministic LF-formatted JSON, and rewrites the hashes. `task fixtures:refresh` calls it. It never runs in `task test` or CI. | Running it twice with no provider change leaves `git diff` empty; a scrub test finds no usernames in Archidekt recordings. |
 | REQ-004 | Scryfall recordings: a search with `has_more` and `next_page` (two pages), a collection lookup, a named-card lookup, and the 404 error body. The six existing card fixtures move under the manifest. | Adapter tests parse each; a paging test follows the recorded `next_page`; the 404 maps to `not-found`. |
 | REQ-005 | Archidekt recordings capture response shapes, not whole decks: card search for a card with many printings, including the `count` and `next` pages; one of the owner's decks trimmed to a handful of entries, keeping a category whose `includedInDeck` is false, a commander, and a card in two categories; the deck list; folder and snapshot reads. | Adapter tests parse each; printings per name and the set field come from the recording; the excluded category maps out of `main`; the trimmed deck file stays under 50 KB. |
 | REQ-006 | Scenario tests use small mock decks built in the test through `FakeArchidekt` (only the cards each scenario needs), run offline through pull, local read, push preview, and push apply. The mock decks are realistic because REQ-007 holds the fake to the recorded shapes. No real mutation. | Scenarios: an excluded-category entry is left out of the in-deck count; a card in two categories is reported once per entry; push preview of an unchanged pulled deck has no operations; name-only adds resolve a printing from the recorded search. |
@@ -122,6 +119,9 @@ refresh, and `docs/llms/repo-operations.md` with the new target.
 - **D-2 (owner, 2026-11-01):** recordings capture shape only. Scenarios use
   small mock decks built on that real shape, not whole recorded decks. Add a
   whole real deck later only if a bug depends on a full deck's contents.
+- **D-3 (owner, 2026-11-01):** the refresh script may POST to Scryfall
+  `/cards/collection`, a read-only lookup Scryfall offers only as POST. Every
+  other non-GET request is refused.
 - Scryfall allows use of its API data with attribution, and the repo already
   stores card JSON; confirm against scryfall.com/docs/api before phase 1.
 - Size: a whole deck response is large (22959335 is about 1.3 MB), so the
@@ -134,7 +134,7 @@ refresh, and `docs/llms/repo-operations.md` with the new target.
 
 | Requirement | State | Evidence |
 | --- | --- | --- |
-| REQ-001 to REQ-004 | implemented, not merged | Phase 1, `fd67b83`: replay helpers, Scryfall recordings, refresh script. REQ-003: POST `/cards/collection` is a proposed exception awaiting owner confirmation. Phase 1 reported that a second live refresh left `git diff` empty for Scryfall; Archidekt was not refreshed twice, so the double-refresh criterion is not shown for it. Audit fixes `f5ccce0`: refresh compares against the manifest hash, stages writes, and has offline tests of its helpers. |
+| REQ-001 to REQ-004 | merged (`4754596`) | Phase 1, `fd67b83`: replay helpers, Scryfall recordings, refresh script. REQ-003: POST `/cards/collection` allowed by D-3. Phase 1 reported that a second live refresh left `git diff` empty for Scryfall; Archidekt was not refreshed twice, so the double-refresh criterion is not shown for it. Audit fixes `f5ccce0`: refresh compares against the manifest hash, stages writes, and has offline tests of its helpers. |
 | REQ-005 | partial | Phase 2, `1e88926`: Archidekt Sol Ring search pages and trimmed deck 22959335. Deck list, folder, and snapshot recordings are not done: they need an Archidekt login (open question for the owner). |
-| REQ-006 | implemented, not merged | Phase 3, `ba55005`: mock-deck scenarios over the recorded Sol Ring search. |
-| REQ-007 | implemented, not merged | Phase 4, `d078c2c`: `ArchidektFakeContractTests` compares `FakeArchidekt` output with the recorded search pages and deck by key path, value kind, array-size bucket, paging keys, and category flags; the fake gained `id`, `modifier`, `isPremier`, `unlisted`, `updatedAt`, `parentFolder`, and a `previous` link. Breaking the fake made all three tests fail. `task lint`, `task test:integration`, `task test:e2e`, and `task ci` passed. |
+| REQ-006 | merged (`4754596`) | Phase 3, `ba55005`: mock-deck scenarios over the recorded Sol Ring search. |
+| REQ-007 | merged (`4754596`) | Phase 4, `d078c2c`: `ArchidektFakeContractTests` compares `FakeArchidekt` output with the recorded search pages and deck by key path, value kind, array-size bucket, paging keys, and category flags; the fake gained `id`, `modifier`, `isPremier`, `unlisted`, `updatedAt`, `parentFolder`, and a `previous` link. Breaking the fake made all three tests fail. `task lint`, `task test:integration`, `task test:e2e`, and `task ci` passed. |
