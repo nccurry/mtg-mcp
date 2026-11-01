@@ -6,7 +6,7 @@
 - Owner: mtg-mcp (owner session)
 - Last updated: 2026-11-01, branch `deck-edit-ergonomics/integration` at `645ff5b`
 - Implementation authorized: Yes (owner, 2026-11-01: "Start implementing")
-- Selected work and endpoint: phases 0 to 5, merged into `main`, audited, released in the next version, and
+- Selected work and endpoint: phases 0 to 6, merged into `main`, audited, released in the next version, and
   installed.
 - State: drafted and reviewed once (independent read-only review, 2026-11-01). Updated the same day with three
   more session reports (see Sources).
@@ -71,6 +71,9 @@ The reports also raised points that are not in this plan. See Handled Elsewhere.
 | REQ-013 | S6, S7 | A request-limit refusal on a push preview says how many operations fit and that the push can be split by applying part of the local changes first. The preview summary shows predicted requests against the limit before any refusal. | Tests: an over-limit push preview names the limit, the predicted count, and the split advice; a preview under the limit shows both numbers. |
 | REQ-014 | S7 | Push sends card mutations for one deck in `modifyCards/v2` requests of up to N cards each (N set by the phase 0 probe), not one card per request. Verification, guards, and partial-failure reporting stay per card. If the probe shows Archidekt cannot report per-card results for a batched request, the requirement is dropped with that evidence, and REQ-013 stands alone. | Fake-HTTP tests: a 40-card push makes ceil(40/N) mutation requests; a failed batch reports which cards were not applied and leaves the baseline consistent; predicted requests match the requests sent. |
 | REQ-015 | S1-S7 | Descriptions and server instructions state facts agents missed: `add-entry` needs only a card name (resolution fills the IDs; give `printingId` or `setCode` and `collectorNumber` to choose a printing instead of Archidekt's first-listed one); `archidekt_push_apply` reads Archidekt back and verifies each card, so no separate check is needed; `card_list_query` groups by `subtypes` (such as Aura and Equipment) and by `tags`; `stats_castability`, `stats_mana_availability`, and `stats_simulate` answer land-count and on-curve questions. | Description tests within the length limit; server instruction tests. |
+| REQ-016 | docs | A `docs/architecture/` folder describes the design and conventions an agent or contributor needs before changing code: `README.md` (the current `docs/architecture.md` moved here, as the index), `mcp-surface.md` (tool naming and prefixes, description rules, parameter and result conventions, preview and apply pairs, fingerprints and the options an apply repeats, `responseFormat`, paging, errors and reason codes, operation modes and annotations), `deck-model.md` (entries, zones, categories, Archidekt zone categories, change kinds, and batch semantics), and `code-style.md` (a short summary that links `AGENTS.md` and `docs/llms/csharp-best-practices.md` instead of copying them). Every link to `docs/architecture.md` (`AGENTS.md`, `llms.txt`, other docs) points to the new folder; no stub file is left behind. | `git diff --check`; a link check over the changed docs; every statement checked against the code at the commit it lands on. |
+| REQ-017 | docs | The naming rule is written in `mcp-surface.md` and enforced by an architecture test over every registered tool: tool names are snake_case with a registered prefix; parameter and result property names are camelCase; change kinds, discriminators, reason codes, and other fixed values the server defines are kebab-case; values passed through from a provider (such as Scryfall's `not_legal` and tag slugs) keep the provider's spelling. | An architecture test that fails on a snake_case or kebab-case property, a camelCase discriminator, or an unprefixed tool, with an allowlist only for named provider pass-through values. |
+| REQ-018 | docs | Writing the pages doubles as a consistency check of the MCP surface against the written rules. Any inconsistency that can be fixed without breaking a client is fixed in this phase: a description, a default, an error message, an output field added beside an existing one. Breaking inconsistencies, such as renaming a field or changing paging style, are listed in the plan as findings for the owner to decide, not changed. | The inventory is recorded in Evidence; every non-breaking repair has a test. |
 
 Non-goals:
 
@@ -85,6 +88,8 @@ Non-goals:
 - **Filters on other deck read tools.** `stats_local_deck_summary`, `local_deck_validate`, and
   `local_deck_duplicates_preview` report on the whole deck by design.
 - **New tools.** The tool count stays the same.
+- **Renaming existing tools, parameters, or fields.** The names already follow one rule per kind of name
+  (REQ-017), and a rename would break clients with no compatibility alias allowed.
 
 ## Handled Elsewhere
 
@@ -250,18 +255,22 @@ Inspected at `c4fa0f1` (2026-11-01, read-only):
    - Request-limit advice and batched mutations.
    - Fake-HTTP fixtures and tests.
 4. **Phase 4 (REQ-012):** argument error paths and types, if phase 0 shows a gap.
-5. **Phase 5 (REQ-008, REQ-009, REQ-015):** descriptions, server instructions, docs, the E2E workflow tests, the
-   full audit, merge to `main`, release, and install.
+5. **Phase 5 (REQ-016 to REQ-018):** the `docs/architecture/` folder, the naming rule and its architecture test,
+   and the surface consistency inventory with its non-breaking repairs. The pages describe the code as it is on
+   the integration branch; phase 6 updates them for features that land later.
+6. **Phase 6 (REQ-008, REQ-009, REQ-015):** descriptions, server instructions, docs (including the
+   `docs/architecture/` pages the new change kinds and formats touch), the E2E workflow tests, the full audit,
+   merge to `main`, release, and install.
 
 Each phase runs focused tests, then `task ci`, `task test:integration`, and `task test:e2e` from PowerShell.
 
-Phases 1, 3, and 4 touch separate files from phase 2 and can run in parallel worktrees. Phase 3 has two
+Phases 1, 3, 4, and 5 touch separate files from phase 2 and can run in parallel worktrees. Phase 3 has two
 exceptions:
 
 - REQ-007 names `patch-entries` in its fix text, so its apply tests run only after phase 2 merges.
 - The Core zone category definition lands in phase 2 before phase 3 uses it.
 
-Phase 5 needs all the others.
+Phase 6 needs all the others.
 
 Audit: at the end, run the full audit with every specialist over the whole change. Fix every supported finding in
 scope, including P3. Run at most 3 passes. Re-audit only after a serious finding or a substantial change.
@@ -308,6 +317,9 @@ contract. The CHANGELOG names:
 | REQ-013 | planned | |
 | REQ-014 | planned | |
 | REQ-015 | planned | |
+| REQ-016 | planned | |
+| REQ-017 | planned | |
+| REQ-018 | planned | |
 
 The plan is complete when every requirement is verified, or dropped with recorded evidence where the plan allows it
 (REQ-012, REQ-014). Every requirement must be verified on both the merge commit and the release commit, the audit
