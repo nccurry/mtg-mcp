@@ -480,7 +480,8 @@ public sealed class ArchidektPrintingResolverTests
     }
 
     /// <summary>
-    /// Verifies a failure after a write was attempted stays unknown, and the rest are not sent.
+    /// Verifies a failure after a write was attempted stays unknown for every card in that request, and the rest are
+    /// not sent.
     /// </summary>
     [Fact]
     public async Task ApplyPlan_FailureAfterAWriteStarted_IsUnknown()
@@ -500,10 +501,125 @@ public sealed class ArchidektPrintingResolverTests
         ArchidektApplyResult result = await ApplyAsync(handler, current, target);
 
         Assert.Equal("partial", result.Outcome);
-        Assert.Equal("unknown", result.Operations[0].Status);
-        Assert.Equal("not-attempted", result.Operations[1].Status);
-        Assert.Equal("Not sent: an earlier operation stopped the push.", result.Operations[1].Message);
+        Assert.All(result.Operations, value => Assert.Equal("unknown", value.Status));
         Assert.Single(handler.Requests, value => value.Method == HttpMethod.Patch);
+    }
+
+    /// <summary>
+    /// Verifies 40 new cards are sent in two requests of 25 and 15 cards, each card with its own patch ID, and that
+    /// the plan predicted at least those requests.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPlan_FortyNewCards_SendsTwoMutationRequests()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
+        handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", AcceptedBody(25), HttpStatusCode.Created);
+        handler.Add(HttpMethod.Patch, "api/decks/42/modifyCards/v2/", AcceptedBody(15), HttpStatusCode.Created);
+        handler.Add(HttpMethod.Get, "api/decks/42/", ArchidektTestPayloads.Deck);
+        handler.Add(HttpMethod.Get, "api/decks/42/", ArchidektTestPayloads.Deck);
+        (RemoteDeckSnapshot current, RemoteDeckSnapshot target) = DeckWithNewCard(NewCards(40));
+
+        ArchidektApplyResult result = await ApplyAsync(handler, current, target);
+
+        CapturedArchidektRequest[] sent = [.. handler.Requests.Where(value => value.Method == HttpMethod.Patch)];
+        Assert.Equal(2, sent.Length);
+        Assert.Equal([25, 15], sent.Select(value => CardsIn(value).Count));
+        List<string?> patchIds = [.. sent.SelectMany(CardsIn).Select(value => value.GetProperty("patchId").GetString())];
+        Assert.Equal(40, patchIds.Distinct().Count());
+        Assert.All(result.Operations, value => Assert.NotEqual("unknown", value.Status));
+        Assert.Equal(40, result.Operations.Count(value => value.Status == "applied"));
+        Assert.True(sent.Length <= ArchidektSyncPlanner.PlanRemoteApply(current, target).OperationRequests);
+    }
+
+    /// <summary>
+    /// Verifies a batch Archidekt refuses without naming a card is sent again one card at a time, the cards before the
+    /// refused one are applied, the refused card is named, and the requests sent stay within the prediction.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPlan_BatchWithOneBadCard_FallsBackToSingleSendsAndNamesTheBadCard()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
+        const string route = "api/decks/42/modifyCards/v2/";
+        handler.Add(HttpMethod.Patch, route, RefusedBody, HttpStatusCode.BadRequest);
+        handler.Add(HttpMethod.Patch, route, AcceptedBody(1), HttpStatusCode.Created);
+        handler.Add(HttpMethod.Patch, route, AcceptedBody(1), HttpStatusCode.Created);
+        handler.Add(HttpMethod.Patch, route, RefusedBody, HttpStatusCode.BadRequest);
+        (RemoteDeckSnapshot current, RemoteDeckSnapshot target) = DeckWithNewCard(NewCards(5));
+
+        ArchidektApplyResult result = await ApplyAsync(handler, current, target);
+
+        CapturedArchidektRequest[] sent = [.. handler.Requests.Where(value => value.Method == HttpMethod.Patch)];
+        Assert.Equal([5, 1, 1, 1], sent.Select(value => CardsIn(value).Count));
+        Assert.Equal("partial", result.Outcome);
+        Assert.Equal(
+            ["applied", "applied", "unknown", "not-attempted", "not-attempted"],
+            result.Operations.Select(value => value.Status));
+        Assert.Equal("Card 03", result.Operations[2].Subject);
+        Assert.True(sent.Length <= ArchidektSyncPlanner.PlanRemoteApply(current, target).OperationRequests);
+    }
+
+    /// <summary>
+    /// Verifies the prediction counts one request per run of up to 25 adds, one request for any other operation, and
+    /// the cards of the largest batch again for the single sends after a refused batch.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(2, 1 + 2)]
+    [InlineData(25, 1 + 25)]
+    [InlineData(26, 2 + 25)]
+    [InlineData(40, 2 + 25)]
+    public void OperationRequests_CountsBatchesAndTheFallbackReserve(int adds, int expected)
+    {
+        (RemoteDeckSnapshot current, RemoteDeckSnapshot target) = DeckWithNewCard(NewCards(adds));
+
+        ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current, target);
+
+        Assert.Equal(expected, plan.OperationRequests);
+        Assert.Equal(expected + 1, plan.PredictedProviderRequests);
+    }
+
+    /// <summary>
+    /// Builds new entries that already carry an Archidekt card ID, so no search is needed to send them.
+    /// </summary>
+    private static RemoteDeckEntry[] NewCards(int count)
+    {
+        return
+        [
+            .. Enumerable.Range(1, count).Select(number => Entry($"Card {number:00}") with
+            {
+                ProviderCardId = (5000 + number).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                SortOrder = number,
+            }),
+        ];
+    }
+
+    /// <summary>
+    /// Reads the card payloads of a recorded modifyCards request.
+    /// </summary>
+    private static List<JsonElement> CardsIn(CapturedArchidektRequest request)
+    {
+        using JsonDocument document = JsonDocument.Parse(request.Body);
+        return [.. document.RootElement.GetProperty("cards").EnumerateArray().Select(value => value.Clone())];
+    }
+
+    /// <summary>
+    /// Holds the answer Archidekt gave to a batch with one card it refused: 400, and the deck left unchanged.
+    /// </summary>
+    private const string RefusedBody = """{"error":"Unable to add one or more cards"}""";
+
+    /// <summary>
+    /// Builds the answer Archidekt gave to accepted adds: one object per card, in request order.
+    /// </summary>
+    private static string AcceptedBody(int count)
+    {
+        IEnumerable<string> added = Enumerable.Range(1, count).Select(number => $$"""
+            {"deckRelationId":{{9000 + number}},"patchId":"{{number:x32}}","categories":null,"quantity":1,
+            "companion":false,"flippedDefault":false,"modifier":"Normal","cardId":{{5000 + number}},
+            "createdAt":"2026-01-01T00:00:00.000000-06:00"}
+            """);
+        return $$"""{"add":[{{string.Join(',', added)}}],"createdCategories":null}""";
     }
 
     /// <summary>

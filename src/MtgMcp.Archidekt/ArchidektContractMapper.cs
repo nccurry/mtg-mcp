@@ -498,7 +498,9 @@ internal static class ArchidektJsonContract
             }
         }
 
-        return IsInDeck(ordered, primary, categoriesByName) ? "main" : "maybeboard";
+        return IsInDeck(ordered, primary, categoriesByName)
+            ? DeckZoneCategories.MainZone
+            : DeckZoneCategories.MaybeboardZone;
     }
 
     /// <summary>

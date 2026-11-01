@@ -384,7 +384,7 @@ internal sealed class ArchidektFolderOperations
             throw new ArchidektProviderException(
                 ArchidektFailureKind.InvalidInput,
                 "confirmation-required",
-                "The exact confirmation phrase is required.");
+                $"Pass confirmation exactly as: {expected}");
         }
     }
 
