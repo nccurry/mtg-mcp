@@ -511,7 +511,8 @@ public sealed class FoundationMcpTests
             ["local_deck_delete"] = ["deckId", "expectedRevision"],
             ["local_deck_duplicates_preview"] = ["deckId", "exempt", "expectedRevision", "keepPriority", "matchBy"],
             ["local_deck_export_bundle"] = ["artifact", "deckId", "formatId", "offset", "options"],
-            ["local_deck_get"] = ["cardNames", "cursor", "deckId", "fields", "include", "pageSize", "responseFormat"],
+            ["local_deck_get"] =
+                ["cardNames", "categoryNames", "cursor", "deckId", "fields", "include", "pageSize", "responseFormat", "zones"],
             ["local_deck_identity_reconcile_apply"] =
                 ["allowPartial", "applyToken", "deckId", "expectedRevision", "previewFingerprint", "returnDeck"],
             ["local_deck_identity_reconcile_preview"] =
@@ -585,11 +586,14 @@ public sealed class FoundationMcpTests
             ["archidekt_pull_preview"] =
                 [
                     "differenceOffset", "discardLocalChanges", "expectedPreviewFingerprint", "localDeckId",
-                    "operationOffset", "remoteDeckId",
+                    "operationOffset", "remoteDeckId", "responseFormat",
                 ],
             ["archidekt_push_apply"] = ["request"],
             ["archidekt_push_preview"] =
-                ["confirmRemovals", "differenceOffset", "expectedPreviewFingerprint", "localDeckId", "operationOffset"],
+                [
+                    "confirmRemovals", "differenceOffset", "expectedPreviewFingerprint", "localDeckId", "operationOffset",
+                    "responseFormat",
+                ],
             ["archidekt_snapshot_create"] = ["request"],
             ["archidekt_snapshot_delete"] = ["request"],
             ["archidekt_snapshots_get"] = ["deckId", "kind", "offset", "responseFormat", "snapshotId", "zones"],
@@ -597,7 +601,7 @@ public sealed class FoundationMcpTests
             ["archidekt_snapshot_restore_preview"] =
                 ["deckId", "differenceOffset", "expectedPreviewFingerprint", "operationOffset", "snapshotId"],
             ["archidekt_snapshot_update"] = ["request"],
-            ["archidekt_sync_diff"] = ["differenceOffset", "localDeckId"],
+            ["archidekt_sync_diff"] = ["differenceOffset", "localDeckId", "responseFormat"],
         };
         HashSet<string> reads = [.. ArchidektReadToolNames];
         HashSet<string> destructive =
