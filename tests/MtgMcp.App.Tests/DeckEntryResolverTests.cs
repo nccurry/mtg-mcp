@@ -273,7 +273,21 @@ public sealed class DeckEntryResolverTests
         }
 
         DeckChangeResolution result = await new DeckEntryResolver(data.Scryfall)
-            .ResolveChangesAsync(changes, null, TestContext.Current.CancellationToken);
+            .ResolveChangesAsync(
+                changes,
+                new DeckDocument(
+                    Guid.CreateVersion7(),
+                    "Deck",
+                    string.Empty,
+                    "custom",
+                    1,
+                    DateTimeOffset.UnixEpoch,
+                    DateTimeOffset.UnixEpoch,
+                    [],
+                    [],
+                    [],
+                    []),
+                TestContext.Current.CancellationToken);
 
         Assert.Equal(changes.Count, result.Changes.Count);
         foreach ((int position, string name, Guid? expected, _) in adds)
