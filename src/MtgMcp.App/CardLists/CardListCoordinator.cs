@@ -283,7 +283,7 @@ internal sealed class CardListCoordinator
         }
 
         if (list.Data.HasDeckFields && !IsLocalDeck(list.Data.Sources) &&
-            FindEntryIdUse(where, groupBy, rows) is { } entryIdPath)
+            FindEntryIdPath(where, groupBy, rows) is { } entryIdPath)
         {
             return new OperationInvalidInput(
                 "invalid-field",
@@ -394,7 +394,7 @@ internal sealed class CardListCoordinator
     /// <summary>
     /// Finds the path of the first filter, group, row field, or sort key that names entryId, or null when none does.
     /// </summary>
-    private static string? FindEntryIdUse(
+    private static string? FindEntryIdPath(
         IReadOnlyList<CardListFilterInput>? where,
         IReadOnlyList<string>? groupBy,
         CardListRowsInput? rows)

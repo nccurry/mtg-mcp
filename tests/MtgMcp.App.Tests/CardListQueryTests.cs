@@ -190,6 +190,75 @@ public sealed class CardListQueryTests
     }
 
     /// <summary>
+    /// Verifies every place a query can name entryId is refused with the path of that place, and that a source
+    /// that holds Archidekt cards says so: an Archidekt deck or snapshot. A comparison that mixes a local deck
+    /// with an Archidekt deck has no deck fields at all, so it gets the plain unknown-field message.
+    /// </summary>
+    [Theory]
+    [InlineData("archidekt-deck", "where", "where[1].field")]
+    [InlineData("archidekt-deck", "groupBy", "groupBy[1]")]
+    [InlineData("archidekt-deck", "rows.fields", "rows.fields[1]")]
+    [InlineData("archidekt-deck", "rows.sortBy", "rows.sortBy[1].field")]
+    [InlineData("archidekt-snapshot", "where", "where[1].field")]
+    [InlineData("archidekt-snapshot", "groupBy", "groupBy[1]")]
+    [InlineData("archidekt-snapshot", "rows.fields", "rows.fields[1]")]
+    [InlineData("archidekt-snapshot", "rows.sortBy", "rows.sortBy[1].field")]
+    [InlineData("mixed-compare", "where", "where[1].field")]
+    [InlineData("mixed-compare", "groupBy", "groupBy[1]")]
+    [InlineData("mixed-compare", "rows.fields", "rows.fields[1]")]
+    [InlineData("mixed-compare", "rows.sortBy", "rows.sortBy[1].field")]
+    [InlineData("scryfall-snapshot", "where", "where[1].field")]
+    [InlineData("scryfall-snapshot", "groupBy", "groupBy[1]")]
+    [InlineData("scryfall-snapshot", "rows.fields", "rows.fields[1]")]
+    [InlineData("scryfall-snapshot", "rows.sortBy", "rows.sortBy[1].field")]
+    public async Task Query_EntryIdWithoutLocalEntries_NamesThePathOfTheField(
+        string sourceKind,
+        string position,
+        string path)
+    {
+        using CardListWorld world = await CardListWorld.CreateAsync();
+        world.QueueRemoteDeck(world.Echo, world.Foxtrot);
+        world.Archidekt.Add(
+            HttpMethod.Get,
+            "api/decks/snapshots/77/",
+            "{\"id\":77,\"name\":\"S\",\"description\":\"\",\"createdAt\":\"2026-07-04T12:00:00Z\",\"deck\":" +
+            CardListWorld.RemoteDeck(world.Bravo) + "}");
+        CardListSourceInput source = sourceKind switch
+        {
+            "archidekt-deck" => new ArchidektDeckSourceInput("42"),
+            "archidekt-snapshot" => new ArchidektSnapshotSourceInput("42", "77"),
+            "mixed-compare" => new CompareSourceInput(
+                new DeckSourceInput((await world.CreateDeckAsync()).DeckId),
+                new ArchidektDeckSourceInput("42"),
+                "union"),
+            _ => new ScryfallSnapshotSourceInput(await world.Data.SaveSearchAsync()),
+        };
+
+        OperationInvalidInput failure = Failure(await Query(
+            world,
+            source,
+            where: position == "where"
+                ? [new CardListFilterInput("name", "eq", JsonElement.Parse("\"x\"")),
+                    new CardListFilterInput("entryId", "eq", JsonElement.Parse("\"x\""))]
+                : null,
+            groupBy: position == "groupBy" ? ["name", "entryId"] : null,
+            rows: position switch
+            {
+                "rows.fields" => new CardListRowsInput(["name", "entryId"]),
+                "rows.sortBy" => new CardListRowsInput(
+                    SortBy: [new CardListSortInput("name", "asc"), new CardListSortInput("entryId", "asc")]),
+                _ => null,
+            }));
+
+        Assert.Equal("invalid-field", failure.ReasonCode);
+        Assert.Equal(path, failure.Path);
+        Assert.StartsWith("Unknown or unavailable field 'entryId'.", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(
+            sourceKind.StartsWith("archidekt", StringComparison.Ordinal),
+            failure.Message.Contains("Archidekt sources have no local entry IDs", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// Verifies every other source kind works: a saved search, a card list, a backup, Archidekt, and a nested
     /// comparison. Deck fields exist only for deck-like sources.
     /// </summary>
