@@ -101,6 +101,40 @@ no match in `cardNamesNotFound`. `totalEntries` and `nextCursor` count the match
 `cardCount`, and `cardsByZone` always cover the whole deck. The cursor binds `cardNames`
 and `responseFormat` along with `include` and `fields`, so a cursor with a changed filter or format is refused.
 
+`zones` and `categoryNames` filter the same way and join the cursor binding (`DeckCardViewCoordinator`):
+
+- `zones` takes zone codes (`commander`, `main`, `sideboard`, `maybeboard`). An empty list or an unknown code is refused
+  as `invalid-zones`, naming the allowed codes.
+- `categoryNames` takes 1 to 100 names, matched ignoring case and surrounding space against an entry's primary and
+  non-primary categories. A bad list is refused as `invalid-category-names`.
+- Values inside one filter combine with OR, and the three filters (`cardNames`, `zones`, `categoryNames`) combine
+  with AND. `zonesNotFound` and `categoryNamesNotFound` list the values that match no entry of the whole deck, as
+  `cardNamesNotFound` does. No match is a normal result with no entries.
+- `totalEntries` and `nextCursor` count the matching entries; `entryCount`, `cardCount`, and `cardsByZone` still cover the
+  whole deck. With `include`, card data is read for the matching entries only. A concise read of a 347-entry deck with
+  `categoryNames: ["Maybeboard"]` returns its 13 maybeboard entries in one page.
+
+### Archidekt difference rows
+
+`archidekt_sync_diff`, `archidekt_pull_preview`, and `archidekt_push_preview` take `responseFormat`, which is
+`full` (the default) or `concise`; `standard` is accepted as `full`, and any other value is refused with
+`invalid-response-format`. `archidekt_snapshot_restore_preview` does not take it, because its one difference row holds
+two content fingerprints, not entry JSON.
+
+| `responseFormat` | Difference row |
+| --- | --- |
+| `full` or `standard` | `path`, `state`, and the whole `baselineValue`, `localValue`, and `remoteValue` (the JSON of one entry, category, or text value). |
+| `concise` | `path`, `state`, and `fields`: one `{ name, baseline, local, remote }` per field whose values differ. For an added or removed row, the fields of the side that exists. A row for one text value, such as the deck name, lists that value under its last path segment. |
+
+The format changes only how rows are shown. The `previewFingerprint`, the guards, the summary, the operations, and
+`applyAvailable` are computed before formatting and are the same in both formats. Paging measures the rows of the
+format returned, so a concise page holds more rows; `nextDifferenceOffset` keeps its meaning, and the `narrow` text
+says to pass `responseFormat: "concise"` again on the next page. An 18-edit push preview on a 347-entry fake deck is
+36,996 characters in `full` (cut at 17 of 19 rows) and 6,923 in `concise` (all 19 rows)
+(`ArchidektConciseDifference.cs`, `ArchidektResultPaging.cs`). The pull and push previews also return `applyOptions`, the
+options the apply must repeat, and `archidekt_push_preview` returns `providerRequestLimit` beside
+`predictedProviderRequests` (see [MCP surface](architecture/mcp-surface.md)).
+
 ## Historical: `detailLevel`
 
 > Historical reference: these removed legacy short-output aliases are not a

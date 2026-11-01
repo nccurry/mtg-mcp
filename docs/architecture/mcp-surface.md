@@ -66,8 +66,16 @@ pass-through names and values. Both are empty today.
   `path` (`src/MtgMcp.App/Hosting/ToolCallPolicy.cs`, `CloseObject` in `ToolRegistration.cs`).
 - A whole number written as `328.0` or `3.28e2` is read as `328`
   (`src/MtgMcp.App/Hosting/WholeNumberArguments.cs`).
-- A binding error names the JSON path of the value it could not read and, for a union, lists the allowed
-  kinds.
+- A binding error names the JSON path of the value it could not read and the type it expected in plain words:
+  "The value at 'changes[3].entry.sortOrder' must be an integer." The words are "an integer", "a number",
+  "true or false", "text", "a UUID", "a date and time", "a list", "an object", or "one of:" with the allowed values
+  of an enum (`ToolCallPolicy.DescribeExpectedType`). It also names a path inside a change list and a nested draft. For
+  a union, the error lists the allowed kinds.
+- A change that is refused after it is read names its index and kind, for example "Deck change at index 2 with kind
+  'patch-entries' is invalid: ..." (`DeckChangeInputMapper` in `src/MtgMcp.App/Decks/DeckChangeInput.cs`).
+- A closed list of changes is one input with a `kind` per item. `local_deck_apply_changes` takes `patch-entries` for
+  many-entry edits and `remove-entry` with `entryIds` for many removals, so a caller does not repeat one change per
+  entry. The descriptions of `update-entry`, `assign-category`, and `unassign-category` point to `patch-entries`.
 - Local decks and writes use `deckId` and `expectedRevision`. Archidekt tools use `localDeckId`,
   `remoteDeckId`, and `expectedRemoteFingerprint` (inside `request` for writes).
 - A write that returns a deck returns a summary. Pass `returnDeck: true` to get the whole deck.
@@ -101,6 +109,23 @@ pass-through names and values. Both are empty today.
   - `preview-changed`: a later page of a preview came from a changed preview (`ResultPage.cs`).
   - `pull-preview-changed`, `push-preview-changed`, `restore-preview-changed`, `import-preview-changed`: an
     apply found that its preview no longer matches.
+- Refusals name what to change, so a caller can fix the call without a guess:
+  - `pull-discard-option-mismatch`: `archidekt_pull_apply` got a preview fingerprint that matches the preview with the
+    other `discardLocalChanges` value. The message names the value the preview used and says to pass the same one. The
+    check rebuilds the preview from data the apply already read and sends no provider request
+    (`ArchidektCoordinator.DescribeOtherDiscardValueAsync`).
+  - `push-removals-unconfirmed`: a push removes too many entries and `confirmRemovals` is missing or wrong; the message
+    names the option and the count.
+  - `confirmation-required`: a delete or restore tool got a wrong `confirmation`; the message shows the exact phrase
+    (`restore snapshot <snapshotId>`, `delete snapshot <snapshotId>`, `delete folder <folderId>`, `delete <deckId>`).
+  - `entry-zone-contradicts-category`: names each local entry ID and both `patch-entries` fixes (see
+    [Deck model](deck-model.md)).
+  - `request-limit-exceeded`: names the limit, the predicted request count, how many operations fit, and that the push
+    can be split by applying part of the local changes first.
+  - `invalid-zones`, `invalid-category-names`, and `invalid-card-names`: bad `local_deck_get` filters; each carries the
+    `path` of the bad value.
+  - `invalid-deck-change`: a `patch-entries` change, or a `remove-entry` with both or neither of `entryId` and
+    `entryIds`, is refused, and nothing is written.
 - `operation-mode-denied` (an `unsupported` result) is returned by a write tool called in a mode that does not
   allow it. See Operation modes.
 
@@ -145,7 +170,12 @@ state is refused instead of applied.
 - A fingerprint covers the whole preview, not one page. An apply never takes a page.
 - The Archidekt apply tools take one `request` object. The local apply tools take flat arguments.
 - The Archidekt apply tools run the preview again and refuse a stale one. A pull apply with a different
-  `discardLocalChanges` than its preview is refused (`pull-preview-changed`).
+  `discardLocalChanges` than its preview is refused with `pull-discard-option-mismatch`, naming the value the preview
+  used; any other mismatch stays `pull-preview-changed`.
+- `archidekt_pull_preview` and `archidekt_push_preview` return `applyOptions` when the apply call must repeat an
+  option: `discardLocalChanges: true` for a pull, `confirmRemovals` with the removal count for a push. It is the field
+  to read for what an apply repeats. `archidekt_push_preview` also returns `providerRequestLimit` beside
+  `predictedProviderRequests`, which counts every request the push needs, with the reads and the room to retry them.
 - `local_deck_duplicates_preview` has no apply tool. It returns the changes to send to `local_deck_apply_changes`.
 - Other guards use the same idea without a preview: `expectedRevision` on local deck writes,
   `expectedDatabaseFingerprint` on backup restore, `expectedActiveGeneration` on card-data changes, and
@@ -155,13 +185,14 @@ state is refused instead of applied.
 
 ## responseFormat
 
-Seven tools take `responseFormat` with the values `concise`, `standard`, and `full`. The defaults differ.
+Ten tools take `responseFormat` with the values `concise`, `standard`, and `full`. The defaults differ.
 
 | Tool | Default | Notes |
 | --- | --- | --- |
 | `scryfall_search`, `scryfall_cards_get`, `scryfall_installed_cards_by_tag`, `card_lists_compare` | `standard` | `fields` picks concise fields; `full` adds raw provider objects and caps a page at 25 rows |
 | `archidekt_deck_get`, `archidekt_snapshots_get` | `concise` | `full` and `standard` give every entry field |
 | `local_deck_get` | `full` | `standard` is the same as `full`; `concise` gives five entry fields |
+| `archidekt_sync_diff`, `archidekt_pull_preview`, `archidekt_push_preview` | `full` | `standard` is the same as `full`; `concise` gives each difference row as `path`, `state`, and only the differing `fields`. Fingerprints, guards, and `applyAvailable` do not change. |
 
 An unknown value is refused with `invalid-response-format`. See [Output control](../output-control.md).
 
