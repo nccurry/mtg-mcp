@@ -8,12 +8,14 @@
 - Implementation authorized: Yes (owner, 2026-11-01: "Start implementing")
 - Selected work and endpoint: phases 0 to 6, merged into `main`, audited, released in the next version, and
   installed.
-- State: phases 0 to 6 merged into integration; `task ci` passed on `c239f8a`; audit pass 1 found no P0 or P1 and a set of P2 and P3 findings now being repaired in three worktrees (`fixdecks`, `fixarchidekt`, `fixshared`).
-  more session reports (see Sources).
+- State: phases 0 to 6 merged into integration, and `task ci` passed on `c239f8a`. Audit pass 1 found no P0 or
+  P1. Its P2 and P3 findings are being repaired in three worktrees (`fixdecks`, `fixarchidekt`, `fixshared`).
 - Decisions: the owner accepted D-2, D-3, and D-5 and approved the D-7 live probe on 2026-11-01.
-- Next action: merge the repairs, update the docs and this plan for them, run `task ci`, then merge to `main` and ask the owner about the release.
+- Next action: merge the repairs, update the docs and this plan for them, and run `task ci`. Then merge to `main`
+  and ask the owner about the release.
 - Blocker: none.
-- Resume check: this file exists on `main` or on `docs/deck-edit-ergonomics-plc`.
+- Resume check: `git log deck-edit-ergonomics/integration` contains `614e5aa`; worktrees under
+  `../mtg-mcp-wt/deck-edit-ergonomics/`.
 
 ## Sources
 
