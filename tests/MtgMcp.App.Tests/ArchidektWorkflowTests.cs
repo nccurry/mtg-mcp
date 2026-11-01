@@ -1991,7 +1991,7 @@ public sealed partial class ArchidektWorkflowTests
             await world.Reads.PreviewPullAsync("42", edited.DeckId, cancellationToken: token));
 
         Assert.Contains(
-            "'Side Card 01' (zone 'main', but its categories give zone 'sideboard')",
+            "'Side Card 01' (zone 'main', but its Archidekt categories put it in 'sideboard')",
             preview.ApplyNotice,
             StringComparison.Ordinal);
         await AssertPullIsRefusedAsync(world, edited.DeckId, edited.Revision);
@@ -2013,7 +2013,7 @@ public sealed partial class ArchidektWorkflowTests
             await world.Reads.PreviewPullAsync("42", edited.DeckId, cancellationToken: token));
 
         Assert.Contains(
-            "'Side Card 01' (zone 'main', but its categories give zone 'maybeboard')",
+            "'Side Card 01' (zone 'main', but its Archidekt categories put it in 'maybeboard')",
             preview.ApplyNotice,
             StringComparison.Ordinal);
         await AssertPullIsRefusedAsync(world, edited.DeckId, edited.Revision);
@@ -2215,7 +2215,7 @@ public sealed partial class ArchidektWorkflowTests
         Assert.True(preview.HasConflicts);
         Assert.False(preview.ApplyAvailable);
         Assert.Contains(
-            "'Side Card 01' (zone 'main', but its categories give zone 'sideboard')",
+            "'Side Card 01' (zone 'main', but its Archidekt categories put it in 'sideboard')",
             preview.ApplyNotice,
             StringComparison.Ordinal);
     }
