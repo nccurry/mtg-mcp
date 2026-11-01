@@ -73,31 +73,13 @@ internal static class DeckAddPresence
 
             DeckEntryDraft draft = add.Entry;
             Present added = Present.FromDraft(draft);
-            Present? sameZone = skipPresent
-                ? present.Find(value => SameCard(value, added) && SameZone(value, added) &&
-                    StaysInZone(changes, index, value, added))
-                : null;
+            Present? sameZone = skipPresent ? FindSkipTarget(present, changes, index, added) : null;
             if (sameZone is not null)
             {
-                if (DeckEntryDraftRules.FirstProblem(draft) is string problem)
+                string? refusal = LeaveOut(present, skippedById, issues, index + 1, draft, sameZone);
+                if (refusal is not null)
                 {
-                    return new DeckAddPresenceResult(
-                        changes,
-                        [],
-                        $"Change {index + 1} is an add-entry that cannot be written: {problem} Nothing was written.");
-                }
-
-                issues.Add(new DeckWriteIssue(
-                    DeckWriteIssue.Skipped,
-                    $"'{added.CardName}' is already in zone {sameZone.Zone} as {Describe(sameZone)}; not added.",
-                    sameZone.EntryId,
-                    added.CardName));
-
-                // When the add carried the ID of the entry it matched, a later change that names that ID already
-                // targets the right entry, so there is nothing to refuse.
-                if (draft.EntryId is Guid skippedId && skippedId != sameZone.EntryId)
-                {
-                    skippedById[skippedId] = new Skipped(index + 1, added.CardName, sameZone);
+                    return new DeckAddPresenceResult(changes, [], refusal);
                 }
 
                 continue;
@@ -119,6 +101,75 @@ internal static class DeckAddPresence
     }
 
     /// <summary>
+    /// Finds the entry that lets an add be left out: a same-card entry in the same zone that stays there after the
+    /// whole batch. When the add carries an entry ID, the entry with that ID is preferred, because a retried batch
+    /// finds the entry its first attempt made.
+    /// </summary>
+    private static Present? FindSkipTarget(
+        List<Present> present,
+        IReadOnlyList<DeckChange> changes,
+        int index,
+        Present added)
+    {
+        Present? match = null;
+        foreach (Present value in present)
+        {
+            if (!SameCard(value, added) || !SameZone(value, added) || !StaysInZone(changes, index, value, added))
+            {
+                continue;
+            }
+
+            if (added.EntryId is Guid id && value.EntryId == id)
+            {
+                return value;
+            }
+
+            match ??= value;
+        }
+
+        return match;
+    }
+
+    /// <summary>
+    /// Leaves an add out: reports it as skipped and remembers its entry ID so a later change that names it can be
+    /// refused. Returns the reason to refuse the whole batch when the add could not be written anyway, or null.
+    /// </summary>
+    private static string? LeaveOut(
+        List<Present> present,
+        Dictionary<Guid, Skipped> skippedById,
+        List<DeckWriteIssue> issues,
+        int changeNumber,
+        DeckEntryDraft draft,
+        Present target)
+    {
+        if (DeckEntryDraftRules.FirstProblem(draft) is string problem)
+        {
+            return $"Change {changeNumber} is an add-entry that cannot be written: {problem} Nothing was written.";
+        }
+
+        if (draft.EntryId is Guid id && id != target.EntryId && present.Exists(value => value.EntryId == id))
+        {
+            return $"Change {changeNumber} is an add-entry whose entryId {id} already belongs to another entry. " +
+                "Nothing was written.";
+        }
+
+        issues.Add(new DeckWriteIssue(
+            DeckWriteIssue.Skipped,
+            $"'{Trimmed(draft.CardName)}' is already in zone {target.Zone} as {Describe(target)}; not added.",
+            target.EntryId,
+            Trimmed(draft.CardName)));
+
+        // When the add carried the ID of the entry it matched, a later change that names that ID already targets the
+        // right entry, so there is nothing to refuse.
+        if (draft.EntryId is Guid skippedId && skippedId != target.EntryId)
+        {
+            skippedById[skippedId] = new Skipped(changeNumber, Trimmed(draft.CardName), target);
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Tells whether an entry is still the same card in the same zone once the changes after the add have run. A
     /// later remove-entry of it, or an update-entry that moves it out of the zone or makes it another card, means it
     /// does not stay, so leaving out the add would lose the card.
@@ -127,6 +178,7 @@ internal static class DeckAddPresence
     {
         if (existing.EntryId is not Guid id)
         {
+            // An earlier add of this batch without an entryId cannot be named by any later change, so it stays.
             return true;
         }
 
