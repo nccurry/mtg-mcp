@@ -2,16 +2,16 @@
 
 ## Current Work
 
-- Status: Planned
+- Status: In progress (phase 0)
 - Owner: mtg-mcp (owner session)
-- Last updated: 2026-11-01, branch `docs/deck-edit-ergonomics-plc` from `main` at `c4fa0f1` (release `0.13.3`)
-- Implementation authorized: No. The owner asked for this plan; implementation waits for the owner's go-ahead.
+- Last updated: 2026-11-01, branch `deck-edit-ergonomics/integration` at `645ff5b`
+- Implementation authorized: Yes (owner, 2026-11-01: "Start implementing")
 - Selected work and endpoint: phases 0 to 5, merged into `main`, audited, released in the next version, and
   installed.
 - State: drafted and reviewed once (independent read-only review, 2026-11-01). Updated the same day with three
   more session reports (see Sources).
 - Decisions: the owner accepted D-2, D-3, and D-5 and approved the D-7 live probe on 2026-11-01.
-- Next action: the owner's go-ahead to implement; then the plan moves to `in-progress/` and phase 0 starts.
+- Next action: wave A (phase 0 facts and probe, phases 1, 2, and 3a) in parallel worktrees, then wave B (phase 3b, phase 4), then phase 5.
 - Blocker: none.
 - Resume check: this file exists on `main` or on `docs/deck-edit-ergonomics-plc`.
 
