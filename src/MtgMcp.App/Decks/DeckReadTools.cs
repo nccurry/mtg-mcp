@@ -64,7 +64,7 @@ internal sealed class DeckReadTools
     [Description("Local deck store: lists canonically ordered local deck summaries using an opaque stable cursor.")]
     internal Task<OperationResult<DeckPage>> ListAsync(
         [Description("Opaque cursor returned by a prior local_deck_list call.")] string? cursor = null,
-        [Description("Number of summaries to return, from 1 through 100.")] int pageSize = 50,
+        [Description("Number of summaries to return, from 1 through 100; default 50.")] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
         return store.ListAsync(cursor, pageSize, cancellationToken);

@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
 namespace MtgMcp.Core.Decks;
@@ -8,25 +10,39 @@ namespace MtgMcp.Core.Decks;
 public abstract record CategoryRuleSource;
 
 /// <summary>Supplies the complete caller-authored category rules.</summary>
-public sealed record InlineCategoryRuleSource(CategoryRuleSet RuleSet) : CategoryRuleSource;
+public sealed record InlineCategoryRuleSource(
+    [property: Description("The complete rules: an assignment mode and the category rules.")] CategoryRuleSet RuleSet) : CategoryRuleSource;
 
 /// <summary>Defines deterministic category ownership and tag selectors.</summary>
-public sealed record CategoryRuleSet(string AssignmentMode, IReadOnlyList<CategoryRule> Rules);
+public sealed record CategoryRuleSet(
+    [property: Description(
+        "add-only: only adds assignments; synchronize-listed-categories: also removes assignments of the listed " +
+        "categories that no longer match."),
+     AllowedValues("add-only", "synchronize-listed-categories")]
+    string AssignmentMode,
+    [property: Description("One rule per category; each category appears once.")] IReadOnlyList<CategoryRule> Rules);
 
 /// <summary>Defines one category and its exact tag selector groups.</summary>
 public sealed record CategoryRule(
-    Guid CategoryId,
+    [property: Description("The category the rule assigns.")] Guid CategoryId,
+    [property: Description("Tags an entry must all have; use an empty list for none.")]
     IReadOnlyList<CategoryTagSelector> AllOf,
+    [property: Description("Tags of which an entry must have at least one; use an empty list for none.")]
     IReadOnlyList<CategoryTagSelector> AnyOf,
+    [property: Description("Tags an entry must not have; use an empty list for none.")]
     IReadOnlyList<CategoryTagSelector> NoneOf,
+    [property: Description("Makes this category primary for matching entries; unique among the rules, lower wins. Omit for non-primary.")]
     int? PrimaryPriority = null);
 
 /// <summary>Identifies one exact Oracle or art tag selector.</summary>
 public sealed record CategoryTagSelector(
-    string TagType,
-    Guid? TagId = null,
-    string? ExactSlug = null,
+    [property: Description("The tag type."), AllowedValues("oracle", "art")] string TagType,
+    [property: Description("The tag ID; give this or exactSlug, not both.")] Guid? TagId = null,
+    [property: Description("The tag slug; give this or tagId, not both.")] string? ExactSlug = null,
+    [property: Description("Also match tags that descend from this tag; default false.")]
     bool IncludeDescendants = false,
+    [property: Description("The lowest tag weight that counts; default weak."),
+     AllowedValues("weak", "median", "strong", "very-strong")]
     string MinimumWeight = "weak");
 
 /// <summary>Provides provider-neutral tag evidence for one deck entry.</summary>
