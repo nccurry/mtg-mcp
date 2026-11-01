@@ -27,6 +27,12 @@ is complete.
 was completed and released as 0.12.0 on 2026-10-29.
 
 
+## Deck Editing
+
+[deck-edit-ergonomics](deck-edit-ergonomics/README.md) is drafted: entry filters on
+`local_deck_get`, a `patch-entries` change kind, categories on `add-entry`, concise
+Archidekt difference rows, and preview and apply option checks.
+
 ## Retired Reference Packets
 
 The nine legacy reference packets that used to wait here (Jasmine analysis
