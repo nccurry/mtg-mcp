@@ -219,15 +219,21 @@ public static class ArchidektLocalMapper
     /// <param name="target">The pushed target, built from <paramref name="local"/> in entry and category order.</param>
     /// <param name="verificationMismatch">True when the verification found a difference; the baseline then keeps every
     /// local difference visible as a local change.</param>
+    /// <param name="notLanded">For a partial push, the local entries whose add or update was not applied (or may not
+    /// have been); null for a finished push. A new entry among them is not linked, even to a row that matches it, so
+    /// it stays a local addition; the baseline keeps every local difference visible as a local change, and records the
+    /// fields no row shows only for the linked rows, so a pull can still keep the local additions.</param>
     /// <returns>
     /// The baseline JSON and the local entry IDs the push could not link to a provider row, or null when all linked.
-    /// A category with no verified match stores no link, and the next push plans it by name.
+    /// The entries in <paramref name="notLanded"/> are not listed. A category with no verified match stores no link,
+    /// and the next push plans it by name.
     /// </returns>
     public static (string Json, IReadOnlyList<Guid>? UnlinkedLocalIds) CreatePushBaseline(
         DeckDocument local,
         RemoteDeckSnapshot verified,
         RemoteDeckSnapshot target,
-        bool verificationMismatch = false)
+        bool verificationMismatch = false,
+        IReadOnlySet<Guid>? notLanded = null)
     {
         ArgumentNullException.ThrowIfNull(local);
         ArgumentNullException.ThrowIfNull(verified);
@@ -260,6 +266,12 @@ public static class ArchidektLocalMapper
         for (int index = 0; index < local.Entries.Count; index++)
         {
             Guid entryId = local.Entries[index].EntryId;
+            if (notLanded?.Contains(entryId) == true &&
+                string.IsNullOrWhiteSpace(target.Entries[index].ProviderRelationId))
+            {
+                continue;
+            }
+
             if (links.EntryRelationIds[index] is { } relationId)
             {
                 entryRelations[entryId] = relationId;
@@ -278,18 +290,24 @@ public static class ArchidektLocalMapper
             }
         }
 
-        // After a verification mismatch the local deck is not what was synchronized: the baseline keeps the verified
-        // remote state and a local fingerprint no deck can have, so every difference Archidekt did not take stays
-        // visible as a local change until a later push or pull succeeds.
+        // After a verification mismatch or a partial push the local deck is not what was synchronized: the baseline
+        // keeps the verified remote state and a local fingerprint no deck can have, so every difference Archidekt did
+        // not take stays visible as a local change until a later push or pull succeeds.
+        bool unsynchronized = verificationMismatch || notLanded is not null;
         ArchidektSyncBaseline baseline = new(
             2,
             verified.RemoteId,
             verified.RemoteFingerprint,
-            verificationMismatch ? UnsynchronizedFingerprint : LocalFingerprint(local),
+            unsynchronized ? UnsynchronizedFingerprint : LocalFingerprint(local),
             verified,
             entryRelations,
             categoryRelations,
             verificationMismatch ? null : LocalInvisibleFingerprint(local));
+        if (notLanded is not null)
+        {
+            baseline = baseline with { LocalInvisibleFingerprint = LinkedInvisibleFingerprint(local, baseline) };
+        }
+
         string json = JsonSerializer.Serialize(baseline, ArchidektContract.JsonOptions);
         return (json, unlinked.Count == 0 ? null : unlinked);
     }

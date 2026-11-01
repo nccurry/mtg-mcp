@@ -1051,7 +1051,8 @@ public sealed class ArchidektLocalMapperTests
     /// come from the categories: a zone with a zone category always does; the main zone does when what is left after
     /// removing the zone categories maps to main, needs a new primary category when the primary category is a zone
     /// category and others remain, and does not when the zone comes from a category the change does not touch (a
-    /// primary category outside the deck, or a premier category).
+    /// primary category outside the deck, or a premier category). A zone that is neither main nor has a zone category
+    /// cannot use the match change at all.
     /// </summary>
     [Theory]
     [InlineData("sideboard", "Removal", "Removal", "main", ArchidektMatchFix.Clears)]
@@ -1062,6 +1063,8 @@ public sealed class ArchidektLocalMapperTests
     [InlineData("main", "Considering", "Considering", "maybeboard", ArchidektMatchFix.DoesNotClear)]
     [InlineData("main", "Considering,Sideboard", "Considering", "sideboard", ArchidektMatchFix.DoesNotClear)]
     [InlineData("main", "Partner", "Partner", "commander", ArchidektMatchFix.DoesNotClear)]
+    [InlineData("companion", "Removal", "Removal", "main", ArchidektMatchFix.NotAvailableForZone)]
+    [InlineData("companion", "Sideboard,Removal", "Sideboard", "sideboard", ArchidektMatchFix.NotAvailableForZone)]
     public void FindZoneContradictions_SaysWhetherMatchingTheCategoriesClearsIt(
         string zone,
         string categories,

@@ -479,7 +479,7 @@ internal sealed class ArchidektDeckOperations
     /// Archidekt rejects a batch of added cards whole and changes nothing, so a rejected batch is sent again card by
     /// card, once per push: the cards it accepts are applied, a card it rejects is reported as not applied, and the
     /// push goes on. When any operation did not take effect, the push is reported as partial or not applied and is
-    /// not verified, so the local baseline stays as it was.
+    /// not verified here; the caller reads a partial push back and records what landed.
     /// </summary>
     internal async Task<ArchidektApplyResult> ApplyPlanAsync(
         RemoteDeckSnapshot current,
@@ -765,8 +765,9 @@ internal sealed class ArchidektDeckOperations
             return false;
         }
         catch (ArchidektProviderException exception)
-            when (exception.Kind is ArchidektFailureKind.Unavailable or ArchidektFailureKind.Unsupported)
         {
+            // Any other failure, a 404 included, may follow a write Archidekt made, so the run is unknown and the
+            // statuses of the runs before it are kept.
             progress.Statuses.AddRange(run.Select(value => Status(value.Public, UnknownStatus, exception.Message)));
             return false;
         }

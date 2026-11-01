@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MtgMcp.App.Archidekt;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Decks;
 using MtgMcp.App.Hosting;
 using MtgMcp.Archidekt;
 using MtgMcp.Core.Decks;
@@ -1564,12 +1565,11 @@ public sealed partial class ArchidektWorkflowTests
 
     /// <summary>
     /// Verifies a push whose batch holds cards Archidekt refuses sends the cards one at a time, applies the good cards
-    /// before and after the refused ones, names the refused cards as not applied, stays within the predicted requests,
-    /// and leaves the baseline and the local deck as they were, so the next preview shows what landed as an Archidekt
-    /// change.
+    /// before and after the refused ones, names the refused cards as not applied, sends no more writes than the plan
+    /// counts with its reserve, and records what landed, so the next preview offers only the refused cards.
     /// </summary>
     [Fact]
-    public async Task ApplyPush_WithABadCardInTheBatch_NamesItAndLeavesTheBaseline()
+    public async Task ApplyPush_WithABadCardInTheBatch_NamesItAndRecordsWhatLanded()
     {
         FakeArchidekt fake = CreateDeckForNameOnlyAdds();
         using World world = new(OperationMode.Remote, fake);
@@ -1608,12 +1608,237 @@ public sealed partial class ArchidektWorkflowTests
         Assert.Equal(
             [1, 1, 0, 0, 1],
             Enumerable.Range(1, 5).Select(number => fake.QuantityOf($"Side Card {number:00}")));
-        Assert.Equal(6, fake.Requests.Skip(before).Count(value => value.StartsWith("PATCH", StringComparison.Ordinal)));
+        int writes = fake.Requests.Skip(before).Count(value => value.StartsWith("PATCH", StringComparison.Ordinal));
+        Assert.Equal(6, writes);
+        Assert.True(writes <= PlannedWrites(preview));
         Assert.True(fake.Requests.Count - before <= preview.PredictedProviderRequests);
+        Assert.NotNull(applied.LocalRevision);
+        Assert.NotNull(applied.FinalRemoteFingerprint);
+        Assert.True(after.ApplyAvailable);
+        Assert.Equal(
+            [("entry-add", "Side Card 03"), ("entry-add", "Side Card 04")],
+            after.Operations.Select(value => (value.Kind, value.Subject)));
+        Assert.DoesNotContain(after.Differences, value => value.State.StartsWith("remote-", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Verifies a batch of 25 adds with one card Archidekt refuses converges: the partial push records the 24 cards
+    /// that landed, a pull then keeps the refused card with no duplicate refusal, the next push preview is available
+    /// and adds only the refused card, and once Archidekt accepts that card (or it is removed locally) the push
+    /// applies cleanly.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ApplyPush_WithOneRefusedCardInABatchOf25_ConvergesOnTheNextPush(bool removeTheCard)
+    {
+        FakeArchidekt fake = CreateDeckForNameOnlyAdds();
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            AddSideboardCards(local, [.. Enumerable.Range(1, 25).Select(value => $"Side Card {value:00}")]),
+            token));
+        fake.RefusedCardIds.UnionWith([5026, 5027]);
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(localDeckId, edited.Revision, preview.RemoteFingerprint, preview.PreviewFingerprint),
+            token));
+
+        Assert.Equal("partial", applied.Outcome);
+        Assert.Equal(24, applied.Operations.Count(value => value.Status == "applied"));
+        Assert.Equal("Side Card 13", applied.Operations.Single(value => value.Status == "not-applied").Subject);
+        Assert.Contains("local baseline now records", applied.Notice, StringComparison.Ordinal);
+        Assert.Null(applied.UnlinkedLocalIds);
+        ArchidektSyncPreviewView pull = Success(
+            await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
+        Assert.True(pull.ApplyAvailable, pull.ApplyNotice);
+        Assert.Empty(pull.Operations.Where(value => value.Kind == ArchidektSyncPlanner.EntryAddKind));
+        ArchidektApplyResult pulled = Success(await world.LocalWrites.ApplyPullAsync(
+            new ArchidektPullApplyRequest(
+                "42",
+                localDeckId,
+                pull.LocalRevision,
+                pull.RemoteFingerprint,
+                pull.PreviewFingerprint),
+            token));
+        DeckDocument afterPull = Success(await world.Store.GetAsync(localDeckId, token));
+        Assert.Equal(26, afterPull.Entries.Count);
+        Assert.Single(afterPull.Entries, value => value.CardName == "Side Card 13");
+        ArchidektSyncPreviewView next = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        Assert.True(next.ApplyAvailable, next.ApplyNotice);
+        ArchidektRemoteOperation only = Assert.Single(next.Operations);
+        Assert.Equal(("entry-add", "Side Card 13"), (only.Kind, only.Subject));
+
+        long revision = Assert.IsType<long>(pulled.LocalRevision);
+        if (removeTheCard)
+        {
+            revision = Success(await world.Store.ApplyChangesAsync(
+                localDeckId,
+                revision,
+                [new RemoveDeckEntryChange(afterPull.Entries.Single(value => value.CardName == "Side Card 13").EntryId)],
+                token)).Revision;
+        }
+        else
+        {
+            fake.RefusedCardIds.Clear();
+        }
+
+        ArchidektSyncPreviewView last = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        ArchidektApplyResult finished = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(localDeckId, revision, last.RemoteFingerprint, last.PreviewFingerprint),
+            token));
+        ArchidektSyncPreviewView clean = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        Assert.Equal("applied", finished.Outcome);
+        Assert.Equal(
+            [.. Enumerable.Range(1, 25).Select(value => value == 13 && removeTheCard ? 0 : 1)],
+            Enumerable.Range(1, 25).Select(value => fake.QuantityOf($"Side Card {value:00}")));
+        Assert.Empty(clean.Operations);
+        Assert.Empty(clean.Differences);
+    }
+
+    /// <summary>
+    /// Verifies a card Archidekt added but did not confirm is not linked after a partial push: the next push preview
+    /// is available and shows it as a difference that replaces the Archidekt row, so the card ends up once, not twice.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPush_WithAnUnconfirmedCard_ReplacesItOnTheNextPushInsteadOfDuplicatingIt()
+    {
+        FakeArchidekt fake = CreateDeckForNameOnlyAdds();
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            AddSideboardCards(local, "Side Card 01", "Side Card 02", "Side Card 03"),
+            token));
+        fake.UnconfirmedCardIds.UnionWith([5004, 5005]);
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(localDeckId, edited.Revision, preview.RemoteFingerprint, preview.PreviewFingerprint),
+            token));
+        ArchidektSyncPreviewView next = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        Assert.Equal("partial", applied.Outcome);
+        Assert.Equal(["applied", "unknown", "applied"], applied.Operations.Select(value => value.Status));
+        Assert.NotNull(applied.LocalRevision);
+        Assert.True(next.ApplyAvailable, next.ApplyNotice);
+        Assert.Equal(
+            [("entry-add", "Side Card 02"), ("entry-remove", "Side Card 02")],
+            next.Operations.Select(value => (value.Kind, value.Subject)));
+        fake.UnconfirmedCardIds.Clear();
+        ArchidektApplyResult finished = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                Assert.IsType<long>(applied.LocalRevision),
+                next.RemoteFingerprint,
+                next.PreviewFingerprint),
+            token));
+        Assert.Equal("applied", finished.Outcome);
+        Assert.Equal(1, fake.QuantityOf("Side Card 02"));
+    }
+
+    /// <summary>
+    /// Verifies a partial push whose read afterwards fails keeps the old baseline and the local deck as they were and
+    /// says so, so the next preview shows what landed as an Archidekt change.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPush_PartialWithoutAReadAfterwards_KeepsTheBaselineAndSaysSo()
+    {
+        FakeArchidekt fake = CreateDeckForNameOnlyAdds();
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            AddSideboardCards(local, "Side Card 01", "Side Card 02", "Side Card 03"),
+            token));
+        fake.RefusedCardIds.UnionWith([5004, 5005]);
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        fake.DeckReadsThatSucceedAfterWrites = 0;
+
+        ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(localDeckId, edited.Revision, preview.RemoteFingerprint, preview.PreviewFingerprint),
+            token));
+
+        Assert.Equal("partial", applied.Outcome);
+        Assert.Equal(["applied", "not-applied", "applied"], applied.Operations.Select(value => value.Status));
         Assert.Null(applied.LocalRevision);
+        Assert.Equal(ArchidektApplyResult.UnverifiedNotice, applied.Notice);
         Assert.Equal(edited.Revision, Success(await world.Store.GetAsync(localDeckId, token)).Revision);
+        fake.DeckReadsThatSucceedAfterWrites = null;
+        ArchidektSyncPreviewView after = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
         Assert.False(after.ApplyAvailable);
-        Assert.Equal(3, after.Differences.Count(value => value.State == "remote-added"));
+        Assert.Equal(2, after.Differences.Count(value => value.State == "remote-added"));
+    }
+
+    /// <summary>
+    /// Verifies the fix that names a new primary category, sent through local_deck_apply_changes, clears a zone
+    /// contradiction whose match change needs one, and that the push is then available and applies.
+    /// </summary>
+    [Fact]
+    public async Task PushPreview_AfterTheNeedsPrimaryCategoryFix_IsAvailable()
+    {
+        FakeArchidekt fake = new();
+        fake.AddCategory("Removal");
+        fake.AddCategory("Sideboard", includedInDeck: false);
+        fake.AddEntry(fake.AddCardToCatalog(601, "Rock"), 1, "Sideboard", "Removal");
+        fake.AddEntry(fake.AddCardToCatalog(602, "Bolt"), 1, "Removal");
+        using World world = new(OperationMode.Remote, fake);
+        using UninstalledCardData cardData = new();
+        DeckBatchWriteTools batch = new(world.Store, OperationMode.Local, cardData.Resolver);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckEntry rock = local.Entries.Single(value => value.CardName == "Rock");
+        Assert.Equal("sideboard", rock.Zone);
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            [new UpdateDeckEntryChange(rock with { Zone = "main" })],
+            token));
+        OperationInvalidInput refused = Assert.IsType<OperationInvalidInput>(
+            (await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token)).Value);
+        Assert.Contains("primaryCategoryId", refused.Message, StringComparison.Ordinal);
+
+        DeckWriteResult written = Success(await batch.ApplyChangesAsync(
+            localDeckId,
+            edited.Revision,
+            [
+                new PatchDeckEntriesInput(
+                    [rock.EntryId],
+                    Zone: "main",
+                    PrimaryCategoryId: local.Categories.Single(value => value.Name == "Removal").CategoryId,
+                    ZoneCategories: "match"),
+            ],
+            cancellationToken: token));
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+        ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(localDeckId, written.Revision, preview.RemoteFingerprint, preview.PreviewFingerprint),
+            token));
+
+        Assert.True(preview.ApplyAvailable, preview.ApplyNotice);
+        Assert.Equal("applied", applied.Outcome);
+        Assert.Equal(["Removal"], fake.CategoriesOf("Rock"));
     }
 
     /// <summary>
@@ -2633,6 +2858,16 @@ public sealed partial class ArchidektWorkflowTests
             new AddDeckEntryChange(draft with { EntryId = entryId }),
             new AssignDeckCategoryChange(entryId, removal.CategoryId, true),
         ];
+    }
+
+    /// <summary>
+    /// Counts the write requests the plan behind a push preview may send, with the reserve for one batch sent again
+    /// card by card.
+    /// </summary>
+    private static int PlannedWrites(ArchidektSyncPreviewView preview)
+    {
+        return ArchidektSyncPlanner.CountOperationRequests(
+            [.. preview.Operations.Select(value => new ArchidektPlannedOperation(value, null, null, null, null))]);
     }
 
     /// <summary>

@@ -82,7 +82,7 @@ public static class ArchidektSyncPlanner
         // compared with the zones a read gives now, so such a zone is not a difference (a pull still moves the entry).
         RemoteDeckSnapshot baselineRows = ArchidektJsonContract.WithCurrentZones(baseline.RemoteSnapshot);
         RemoteDeckSnapshot effectiveLocal = localChanged
-            ? localProjection
+            ? WithChosenPrintings(localProjection, baselineRows)
             : baselineRows;
         RemoteDeckSnapshot effectiveRemote = remoteChanged
             ? remote
@@ -137,6 +137,41 @@ public static class ArchidektSyncPlanner
             baseline.RemoteFingerprint,
             localChanged && remoteChanged,
             differences);
+    }
+
+    /// <summary>
+    /// Gives each local row that names no printing the printing, Oracle ID, and card name of the baseline row it is
+    /// linked to, when the names match. A card added by name accepts the printing Archidekt chose (see
+    /// <c>PrintingEqual</c>), so that choice is not a local change.
+    /// </summary>
+    private static RemoteDeckSnapshot WithChosenPrintings(RemoteDeckSnapshot local, RemoteDeckSnapshot baseline)
+    {
+        Dictionary<string, RemoteDeckEntry> baselineRows = baseline.Entries
+            .Where(value => !string.IsNullOrWhiteSpace(value.ProviderRelationId))
+            .GroupBy(value => value.ProviderRelationId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        List<RemoteDeckEntry> entries = [];
+        foreach (RemoteDeckEntry entry in local.Entries)
+        {
+            bool namesNoPrinting = entry.PrintingId is null &&
+                string.IsNullOrWhiteSpace(entry.SetCode) &&
+                string.IsNullOrWhiteSpace(entry.CollectorNumber);
+            entries.Add(namesNoPrinting &&
+                !string.IsNullOrWhiteSpace(entry.ProviderRelationId) &&
+                baselineRows.TryGetValue(entry.ProviderRelationId, out RemoteDeckEntry? chosen) &&
+                CardNames.Match(chosen.CardName, entry.CardName)
+                    ? entry with
+                    {
+                        CardName = chosen.CardName,
+                        OracleId = entry.OracleId ?? chosen.OracleId,
+                        PrintingId = chosen.PrintingId,
+                        SetCode = chosen.SetCode,
+                        CollectorNumber = chosen.CollectorNumber,
+                    }
+                    : entry);
+        }
+
+        return local with { Entries = entries };
     }
 
     /// <summary>
@@ -802,7 +837,7 @@ public static class ArchidektSyncPlanner
     /// commander, sideboard, or maybeboard zone) makes that category the only primary one, which a read always maps to
     /// that zone. The main zone only removes the zone categories, which clears the contradiction when what is left maps
     /// to main; the change is refused when the primary category is one of them and other categories remain, unless it
-    /// names a new primary category.
+    /// names a new primary category. Any other zone has no zone category, so the change is refused there.
     /// </summary>
     private static ArchidektMatchFix MatchFixFor(
         RemoteDeckEntry entry,
@@ -811,6 +846,11 @@ public static class ArchidektSyncPlanner
         if (DeckZoneCategories.NameForZone(entry.Zone) is not null)
         {
             return ArchidektMatchFix.Clears;
+        }
+
+        if (!DeckZoneCategories.IsMain(entry.Zone))
+        {
+            return ArchidektMatchFix.NotAvailableForZone;
         }
 
         List<string> remaining = [.. entry.CategoryNames.Where(value => DeckZoneCategories.ZoneForName(value) is null)];
@@ -1209,6 +1249,12 @@ public enum ArchidektMatchFix
     /// deck or a commander category, so the contradiction stays.
     /// </summary>
     DoesNotClear,
+
+    /// <summary>
+    /// The change is refused, because the zone is neither main nor a zone with a zone category (such as a companion
+    /// zone), so no category gives it.
+    /// </summary>
+    NotAvailableForZone,
 }
 
 /// <summary>

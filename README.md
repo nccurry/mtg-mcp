@@ -728,9 +728,9 @@ allows at most 30 starts in 60 seconds and 150 requests to Archidekt per tool ca
 It stops on `403` and `429`. Ambiguous mutations are not retried. A push sends added cards in
 batches of up to 25 cards per request; other operations, and every card after a rejected batch,
 are one request each. A rejected batch of adds is resent one card at a time, once per push: a refused card is
-`not-applied` and the push continues (outcome `partial`, baseline unchanged, and the next preview shows what landed); a
-second rejected batch is `not-sent`, so push again. Each added card is confirmed by the `patchId` Archidekt echoes;
-a `403` or `422` leaves the operation `unknown`. `archidekt_push_preview` shows `predictedProviderRequests` (the
+`not-applied` and the push continues (outcome `partial`); a second rejected batch is `not-sent`, so push again. Each
+added card is confirmed by the `patchId` Archidekt echoes; a `403`, `404`, or `422` leaves the operation `unknown`
+and keeps the statuses of the operations before it. `archidekt_push_preview` shows `predictedProviderRequests` (the
 operations, printing searches, reads, and room to retry the reads and one batch fallback) beside
 `providerRequestLimit`. A push predicted over the limit is refused in the preview and the apply, naming an
 estimate of how many of its operations fit. Apply part of the local changes first, then preview and push again for the rest.
@@ -894,7 +894,10 @@ How a push reports what happened (`archidekt_push_apply`, field `outcome` and th
   ("Nothing was sent to Archidekt for this operation."), and the operations after it are `not-attempted`. A
   `429` on a write is `not-sent` (Archidekt did not process it) and is never retried automatically.
 - `partial`: some operations were applied, or one failed after its write was sent (`unknown`: it may or may not
-  have been applied). The rest are `not-sent` or `not-attempted`.
+  have been applied). The rest are `not-sent` or `not-attempted`. The push reads Archidekt back and records what
+  landed as the new baseline, so the next `archidekt_push_preview` offers only the changes that were not applied,
+  and a pull keeps the cards that were not added. An `unknown` card is not linked: if it did land, the next push replaces it rather than adding
+  it twice. When the read fails, the baseline stays as it was and the `notice` says so.
 - `applied-unverified`: the writes were sent, but Archidekt could not be read afterwards (for example it returned
   `429`). The applied statuses are kept, the local baseline is not updated, and the `notice` says to run
   `archidekt_pull_preview` before pushing again.
