@@ -88,7 +88,10 @@ internal sealed class DeckReadTools
         "card data, in pages of entries. Each entry then carries cardData: found, not-installed (run " +
         "scryfall_card_data_sync), or unresolved (no exact Scryfall identity, or not in the installed data). " +
         "A deck too large for one result is also returned in pages: truncated is true with a narrow hint, and " +
-        "nextCursor reads the rest. Every page carries the whole deck's entryCount, cardCount, and cardsByZone.")]
+        "nextCursor reads the rest. Every page carries the whole deck's entryCount, cardCount, and cardsByZone. " +
+        "To check whether cards are in the deck before adding them, pass cardNames: only the matching entries " +
+        "come back, and cardNamesNotFound lists the names with no match. For a large deck, pass responseFormat " +
+        "concise to get only entryId, cardName, quantity, zone, and categoryNames for each entry.")]
     internal Task<OperationResult<DeckDocumentView>> GetAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description(
@@ -101,16 +104,30 @@ internal sealed class DeckReadTools
             "same names as scryfall_search fields.")]
         IReadOnlyList<string>? fields = null,
         [Description(
-            "Opaque cursor from nextCursor of a previous local_deck_get call with the same deckId, include, and " +
-            "fields.")]
+            "Opaque cursor from nextCursor of a previous local_deck_get call with the same deckId, include, " +
+            "fields, cardNames, and responseFormat.")]
         string? cursor = null,
         [Description(
             "Entries per page, from 1 through 100. With include the default is 25; without include the deck " +
             "comes back whole unless it is too large for one result.")]
         int? pageSize = null,
+        [Description(
+            "Optional card names, from 1 through 100, to look for in the deck. Names match ignoring case, and a " +
+            "double-faced card matches by either face. Only matching entries are returned, and cardNamesNotFound " +
+            "lists the names with no match. The deck-wide totals still cover the whole deck. Pass the same " +
+            "cardNames with a cursor.")]
+        IReadOnlyList<string>? cardNames = null,
+        [Description(
+            "Entry fields: full (default: every stored entry field plus the category assignment rows), or " +
+            "concise (entryId, cardName, quantity, zone, and categoryNames only, with no assignment rows). " +
+            "Standard is the same as full. With include, concise still adds cardData, card, and tags. Pass the " +
+            "same responseFormat with a cursor."),
+         ResponseFormatValues]
+        string responseFormat = "full",
         CancellationToken cancellationToken = default)
     {
-        return cardViews.GetAsync(deckId, include, fields, cursor, pageSize, cancellationToken);
+        return cardViews.GetAsync(
+            deckId, include, fields, cursor, pageSize, cardNames, responseFormat, cancellationToken);
     }
 
     /// <summary>
