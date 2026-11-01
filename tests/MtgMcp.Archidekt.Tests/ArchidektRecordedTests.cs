@@ -58,8 +58,104 @@ public sealed class ArchidektRecordedTests
             return;
         }
 
-        RemoteDeckSnapshot deck = ArchidektDeckContractMapper.MapDeck(root, entry.ReadText(), DateTimeOffset.UnixEpoch, entry.Route);
-        Assert.Equal("22959335", deck.RemoteId);
+        switch (entry.Route)
+        {
+            case "/api/decks/v3/":
+                AssertDeckList(root, entry);
+                return;
+            case "/api/decks/folderTree/":
+                AssertFolderTree(root, entry);
+                return;
+            case "/api/decks/folders/{folderId}/":
+                AssertFolderDetail(root, entry);
+                return;
+            case "/api/decks/{deckId}/snapshots/":
+                AssertSnapshotList(root, entry);
+                return;
+            case "/api/decks/snapshots/{snapshotId}/":
+                RemoteNamedSnapshot snapshot = ArchidektSnapshotContractMapper.MapSnapshot(
+                    root, "22959335", entry.ReadText(), DateTimeOffset.UnixEpoch, entry.Route);
+                Assert.Equal(root.GetProperty("id").GetInt32().ToString(System.Globalization.CultureInfo.InvariantCulture), snapshot.Summary.SnapshotId);
+                AssertDeckCards(root, snapshot.Deck);
+                return;
+        }
+
+        AssertDeckCards(root, ArchidektDeckContractMapper.MapDeck(root, entry.ReadText(), DateTimeOffset.UnixEpoch, entry.Route));
+        Assert.Equal("22959335", ArchidektDeckContractMapper.MapDeck(root, entry.ReadText(), DateTimeOffset.UnixEpoch, entry.Route).RemoteId);
+    }
+
+    /// <summary>
+    /// Verifies the deck list maps every recorded row and keeps the full count the recording trimmed away.
+    /// </summary>
+    private static void AssertDeckList(JsonElement root, RecordedEntry entry)
+    {
+        RemoteDeckPage page = ArchidektDeckContractMapper.MapDeckPage(root, entry.ReadText(), DateTimeOffset.UnixEpoch, entry.Route);
+
+        JsonElement results = root.GetProperty("results");
+        Assert.Equal(results.GetArrayLength(), page.Items.Count);
+        Assert.True(root.GetProperty("count").GetInt32() > page.Items.Count);
+        Assert.All(page.Items, item => Assert.Equal("0", item.ParentFolderId));
+        Assert.Equal(
+            results.EnumerateArray().Select(row => row.GetProperty("name").GetString()).Order(StringComparer.OrdinalIgnoreCase),
+            page.Items.Select(item => item.Name));
+    }
+
+    /// <summary>
+    /// Verifies the folder tree maps the root, nested folders, and the parent link of each child.
+    /// </summary>
+    private static void AssertFolderTree(JsonElement root, RecordedEntry entry)
+    {
+        RemoteFolderTree tree = ArchidektFolderContractMapper.MapFolderTree(root, entry.ReadText(), DateTimeOffset.UnixEpoch, entry.Route);
+
+        Assert.Equal(CountNodes(root), tree.Items.Count);
+        RemoteFolderRecord rootFolder = tree.Items.Single(folder => folder.ParentFolderId is null);
+        Assert.Equal(root.GetProperty("children").GetArrayLength(), rootFolder.ChildFolderIds.Count);
+        Assert.Contains(tree.Items, folder => folder.ParentFolderId is not null && folder.ChildFolderIds.Count > 0);
+    }
+
+    /// <summary>
+    /// Verifies a folder read maps its folder, its trimmed deck rows, and the subfolder it names.
+    /// </summary>
+    private static void AssertFolderDetail(JsonElement root, RecordedEntry entry)
+    {
+        RemoteFolderTree detail = ArchidektFolderContractMapper.MapFolderDetail(root, entry.ReadText(), DateTimeOffset.UnixEpoch, entry.Route);
+
+        RemoteFolderRecord folder = detail.Items.Single(value => value.FolderId == root.GetProperty("id").GetInt32().ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(root.GetProperty("decks").GetArrayLength(), folder.Decks.Count);
+        Assert.Equal(root.GetProperty("subfolders").GetArrayLength(), folder.ChildFolderIds.Count);
+    }
+
+    /// <summary>
+    /// Verifies the snapshot list maps every row to the deck it was requested for.
+    /// </summary>
+    private static void AssertSnapshotList(JsonElement root, RecordedEntry entry)
+    {
+        RemoteNamedSnapshotPage page = ArchidektSnapshotContractMapper.MapSnapshotPage(root, "22959335", entry.ReadText(), DateTimeOffset.UnixEpoch, entry.Route);
+
+        Assert.Equal(root.GetArrayLength(), page.Items.Count);
+        Assert.All(page.Items, item => Assert.Equal("22959335", item.DeckId));
+        Assert.All(page.Items, item => Assert.NotNull(item.CreatedAtUtc));
+    }
+
+    /// <summary>
+    /// Counts a folder and every folder below it.
+    /// </summary>
+    private static int CountNodes(JsonElement folder)
+    {
+        int count = 1;
+        if (folder.TryGetProperty("children", out JsonElement children) && children.ValueKind == JsonValueKind.Array)
+        {
+            count += children.EnumerateArray().Sum(CountNodes);
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Verifies each raw card of a deck or snapshot maps to entries with the printing the raw card names.
+    /// </summary>
+    private static void AssertDeckCards(JsonElement root, RemoteDeckSnapshot deck)
+    {
         foreach (JsonElement card in root.GetProperty("cards").EnumerateArray())
         {
             JsonElement raw = card.GetProperty("card");
@@ -81,26 +177,58 @@ public sealed class ArchidektRecordedTests
         using JsonDocument document = JsonDocument.Parse(RecordedManifest.Get(id).ReadText());
         JsonElement root = document.RootElement;
 
-        Assert.Empty(PropertyNamesAnywhere(root).Where(name => name is "username" or "avatar"));
-        if (root.TryGetProperty("owner", out JsonElement owner))
+        Assert.Empty(PropertyNamesAnywhere(root).Where(name => name is "username" or "avatar" or "avatarUrl" or "email" or "token" or "password" or "frame"));
+        foreach ((string name, JsonElement value) in PropertiesAnywhere(root))
         {
-            Assert.Equal(0, owner.GetProperty("id").GetInt32());
-            Assert.Equal(string.Empty, root.GetProperty("description").GetString());
+            if (name == "owner")
+            {
+                Assert.Equal(0, value.GetProperty("id").GetInt32());
+            }
+
+            if (name == "parentFolderId")
+            {
+                Assert.Equal(0, value.GetInt32());
+            }
+
+            if (name == "parentFolder" && value.ValueKind == JsonValueKind.Object)
+            {
+                Assert.Equal(0, value.GetProperty("id").GetInt32());
+            }
+
+            if (name == "parentFolder" && value.ValueKind == JsonValueKind.Number)
+            {
+                Assert.Equal(0, value.GetInt32());
+            }
+
+            if (name == "description" && value.ValueKind == JsonValueKind.String)
+            {
+                Assert.Equal(string.Empty, value.GetString());
+            }
         }
 
-        if (root.TryGetProperty("parentFolder", out JsonElement folder))
-        {
-            Assert.Equal(0, folder.GetInt32());
-        }
+        Assert.DoesNotMatch("(?i)(jwt|bearer) [a-z0-9._-]{16,}", RecordedManifest.Get(id).ReadText());
     }
 
     /// <summary>
-    /// Verifies the trimmed deck recording stays under 50 KB.
+    /// Verifies every recorded Archidekt deck, list, folder, and snapshot file stays under 50 KB.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Ids))]
+    public void Recording_File_IsUnderFiftyKilobytes(string id)
+    {
+        Assert.InRange(RecordedManifest.Get(id).ReadBytes().Length, 1, 50 * 1024 - 1);
+    }
+
+    /// <summary>
+    /// Verifies the manifest lists a login-only recording with the auth flag and no owner name in its URL.
     /// </summary>
     [Fact]
-    public void Deck_RecordedFile_IsUnderFiftyKilobytes()
+    public void Manifest_LoginOnlyRecordings_AreFlaggedAndKeepTheUsernamePlaceholder()
     {
-        Assert.InRange(RecordedManifest.Get("deck-22959335").ReadBytes().Length, 1, 50 * 1024 - 1);
+        string[] ids = ["deck-list", "folder-tree", "folder-401005", "snapshot-list-22959335", "snapshot-152482"];
+
+        Assert.All(ids, id => Assert.True(RecordedManifest.Get(id).Auth));
+        Assert.Contains("{username}", RecordedManifest.Get("deck-list").Url, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -222,6 +350,34 @@ public sealed class ArchidektRecordedTests
                 foreach (string name in PropertyNamesAnywhere(item))
                 {
                     yield return name;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Lists every property name and value at any depth of a JSON value.
+    /// </summary>
+    private static IEnumerable<(string Name, JsonElement Value)> PropertiesAnywhere(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (JsonProperty property in element.EnumerateObject())
+            {
+                yield return (property.Name, property.Value);
+                foreach ((string Name, JsonElement Value) inner in PropertiesAnywhere(property.Value))
+                {
+                    yield return inner;
+                }
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (JsonElement item in element.EnumerateArray())
+            {
+                foreach ((string Name, JsonElement Value) inner in PropertiesAnywhere(item))
+                {
+                    yield return inner;
                 }
             }
         }

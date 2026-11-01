@@ -45,6 +45,93 @@
         "Command Tower"
       ],
       "scrubbed": "cards trimmed to 5 entries, categories kept whole; description emptied; owner id and parent folder id zeroed, username, avatar, frame, affiliate fields removed; prices nulled; view count and comment root removed"
+    },
+    {
+      "id": "deck-list",
+      "method": "GET",
+      "url": "https://archidekt.com/api/decks/v3/?ownerUsername={username}",
+      "route": "/api/decks/v3/",
+      "status": 200,
+      "file": "decks-v3/list.json",
+      "capturedAt": "2026-11-01",
+      "sha256": "f5be7d7f7233358f1f9bcb0c586b535febdce0bae8a0e294f50f926c338ab94f",
+      "refresh": true,
+      "auth": true,
+      "trimData": 3,
+      "scrubbed": "rows put in id order, then trimmed to 3, count kept; owner id, deck text, and folder id zeroed or emptied, username and avatar removed; view count removed; edit time, card count, and color counts fixed because they move with every edit"
+    },
+    {
+      "id": "folder-tree",
+      "method": "GET",
+      "url": "https://archidekt.com/api/decks/folderTree/",
+      "route": "/api/decks/folderTree/",
+      "status": 200,
+      "file": "folder-tree/tree.json",
+      "capturedAt": "2026-11-01",
+      "sha256": "b9c2348eb3f7dcf9d5baff0b6350bde19a8d23422f45aede72becae6551de07f",
+      "refresh": true,
+      "auth": true,
+      "scrubbed": "none needed; ids and folder names only"
+    },
+    {
+      "id": "folder-401005",
+      "method": "GET",
+      "url": "https://archidekt.com/api/decks/folders/401005/",
+      "route": "/api/decks/folders/{folderId}/",
+      "status": 200,
+      "file": "folders-id/401005.json",
+      "capturedAt": "2026-11-01",
+      "sha256": "2800bb268d783def3af7a829b87bfc7034f1455b1634688bd6b5af6ab7cdb7c1",
+      "refresh": true,
+      "auth": true,
+      "trimData": 2,
+      "scrubbed": "deck rows put in id order, then trimmed to 2, count kept, subfolders kept; owner id, deck text, and parent folder ids zeroed or emptied, username and avatar removed; view count removed; edit time, card count, and color counts fixed because they move with every edit"
+    },
+    {
+      "id": "folder-397567",
+      "method": "GET",
+      "url": "https://archidekt.com/api/decks/folders/397567/",
+      "route": "/api/decks/folders/{folderId}/",
+      "status": 200,
+      "file": "folders-id/397567.json",
+      "capturedAt": "2026-11-01",
+      "sha256": "62c1afb71229c5bb4ae2adf44a1179912d44e00de7f8124c985cdbc9a19a259d",
+      "refresh": true,
+      "auth": true,
+      "scrubbed": "owner id zeroed, username and avatar removed; a root folder with no parent and no decks"
+    },
+    {
+      "id": "snapshot-list-22959335",
+      "method": "GET",
+      "url": "https://archidekt.com/api/decks/22959335/snapshots/",
+      "route": "/api/decks/{deckId}/snapshots/",
+      "status": 200,
+      "file": "deck-snapshots/22959335.json",
+      "capturedAt": "2026-11-01",
+      "sha256": "a8590c597cf145a0c57c74ad83a2273950ed14f0437b4e7f9100e70d84746031",
+      "refresh": true,
+      "auth": true,
+      "scrubbed": "none needed; ids, dates, and snapshot names only"
+    },
+    {
+      "id": "snapshot-152482",
+      "method": "GET",
+      "url": "https://archidekt.com/api/decks/snapshots/152482/",
+      "route": "/api/decks/snapshots/{snapshotId}/",
+      "status": 200,
+      "file": "snapshots-id/152482.json",
+      "capturedAt": "2026-11-01",
+      "sha256": "a4334c4b0b7b1397849ade03845fcc8a414a36b380a85cff39126bfc4517aa2e",
+      "refresh": true,
+      "auth": true,
+      "keepCardNames": [
+        "Sam, Loyal Attendant",
+        "Tireless Provisioner",
+        "Ghostly Prison",
+        "Grasp of Fate",
+        "Command Tower"
+      ],
+      "scrubbed": "cards trimmed to 5 entries, categories kept whole; description emptied; prices nulled"
     }
   ]
 }

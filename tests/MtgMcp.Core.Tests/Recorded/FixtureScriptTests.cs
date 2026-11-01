@@ -61,6 +61,10 @@ public sealed class FixtureScriptTests
     [Theory]
     [InlineData("GET", "/cards/named", "allowed")]
     [InlineData("POST", "/cards/collection", "allowed")]
+    [InlineData("POST", "/api/rest-auth/login/", "allowed")]
+    [InlineData("POST", "/api/rest-auth/logout/", "refused")]
+    [InlineData("POST", "/api/decks/v2/", "refused")]
+    [InlineData("PUT", "/api/rest-auth/login/", "refused")]
     [InlineData("POST", "/cards/search", "refused")]
     [InlineData("DELETE", "/cards/collection", "refused")]
     [InlineData("PUT", "/cards/collection", "refused")]
@@ -88,6 +92,51 @@ public sealed class FixtureScriptTests
         Assert.Null(result["owner"]!["frame"]);
         Assert.Null(result["owner"]!["username"]);
         Assert.Equal(2, result["cards"]!.AsArray().Count);
+    }
+
+    /// <summary>
+    /// Verifies a deck list or folder read loses each row's owner id, deck text, and folder id, has its edit time and
+    /// counts fixed, keeps its count, and trims its rows after putting them in id order.
+    /// </summary>
+    [Theory]
+    [InlineData("results")]
+    [InlineData("decks")]
+    public void ConvertToStableJson_DeckSummaries_AreScrubbedAndTrimmed(string listName)
+    {
+        string json = $$$"""
+            {"count":9,"{{{listName}}}":[
+              {"id":2,"description":null,"parentFolderId":77,"owner":{"id":5,"username":"someone","avatar":"a.png"}},
+              {"id":1,"description":"text","parentFolderId":77,"size":9,"updatedAt":"2026-11-01T00:00:00Z","colors":{"W":4},
+               "owner":{"id":5,"username":"someone","avatar":"a.png"}}]}
+            """;
+
+        JsonNode result = JsonNode.Parse(Stable(json, "[pscustomobject]@{ trimData = 1 }"))!;
+
+        Assert.Equal(9, result["count"]!.GetValue<int>());
+        JsonNode row = Assert.Single(result[listName]!.AsArray())!;
+        Assert.Equal(0, row["owner"]!["id"]!.GetValue<int>());
+        Assert.Null(row["owner"]!["username"]);
+        Assert.Equal(0, row["parentFolderId"]!.GetValue<int>());
+        Assert.Equal(string.Empty, row["description"]!.GetValue<string>());
+        Assert.Equal(1, row["id"]!.GetValue<int>());
+        Assert.Equal(0, row["size"]!.GetValue<int>());
+        Assert.Equal(0, row["colors"]!["W"]!.GetValue<int>());
+        Assert.Equal("2026-01-01T00:00:00Z", row["updatedAt"]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Verifies a named snapshot with no owner loses its deck text and a folder read keeps no description it lacked.
+    /// </summary>
+    [Fact]
+    public void ConvertToStableJson_SnapshotAndFolder_EmptyTextOnlyWhereItExists()
+    {
+        JsonNode snapshot = JsonNode.Parse(Stable("""{"id":3,"description":"note","cards":[]}""", "$null"))!;
+        JsonNode folder = JsonNode.Parse(Stable("""{"id":4,"parentFolder":{"id":8,"name":"Home"},"owner":{"id":5,"username":"u"}}""", "$null"))!;
+
+        Assert.Equal(string.Empty, snapshot["description"]!.GetValue<string>());
+        Assert.Null(folder["description"]);
+        Assert.Equal(0, folder["parentFolder"]!["id"]!.GetValue<int>());
+        Assert.Equal(0, folder["owner"]!["id"]!.GetValue<int>());
     }
 
     /// <summary>

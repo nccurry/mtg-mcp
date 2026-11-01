@@ -13,7 +13,8 @@ internal sealed record RecordedEntry(
     string Route,
     int Status,
     string File,
-    string Sha256)
+    string Sha256,
+    bool Auth = false)
 {
     /// <summary>
     /// Reads the stored bytes of the recording.
@@ -145,7 +146,8 @@ internal static class RecordedManifest
                 item.GetProperty("route").GetString()!,
                 item.GetProperty("status").GetInt32(),
                 item.GetProperty("file").GetString()!,
-                item.GetProperty("sha256").GetString()!));
+                item.GetProperty("sha256").GetString()!,
+                item.TryGetProperty("auth", out JsonElement auth) && auth.GetBoolean()));
         }
 
         return entries;
