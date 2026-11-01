@@ -20,7 +20,8 @@ $readOnlyPostPaths = @("/cards/collection")
 # Properties removed wherever they appear, because they identify a person or change without a card change.
 $removedProperties = @(
     "username", "avatar", "avatarUrl", "avatarURL", "email",
-    "image_uris", "purchase_uris", "related_uris", "edhrec_rank", "penny_rank"
+    "image_uris", "purchase_uris", "related_uris", "edhrec_rank", "penny_rank",
+    "ckAffiliate", "tcgAffiliate", "referrerEnum", "viewCount", "commentRoot"
 )
 
 $writerOptions = [System.Text.Json.JsonSerializerOptions]::new()
@@ -53,14 +54,40 @@ function Remove-Volatile {
     }
 }
 
+function Test-Member {
+    param($Entry, [string] $Name)
+
+    return $null -ne $Entry -and $Entry.PSObject.Properties.Name -contains $Name
+}
+
 function ConvertTo-StableJson {
-    param([string] $Text, $TrimData)
+    param([string] $Text, $Entry)
 
     $root = [System.Text.Json.Nodes.JsonNode]::Parse($Text)
-    if ($null -ne $TrimData -and $root -is [System.Text.Json.Nodes.JsonObject] -and $root["data"] -is [System.Text.Json.Nodes.JsonArray]) {
-        $data = $root["data"]
-        while ($data.Count -gt $TrimData) {
-            $data.RemoveAt($data.Count - 1)
+    if ((Test-Member $Entry "trimData") -and $root -is [System.Text.Json.Nodes.JsonObject]) {
+        # Scryfall lists use data and Archidekt lists use results.
+        foreach ($listName in @("data", "results")) {
+            $list = $root[$listName]
+            while ($list -is [System.Text.Json.Nodes.JsonArray] -and $list.Count -gt $Entry.trimData) {
+                $list.RemoveAt($list.Count - 1)
+            }
+        }
+    }
+
+    if ((Test-Member $Entry "keepCardNames") -and $root -is [System.Text.Json.Nodes.JsonObject]) {
+        # An Archidekt deck keeps only the named cards; its categories stay whole so excluded categories remain visible.
+        $cards = $root["cards"]
+        for ($index = $cards.Count - 1; $index -ge 0; $index--) {
+            if ($Entry.keepCardNames -notcontains $cards[$index]["card"]["oracleCard"]["name"].GetValue[string]()) {
+                $cards.RemoveAt($index)
+            }
+        }
+
+        # The deck text names the owner's migration source and workspace, so it is replaced; the owner id is zeroed.
+        $root["description"] = ""
+        if ($root["owner"] -is [System.Text.Json.Nodes.JsonObject]) {
+            $root["owner"]["id"] = 0
+            [void] $root["owner"].Remove("frame")
         }
     }
 
@@ -128,8 +155,7 @@ function Invoke-Refresh {
                 }
 
                 $first = $false
-                $trim = if ($entry.PSObject.Properties.Name -contains "trimData") { $entry.trimData } else { $null }
-                $text = ConvertTo-StableJson -Text (Invoke-ProviderRead -Entry $entry) -TrimData $trim
+                $text = ConvertTo-StableJson -Text (Invoke-ProviderRead -Entry $entry) -Entry $entry
                 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
                 Write-Utf8 -Path $path -Text $text
             }
@@ -143,7 +169,7 @@ function Invoke-Refresh {
             Write-Host "$($entry.id): $(if ($after -eq $before) { 'unchanged' } else { 'updated' })"
         }
 
-        $json = ConvertTo-StableJson -Text ($manifest | ConvertTo-Json -Depth 10 -Compress) -TrimData $null
+        $json = ConvertTo-StableJson -Text ($manifest | ConvertTo-Json -Depth 10 -Compress) -Entry $null
         Write-Utf8 -Path $manifestPath.FullName -Text $json
     }
 }

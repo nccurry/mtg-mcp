@@ -18,6 +18,12 @@
     </ItemGroup>
 
     <ItemGroup>
+        <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+        <Compile Include="..\MtgMcp.Core.Tests\Recorded\RecordedManifest.cs" Link="Recorded\RecordedManifest.cs" />
+        <Compile Include="..\MtgMcp.Core.Tests\Recorded\ReplayHttpHandler.cs" Link="Recorded\ReplayHttpHandler.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\..\src\MtgMcp.Archidekt\MtgMcp.Archidekt.csproj" />
     </ItemGroup>
 </Project>
