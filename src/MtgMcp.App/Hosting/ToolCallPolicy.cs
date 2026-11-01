@@ -282,6 +282,90 @@ internal static partial class ToolCallPolicy
     private static partial Regex MissingRequiredProperties();
 
     /// <summary>
+    /// Matches the serializer message that names the type a JSON value could not be converted to.
+    /// </summary>
+    [GeneratedRegex(@"could not be converted to (\S+?)\.(?: |$)")]
+    private static partial Regex ConversionTarget();
+
+    /// <summary>
+    /// Describes the type a failed conversion targeted in plain words, or returns null when it cannot be told.
+    /// </summary>
+    private static string? DescribeExpectedType(string message)
+    {
+        Match match = ConversionTarget().Match(message);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        string name = match.Groups[1].Value;
+        const string nullable = "System.Nullable`1[";
+        if (name.StartsWith(nullable, StringComparison.Ordinal) && name.EndsWith(']'))
+        {
+            name = name[nullable.Length..^1];
+        }
+
+        Type? type = name.Contains('`', StringComparison.Ordinal) ? null : FindType(name);
+        if (type is null)
+        {
+            return name.Contains("List`1", StringComparison.Ordinal) || name.EndsWith("[]", StringComparison.Ordinal)
+                ? "a list"
+                : null;
+        }
+
+        if (type.IsEnum)
+        {
+            List<string> names = [];
+            foreach (object value in Enum.GetValues(type))
+            {
+                names.Add(JsonSerializer.Serialize(value, type, SerializerOptions).Trim('"'));
+            }
+
+            return "one of: " + string.Join(", ", names);
+        }
+
+        if (type == typeof(Guid))
+        {
+            return "a UUID";
+        }
+
+        if (type == typeof(DateTimeOffset))
+        {
+            return "a date and time";
+        }
+
+        return Type.GetTypeCode(type) switch
+        {
+            TypeCode.Int16 or TypeCode.Int32 or TypeCode.Int64 or TypeCode.UInt16 or TypeCode.UInt32
+                or TypeCode.UInt64 or TypeCode.Byte or TypeCode.SByte => "an integer",
+            TypeCode.Double or TypeCode.Single or TypeCode.Decimal => "a number",
+            TypeCode.Boolean => "true or false",
+            TypeCode.String => "text",
+            TypeCode.DateTime => "a date and time",
+            TypeCode.Object when type.IsArray || typeof(System.Collections.IEnumerable).IsAssignableFrom(type) => "a list",
+            TypeCode.Object => "an object",
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// Finds a type by full name among the loaded assemblies.
+    /// </summary>
+    private static Type? FindType(string name)
+    {
+        foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            Type? type = assembly.GetType(name, throwOnError: false);
+            if (type is not null)
+            {
+                return type;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Reports whether a parameter is supplied from tool arguments rather than injected by the host.
     /// </summary>
     internal static bool IsArgumentParameter(ParameterInfo parameter)
@@ -308,6 +392,11 @@ internal static partial class ToolCallPolicy
             Match unmapped = UnmappedMember().Match(exception.Message);
             string path = CombinePath(parameter.Name!, exception.Path);
             string message = $"The value at '{path}' could not be read: {TrimPathSuffix(exception.Message)}";
+            string? expected = DescribeExpectedType(exception.Message);
+            if (expected is not null)
+            {
+                message = $"The value at '{path}' must be {expected}.";
+            }
             if (unmapped.Success)
             {
                 string raw = unmapped.Groups[1].Value;
