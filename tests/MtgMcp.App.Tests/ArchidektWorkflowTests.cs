@@ -7,6 +7,7 @@ using MtgMcp.App.Hosting;
 using MtgMcp.Archidekt;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
+using MtgMcp.Core.Tests.Recorded;
 using MtgMcp.Decks;
 
 namespace MtgMcp.App.Tests;
@@ -1277,6 +1278,81 @@ public sealed class ArchidektWorkflowTests
         Assert.Single(world.Fake.Requests, value => value.Contains("api/cards/v2/", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// Verifies a mock deck of three cards through read, pull, and push preview: an entry whose first category is
+    /// excluded is out of the deck, an entry whose only excluded category is a later one stays in, and a card in two
+    /// categories is one entry reported once.
+    /// </summary>
+    [Fact]
+    public async Task MockDeck_WithExcludedAndSharedCategories_CountsAndReportsEachEntryOnce()
+    {
+        FakeArchidekt fake = new();
+        fake.AddCategory("Removal");
+        fake.AddCategory("Ramp");
+        fake.AddCategory("Maybe", includedInDeck: false);
+        fake.AddEntry(fake.AddCardToCatalog(501, "Bolt"), 1, "Maybe", "Removal");
+        fake.AddEntry(fake.AddCardToCatalog(502, "Signet"), 1, "Ramp", "Maybe");
+        fake.AddEntry(fake.AddCardToCatalog(503, "Charm"), 2, "Removal", "Ramp");
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+
+        List<ArchidektFullDeckEntryView> entries = await ReadEveryEntryAsync(world, token);
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        ArchidektSyncPreviewView push = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        Assert.Equal(["Bolt", "Charm", "Signet"], entries.Select(value => value.CardName).Order(StringComparer.Ordinal));
+        Assert.Equal("maybeboard", entries.Single(value => value.CardName == "Bolt").Zone);
+        Assert.Equal(
+            [false, true, true],
+            entries.OrderBy(value => value.CardName, StringComparer.Ordinal).Select(value => value.InDeck));
+        Assert.Equal(3, entries.Where(value => value.InDeck).Sum(value => value.Quantity));
+        Assert.Equal(3, local.Entries.Count);
+        Assert.Equal(1, local.Entries.Count(value => value.Zone == "maybeboard"));
+        Assert.Empty(push.Operations);
+    }
+
+    /// <summary>
+    /// Verifies a name-only add of Sol Ring resolves its printing from the recorded Archidekt search, which has 141
+    /// printings, previews it, applies it with that printing's card id, and leaves the next preview clean.
+    /// </summary>
+    [Fact]
+    public async Task NameOnlyAdd_OfSolRingFromTheRecordedSearch_PushesTheFirstRecordedPrinting()
+    {
+        FakeArchidekt fake = new();
+        fake.AddCategory("Removal");
+        fake.AddEntry(fake.AddCardToCatalog(501, "Bolt"), 1, "Removal");
+        fake.ServeRecordedSearch("Sol Ring", 1, RecordedManifest.Get("search-sol-ring-page-1").ReadText());
+        fake.ServeRecordedSearch("Sol Ring", 2, RecordedManifest.Get("search-sol-ring-page-2").ReadText());
+        using World world = new(OperationMode.Remote, fake);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        Guid localDeckId = await world.PullAsync();
+        DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
+        DeckDocument edited = Success(await world.Store.ApplyChangesAsync(
+            localDeckId,
+            local.Revision,
+            AddToRemoval(local, new DeckEntryDraft(1, "Sol Ring")),
+            token));
+        ArchidektSyncPreviewView preview = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        ArchidektApplyResult applied = Success(await world.Writes.ApplyPushAsync(
+            new ArchidektPushApplyRequest(
+                localDeckId,
+                edited.Revision,
+                preview.RemoteFingerprint,
+                preview.PreviewFingerprint),
+            token));
+
+        Assert.Contains(
+            "frc 21 (first of 141 Archidekt printings of this name",
+            preview.Operations.Single(value => value.Subject == "Sol Ring").Summary,
+            StringComparison.Ordinal);
+        Assert.Equal("applied", applied.Outcome);
+        Assert.Equal("156003", world.Fake.CardIdOf("Sol Ring"));
+        Assert.Empty(Success(await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token)).Operations);
+    }
     /// <summary>
     /// Verifies a name-only add of a card whose name is part of other card names is searched for exactly, so the card
     /// is chosen and not one of the longer names that Archidekt lists first for a plain name search.

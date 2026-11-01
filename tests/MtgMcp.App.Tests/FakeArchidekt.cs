@@ -53,6 +53,11 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     private readonly Dictionary<int, FakeCard> catalog = [];
 
     /// <summary>
+    /// Holds recorded search pages by lowercase card name and page number.
+    /// </summary>
+    private readonly Dictionary<(string Name, int Page), string> recordedSearches = [];
+
+    /// <summary>
     /// Counts the deck reads, which seeds the reordering of the next read.
     /// </summary>
     private int reads;
@@ -132,6 +137,27 @@ internal sealed class FakeArchidekt : HttpMessageHandler
             collectorNumber ?? cardId.ToString(System.Globalization.CultureInfo.InvariantCulture));
         catalog[cardId] = card;
         return card;
+    }
+
+    /// <summary>
+    /// Serves a recorded search response for a card name and page, and makes each printing in it known to the fake so
+    /// it can be added to the deck.
+    /// </summary>
+    internal void ServeRecordedSearch(string cardName, int page, string body)
+    {
+        recordedSearches[(cardName.ToLowerInvariant(), page)] = body;
+        foreach (JsonNode? result in JsonNode.Parse(body)!["results"]!.AsArray())
+        {
+            JsonNode oracle = result!["oracleCard"]!;
+            int id = result["id"]!.GetValue<int>();
+            catalog[id] = new FakeCard(
+                id,
+                oracle["name"]!.GetValue<string>(),
+                Guid.Parse(result["uid"]!.GetValue<string>()),
+                Guid.Parse(oracle["uid"]!.GetValue<string>()),
+                result["edition"]!["editioncode"]!.GetValue<string>(),
+                result["collectorNumber"]!.GetValue<string>());
+        }
     }
 
     /// <summary>
@@ -305,6 +331,11 @@ internal sealed class FakeArchidekt : HttpMessageHandler
         int page = query.TryGetValue("page", out string? pageText)
             ? int.Parse(pageText, System.Globalization.CultureInfo.InvariantCulture)
             : 1;
+        if (edition is null && recordedSearches.TryGetValue((wanted.ToLowerInvariant(), page), out string? recorded))
+        {
+            return Json(recorded);
+        }
+
         List<FakeCard> matches = [.. catalog.Values.Where(value =>
             (exact
                 ? string.Equals(value.Name, wanted, StringComparison.OrdinalIgnoreCase)

@@ -21,6 +21,9 @@
         <Compile Include="..\MtgMcp.Scryfall.Tests\RecordedCards.cs" Link="Fixtures\RecordedCards.cs" />
         <Compile Include="..\MtgMcp.Scryfall.Tests\ScryfallTestFixture.cs" Link="Fixtures\ScryfallTestFixture.cs" />
         <Compile Include="..\MtgMcp.Archidekt.Tests\ArchidektTestHttpHandler.cs" Link="Fixtures\ArchidektTestHttpHandler.cs" />
+        <Compile Include="..\MtgMcp.Core.Tests\Recorded\RecordedManifest.cs" Link="Recorded\RecordedManifest.cs" />
+        <None Include="..\MtgMcp.Archidekt.Tests\Fixtures\recorded\manifest.json" Link="Fixtures\recorded\manifest.json" CopyToOutputDirectory="PreserveNewest" />
+        <None Include="..\MtgMcp.Archidekt.Tests\Fixtures\recorded\cards-v2\*.json" Link="Fixtures\recorded\cards-v2\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
         <None Include="..\MtgMcp.Scryfall.Tests\Fixtures\recorded\cards-id\*.json" Link="Fixtures\recorded\cards-id\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
         <None Include="Fixtures\commander-rules\*.jsonl" CopyToOutputDirectory="PreserveNewest" />
         <None Include="Fixtures/on-curve-replay.json" CopyToOutputDirectory="PreserveNewest" />
