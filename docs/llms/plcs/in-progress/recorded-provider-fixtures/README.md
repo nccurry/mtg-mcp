@@ -8,10 +8,23 @@
 - Selected work and endpoint: phases 1 to 4 below, merged into `main`. No
   release is required; this changes tests, fixtures, one script, and one Task
   target.
-- State: approved; phase 1 starting.
+- State: phases 1 to 4 implemented on `rpf/main` (`fd67b83`, `1e88926`,
+  `ba55005`, `d078c2c`); not merged, and the PLC is not complete.
 - Where: worktree `../mtg-mcp-wt/recorded-provider-fixtures/main`, branch
   `rpf/main`.
-- Next action and blocker: implement phase 1. No blocker.
+- Next action and blocker: owner decisions below (POST for
+  `/cards/collection`, login-only Archidekt recordings), then the full audit
+  and merge.
+- Decisions made during implementation:
+  - POST is allowed only for Scryfall `/cards/collection`, a read-only lookup.
+    Proposed; awaiting owner confirmation.
+  - Sol Ring replaces Assassin's Trophy as the paging recording, because
+    paging needs more than 25 printings.
+  - Six legacy Scryfall card fixtures keep their prices and use
+    `refresh: false`.
+  - Archidekt deck list, folder, and snapshot recordings are skipped because
+    they need an Archidekt login (open question for the owner).
+  - The recorded deck's `parentFolder` is zeroed with the owner id.
 - Resume check: `git -C ../mtg-mcp-wt/recorded-provider-fixtures/main log --oneline main..`.
 
 ## Outcome And Requirements
@@ -117,4 +130,7 @@ refresh, and `docs/llms/repo-operations.md` with the new target.
 
 | Requirement | State | Evidence |
 | --- | --- | --- |
-| REQ-001 to REQ-007 | planned | Test-strategy research of 2026-11-01; no provider requests made yet. |
+| REQ-001 to REQ-004 | implemented, not merged | Phase 1, `fd67b83`: replay helpers, Scryfall recordings, refresh script. |
+| REQ-005 | implemented, not merged | Phase 2, `1e88926`: Archidekt Sol Ring search pages and trimmed deck 22959335. Deck list, folder, and snapshot recordings skipped (login needed). |
+| REQ-006 | implemented, not merged | Phase 3, `ba55005`: mock-deck scenarios over the recorded Sol Ring search. |
+| REQ-007 | implemented, not merged | Phase 4, `d078c2c`: `ArchidektFakeContractTests` compares `FakeArchidekt` output with the recorded search pages and deck by key path, value kind, array-size bucket, paging keys, and category flags; the fake gained `id`, `modifier`, `isPremier`, `unlisted`, `updatedAt`, `parentFolder`, and a `previous` link. Breaking the fake made all three tests fail. `task lint`, `task test:integration`, `task test:e2e`, and `task ci` passed. |
