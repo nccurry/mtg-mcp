@@ -2,16 +2,16 @@
 
 ## Current Work
 
-- Status: In progress (phases 0 to 5 merged into integration at `12bfbb9`; phase 6 running)
+- Status: In progress (all phases merged at `c239f8a`; audit pass 1 done, repairs running)
 - Owner: mtg-mcp (owner session)
-- Last updated: 2026-11-01, branch `deck-edit-ergonomics/integration` at `645ff5b`
+- Last updated: 2026-11-01, branch `deck-edit-ergonomics/integration` at `c239f8a`
 - Implementation authorized: Yes (owner, 2026-11-01: "Start implementing")
 - Selected work and endpoint: phases 0 to 6, merged into `main`, audited, released in the next version, and
   installed.
-- State: drafted and reviewed once (independent read-only review, 2026-11-01). Updated the same day with three
+- State: phases 0 to 6 merged into integration; `task ci` passed on `c239f8a`; audit pass 1 found no P0 or P1 and a set of P2 and P3 findings now being repaired in three worktrees (`fixdecks`, `fixarchidekt`, `fixshared`).
   more session reports (see Sources).
 - Decisions: the owner accepted D-2, D-3, and D-5 and approved the D-7 live probe on 2026-11-01.
-- Next action: wave A (phase 0 facts and probe, phases 1, 2, and 3a) in parallel worktrees, then wave B (phase 3b, phase 4), then phase 5.
+- Next action: merge the repairs, update the docs and this plan for them, run `task ci`, then merge to `main` and ask the owner about the release.
 - Blocker: none.
 - Resume check: this file exists on `main` or on `docs/deck-edit-ergonomics-plc`.
 
@@ -357,3 +357,45 @@ Phase 5 found these inconsistencies, which cannot be fixed without breaking clie
    `restore-preview-changed`, and `import-preview-changed`.
 7. Most Scryfall `invalid-input` results carry no `path`.
 8. `archidekt_deck_create` takes `expectedLocalRevision` where the local deck tools take `expectedRevision`.
+
+### Audit Ledger
+
+Pass 1 (2026-11-01) reviewed `c4fa0f1..c239f8a` (91 files). Seven read-only reviewers each applied two specialist
+skills: correctness with security, tests with test quality, simplicity with performance, code quality with dead
+code, structure with visual review, plan alignment with docs sync, and plain language with file hygiene. No P0 or
+P1. Checks on `c239f8a`: `task ci` passed (2,154 tests, 77 smoke tests, every assembly over 90 percent line
+coverage, Decks lowest at 95.0 percent), plus `task test:integration` and `task test:e2e`.
+
+Accepted P2 findings:
+
+- `patch-entries` wrote a printing that did not resolve to the entry's card.
+- `patchId` was not matched against the batch response.
+- Cards after the first refused card in a batch fallback were not sent.
+- A second rejected batch could exceed the request reserve.
+- The zone-fix notice offered a `match` fix that cannot work in some cases.
+- A missed row lookup fell back silently to `Guid.Empty`.
+- The zone-category rules were duplicated in three places.
+- Long mixed-purpose methods: the patcher, draft categories, and the batch loop.
+- Error type names were found by scanning every loaded assembly.
+- `DescribeOverLimit` had unreachable defaults.
+- "For one operation" was ambiguous in the request-limit text.
+- One zone-fix test could not fail.
+
+The P3 findings cover duplicated helpers, names, line length, wording, missing test cases, `stats_simulate` and
+Scryfall `pageSize` descriptions, and stale docs.
+
+Rejected findings:
+
+- Reason-code checks in `ToolNamingRuleTests`: Core enforces kebab-case reason codes at runtime
+  (`ContractValidation.cs:30`).
+- A union in place of `ArchidektDifferenceRow`: the structure review found that the base gives the polymorphic JSON
+  for one cost.
+- A string-enum for `zoneCategories`: the repo has no string-enum JSON converter, and `AllowedValues` already
+  publishes the values. Normalization moves to one place instead.
+
+Decided during repair:
+
+- `local_deck_get` `zones` accepts any non-empty code, and codes with no entries go to `zonesNotFound`. This
+  replaces REQ-001's refusal of unknown codes, because the local store has no closed zone set.
+- A batch fallback continues past a refused card. The reserve covers one rejected batch; a second rejected batch is
+  not retried card by card, and its cards are reported as not sent.
