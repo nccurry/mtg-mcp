@@ -115,7 +115,7 @@ public sealed class AddByNameScenarioTests
     /// <summary>
     /// Pulls the fake deck into a new local deck and returns the local deck ID and its revision.
     /// </summary>
-    private static async Task<(string LocalDeckId, long Revision)> PullAsync(
+    internal static async Task<(string LocalDeckId, long Revision)> PullAsync(
         ToolBudgetWorld world,
         CancellationToken token)
     {
