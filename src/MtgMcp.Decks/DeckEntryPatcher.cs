@@ -10,11 +10,6 @@ namespace MtgMcp.Decks;
 internal static class DeckEntryPatcher
 {
     /// <summary>
-    /// Names the reason code of every refusal of a patch.
-    /// </summary>
-    private const string Reason = "invalid-deck-change";
-
-    /// <summary>
     /// Applies the patch to every listed entry, or throws before the first write when the patch is refused. A
     /// zone category the deck lacks is created once, in this transaction.
     /// </summary>
@@ -28,60 +23,112 @@ internal static class DeckEntryPatcher
     {
         if (PatchDeckEntriesRules.FirstProblem(change) is string problem)
         {
-            throw Refuse(problem);
+            throw DeckInputException.Refusal(problem);
         }
 
         DeckDocument deck = await DeckSql.ReadDeckAsync(connection, transaction, deckId, cancellationToken)
             .ConfigureAwait(false) ?? throw new InvalidDataException("The deck could not be read.");
         Dictionary<Guid, DeckEntry> entries = deck.Entries.ToDictionary(value => value.EntryId);
+        RequireEntries(entries, change);
+        RequireCategories(deck, change);
+        RequirePrintings(change);
+        ZoneRule zone = await ResolveZoneAsync(connection, transaction, deck, change, createId, cancellationToken)
+            .ConfigureAwait(false);
+        ILookup<Guid, DeckCategoryAssignment> assignments = deck.CategoryAssignments.ToLookup(value => value.EntryId);
+        foreach (Guid id in change.EntryIds)
+        {
+            await PatchEntryAsync(
+                connection,
+                transaction,
+                deckId,
+                entries[id],
+                assignments[id],
+                change,
+                zone,
+                cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Finds or creates the zone category a zone change with match needs, once for the whole patch, and refuses a
+    /// primary category that the zone change would remove again.
+    /// </summary>
+    private static async Task<ZoneRule> ResolveZoneAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        DeckDocument deck,
+        PatchDeckEntriesChange change,
+        Func<Guid> createId,
+        CancellationToken cancellationToken)
+    {
+        if (change.Zone is null || !DeckZoneCategories.IsMatch(change.ZoneCategories))
+        {
+            return ZoneRule.Leave;
+        }
+
+        HashSet<Guid> zoneIds = DeckZoneCategories.ZoneCategoryIds(deck.Categories);
+        if (DeckZoneCategories.IsMain(change.Zone))
+        {
+            return change.PrimaryCategoryId is Guid primary && zoneIds.Contains(primary)
+                ? throw DeckInputException.Refusal(DeckZoneCategories.MainPrimaryProblem)
+                : new ZoneRule(true, zoneIds, null);
+        }
+
+        (DeckCategory? category, DeckCategory? created) = DeckZoneCategories.FindOrCreate(
+            change.Zone,
+            deck.Categories,
+            createId);
+        if (created is not null)
+        {
+            await DeckSql.InsertCategoryAsync(connection, transaction, deck.DeckId, created, cancellationToken)
+                .ConfigureAwait(false);
+            zoneIds.Add(created.CategoryId);
+        }
+
+        return new ZoneRule(true, zoneIds, category);
+    }
+
+    /// <summary>
+    /// Writes one entry's changed fields and its category difference.
+    /// </summary>
+    private static async Task PatchEntryAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid deckId,
+        DeckEntry current,
+        IEnumerable<DeckCategoryAssignment> assigned,
+        PatchDeckEntriesChange change,
+        ZoneRule zone,
+        CancellationToken cancellationToken)
+    {
+        DeckEntry updated = Patched(current, change);
+        if (updated != current)
+        {
+            await DeckSql.UpdateEntryAsync(
+                connection,
+                transaction,
+                deckId,
+                DeckContractValidator.Normalize(updated),
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        Dictionary<Guid, bool> existing = assigned.ToDictionary(value => value.CategoryId, value => value.IsPrimary);
+        Dictionary<Guid, bool> final = FinalAssignments(current.EntryId, existing, change, zone);
+        await WriteDifferenceAsync(connection, transaction, deckId, current.EntryId, existing, final, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Refuses a patch that names an entry the deck does not have.
+    /// </summary>
+    private static void RequireEntries(Dictionary<Guid, DeckEntry> entries, PatchDeckEntriesChange change)
+    {
         foreach (Guid id in change.EntryIds)
         {
             if (!entries.ContainsKey(id))
             {
-                throw Refuse($"Entry {id} was not found in this deck.");
+                throw DeckInputException.Refusal($"Entry {id} was not found in this deck.");
             }
-        }
-
-        RequireCategories(deck, change);
-        string? zone = change.Zone?.Trim().ToLowerInvariant();
-        bool match = zone is not null && DeckZoneCategories.IsMatch(change.ZoneCategories);
-        List<DeckCategory> categories = [.. deck.Categories];
-        DeckCategory? zoneCategory = null;
-        if (match && !DeckZoneCategories.IsMain(zone))
-        {
-            string name = DeckZoneCategories.NameForZone(zone)!;
-            zoneCategory = DeckDraftCategories.FindByName(categories, name);
-            if (zoneCategory is null)
-            {
-                zoneCategory = new DeckCategory(createId(), name, null, 0);
-                categories.Add(zoneCategory);
-                await DeckSql.InsertCategoryAsync(connection, transaction, deckId, zoneCategory, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-        }
-
-        HashSet<Guid> zoneIds = [.. categories
-            .Where(value => DeckZoneCategories.ZoneForName(value.Name) is not null)
-            .Select(value => value.CategoryId)];
-        ILookup<Guid, DeckCategoryAssignment> assignments = deck.CategoryAssignments.ToLookup(value => value.EntryId);
-        foreach (Guid id in change.EntryIds)
-        {
-            DeckEntry current = entries[id];
-            DeckEntry updated = Patched(current, change);
-            if (updated != current)
-            {
-                await DeckSql.UpdateEntryAsync(
-                    connection,
-                    transaction,
-                    deckId,
-                    DeckContractValidator.Normalize(updated),
-                    cancellationToken).ConfigureAwait(false);
-            }
-
-            Dictionary<Guid, bool> existing = assignments[id].ToDictionary(value => value.CategoryId, value => value.IsPrimary);
-            Dictionary<Guid, bool> final = FinalAssignments(id, existing, change, match ? zoneIds : null, zoneCategory);
-            await WriteDifferenceAsync(connection, transaction, deckId, id, existing, final, cancellationToken)
-                .ConfigureAwait(false);
         }
     }
 
@@ -101,13 +148,41 @@ internal static class DeckEntryPatcher
         {
             if (!known.Contains(id))
             {
-                throw Refuse($"Category {id} was not found in this deck.");
+                throw DeckInputException.Refusal($"Category {id} was not found in this deck.");
             }
         }
     }
 
     /// <summary>
-    /// Gives the entry with the patch's plain fields and printing applied.
+    /// Refuses a patch whose printing was not looked up against every listed entry's card, so a printing is never
+    /// written as given over an entry's identity.
+    /// </summary>
+    private static void RequirePrintings(PatchDeckEntriesChange change)
+    {
+        if (change.Printing is null)
+        {
+            return;
+        }
+
+        foreach (Guid id in change.EntryIds)
+        {
+            if (FindPrinting(change, id) is null)
+            {
+                throw DeckInputException.Refusal($"Entry {id} has no looked-up printing for this patch.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Finds the printing the card data lookup gave an entry, or null when it gave none.
+    /// </summary>
+    private static DeckEntryPrinting? FindPrinting(PatchDeckEntriesChange change, Guid entryId)
+    {
+        return change.Printings?.FirstOrDefault(value => value.EntryId == entryId);
+    }
+
+    /// <summary>
+    /// Gives the entry with the patch's plain fields and looked-up printing applied.
     /// </summary>
     private static DeckEntry Patched(DeckEntry entry, PatchDeckEntriesChange change)
     {
@@ -119,38 +194,26 @@ internal static class DeckEntryPatcher
             Finish = change.Finish ?? entry.Finish,
             Language = change.Language ?? entry.Language,
         };
-        if (change.Printing is null)
-        {
-            return updated;
-        }
-
-        DeckEntryPrinting? resolved = change.Printings?.FirstOrDefault(value => value.EntryId == entry.EntryId);
-        return resolved is null
+        return FindPrinting(change, entry.EntryId) is DeckEntryPrinting resolved
             ? updated with
-            {
-                PrintingId = change.Printing.PrintingId,
-                SetCode = change.Printing.SetCode,
-                CollectorNumber = change.Printing.CollectorNumber,
-            }
-            : updated with
             {
                 PrintingId = resolved.PrintingId,
                 SetCode = resolved.SetCode,
                 CollectorNumber = resolved.CollectorNumber,
                 Language = change.Language ?? resolved.Language ?? updated.Language,
-            };
+            }
+            : updated;
     }
 
     /// <summary>
     /// Works out the category assignments an entry ends with: the category edits first, then, for a zone change with
-    /// match, the zone category rule. The zone IDs are null when zone categories are left alone.
+    /// match, the zone category rule.
     /// </summary>
     private static Dictionary<Guid, bool> FinalAssignments(
         Guid entryId,
         Dictionary<Guid, bool> existing,
         PatchDeckEntriesChange change,
-        HashSet<Guid>? zoneIds,
-        DeckCategory? zoneCategory)
+        ZoneRule zone)
     {
         Dictionary<Guid, bool> final = new(existing);
         foreach (Guid id in change.RemoveCategoryIds ?? [])
@@ -168,13 +231,13 @@ internal static class DeckEntryPatcher
             ReplacePrimary(final, existing, primary, change.AddCategoryIds ?? []);
         }
 
-        if (zoneIds is null)
+        if (!zone.Match)
         {
             return final;
         }
 
         bool lostPrimary = false;
-        foreach (Guid id in zoneIds)
+        foreach (Guid id in zone.ZoneCategoryIds)
         {
             if (final.Remove(id, out bool wasPrimary) && wasPrimary)
             {
@@ -182,18 +245,18 @@ internal static class DeckEntryPatcher
             }
         }
 
-        if (zoneCategory is not null)
+        if (zone.Category is not null)
         {
             foreach (Guid id in final.Keys.ToArray())
             {
                 final[id] = false;
             }
 
-            final[zoneCategory.CategoryId] = true;
+            final[zone.Category.CategoryId] = true;
         }
         else if (lostPrimary && final.Count > 0 && !final.ContainsValue(true))
         {
-            throw Refuse(
+            throw DeckInputException.Refusal(
                 $"Entry {entryId} loses its primary zone category in zone main and has other categories. Give " +
                 "primaryCategoryId to choose its new primary category, or remove its other categories.");
         }
@@ -263,10 +326,16 @@ internal static class DeckEntryPatcher
     }
 
     /// <summary>
-    /// Builds the refusal of a patch, which rolls the whole batch back.
+    /// Says how a zone change treats zone categories: left alone, or matched to the new zone.
     /// </summary>
-    private static DeckInputException Refuse(string message)
+    /// <param name="Match">Whether the zone categories follow the new zone.</param>
+    /// <param name="ZoneCategoryIds">Every category of the deck that stands for a zone.</param>
+    /// <param name="Category">The zone category the entries end with, or null for zone main.</param>
+    private readonly record struct ZoneRule(bool Match, HashSet<Guid> ZoneCategoryIds, DeckCategory? Category)
     {
-        return new DeckInputException(message + " Nothing was written.", Reason);
+        /// <summary>
+        /// Gets the rule that leaves every category as it is.
+        /// </summary>
+        internal static ZoneRule Leave { get; } = new(false, [], null);
     }
 }

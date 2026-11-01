@@ -14,11 +14,17 @@ internal static class DeckContractValidator
     internal static DeckNewEntry Normalize(DeckEntryDraft value, Func<Guid> createId)
     {
         ArgumentNullException.ThrowIfNull(value);
+        DeckEntry entry = NormalizeEntry(value, createId);
+        if (DeckEntryDraftRules.CategoryProblem(value) is string problem)
+        {
+            throw new DeckInputException(problem);
+        }
+
         return new DeckNewEntry(
-            NormalizeEntry(value, createId),
+            entry,
             [.. (value.CategoryIds ?? []).Distinct()],
             value.PrimaryCategoryId,
-            value.ZoneCategories?.Trim().ToLowerInvariant());
+            value.ZoneCategories);
     }
 
     /// <summary>
@@ -26,7 +32,7 @@ internal static class DeckContractValidator
     /// </summary>
     private static DeckEntry NormalizeEntry(DeckEntryDraft value, Func<Guid> createId)
     {
-        if (DeckEntryDraftRules.FirstProblem(value) is string problem)
+        if (DeckEntryDraftRules.FirstEntryProblem(value) is string problem)
         {
             throw new DeckInputException(problem);
         }
@@ -155,7 +161,7 @@ internal static class DeckContractValidator
 
 /// <summary>
 /// Holds a normalized new entry together with the categories its draft asked for. The category IDs are distinct, and
-/// the zone categories mode is lowercase or null.
+/// the zone categories mode is as the caller gave it, or null.
 /// </summary>
 internal sealed record DeckNewEntry(
     DeckEntry Entry,
@@ -178,10 +184,19 @@ internal sealed class DeckInputException : Exception
     /// <summary>
     /// Creates a bounded validation failure safe for conversion to structured invalid input.
     /// </summary>
-    internal DeckInputException(string message, string reasonCode = "invalid-deck-input")
+    internal DeckInputException(string message, string reasonCode = DeckReasonCodes.InvalidDeckInput)
         : base(message)
     {
         ReasonCode = reasonCode;
+    }
+
+    /// <summary>
+    /// Builds the refusal of a change or draft the deck cannot take. The whole request is rolled back or never
+    /// started, so the message says nothing was written.
+    /// </summary>
+    internal static DeckInputException Refusal(string message)
+    {
+        return new DeckInputException(message + " Nothing was written.", DeckReasonCodes.InvalidDeckChange);
     }
 
     /// <summary>

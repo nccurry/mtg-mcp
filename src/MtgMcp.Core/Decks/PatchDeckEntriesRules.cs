@@ -17,7 +17,7 @@ public static class PatchDeckEntriesRules
     public static string? FirstProblem(PatchDeckEntriesChange change)
     {
         ArgumentNullException.ThrowIfNull(change);
-        return EntryProblem(change) ??
+        return EntryIdsProblem(change.EntryIds) ??
             FieldProblem(change) ??
             PrintingProblem(change.Printing) ??
             CategoryProblem(change) ??
@@ -25,17 +25,18 @@ public static class PatchDeckEntriesRules
     }
 
     /// <summary>
-    /// Checks the entry ID list: 1 to 100 distinct, non-empty IDs.
+    /// Checks a list of entry IDs a change names: 1 to 100 distinct, non-empty IDs. Returns the first problem, or
+    /// null when the list is usable.
     /// </summary>
-    private static string? EntryProblem(PatchDeckEntriesChange change)
+    public static string? EntryIdsProblem(IReadOnlyList<Guid>? entryIds)
     {
-        if (change.EntryIds is not { Count: >= 1 and <= MaxEntries })
+        if (entryIds is not { Count: >= 1 and <= MaxEntries })
         {
             return $"A patch-entries change needs 1 to {MaxEntries} entry IDs.";
         }
 
         HashSet<Guid> seen = [];
-        foreach (Guid id in change.EntryIds)
+        foreach (Guid id in entryIds)
         {
             if (id == Guid.Empty)
             {
@@ -149,19 +150,8 @@ public static class PatchDeckEntriesRules
             return "A change that sets a zone must also set zoneCategories to \"match\" or \"leave\".";
         }
 
-        if (!DeckZoneCategories.IsMatch(change.ZoneCategories) || DeckZoneCategories.IsMain(change.Zone))
-        {
-            return null;
-        }
-
-        if (DeckZoneCategories.NameForZone(change.Zone) is null)
-        {
-            return $"zoneCategories \"match\" has no category for zone '{change.Zone.Trim()}'; use \"leave\".";
-        }
-
-        return change.PrimaryCategoryId is null
-            ? null
-            : "primaryCategoryId cannot be set with zoneCategories \"match\" for a zone that has a zone category; " +
-                "the zone category becomes the primary category.";
+        return DeckZoneCategories.IsMatch(change.ZoneCategories)
+            ? DeckZoneCategories.MatchProblem(change.Zone, change.PrimaryCategoryId)
+            : null;
     }
 }

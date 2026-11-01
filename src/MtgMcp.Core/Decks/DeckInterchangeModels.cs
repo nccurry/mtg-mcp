@@ -29,7 +29,7 @@ public sealed record DeckImportOptions(
     [property: Description("The deck description.")] string Description = "",
     [property: Description("The format label; default commander.")] string Format = "commander",
     [property: Description("The zone for cards the document does not place; default main.")]
-    string DefaultZone = "main",
+    string DefaultZone = DeckZoneCategories.MainZone,
     [property: Description("Accept the lines that parse even when others have errors; default false.")]
     bool AllowPartial = false,
     [property: Description("Allow formats marked experimental; default false.")] bool AllowExperimental = false);

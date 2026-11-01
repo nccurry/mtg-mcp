@@ -64,9 +64,10 @@ public sealed record DeckEntryDraft(
     [property: Description("The language code; default en.")] string Language = "en",
     [property: Description("The finish, such as nonfoil or foil; default nonfoil.")] string Finish = "nonfoil",
     [property: Description("The zone code: main (default), commander, sideboard, or maybeboard.")]
-    string Zone = "main",
+    string Zone = DeckZoneCategories.MainZone,
     [property: Description("The order of the entry within its zone; default 0.")] int SortOrder = 0,
-    [property: Description("An ID for the new entry so later changes in the batch can refer to it; omit to generate one.")]
+    [property: Description(
+        "An ID for the new entry so later changes in the batch can refer to it; omit to generate one.")]
     Guid? EntryId = null,
     [property: Description("IDs of categories to assign to the new entry.")] IReadOnlyList<Guid>? CategoryIds = null,
     [property: Description("The category assigned as primary, even when it is not in categoryIds.")]
@@ -93,7 +94,8 @@ public sealed record DeckCategoryDraft(
     [property: Description("The category name.")] string Name,
     [property: Description("A color for the category; omit for none.")] string? Color = null,
     [property: Description("The order of the category among the deck's categories; default 0.")] int SortOrder = 0,
-    [property: Description("An ID for the new category so later changes in the batch can refer to it; omit to generate one.")]
+    [property: Description(
+        "An ID for the new category so later changes in the batch can refer to it; omit to generate one.")]
     Guid? CategoryId = null);
 
 /// <summary>

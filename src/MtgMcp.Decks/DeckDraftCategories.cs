@@ -11,41 +11,47 @@ internal static class DeckDraftCategories
 {
     /// <summary>
     /// Works out the assignments of a new entry against the categories that exist. When the zone categories mode is
-    /// match and the zone has a zone category the deck lacks, the category is created and added to the list.
-    /// Throws when a category is unknown or the draft's categories contradict each other.
+    /// match and the zone has a zone category the deck lacks, that category is returned as created for the caller to
+    /// store and to add to the categories before the next draft. Throws when a category is unknown or the draft's
+    /// categories contradict each other.
     /// </summary>
-    internal static IReadOnlyList<DeckCategoryAssignment> Plan(
+    internal static (IReadOnlyList<DeckCategoryAssignment> Assignments, DeckCategory? Created) Plan(
         DeckNewEntry added,
-        List<DeckCategory> categories,
+        IReadOnlyList<DeckCategory> categories,
         Func<Guid> createId)
     {
         List<Guid> ids = [.. added.CategoryIds];
         Guid? primary = added.PrimaryCategoryId;
-        if (DeckZoneCategories.IsMatch(added.ZoneCategories))
+        string zone = added.Entry.Zone;
+        bool match = DeckZoneCategories.IsMatch(added.ZoneCategories);
+        if (match)
         {
-            string zone = added.Entry.Zone;
-            ids.RemoveAll(id => IsZoneCategory(categories, id));
-            if (DeckZoneCategories.IsMain(zone))
+            HashSet<Guid> zoneCategories = DeckZoneCategories.ZoneCategoryIds(categories);
+            ids.RemoveAll(zoneCategories.Contains);
+            if (DeckZoneCategories.MatchProblem(zone, primary) is string problem)
             {
-                if (primary is Guid named && IsZoneCategory(categories, named))
-                {
-                    throw new DeckInputException(
-                        "primaryCategoryId names a zone category, but the entry is in zone main and " +
-                        "zoneCategories is \"match\".");
-                }
+                throw DeckInputException.Refusal(problem);
             }
-            else
+
+            if (DeckZoneCategories.IsMain(zone) && primary is Guid named && zoneCategories.Contains(named))
             {
-                primary = ZoneCategoryFor(added, categories, createId).CategoryId;
+                throw DeckInputException.Refusal(DeckZoneCategories.MainPrimaryProblem);
             }
         }
 
         foreach (Guid id in primary is Guid value ? [.. ids, value] : ids)
         {
-            if (!categories.Exists(category => category.CategoryId == id))
+            if (!categories.Any(category => category.CategoryId == id))
             {
-                throw new DeckInputException($"Category {id} was not found in this deck.");
+                throw DeckInputException.Refusal($"Category {id} was not found in this deck.");
             }
+        }
+
+        DeckCategory? created = null;
+        if (match)
+        {
+            (DeckCategory? zoneCategory, created) = DeckZoneCategories.FindOrCreate(zone, categories, createId);
+            primary = zoneCategory?.CategoryId ?? primary;
         }
 
         List<DeckCategoryAssignment> assignments = [];
@@ -62,64 +68,7 @@ internal static class DeckDraftCategories
             assignments.Add(new DeckCategoryAssignment(added.Entry.EntryId, primaryId, true));
         }
 
-        return assignments;
-    }
-
-    /// <summary>
-    /// Finds the zone category for the new entry's zone, creating and listing it when the deck lacks it.
-    /// </summary>
-    private static DeckCategory ZoneCategoryFor(DeckNewEntry added, List<DeckCategory> categories, Func<Guid> createId)
-    {
-        if (added.PrimaryCategoryId is not null)
-        {
-            throw new DeckInputException(
-                "primaryCategoryId cannot be set with zoneCategories \"match\" for a zone that has a zone category; " +
-                "the zone category becomes the primary category.");
-        }
-
-        string name = DeckZoneCategories.NameForZone(added.Entry.Zone) ?? throw new DeckInputException(
-            $"zoneCategories \"match\" has no category for zone '{added.Entry.Zone}'; use \"leave\".");
-        DeckCategory? existing = FindByName(categories, name);
-        if (existing is not null)
-        {
-            return existing;
-        }
-
-        DeckCategory created = new(createId(), name, null, 0);
-        categories.Add(created);
-        return created;
-    }
-
-    /// <summary>
-    /// Finds a category by name, ignoring case and surrounding space, in the deck's category order.
-    /// </summary>
-    internal static DeckCategory? FindByName(IReadOnlyList<DeckCategory> categories, string name)
-    {
-        foreach (DeckCategory category in categories)
-        {
-            if (string.Equals(category.Name.Trim(), name, StringComparison.OrdinalIgnoreCase))
-            {
-                return category;
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Tells whether the category with the given ID is a zone category.
-    /// </summary>
-    private static bool IsZoneCategory(IReadOnlyList<DeckCategory> categories, Guid id)
-    {
-        foreach (DeckCategory category in categories)
-        {
-            if (category.CategoryId == id)
-            {
-                return DeckZoneCategories.ZoneForName(category.Name) is not null;
-            }
-        }
-
-        return false;
+        return (assignments, created);
     }
 
     /// <summary>
@@ -133,21 +82,16 @@ internal static class DeckDraftCategories
         Func<Guid> createId,
         CancellationToken cancellationToken)
     {
-        List<DeckCategory> categories = [.. await DeckSql.ReadCategoriesAsync(
+        IReadOnlyList<DeckCategory> categories = await DeckSql.ReadCategoriesAsync(
             connection,
             transaction,
             deckId,
-            cancellationToken).ConfigureAwait(false)];
-        int known = categories.Count;
-        IReadOnlyList<DeckCategoryAssignment> assignments = Plan(added, categories, createId);
-        if (categories.Count > known)
+            cancellationToken).ConfigureAwait(false);
+        (IReadOnlyList<DeckCategoryAssignment> assignments, DeckCategory? created) = Plan(added, categories, createId);
+        if (created is not null)
         {
-            await DeckSql.InsertCategoryAsync(
-                connection,
-                transaction,
-                deckId,
-                categories[^1],
-                cancellationToken).ConfigureAwait(false);
+            await DeckSql.InsertCategoryAsync(connection, transaction, deckId, created, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         foreach (DeckCategoryAssignment assignment in assignments)

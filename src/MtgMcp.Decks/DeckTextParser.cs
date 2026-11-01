@@ -149,13 +149,13 @@ internal static partial class DeckTextParser
     /// </summary>
     private static string NormalizeZone(string? value)
     {
-        string normalized = NormalizeRequired(value, "main");
+        string normalized = NormalizeRequired(value, DeckZoneCategories.MainZone);
         return normalized switch
         {
-            "mainboard" or "deck" => "main",
-            "commanders" => "commander",
-            "sideboard" => "sideboard",
-            "maybeboard" or "considering" => "maybeboard",
+            "mainboard" or "deck" => DeckZoneCategories.MainZone,
+            "commanders" => DeckZoneCategories.CommanderZone,
+            DeckZoneCategories.SideboardZone => DeckZoneCategories.SideboardZone,
+            "considering" or DeckZoneCategories.MaybeboardZone => DeckZoneCategories.MaybeboardZone,
             _ => normalized,
         };
     }

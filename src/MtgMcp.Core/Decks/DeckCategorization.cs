@@ -11,7 +11,8 @@ public abstract record CategoryRuleSource;
 
 /// <summary>Supplies the complete caller-authored category rules.</summary>
 public sealed record InlineCategoryRuleSource(
-    [property: Description("The complete rules: an assignment mode and the category rules.")] CategoryRuleSet RuleSet) : CategoryRuleSource;
+    [property: Description("The complete rules: an assignment mode and the category rules.")]
+    CategoryRuleSet RuleSet) : CategoryRuleSource;
 
 /// <summary>Defines deterministic category ownership and tag selectors.</summary>
 public sealed record CategoryRuleSet(
@@ -31,7 +32,9 @@ public sealed record CategoryRule(
     IReadOnlyList<CategoryTagSelector> AnyOf,
     [property: Description("Tags an entry must not have; use an empty list for none.")]
     IReadOnlyList<CategoryTagSelector> NoneOf,
-    [property: Description("Makes this category primary for matching entries; unique among the rules, lower wins. Omit for non-primary.")]
+    [property: Description(
+        "Makes this category primary for matching entries; unique among the rules, lower wins. Omit for " +
+        "non-primary.")]
     int? PrimaryPriority = null);
 
 /// <summary>Identifies one exact Oracle or art tag selector.</summary>
