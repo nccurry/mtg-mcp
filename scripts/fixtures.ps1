@@ -14,90 +14,7 @@ Set-StrictMode -Version Latest
 # Fixture refresh is a manual, read-only provider call. It is never part of test or CI.
 $userAgent = "mtg-mcp-fixtures/1.0 (+https://github.com/nccurry/mtg-mcp)"
 
-# POST is allowed only for provider routes that are read-only lookups.
-$readOnlyPostPaths = @("/cards/collection")
-
-# Properties removed wherever they appear, because they identify a person or change without a card change.
-$removedProperties = @(
-    "username", "avatar", "avatarUrl", "avatarURL", "email",
-    "image_uris", "purchase_uris", "related_uris", "edhrec_rank", "penny_rank",
-    "ckAffiliate", "tcgAffiliate", "referrerEnum", "viewCount", "commentRoot"
-)
-
-$writerOptions = [System.Text.Json.JsonSerializerOptions]::new()
-$writerOptions.WriteIndented = $true
-$writerOptions.Encoder = [System.Text.Encodings.Web.JavaScriptEncoder]::UnsafeRelaxedJsonEscaping
-
-function Remove-Volatile {
-    param([System.Text.Json.Nodes.JsonNode] $Node)
-
-    if ($Node -is [System.Text.Json.Nodes.JsonObject]) {
-        foreach ($name in @($Node.Keys)) {
-            if ($removedProperties -contains $name) {
-                [void] $Node.Remove($name)
-            }
-            elseif ($name -eq "prices" -and $Node[$name] -is [System.Text.Json.Nodes.JsonObject]) {
-                $prices = $Node[$name]
-                foreach ($key in @($prices.Keys)) {
-                    $prices[$key] = $null
-                }
-            }
-            else {
-                Remove-Volatile -Node $Node[$name]
-            }
-        }
-    }
-    elseif ($Node -is [System.Text.Json.Nodes.JsonArray]) {
-        foreach ($item in $Node) {
-            Remove-Volatile -Node $item
-        }
-    }
-}
-
-function Test-Member {
-    param($Entry, [string] $Name)
-
-    return $null -ne $Entry -and $Entry.PSObject.Properties.Name -contains $Name
-}
-
-function ConvertTo-StableJson {
-    param([string] $Text, $Entry)
-
-    $root = [System.Text.Json.Nodes.JsonNode]::Parse($Text)
-    if ((Test-Member $Entry "trimData") -and $root -is [System.Text.Json.Nodes.JsonObject]) {
-        # Scryfall lists use data and Archidekt lists use results.
-        foreach ($listName in @("data", "results")) {
-            $list = $root[$listName]
-            while ($list -is [System.Text.Json.Nodes.JsonArray] -and $list.Count -gt $Entry.trimData) {
-                $list.RemoveAt($list.Count - 1)
-            }
-        }
-    }
-
-    if ((Test-Member $Entry "keepCardNames") -and $root -is [System.Text.Json.Nodes.JsonObject]) {
-        # An Archidekt deck keeps only the named cards; its categories stay whole so excluded categories remain visible.
-        $cards = $root["cards"]
-        for ($index = $cards.Count - 1; $index -ge 0; $index--) {
-            if ($Entry.keepCardNames -notcontains $cards[$index]["card"]["oracleCard"]["name"].GetValue[string]()) {
-                $cards.RemoveAt($index)
-            }
-        }
-
-        # The deck text names the owner's migration source and workspace, so it is replaced; the owner id and the owner's folder id are zeroed.
-        $root["description"] = ""
-        if ($root["parentFolder"] -is [System.Text.Json.Nodes.JsonValue]) {
-            $root["parentFolder"] = 0
-        }
-
-        if ($root["owner"] -is [System.Text.Json.Nodes.JsonObject]) {
-            $root["owner"]["id"] = 0
-            [void] $root["owner"].Remove("frame")
-        }
-    }
-
-    Remove-Volatile -Node $root
-    return ($root.ToJsonString($writerOptions) -replace "`r`n", "`n") + "`n"
-}
+. (Join-Path $PSScriptRoot "fixtures.functions.ps1")
 
 function Get-Sha256 {
     param([string] $Path)
@@ -116,15 +33,12 @@ function Invoke-ProviderRead {
 
     $uri = [System.Uri] $Entry.url
     $method = $Entry.method.ToUpperInvariant()
-    $isReadOnlyPost = $method -eq "POST" -and ($readOnlyPostPaths -contains $uri.AbsolutePath)
-    if ($method -ne "GET" -and -not $isReadOnlyPost) {
-        throw "Refusing $method $($Entry.url): fixtures are read with GET only."
-    }
+    Assert-ReadOnlyRequest -Method $method -Path $uri.AbsolutePath
 
     $request = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::new($method), $uri)
     $request.Headers.TryAddWithoutValidation("User-Agent", $userAgent) | Out-Null
     $request.Headers.TryAddWithoutValidation("Accept", "application/json") | Out-Null
-    if ($isReadOnlyPost) {
+    if ($method -eq "POST") {
         $request.Content = [System.Net.Http.StringContent]::new($Entry.requestBody, [System.Text.Encoding]::UTF8, "application/json")
     }
 
@@ -150,31 +64,50 @@ function Invoke-Refresh {
     $first = $true
     foreach ($manifestPath in $manifestPaths) {
         $manifest = Get-Content -LiteralPath $manifestPath.FullName -Raw | ConvertFrom-Json -DateKind String
-        foreach ($entry in $manifest.entries) {
-            $path = Join-Path $manifestPath.Directory.FullName $entry.file
-            $before = if (Test-Path -LiteralPath $path) { Get-Sha256 -Path $path } else { "" }
-            if ($entry.refresh) {
-                if (-not $first) {
-                    Start-Sleep -Milliseconds $PaceMilliseconds
+        $staging = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString("N"))
+        New-Item -ItemType Directory -Path $staging | Out-Null
+        try {
+            # Recordings are staged and moved into place only after every entry of this manifest succeeds.
+            $staged = @()
+            foreach ($entry in $manifest.entries) {
+                $path = Join-Path $manifestPath.Directory.FullName $entry.file
+                if ($entry.refresh) {
+                    if (-not $first) {
+                        Start-Sleep -Milliseconds $PaceMilliseconds
+                    }
+
+                    $first = $false
+                    $text = ConvertTo-StableJson -Text (Invoke-ProviderRead -Entry $entry) -Entry $entry
+                    $temp = Join-Path $staging "$($staged.Count).json"
+                    Write-Utf8 -Path $temp -Text $text
+                    $staged += , @($temp, $path)
+                    $after = Get-Sha256 -Path $temp
+                }
+                else {
+                    $after = Get-Sha256 -Path $path
                 }
 
-                $first = $false
-                $text = ConvertTo-StableJson -Text (Invoke-ProviderRead -Entry $entry) -Entry $entry
-                New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
-                Write-Utf8 -Path $path -Text $text
+                # The manifest hash, not the file on disk, says whether the recording moved.
+                $changed = $after -ne $entry.sha256
+                if ($changed) {
+                    $entry.capturedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd")
+                }
+
+                $entry.sha256 = $after
+                Write-Host "$($entry.id): $(if ($changed) { 'updated' } else { 'unchanged' })"
             }
 
-            $after = Get-Sha256 -Path $path
-            if ($after -ne $before) {
-                $entry.capturedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd")
+            foreach ($pair in $staged) {
+                New-Item -ItemType Directory -Force -Path (Split-Path -Parent $pair[1]) | Out-Null
+                Move-Item -LiteralPath $pair[0] -Destination $pair[1] -Force
             }
 
-            $entry.sha256 = $after
-            Write-Host "$($entry.id): $(if ($after -eq $before) { 'unchanged' } else { 'updated' })"
+            $node = [System.Text.Json.Nodes.JsonNode]::Parse(($manifest | ConvertTo-Json -Depth 10 -Compress))
+            Write-Utf8 -Path $manifestPath.FullName -Text (Format-StableJson -Node $node)
         }
-
-        $json = ConvertTo-StableJson -Text ($manifest | ConvertTo-Json -Depth 10 -Compress) -Entry $null
-        Write-Utf8 -Path $manifestPath.FullName -Text $json
+        finally {
+            Remove-Item -LiteralPath $staging -Recurse -Force
+        }
     }
 }
 
