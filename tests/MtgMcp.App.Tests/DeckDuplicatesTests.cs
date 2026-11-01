@@ -110,14 +110,18 @@ public sealed class DeckDuplicatesTests
     [InlineData("language", "language")]
     [InlineData("categories", "categories")]
     [InlineData("zone", "zone")]
+    [InlineData("printing", "printing")]
+    [InlineData("primary", "primary category")]
     public async Task Preview_TwoCopiesThatDiffer_AreAmbiguousWithNoKeptEntry(string field, string named)
     {
         using World world = await World.CreateAsync();
         Guid first = Guid.NewGuid();
         Guid second = Guid.NewGuid();
-        DeckEntryDraft one = Draft(Swords, first);
+        JsonObject firstCard = field == "printing" ? SolRingOne : Swords;
+        DeckEntryDraft one = Draft(firstCard, first);
         DeckEntryDraft two = field switch
         {
+            "printing" => Draft(SolRingTwo, second),
             "finish" => Draft(Swords, second) with { Finish = "foil" },
             "language" => Draft(Swords, second) with { Language = "ja" },
             "zone" => Draft(Swords, second, zone: "sideboard"),
@@ -125,9 +129,12 @@ public sealed class DeckDuplicatesTests
         };
         DeckDocument deck = await world.CreateDeckAsync(
             [one, two],
-            field == "categories"
-                ? [(first, "Ramp"), (second, "Ramp"), (second, "Removal")]
-                : [(first, "Ramp"), (second, "Ramp")]);
+            field switch
+            {
+                "categories" => [(first, "Ramp"), (second, "Ramp"), (second, "Removal")],
+                "primary" => [(first, "Ramp"), (first, "Removal"), (second, "Removal"), (second, "Ramp")],
+                _ => [(first, "Ramp"), (second, "Ramp")],
+            });
 
         DeckDuplicatesPreview preview = Success(await world.Preview(deck, ["Ramp"]));
 
@@ -138,8 +145,11 @@ public sealed class DeckDuplicatesTests
         Assert.All(ambiguous.Entries, entry => Assert.False(entry.Kept));
         Assert.All(ambiguous.Entries, entry => Assert.Equal(0, entry.KeptQuantity));
         Assert.Null(ambiguous.TieBrokenBy);
+        Assert.Equal([named], ambiguous.DiffersIn);
         Assert.Contains($"differ in {named}", preview.Next, StringComparison.Ordinal);
-        Assert.Equal(field is "categories" or "zone", preview.Next.Contains("keepPriority group", StringComparison.Ordinal));
+        Assert.Equal(
+            field is "categories" or "zone",
+            preview.Next.Contains("keepPriority group", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -176,19 +186,23 @@ public sealed class DeckDuplicatesTests
         Guid second = Guid.NewGuid();
         DeckDocument deck = await world.CreateDeckAsync(
             [Draft(Swords, first, zone: "SIDEBOARD"), Draft(Swords, second, zone: "sideboard")],
-            [(first, "Ramp"), (first, "Removal"), (second, "Removal"), (second, "Ramp")]);
+            [(first, "Ramp"), (first, "Removal"), (second, "Ramp"), (second, "removal")]);
 
         DeckDuplicatesPreview preview = Success(await world.Preview(deck, ["Ramp"]));
 
         Assert.Empty(preview.Ambiguous);
         DuplicateGroup group = Assert.Single(preview.Duplicates);
         Assert.Equal("identical-entries", group.TieBrokenBy);
-        DeckDocument stored = Success(await world.Data.Store.GetAsync(deck.DeckId, TestContext.Current.CancellationToken));
+        DeckDocument stored = Success(await world.Data.Store.GetAsync(
+            deck.DeckId,
+            TestContext.Current.CancellationToken));
         Assert.Equal(stored.Entries[0].EntryId, Assert.Single(group.Entries, entry => entry.Kept).EntryId);
         Assert.Equal(
             stored.Entries[1].EntryId,
             Assert.IsType<RemoveDeckEntryInput>(Assert.Single(preview.Changes)).EntryId);
-        Assert.Contains("\"tieBrokenBy\":\"identical-entries\"", JsonSerializer.Serialize(group, ToolCallPolicy.SerializerOptions),
+        Assert.Contains(
+            "\"tieBrokenBy\":\"identical-entries\"",
+            JsonSerializer.Serialize(group, ToolCallPolicy.SerializerOptions),
             StringComparison.Ordinal);
     }
 
@@ -242,8 +256,11 @@ public sealed class DeckDuplicatesTests
         Assert.All(preview.Duplicates, group => Assert.Equal("identical-entries", group.TieBrokenBy));
         Assert.Equal(51, preview.Changes.Count);
         Assert.All(preview.Changes, change => Assert.IsType<RemoveDeckEntryInput>(change));
-        HashSet<Guid> kept = [.. preview.Duplicates.Select(group => Assert.Single(group.Entries, e => e.Kept).EntryId)];
-        DeckDocument stored = Success(await world.Data.Store.GetAsync(deck.DeckId, TestContext.Current.CancellationToken));
+        HashSet<Guid> kept =
+            [.. preview.Duplicates.Select(group => Assert.Single(group.Entries, e => e.Kept).EntryId)];
+        DeckDocument stored = Success(await world.Data.Store.GetAsync(
+            deck.DeckId,
+            TestContext.Current.CancellationToken));
         foreach (IGrouping<string, DeckEntry> copies in stored.Entries.GroupBy(entry => entry.CardName))
         {
             Assert.Contains(copies.First().EntryId, kept);

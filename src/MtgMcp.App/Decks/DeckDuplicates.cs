@@ -42,6 +42,14 @@ internal sealed record DuplicateGroup(DuplicateCard Card, int Limit, IReadOnlyLi
     [JsonPropertyName("tieBrokenBy")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? TieBrokenBy { get; init; }
+
+    /// <summary>
+    /// Gets the entry fields in which the tied entries of an ambiguous group differ, or null for a group that is not
+    /// ambiguous.
+    /// </summary>
+    [JsonPropertyName("differsIn")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? DiffersIn { get; init; }
 }
 
 /// <summary>
@@ -100,6 +108,7 @@ internal sealed record DeckDuplicatesPreview(
 /// </summary>
 /// <param name="Entry">The stored entry.</param>
 /// <param name="Categories">The names of the categories assigned to the entry, primary first.</param>
+/// <param name="PrimaryCategory">The name of the entry's primary category, or null when it has none.</param>
 /// <param name="Key">The text that says which card the entry is, or null when the entry has no identity.</param>
 /// <param name="Card">The Scryfall card, when card data was read for the entry.</param>
 /// <param name="OracleId">The Oracle ID for the result, when known.</param>
@@ -107,6 +116,7 @@ internal sealed record DeckDuplicatesPreview(
 internal sealed record DuplicateCandidate(
     DeckEntry Entry,
     IReadOnlyList<string> Categories,
+    string? PrimaryCategory,
     string? Key,
     ScryfallCard? Card,
     Guid? OracleId,
@@ -126,7 +136,8 @@ internal static class DeckDuplicateFinder
     /// <summary>
     /// Lists the entry fields that can differ between tied entries, in the order the next step names them.
     /// </summary>
-    private static readonly string[] ComparedFields = ["printing", "language", "finish", "zone", "categories"];
+    private static readonly string[] ComparedFields =
+        ["printing", "language", "finish", "zone", "categories", "primary category"];
 
     /// <summary>
     /// Finds duplicates and plans the edits.
@@ -196,7 +207,8 @@ internal static class DeckDuplicateFinder
         if (ambiguous > 0)
         {
             List<string> fields = [.. ComparedFields.Where(differing.Contains)];
-            string differs = $"For the ambiguous cards, the tied entries differ in {string.Join(", ", fields)}.";
+            string differs = $"For the ambiguous cards, the tied entries differ in {string.Join(", ", fields)}; " +
+                "differsIn on each card says which.";
             steps.Add(
                 fields.Exists(field => field is "zone" or "categories")
                     ? differs + " For a zone or category difference, add a keepPriority group that ranks one " +
@@ -287,6 +299,7 @@ internal static class DeckDuplicateFinder
                 tiedIndexes.Contains(index) ? 0 : keptQuantities[index]))])
         {
             TieBrokenBy = ties.Count > 0 && !unresolved ? IdenticalEntries : null,
+            DiffersIn = unresolved ? [.. ComparedFields.Where(differences.Contains)] : null,
         };
         if (unresolved)
         {
@@ -314,7 +327,9 @@ internal static class DeckDuplicateFinder
     /// Finds the sets of same-rank entries that the cut line splits, so the choice between them would be a guess.
     /// Entries that all keep or all lose their copies are not a tie.
     /// </summary>
-    private static List<int[]> TiesAtTheCut(List<(DuplicateCandidate Candidate, int Rank)> ranked, int[] keptQuantities)
+    private static List<int[]> TiesAtTheCut(
+        List<(DuplicateCandidate Candidate, int Rank)> ranked,
+        int[] keptQuantities)
     {
         List<int[]> ties = [];
         foreach (IGrouping<int, int> sameRank in Enumerable.Range(0, ranked.Count).GroupBy(index => ranked[index].Rank))
@@ -338,7 +353,8 @@ internal static class DeckDuplicateFinder
 
     /// <summary>
     /// Names the fields in which tied entries differ: printing, language, finish, zone (letter case ignored), and
-    /// the set of categories (letter case and order ignored). Quantity and sort order are not compared.
+    /// the set of categories and the primary category (letter case and order ignored). Quantity and sort order are
+    /// not compared.
     /// </summary>
     private static HashSet<string> DifferingFields(List<DuplicateCandidate> tied)
     {
@@ -370,6 +386,11 @@ internal static class DeckDuplicateFinder
             {
                 fields.Add("categories");
             }
+
+            if (!string.Equals(head.PrimaryCategory, other.PrimaryCategory, StringComparison.OrdinalIgnoreCase))
+            {
+                fields.Add("primary category");
+            }
         }
 
         return fields;
@@ -395,7 +416,8 @@ internal static class DeckDuplicateFinder
 
         if (!string.IsNullOrWhiteSpace(entry.SetCode) && !string.IsNullOrWhiteSpace(entry.CollectorNumber))
         {
-            return $"set:{entry.SetCode.Trim().ToLowerInvariant()}/{entry.CollectorNumber.Trim().ToLowerInvariant()}";
+            string set = entry.SetCode.Trim().ToLowerInvariant();
+            return $"set:{set}/{entry.CollectorNumber.Trim().ToLowerInvariant()}";
         }
 
         return "name:" + ScryfallCardSets.NormalizeName(entry.CardName);
