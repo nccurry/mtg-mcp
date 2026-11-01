@@ -31,7 +31,8 @@ was completed and released as 0.12.0 on 2026-10-29.
 
 [deck-edit-ergonomics](deck-edit-ergonomics/README.md) is drafted: entry filters on
 `local_deck_get`, a `patch-entries` change kind, categories on `add-entry`, concise
-Archidekt difference rows, and preview and apply option checks.
+Archidekt difference rows, zone category matching, clearer refusals,
+and batched Archidekt card writes.
 
 ## Retired Reference Packets
 
