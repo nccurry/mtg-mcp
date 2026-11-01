@@ -2,24 +2,23 @@
 
 ## Current Work
 
-- Status: In progress
+- Status: Complete
 - Owner: mtg-mcp (Opus parent session with Sonnet implementation children)
-- Last updated: 2026-10-31, `main` at `3485497`
+- Last updated: 2026-11-01, `main` at `ce2f488` (release `0.13.3`)
 - Implementation authorized: Yes (owner's standing instruction, 2026-10-31: other
   sessions send mtg-mcp bugs; research each, fix it, and release it in the next
   version)
 - Selected work and endpoint: phases 1 to 3 and the upgrade note, merged into
-  `main` on this host, audited, released as `0.13.2`, and installed.
-- State: phases 1 to 3 implemented and merged into `ldas/integ`; docs done; full audit next.
-- Next action and blocker: full audit, then merge to `main`, release `0.13.2`, and install. No blocker.
-- Resume check: `git worktree list` shows the checkouts below.
-
-| Checkout | Branch | Owner | State |
-| --- | --- | --- | --- |
-| `mtg-mcp-wt/local-deck-agent-safety/integ` | `ldas/integ` | parent | integration |
-| `mtg-mcp-wt/local-deck-agent-safety/p1-adds` | `ldas/p1-adds` | Sonnet child | phase 1 |
-| `mtg-mcp-wt/local-deck-agent-safety/p2-duplicates` | `ldas/p2-duplicates` | Sonnet child | phase 2 |
-| `mtg-mcp-wt/local-deck-agent-safety/p3-read` | `ldas/p3-read` | Sonnet child | phase 3 |
+  `main`, audited, released, and installed.
+- State: delivered. Merged in `15b07ff`. Released as `0.13.3` (`ce2f488`; NuGet,
+  GitHub Release, and MCP Registry, first release run). `0.13.2` (`1f74b93`) was
+  tagged but never published: the NuGet upload failed on an expired stored API
+  key; the release workflow now uses NuGet trusted publishing (`51c60cf`).
+  Installed globally as `0.13.3`; a stdio probe with the `2026-07-28` handshake
+  listed 86 tools with object schemas.
+- Next action and blocker: none.
+- Resume check: `git log --oneline origin/main` contains `ce2f488`; no
+  `local-deck-agent-safety` worktree exists.
 
 ## Outcome And Requirements
 
@@ -71,7 +70,7 @@ Decisions (parent, under the standing instruction): warn by default and skip
 only on request, because an outright refusal would block deliberate extra
 entries; same-zone matching for `skip` so a sideboard copy of a main-deck card
 stays possible; `responseFormat` defaults to `full` so existing callers see no
-change. Version `0.13.2`: all changes are additive or fix a broken preview
+change. Version: all changes are additive or fix a broken preview
 contract; the new `already-in-deck` issue kind is a new status value and is
 named in the CHANGELOG.
 
@@ -82,7 +81,8 @@ named in the CHANGELOG.
 2. Phase 2 (REQ-003): `DeckDuplicates`, `DeckDuplicatesCoordinator`, tests.
 3. Phase 3 (REQ-004): `DeckReadTools`, `DeckCardViewCoordinator`, view models,
    tests, the budget test fixture.
-4. Docs (REQ-005), full audit, merge to `main`, release `0.13.2`, install.
+4. Docs (REQ-005), full audit, merge to `main`, release, install (shipped as
+   `0.13.3`).
 
 Each phase: focused tests, then `task ci`, `task test:integration`, and
 `task test:e2e` from PowerShell.
@@ -96,10 +96,15 @@ Each phase: focused tests, then `task ci`, `task test:integration`, and
 
 ## Evidence And Completion
 
+All requirements are verified on the merge `15b07ff` (`task ci` 1,957 tests and
+77 smoke, `task test:integration` 589, `task test:e2e` 116) and on the release
+commit `ce2f488` (the same checks plus the installed-package smoke test, 77).
+The full audit ran three passes; every P2 was repaired.
+
 | Requirement | State | Evidence |
 | --- | --- | --- |
-| REQ-001 | implemented; audit pass 1 repairs in `35b279f`, pass 2 in `5872526` | `5e573a6`, `35b279f`, `5872526` (look-ahead skip, trimmed matching, categories kept on update): `ApplyChanges_CardAlreadyInDeck_NoCardData_AddsAndReportsAlreadyInDeck`, `ApplyChanges_CardAlreadyInDeck_WithCardData_MatchesByOracleId`, `ApplyChanges_BasicLandOrOtherCard_GivesNoAlreadyInDeckIssue`, `ApplyChanges_CardAddedTwiceInOneBatch_ReportsTheSecondAdd`. |
-| REQ-002 | implemented; audit pass 1 repairs in `35b279f`, pass 2 in `5872526` | `5e573a6`, `35b279f`, `5872526` (`ApplyChanges_RetryWithSkipBesideAnotherCopy_LaterChangesTargetTheAddedEntry`, `ApplyChanges_SkippedAddWithAnotherEntrysId_IsRefused`, `ApplyChanges_SkipAfterRemoveOrZoneMoveInSameBatch_StillAdds`, `ApplyChanges_RetryWithEntryIdAndSkip_LaterChangesTargetTheExistingEntry`, `ApplyChanges_AnyChangeReferringToASkippedAdd_IsRefused`, `ApplyChanges_SkipOfAnInvalidAdd_IsRefusedWithoutAWrite`): `ApplyChanges_SkipTwice_IsIdempotent`, `ApplyChanges_SkipWithCardInAnotherZone_AddsAndReportsAlreadyInDeck`, `ApplyChanges_ChangeReferringToASkippedAdd_IsRefusedWithoutAWrite`, `ApplyChanges_UnknownWhenCardPresent_IsRefused`. |
-| REQ-003 | implemented; audit pass 1 repairs in `e81dc58` (a primary category difference stays ambiguous; `differsIn` per group) | `747a77d`, `e81dc58`: `Preview_IdenticalCopies_KeepTheFirstInDeckOrder`, `Preview_SeventeenCardsWithFourIdenticalCopies_PlansFiftyOneRemovals`, `Preview_TwoCopiesThatDiffer_AreAmbiguousWithNoKeptEntry`, `Preview_TwoIdenticalCopiesAndOneDifferent_StayAmbiguous`, `Preview_ManyIdenticalCopyGroups_AreCutWithEachGroupsRemovalsTogether`, `Preview_GroupSettledByTheKeepOrder_OmitsTieBrokenBy`. |
-| REQ-004 | implemented; audit pass 1 repairs in `91eda5e` | `bc70bec`, `91eda5e` (`Get_StoredCardNamesAndConcise_PageAndKeepTheCursorFingerprint`, `Get_Concise_ListsThePrimaryCategoryFirst`): `Get_CardNames_ReturnsMatchesAndTheNamesNotFound`, `Get_CardNames_AllMissOrInvalid_AreHandled`, `Get_Cursor_RefusesAChangedFilterOrFormat`, `Get_Concise_ReturnsOnlyTheShortEntryFields`, `Get_Concise_LargeSideboardDeckFitsInOneResult`. |
-| REQ-005 | implemented; checks on the merged commit pending | Descriptions in `5e573a6` and `bc70bec` (checked by the 4,096-character architecture test); README, CHANGELOG, and `docs/output-control.md` in the docs commit, corrected in `d08c396`. |
+| REQ-001 | verified; audit pass 1 repairs in `35b279f`, pass 2 in `5872526` | `5e573a6`, `35b279f`, `5872526` (look-ahead skip, trimmed matching, categories kept on update): `ApplyChanges_CardAlreadyInDeck_NoCardData_AddsAndReportsAlreadyInDeck`, `ApplyChanges_CardAlreadyInDeck_WithCardData_MatchesByOracleId`, `ApplyChanges_BasicLandOrOtherCard_GivesNoAlreadyInDeckIssue`, `ApplyChanges_CardAddedTwiceInOneBatch_ReportsTheSecondAdd`. |
+| REQ-002 | verified; audit pass 1 repairs in `35b279f`, pass 2 in `5872526` | `5e573a6`, `35b279f`, `5872526` (`ApplyChanges_RetryWithSkipBesideAnotherCopy_LaterChangesTargetTheAddedEntry`, `ApplyChanges_SkippedAddWithAnotherEntrysId_IsRefused`, `ApplyChanges_SkipAfterRemoveOrZoneMoveInSameBatch_StillAdds`, `ApplyChanges_RetryWithEntryIdAndSkip_LaterChangesTargetTheExistingEntry`, `ApplyChanges_AnyChangeReferringToASkippedAdd_IsRefused`, `ApplyChanges_SkipOfAnInvalidAdd_IsRefusedWithoutAWrite`): `ApplyChanges_SkipTwice_IsIdempotent`, `ApplyChanges_SkipWithCardInAnotherZone_AddsAndReportsAlreadyInDeck`, `ApplyChanges_ChangeReferringToASkippedAdd_IsRefusedWithoutAWrite`, `ApplyChanges_UnknownWhenCardPresent_IsRefused`. |
+| REQ-003 | verified; audit pass 1 repairs in `e81dc58` (a primary category difference stays ambiguous; `differsIn` per group) | `747a77d`, `e81dc58`: `Preview_IdenticalCopies_KeepTheFirstInDeckOrder`, `Preview_SeventeenCardsWithFourIdenticalCopies_PlansFiftyOneRemovals`, `Preview_TwoCopiesThatDiffer_AreAmbiguousWithNoKeptEntry`, `Preview_TwoIdenticalCopiesAndOneDifferent_StayAmbiguous`, `Preview_ManyIdenticalCopyGroups_AreCutWithEachGroupsRemovalsTogether`, `Preview_GroupSettledByTheKeepOrder_OmitsTieBrokenBy`. |
+| REQ-004 | verified; audit pass 1 repairs in `91eda5e` | `bc70bec`, `91eda5e` (`Get_StoredCardNamesAndConcise_PageAndKeepTheCursorFingerprint`, `Get_Concise_ListsThePrimaryCategoryFirst`): `Get_CardNames_ReturnsMatchesAndTheNamesNotFound`, `Get_CardNames_AllMissOrInvalid_AreHandled`, `Get_Cursor_RefusesAChangedFilterOrFormat`, `Get_Concise_ReturnsOnlyTheShortEntryFields`, `Get_Concise_LargeSideboardDeckFitsInOneResult`. |
+| REQ-005 | verified | Descriptions in `5e573a6` and `bc70bec` (checked by the 4,096-character architecture test); README, CHANGELOG, and `docs/output-control.md` in the docs commit, corrected in `d08c396`. |
