@@ -166,7 +166,7 @@ public sealed class CardListQueryTests
 
     /// <summary>
     /// Verifies a source without deck entries refuses entryId as it refuses zone, and an Archidekt deck, whose
-    /// entry IDs are not local, gives no value for it.
+    /// entry IDs are not local, refuses it with a message that says so.
     /// </summary>
     [Fact]
     public async Task Query_EntryIdOnOtherSources_IsRefusedLikeZoneOrEmpty()
@@ -179,12 +179,14 @@ public sealed class CardListQueryTests
             world, new ScryfallSnapshotSourceInput(snapshot), groupBy: ["entryId"]));
         OperationInvalidInput zone = Failure(await Query(
             world, new ScryfallSnapshotSourceInput(snapshot), groupBy: ["zone"]));
-        CardListQueryResult remote = Success(await Query(
+        OperationInvalidInput remote = Failure(await Query(
             world, new ArchidektDeckSourceInput("42"), rows: new CardListRowsInput(["name", "entryId"])));
 
         Assert.Equal(zone.ReasonCode, entryId.ReasonCode);
         Assert.Equal(zone.Path, entryId.Path);
-        Assert.All(remote.Rows!.Items, row => Assert.Null(row.Get("entryId")));
+        Assert.Equal("invalid-field", remote.ReasonCode);
+        Assert.Equal("rows.fields[1]", remote.Path);
+        Assert.Contains("no local entry IDs", remote.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
