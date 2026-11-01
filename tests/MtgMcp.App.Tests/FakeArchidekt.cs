@@ -140,7 +140,7 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     }
 
     /// <summary>
-    /// Serves a recorded search response for a card name and page, and makes each printing in it known to the fake so
+    /// Serves a recorded search response for a card name, matched without regard to case, and a page, and makes each printing in it known to the fake so
     /// it can be added to the deck.
     /// </summary>
     internal void ServeRecordedSearch(string cardName, int page, string body)

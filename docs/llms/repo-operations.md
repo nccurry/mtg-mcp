@@ -38,8 +38,9 @@ task clean
 
 `task test` runs non-live, non-benchmark tests. Use `task benchmark:simulation`
 for the separate fixed Release measurement. Use `task test:live` only when live
-provider validation is explicitly requested and safe. Use `task fixtures:refresh` only to re-record
-provider fixtures (read-only provider requests, paced); it is never part of `task test` or `task ci`.
+provider validation is explicitly requested and safe. Use
+`task fixtures:refresh` only to re-record provider fixtures (read-only provider
+requests, paced); it is never part of `task test` or `task ci`.
 
 `task restore` verifies the committed NuGet graph. After an approved package
 change, use `task restore:lock` to refresh that graph and `task tools:lock` to

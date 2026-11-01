@@ -5,10 +5,15 @@ namespace MtgMcp.Core.Tests.Recorded;
 
 /// <summary>
 /// Serves recorded provider responses by method, path, and sorted decoded query, ignoring the host, and keeps every
-/// request it saw. An unmatched request throws and names the request and the known routes.
+/// request it saw with its body. An unmatched request throws and names the request and the known routes.
 /// </summary>
 internal sealed class ReplayHttpHandler : HttpMessageHandler
 {
+    /// <summary>
+    /// Guards the route map and the request list, which a service may touch from several tasks.
+    /// </summary>
+    private readonly object gate = new();
+
     /// <summary>
     /// Maps a request key to the response served for it.
     /// </summary>
@@ -17,12 +22,21 @@ internal sealed class ReplayHttpHandler : HttpMessageHandler
     /// <summary>
     /// Holds the requests received so far, in order.
     /// </summary>
-    private readonly List<(HttpMethod Method, Uri Uri)> requests = [];
+    private readonly List<(HttpMethod Method, Uri Uri, string Body)> requests = [];
 
     /// <summary>
-    /// Gets the requests received so far, in order.
+    /// Gets a snapshot of the requests received so far, in order; the body is empty for a request without content.
     /// </summary>
-    internal IReadOnlyList<(HttpMethod Method, Uri Uri)> Requests => requests;
+    internal IReadOnlyList<(HttpMethod Method, Uri Uri, string Body)> Requests
+    {
+        get
+        {
+            lock (gate)
+            {
+                return [.. requests];
+            }
+        }
+    }
 
     /// <summary>
     /// Serves a recorded entry at its recorded method and URL.
@@ -37,7 +51,11 @@ internal sealed class ReplayHttpHandler : HttpMessageHandler
     /// </summary>
     internal ReplayHttpHandler Add(RecordedEntry entry, HttpStatusCode status, string body)
     {
-        routes[Key(new HttpMethod(entry.Method), new Uri(entry.Url))] = (status, body);
+        lock (gate)
+        {
+            routes[Key(new HttpMethod(entry.Method), new Uri(entry.Url))] = (status, body);
+        }
+
         return this;
     }
 
@@ -47,45 +65,79 @@ internal sealed class ReplayHttpHandler : HttpMessageHandler
     internal ReplayHttpHandler Override(RecordedEntry entry, HttpStatusCode status, string body = "{}")
     {
         string key = Key(new HttpMethod(entry.Method), new Uri(entry.Url));
-        if (!routes.ContainsKey(key))
+        lock (gate)
         {
-            throw new InvalidOperationException($"Cannot override unknown route {key}.");
+            if (!routes.ContainsKey(key))
+            {
+                throw new InvalidOperationException($"Cannot override unknown route {key}.");
+            }
+
+            routes[key] = (status, body);
         }
 
-        routes[key] = (status, body);
         return this;
     }
 
     /// <summary>
-    /// Builds the match key from the method, path, and sorted decoded query pairs.
+    /// Builds the match key from the method, path, and query pairs. Each pair is split on its first equals sign and
+    /// its name and value are unescaped separately, with a plus read as a space, so an encoded ampersand or equals
+    /// sign inside a value stays part of that value.
     /// </summary>
     internal static string Key(HttpMethod method, Uri uri)
     {
-        List<string> pairs = [];
+        List<(string Name, string Value)> pairs = [];
         foreach (string pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
         {
-            pairs.Add(Uri.UnescapeDataString(pair.Replace('+', ' ')));
+            int equals = pair.IndexOf('=', StringComparison.Ordinal);
+            string name = equals < 0 ? pair : pair[..equals];
+            string value = equals < 0 ? string.Empty : pair[(equals + 1)..];
+            pairs.Add((Unescape(name), Unescape(value)));
         }
 
-        pairs.Sort(StringComparer.Ordinal);
-        return $"{method.Method} {uri.AbsolutePath}?{string.Join('&', pairs)}";
+        pairs.Sort(static (left, right) =>
+        {
+            int byName = string.CompareOrdinal(left.Name, right.Name);
+            return byName != 0 ? byName : string.CompareOrdinal(left.Value, right.Value);
+        });
+        StringBuilder query = new();
+        foreach ((string name, string value) in pairs)
+        {
+            query.Append(query.Length == 0 ? "" : "&").Append(name).Append('=').Append(value);
+        }
+
+        return $"{method.Method} {uri.AbsolutePath}?{query}";
     }
 
     /// <inheritdoc/>
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        requests.Add((request.Method, request.RequestUri!));
+        string body = request.Content is null
+            ? string.Empty
+            : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         string key = Key(request.Method, request.RequestUri!);
-        if (!routes.TryGetValue(key, out (HttpStatusCode Status, string Body) route))
+        (HttpStatusCode Status, string Body) route;
+        lock (gate)
         {
-            throw new InvalidOperationException(
-                $"No recording matches {key}. Known routes:{Environment.NewLine}" +
-                string.Join(Environment.NewLine, routes.Keys.Order(StringComparer.Ordinal)));
+            requests.Add((request.Method, request.RequestUri!, body));
+            if (!routes.TryGetValue(key, out route))
+            {
+                throw new InvalidOperationException(
+                    $"No recording matches {key}. Known routes:{Environment.NewLine}" +
+                    string.Join(Environment.NewLine, routes.Keys.Order(StringComparer.Ordinal)));
+            }
         }
 
-        return Task.FromResult(new HttpResponseMessage(route.Status)
+        return new HttpResponseMessage(route.Status)
         {
             Content = new StringContent(route.Body, Encoding.UTF8, "application/json"),
-        });
+        };
+    }
+
+    /// <summary>
+    /// Decodes one query name or value, reading a plus as a space.
+    /// </summary>
+    private static string Unescape(string text)
+    {
+        return Uri.UnescapeDataString(text.Replace('+', ' '));
     }
 }

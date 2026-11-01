@@ -1308,14 +1308,15 @@ public sealed class ArchidektWorkflowTests
             [false, true, true],
             entries.OrderBy(value => value.CardName, StringComparer.Ordinal).Select(value => value.InDeck));
         Assert.Equal(3, entries.Where(value => value.InDeck).Sum(value => value.Quantity));
+        Assert.Equal(["Ramp", "Removal"], entries.Single(value => value.CardName == "Charm").CategoryNames.Order(StringComparer.Ordinal));
+        Assert.Equal(["Maybe", "Ramp"], entries.Single(value => value.CardName == "Signet").CategoryNames.Order(StringComparer.Ordinal));
         Assert.Equal(3, local.Entries.Count);
         Assert.Equal(1, local.Entries.Count(value => value.Zone == "maybeboard"));
         Assert.Empty(push.Operations);
     }
 
     /// <summary>
-    /// Verifies a name-only add of Sol Ring resolves its printing from the recorded Archidekt search, which has 141
-    /// printings, previews it, applies it with that printing's card id, and leaves the next preview clean.
+    /// Verifies a name-only add of Sol Ring resolves its printing from the recorded Archidekt search, previews it, applies it with that printing's card id, and leaves the next preview clean.
     /// </summary>
     [Fact]
     public async Task NameOnlyAdd_OfSolRingFromTheRecordedSearch_PushesTheFirstRecordedPrinting()
@@ -1323,7 +1324,10 @@ public sealed class ArchidektWorkflowTests
         FakeArchidekt fake = new();
         fake.AddCategory("Removal");
         fake.AddEntry(fake.AddCardToCatalog(501, "Bolt"), 1, "Removal");
-        fake.ServeRecordedSearch("Sol Ring", 1, RecordedManifest.Get("search-sol-ring-page-1").ReadText());
+        string firstPage = RecordedManifest.Get("search-sol-ring-page-1").ReadText();
+        using JsonDocument recorded = JsonDocument.Parse(firstPage);
+        JsonElement firstPrinting = recorded.RootElement.GetProperty("results")[0];
+        fake.ServeRecordedSearch("Sol Ring", 1, firstPage);
         fake.ServeRecordedSearch("Sol Ring", 2, RecordedManifest.Get("search-sol-ring-page-2").ReadText());
         using World world = new(OperationMode.Remote, fake);
         CancellationToken token = TestContext.Current.CancellationToken;
@@ -1346,13 +1350,16 @@ public sealed class ArchidektWorkflowTests
             token));
 
         Assert.Contains(
-            "frc 21 (first of 141 Archidekt printings of this name",
+            $"{firstPrinting.GetProperty("edition").GetProperty("editioncode").GetString()} " +
+            $"{firstPrinting.GetProperty("collectorNumber").GetString()} (first of {recorded.RootElement.GetProperty("count").GetInt32()} " +
+            "Archidekt printings of this name",
             preview.Operations.Single(value => value.Subject == "Sol Ring").Summary,
             StringComparison.Ordinal);
         Assert.Equal("applied", applied.Outcome);
-        Assert.Equal("156003", world.Fake.CardIdOf("Sol Ring"));
+        Assert.Equal(firstPrinting.GetProperty("id").GetInt32().ToString(CultureInfo.InvariantCulture), world.Fake.CardIdOf("Sol Ring"));
         Assert.Empty(Success(await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token)).Operations);
     }
+
     /// <summary>
     /// Verifies a name-only add of a card whose name is part of other card names is searched for exactly, so the card
     /// is chosen and not one of the longer names that Archidekt lists first for a plain name search.
@@ -2487,7 +2494,7 @@ public sealed class ArchidektWorkflowTests
                 4000 + index,
                 "Assassin's Trophy",
                 sets[index % sets.Length],
-                (294 - index).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                (294 - index).ToString(CultureInfo.InvariantCulture),
                 oracleId: new Guid(77, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2),
                 printingId: new Guid(4000 + index, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1));
         }

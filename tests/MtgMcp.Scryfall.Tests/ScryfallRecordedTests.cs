@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text.Json;
 using MtgMcp.Core.Results;
 using MtgMcp.Core.Tests.Recorded;
@@ -18,7 +17,7 @@ public sealed class ScryfallRecordedTests
     /// <summary>
     /// Lists every manifest id so each recording is checked by its own test case.
     /// </summary>
-    public static TheoryData<string> Ids { get; } = ManifestIds();
+    public static TheoryData<string> Ids { get; } = RecordedManifest.Ids();
 
     /// <summary>
     /// Verifies the stored bytes of each recording hash to the manifest value.
@@ -29,7 +28,7 @@ public sealed class ScryfallRecordedTests
     {
         RecordedEntry entry = RecordedManifest.Get(id);
 
-        Assert.Equal(entry.Sha256, Convert.ToHexStringLower(SHA256.HashData(entry.ReadBytes())));
+        Assert.Equal(entry.Sha256, entry.ComputeSha256());
     }
 
     /// <summary>
@@ -38,13 +37,7 @@ public sealed class ScryfallRecordedTests
     [Fact]
     public void Manifest_RecordingFilesOnDisk_AreAllListed()
     {
-        HashSet<string> listed = [.. RecordedManifest.Entries.Select(entry => RecordedManifest.PathOf(entry.File))];
-
-        string[] unlisted = [.. Directory
-            .EnumerateFiles(RecordedManifest.Root, "*.json", SearchOption.AllDirectories)
-            .Where(path => Path.GetFileName(path) != "manifest.json" && !listed.Contains(path))];
-
-        Assert.Empty(unlisted);
+        Assert.Empty(RecordedManifest.UnlistedFiles());
     }
 
     /// <summary>
@@ -85,6 +78,7 @@ public sealed class ScryfallRecordedTests
         RecordedEntry first = RecordedManifest.Get("search-angel-page-1");
         RecordedEntry second = RecordedManifest.Get("search-angel-page-2");
         using JsonDocument firstPage = JsonDocument.Parse(first.ReadText());
+        using JsonDocument secondPage = JsonDocument.Parse(second.ReadText());
         Assert.Equal(
             ReplayHttpHandler.Key(HttpMethod.Get, new Uri(second.Url)),
             ReplayHttpHandler.Key(HttpMethod.Get, new Uri(firstPage.RootElement.GetProperty("next_page").GetString()!)));
@@ -98,11 +92,14 @@ public sealed class ScryfallRecordedTests
 
         ScryfallSearchResult search = Assert.IsType<OperationSuccess<ScryfallSearchResult>>(result.Value).Data;
         Assert.Equal(4, search.Page.TotalCount);
+        Assert.Equal(
+            [.. DataNames(firstPage), .. DataNames(secondPage)],
+            search.Page.Items.Select(card => card.Name));
         Assert.Equal(2, handler.Requests.Count);
     }
 
     /// <summary>
-    /// Verifies the recorded collection response maps found cards and reports the missing identifier.
+    /// Verifies the adapter sends the requested names and the recorded collection response maps found cards and reports the missing identifier.
     /// </summary>
     [Fact]
     public async Task Collection_RecordedResponse_ReturnsFoundAndMissingRows()
@@ -116,6 +113,10 @@ public sealed class ScryfallRecordedTests
             cancellationToken: TestContext.Current.CancellationToken);
 
         ScryfallCollectionResponse collection = Assert.IsType<OperationSuccess<ScryfallCollectionResponse>>(result.Value).Data;
+        using JsonDocument sent = JsonDocument.Parse(Assert.Single(handler.Requests).Body);
+        Assert.Equal(
+            ["Lightning Bolt", "Zzzz Not A Card"],
+            sent.RootElement.GetProperty("identifiers").EnumerateArray().Select(item => item.GetProperty("name").GetString()));
         Assert.Equal("Lightning Bolt", Written(collection, "page", "items")[0].GetProperty("card").GetProperty("name").GetString());
         Assert.Null(collection.Page.Items[1].Card);
     }
@@ -156,21 +157,15 @@ public sealed class ScryfallRecordedTests
     }
 
     /// <summary>
-    /// Collects the manifest ids for theory data.
+    /// Lists the card names of a recorded list response in order.
     /// </summary>
-    private static TheoryData<string> ManifestIds()
+    private static IEnumerable<string?> DataNames(JsonDocument list)
     {
-        TheoryData<string> ids = [];
-        foreach (RecordedEntry entry in RecordedManifest.Entries)
-        {
-            ids.Add(entry.Id);
-        }
-
-        return ids;
+        return list.RootElement.GetProperty("data").EnumerateArray().Select(card => card.GetProperty("name").GetString());
     }
 
     /// <summary>
-    /// Reads a dotted property path from a result written the way the MCP server writes it.
+    /// Reads one property per level of the path from a result written the way the MCP server writes it.
     /// </summary>
     private static JsonElement Written(object result, params string[] path)
     {

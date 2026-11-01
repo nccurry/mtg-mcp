@@ -4,8 +4,9 @@ namespace MtgMcp.App.Tests;
 
 /// <summary>
 /// Holds the fake Archidekt to the recorded real responses: for a card search with many printings and a deck read it
-/// must keep every recorded key path with a value kind the recording shows, the same array-size bucket for the
-/// result and card lists, and the paging keys. A recorded field the fake leaves out must be listed with a reason.
+/// must keep every recorded key path with a value kind the recording shows and every array-size bucket the recording
+/// has, for every array. A recorded field the fake leaves out must be listed with a reason, and each listed path must
+/// exist in the recording.
 /// </summary>
 public sealed class ArchidektFakeContractTests
 {
@@ -31,7 +32,7 @@ public sealed class ArchidektFakeContractTests
     ];
 
     /// <summary>
-    /// Holds the deck fields the adapter keeps only as unreviewed extensions or never reads.
+    /// Holds the deck fields the adapter keeps only as snapshot extensions; the fake omits them on purpose.
     /// </summary>
     private static readonly string[] DeckIgnored =
     [
@@ -44,11 +45,6 @@ public sealed class ArchidektFakeContractTests
     ];
 
     /// <summary>
-    /// Holds the paths whose array size bucket must match the recording exactly.
-    /// </summary>
-    private static readonly string[] BucketedArrays = ["$.results", "$.cards", "$.categories"];
-
-    /// <summary>
     /// Verifies the first fake search page for a card with many printings has the shape of the recorded first page.
     /// </summary>
     [Fact]
@@ -56,7 +52,7 @@ public sealed class ArchidektFakeContractTests
     {
         string actual = await GetAsync(SolRingFake(), "api/cards/v2/?name=Sol%20Ring&exact=true&pageSize=25");
 
-        Assert.Empty(Divergences("search-sol-ring-page-1", actual, PrintingIgnoredUnder("$.results[]")));
+        Assert.Empty(JsonShape.Divergences(Recorded("search-sol-ring-page-1"), actual, PrintingIgnoredUnder("$.results[]")));
     }
 
     /// <summary>
@@ -67,7 +63,7 @@ public sealed class ArchidektFakeContractTests
     {
         string actual = await GetAsync(SolRingFake(), "api/cards/v2/?name=Sol%20Ring&exact=true&page=2&pageSize=25");
 
-        Assert.Empty(Divergences("search-sol-ring-page-2", actual, PrintingIgnoredUnder("$.results[]")));
+        Assert.Empty(JsonShape.Divergences(Recorded("search-sol-ring-page-2"), actual, PrintingIgnoredUnder("$.results[]")));
     }
 
     /// <summary>
@@ -86,7 +82,15 @@ public sealed class ArchidektFakeContractTests
 
         string actual = await GetAsync(fake, "api/decks/42/");
 
-        Assert.Empty(Divergences("deck-22959335", actual, [.. DeckIgnored, .. PrintingIgnoredUnder("$.cards[].card")]));
+        Assert.Empty(JsonShape.Divergences(Recorded("deck-22959335"), actual, [.. DeckIgnored, .. PrintingIgnoredUnder("$.cards[].card")]));
+    }
+
+    /// <summary>
+    /// Reads one recorded response as text.
+    /// </summary>
+    private static string Recorded(string id)
+    {
+        return RecordedManifest.Get(id).ReadText();
     }
 
     /// <summary>
@@ -119,65 +123,5 @@ public sealed class ArchidektFakeContractTests
     private static string[] PrintingIgnoredUnder(string parent)
     {
         return [.. PrintingIgnored.Select(name => $"{parent}.{name}")];
-    }
-
-    /// <summary>
-    /// Lists how the actual JSON departs from a recording: a recorded path the actual JSON lacks, a value kind the
-    /// recording does not show for a path, or an array size bucket that differs. Paths under an ignored prefix are
-    /// skipped.
-    /// </summary>
-    private static List<string> Divergences(string recordingId, string actualJson, string[] ignored)
-    {
-        Dictionary<string, HashSet<string>> recorded = KindsByPath(JsonShape.Of(RecordedManifest.Get(recordingId).ReadText()));
-        Dictionary<string, HashSet<string>> actual = KindsByPath(JsonShape.Of(actualJson));
-        List<string> problems = [];
-        foreach ((string path, HashSet<string> kinds) in recorded)
-        {
-            if (ignored.Any(prefix => path == prefix || path.StartsWith(prefix + ".", StringComparison.Ordinal) ||
-                path.StartsWith(prefix + "[]", StringComparison.Ordinal)))
-            {
-                continue;
-            }
-
-            if (!actual.TryGetValue(path, out HashSet<string>? seen))
-            {
-                problems.Add($"{path} is missing; recorded {string.Join("|", kinds)}");
-                continue;
-            }
-
-            bool bucketed = BucketedArrays.Contains(path);
-            foreach (string kind in seen)
-            {
-                if (!kinds.Contains(kind) && (bucketed || !kind.StartsWith("array", StringComparison.Ordinal) ||
-                    !kinds.Any(value => value.StartsWith("array", StringComparison.Ordinal))))
-                {
-                    problems.Add($"{path} is {kind}; recorded {string.Join("|", kinds)}");
-                }
-            }
-        }
-
-        return problems;
-    }
-
-    /// <summary>
-    /// Groups shape pairs by path into the value kinds seen there; an array kind carries its size bucket.
-    /// </summary>
-    private static Dictionary<string, HashSet<string>> KindsByPath(IEnumerable<string> pairs)
-    {
-        Dictionary<string, HashSet<string>> kinds = new(StringComparer.Ordinal);
-        foreach (string pair in pairs)
-        {
-            int split = pair.IndexOf(':', StringComparison.Ordinal);
-            string path = pair[..split];
-            if (!kinds.TryGetValue(path, out HashSet<string>? set))
-            {
-                set = [];
-                kinds[path] = set;
-            }
-
-            set.Add(pair[(split + 1)..]);
-        }
-
-        return kinds;
     }
 }

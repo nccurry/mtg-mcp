@@ -54,3 +54,5 @@ The shared loader, `ReplayHttpHandler`, and `JsonShape` live in
   It sends read-only requests, scrubs personal and volatile fields, and the diff
   shows what moved. `refresh: false` keeps an older recording as it is.
 - Compare shapes with `JsonShape`, not exact bytes.
+- The linked `Recorded` helpers are compiled into several test projects, so
+  they must stay dependency-free.

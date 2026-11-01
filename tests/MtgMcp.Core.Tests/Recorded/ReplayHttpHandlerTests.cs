@@ -3,7 +3,7 @@ using System.Net;
 namespace MtgMcp.Core.Tests.Recorded;
 
 /// <summary>
-/// Verifies the replay handler and JSON shape helper that adapter tests share.
+/// Verifies the replay handler that adapter tests share.
 /// </summary>
 public sealed class ReplayHttpHandlerTests
 {
@@ -12,7 +12,7 @@ public sealed class ReplayHttpHandlerTests
     /// </summary>
     private static RecordedEntry Entry(string url)
     {
-        return new RecordedEntry("test", "GET", url, "/test", 200, "none.json", "2026-11-01", "", "none");
+        return new RecordedEntry("test", "GET", url, "/test", 200, "none.json", "");
     }
 
     /// <summary>
@@ -89,16 +89,31 @@ public sealed class ReplayHttpHandlerTests
     }
 
     /// <summary>
-    /// Verifies shapes bucket arrays as empty, one, and many and compare as subsets.
+    /// Verifies an encoded ampersand inside a value is not the same query as two separate pairs.
     /// </summary>
     [Fact]
-    public void Missing_RecordedPathsAbsentFromActual_AreListed()
+    public void Key_EncodedAmpersandInValue_DiffersFromSeparatePairs()
     {
-        const string recorded = "{\"a\":[1,2],\"b\":\"x\",\"c\":[]}";
+        Assert.NotEqual(
+            ReplayHttpHandler.Key(HttpMethod.Get, new Uri("https://api.example.test/a?q=a%26b=c")),
+            ReplayHttpHandler.Key(HttpMethod.Get, new Uri("https://api.example.test/a?q=a&b=c")));
+    }
 
-        Assert.Empty(JsonShape.Missing(recorded, "{\"a\":[1,2,3],\"b\":\"y\",\"c\":[],\"d\":1}"));
-        Assert.Equal(
-            ["$.a:array:many", "$.b:string"],
-            JsonShape.Missing(recorded, "{\"a\":[1],\"c\":[]}"));
+    /// <summary>
+    /// Verifies the handler keeps the body of a POST for the test to assert on.
+    /// </summary>
+    [Fact]
+    public async Task Send_PostWithBody_RecordsBody()
+    {
+        using ReplayHttpHandler handler = new();
+        handler.Add(new RecordedEntry("test", "POST", "https://api.example.test/a", "/a", 200, "none.json", ""), HttpStatusCode.OK, "{}");
+        using HttpClient client = new(handler, disposeHandler: false);
+
+        using HttpResponseMessage response = await client.PostAsync(
+            new Uri("https://api.example.test/a"),
+            new StringContent("{\"x\":1}"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("{\"x\":1}", Assert.Single(handler.Requests).Body);
     }
 }

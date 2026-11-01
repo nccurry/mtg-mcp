@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text.Json;
 using MtgMcp.Core.Results;
 using MtgMcp.Core.Tests.Recorded;
@@ -14,7 +13,7 @@ public sealed class ArchidektRecordedTests
     /// <summary>
     /// Lists every manifest id so each recording is checked by its own test case.
     /// </summary>
-    public static TheoryData<string> Ids { get; } = ManifestIds();
+    public static TheoryData<string> Ids { get; } = RecordedManifest.Ids();
 
     /// <summary>
     /// Verifies the stored bytes of each recording hash to the manifest value.
@@ -25,7 +24,7 @@ public sealed class ArchidektRecordedTests
     {
         RecordedEntry entry = RecordedManifest.Get(id);
 
-        Assert.Equal(entry.Sha256, Convert.ToHexStringLower(SHA256.HashData(entry.ReadBytes())));
+        Assert.Equal(entry.Sha256, entry.ComputeSha256());
     }
 
     /// <summary>
@@ -34,13 +33,7 @@ public sealed class ArchidektRecordedTests
     [Fact]
     public void Manifest_RecordingFilesOnDisk_AreAllListed()
     {
-        HashSet<string> listed = [.. RecordedManifest.Entries.Select(entry => RecordedManifest.PathOf(entry.File))];
-
-        string[] unlisted = [.. Directory
-            .EnumerateFiles(RecordedManifest.Root, "*.json", SearchOption.AllDirectories)
-            .Where(path => Path.GetFileName(path) != "manifest.json" && !listed.Contains(path))];
-
-        Assert.Empty(unlisted);
+        Assert.Empty(RecordedManifest.UnlistedFiles());
     }
 
     /// <summary>
@@ -56,33 +49,49 @@ public sealed class ArchidektRecordedTests
 
         if (entry.Route == "/api/cards/v2/")
         {
-            Assert.All(
-                root.GetProperty("results").EnumerateArray(),
-                result => Assert.NotNull(ArchidektJsonContract.ReadPrinting(result)));
+            foreach (JsonElement result in root.GetProperty("results").EnumerateArray())
+            {
+                ArchidektCardPrinting printing = Assert.IsType<ArchidektCardPrinting>(ArchidektJsonContract.ReadPrinting(result));
+                AssertPrintingMatchesRaw(result, printing.SetCode, printing.CollectorNumber);
+            }
+
             return;
         }
 
         RemoteDeckSnapshot deck = ArchidektDeckContractMapper.MapDeck(root, entry.ReadText(), DateTimeOffset.UnixEpoch, entry.Route);
         Assert.Equal("22959335", deck.RemoteId);
+        foreach (JsonElement card in root.GetProperty("cards").EnumerateArray())
+        {
+            JsonElement raw = card.GetProperty("card");
+            string cardId = raw.GetProperty("id").GetInt32().ToString(System.Globalization.CultureInfo.InvariantCulture);
+            RemoteDeckEntry[] mapped = [.. deck.Entries.Where(value => value.ProviderCardId == cardId)];
+            Assert.NotEmpty(mapped);
+            Assert.All(mapped, value => AssertPrintingMatchesRaw(raw, value.SetCode, value.CollectorNumber));
+        }
     }
 
     /// <summary>
-    /// Verifies the owner's identity and folder id and the deck text that names a migration source are absent from the
-    /// recorded deck.
+    /// Verifies no recording holds an owner name or avatar, and that a recorded deck has its owner id and folder id
+    /// zeroed and its deck text emptied.
     /// </summary>
-    [Fact]
-    public void Deck_RecordedBody_HoldsNoOwnerIdentity()
+    [Theory]
+    [MemberData(nameof(Ids))]
+    public void Recording_Body_HoldsNoOwnerIdentity(string id)
     {
-        string text = RecordedManifest.Get("deck-22959335").ReadText();
+        using JsonDocument document = JsonDocument.Parse(RecordedManifest.Get(id).ReadText());
+        JsonElement root = document.RootElement;
 
-        Assert.DoesNotContain("username", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("avatar", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("Workspace", text, StringComparison.Ordinal);
-        using JsonDocument document = JsonDocument.Parse(text);
-        JsonElement owner = document.RootElement.GetProperty("owner");
-        Assert.Equal(0, owner.GetProperty("id").GetInt32());
-        Assert.Single(owner.EnumerateObject());
-        Assert.Equal(0, document.RootElement.GetProperty("parentFolder").GetInt32());
+        Assert.Empty(PropertyNamesAnywhere(root).Where(name => name is "username" or "avatar"));
+        if (root.TryGetProperty("owner", out JsonElement owner))
+        {
+            Assert.Equal(0, owner.GetProperty("id").GetInt32());
+            Assert.Equal(string.Empty, root.GetProperty("description").GetString());
+        }
+
+        if (root.TryGetProperty("parentFolder", out JsonElement folder))
+        {
+            Assert.Equal(0, folder.GetInt32());
+        }
     }
 
     /// <summary>
@@ -156,7 +165,8 @@ public sealed class ArchidektRecordedTests
     }
 
     /// <summary>
-    /// Verifies the recorded deck maps its commander, cards in two categories, and an excluded primary category out of main while an excluded secondary category does not.
+    /// Verifies the recorded deck maps its commander, cards in two categories, and an excluded primary category out of
+    /// main while an excluded secondary category does not.
     /// </summary>
     [Fact]
     public async Task GetDeck_RecordedDeck_MapsZonesAndCategories()
@@ -181,25 +191,48 @@ public sealed class ArchidektRecordedTests
     }
 
     /// <summary>
+    /// Asserts a mapped set code and collector number equal the ones in the raw printing JSON.
+    /// </summary>
+    private static void AssertPrintingMatchesRaw(JsonElement raw, string? setCode, string? collectorNumber)
+    {
+        Assert.Equal(raw.GetProperty("edition").GetProperty("editioncode").GetString(), setCode);
+        Assert.Equal(raw.GetProperty("collectorNumber").GetString(), collectorNumber);
+    }
+
+    /// <summary>
+    /// Lists every property name at any depth of a JSON value.
+    /// </summary>
+    private static IEnumerable<string> PropertyNamesAnywhere(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (JsonProperty property in element.EnumerateObject())
+            {
+                yield return property.Name;
+                foreach (string name in PropertyNamesAnywhere(property.Value))
+                {
+                    yield return name;
+                }
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (JsonElement item in element.EnumerateArray())
+            {
+                foreach (string name in PropertyNamesAnywhere(item))
+                {
+                    yield return name;
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Finds one mapped entry by card name.
     /// </summary>
     private static RemoteDeckEntry Entry(RemoteDeckSnapshot deck, string cardName)
     {
         return deck.Entries.Single(entry => entry.CardName == cardName);
-    }
-
-    /// <summary>
-    /// Collects the manifest ids for theory data.
-    /// </summary>
-    private static TheoryData<string> ManifestIds()
-    {
-        TheoryData<string> ids = [];
-        foreach (RecordedEntry entry in RecordedManifest.Entries)
-        {
-            ids.Add(entry.Id);
-        }
-
-        return ids;
     }
 
     /// <summary>
