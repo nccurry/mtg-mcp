@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.13.2 - 2026-10-31
+## 0.13.2 - 2026-11-01
 
 An agent cleaning up duplicated cards on `0.13.1` hit three agent-safety gaps. A retried add made a second entry for a
 card already in the deck and turned 17 cards into 4 copies each; the duplicates preview left identical copies
