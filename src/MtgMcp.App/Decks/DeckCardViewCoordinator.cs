@@ -226,29 +226,7 @@ internal sealed class DeckCardViewCoordinator
             return views;
         }
 
-        Dictionary<Guid, string> categoryNames = [];
-        foreach (DeckCategory category in deck.Categories)
-        {
-            categoryNames[category.CategoryId] = category.Name;
-        }
-
-        Dictionary<Guid, List<string>> namesByEntry = [];
-        foreach (DeckCategoryAssignment assignment in deck.CategoryAssignments.OrderByDescending(row => row.IsPrimary))
-        {
-            if (!categoryNames.TryGetValue(assignment.CategoryId, out string? name))
-            {
-                continue;
-            }
-
-            if (!namesByEntry.TryGetValue(assignment.EntryId, out List<string>? names))
-            {
-                names = [];
-                namesByEntry[assignment.EntryId] = names;
-            }
-
-            names.Add(name);
-        }
-
+        Dictionary<Guid, IReadOnlyList<string>> namesByEntry = DeckEntryCategories.NamesByEntry(deck);
         foreach (DeckEntry entry in entries)
         {
             views.Add(DeckEntryView.Concise(entry, namesByEntry.GetValueOrDefault(entry.EntryId) ?? []));
@@ -490,7 +468,6 @@ internal sealed class DeckCardViewCoordinator
         List<DeckCategoryAssignment> assignments =
             [.. rows.Where(assignment => keptIds.Contains(assignment.EntryId))];
         int next = offset + keep;
-        string scope = selection.NotFound is null ? "the deck" : "the matching entries";
         return new OperationSuccess<DeckDocumentView>(header with
         {
             Entries = kept,
@@ -499,11 +476,19 @@ internal sealed class DeckCardViewCoordinator
             NextCursor = next < total ? EncodeCursor(fingerprint, deck.Revision, next) : null,
             Limits = limits,
             Truncated = truncated ? true : null,
-            Narrow = truncated
-                ? $"This page shows {kept.Count} of {total} entries; {scope} is not missing the rest. " +
-                    $"Follow nextCursor. {narrowHint}"
-                : null,
+            Narrow = truncated ? NarrowText(selection, kept.Count, total, narrowHint) : null,
         });
+    }
+
+    /// <summary>
+    /// Explains that a page is part of the result and how to get the rest.
+    /// </summary>
+    private static string NarrowText(CardSelection selection, int shown, int total, string narrowHint)
+    {
+        return selection.NotFound is null
+            ? $"This page shows {shown} of {total} entries; the deck is not missing the rest. " +
+                $"Follow nextCursor. {narrowHint}"
+            : $"This page shows {shown} of {total} matching entries; follow nextCursor for the rest. {narrowHint}";
     }
 
     /// <summary>
