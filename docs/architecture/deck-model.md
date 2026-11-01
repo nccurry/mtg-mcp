@@ -124,10 +124,20 @@ Push sends card changes for one deck through `modifyCards/v2`, which takes a lis
   `patchId`.
 - Archidekt refuses a batch that holds a bad card as a whole (a 400 that names no card) and changes nothing. After a
   rejected batch of adds, the push sends that batch's cards one at a time, once per push. A card Archidekt refuses is
-  `not-applied` and the push continues; the outcome is `partial`, the baseline stays as it was, and the next preview
-  shows what landed. A second rejected batch is not resent (`not-sent`; push again). A `429` stops the push, and a
-  `403` or `422` leaves the operation `unknown`. Each added card is confirmed by the `patchId` Archidekt echoes (adds
-  only); an add that does not come back is `unknown`.
+  `not-applied` and the push continues, and the outcome is `partial`. A second rejected batch is not resent
+  (`not-sent`; push again). A `429` stops the push, and a `403`, `404`, `422`, or any other failure after a write
+  started leaves the operation `unknown`; the statuses of the operations before it are kept. Each added card is
+  confirmed by the `patchId` Archidekt echoes (adds only); an add that does not come back is `unknown`.
+- A `partial` push reads the Archidekt deck back, as a finished push does (`ArchidektCoordinator.ApplyPushAsync`). The
+  new baseline is that read, and the local entries whose operations were `applied` are linked to their Archidekt rows.
+  An entry whose add or update was `not-applied`, `not-sent`, `not-attempted`, or `unknown` keeps no new link
+  (`ArchidektLocalMapper.CreatePushBaseline`), so it stays a local change and the next push preview offers only those
+  changes. An `unknown` add that did land shows as a local removal of its Archidekt row plus the local add, so the
+  next push replaces it instead of adding it twice. Stale-zone corrections are written only for entries whose
+  operations landed. When the read fails or the request limit is reached, the baseline stays as it was and the
+  `notice` says so.
+- A local row that names no printing takes the printing of its linked baseline row in the comparison
+  (`ArchidektSyncPlanner.Diff`), so the printing Archidekt chose for a card added by name is not a local change.
 - `ArchidektSyncPlanner.OperationRequests` counts one request per batch or other operation, plus the cards of the
   largest batch again, so the fallback fits in the prediction.
 - `predictedProviderRequests` on the push preview is the figure checked against the limit of 150 requests for one

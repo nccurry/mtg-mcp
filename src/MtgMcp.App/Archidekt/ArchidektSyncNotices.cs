@@ -145,6 +145,9 @@ internal static class ArchidektSyncNotices
                 $"either {leave}, or the same change with zone '{zone}' and zoneCategories \"match\" plus a " +
                 "primaryCategoryId that names a category in the deck that is not Commander, Sideboard or " +
                 "Maybeboard (without it the change is refused, because the primary category is a zone category)",
+            ArchidektMatchFix.NotAvailableForZone =>
+                $"{leave}. zoneCategories \"match\" is refused for zone '{zone}', because no Archidekt category " +
+                "gives that zone, so the card cannot keep it on Archidekt",
             _ =>
                 $"{leave}. Setting zoneCategories \"match\" would not keep the zone, because the zone comes from a " +
                 "category it does not change (a primary category that is not included in the deck, or a commander " +

@@ -22,10 +22,15 @@ client (in Claude Code, /mcp or a new session) before relying on new behavior.
   of one card per request, so a 40-card push makes 2 card requests, not 40. Archidekt refuses a batch with a bad
   card as a whole and names no card, so after a rejected batch of adds the push sends that batch's cards one at a
   time, once per push. A card Archidekt refuses is reported `not-applied` and the push continues; the outcome is
-  `partial`, the local baseline stays as it was, and the next push preview shows what landed. A second rejected batch
-  is not sent again: its cards are `not-sent`, so push again. A `429` stops the push, and a `403` or `422` leaves the
-  operation `unknown`. Each added card is confirmed by the `patchId` Archidekt echoes (adds only). `predictedProviderRequests`
+  `partial`. A second rejected batch is not sent again: its cards are `not-sent`, so push again. A `429` stops the
+  push, and a `403`, `404`, or `422` leaves the operation `unknown` and keeps the statuses of the operations before
+  it. Each added card is confirmed by the `patchId` Archidekt echoes (adds only). `predictedProviderRequests`
   includes the reserve for one batch fallback.
+- A `partial` push now reads Archidekt back and records what landed as the new baseline, linking the cards that were
+  applied. The next push preview offers only the changes that were not applied and can be applied, and a pull keeps
+  the cards that were not added instead of refusing them as duplicates. An `unknown` card is not linked; if it did
+  land, the next push replaces it rather than adding it twice. When the read fails, the baseline stays as it was and
+  the `notice` says so. A local entry added by name no longer shows as changed because Archidekt chose its printing.
 - A request-limit refusal on a push preview or apply names the limit (per `archidekt_push_apply` call, counting
   requests to Archidekt), the predicted count, an estimate of how many of the operations fit, and that the push can be
   split by applying part of the local changes first.
@@ -39,7 +44,8 @@ client (in Claude Code, /mcp or a new session) before relying on new behavior.
   names each local entry ID and offers both fixes as ready `patch-entries` changes: set the zone to what the
   categories give (`zoneCategories: "leave"`), or keep the zone and make the categories match it
   (`zoneCategories: "match"`). The server chooses neither. The `match` fix is offered only when that change is accepted
-  and clears the contradiction; otherwise the message says what else to change, such as a primary category.
+  and clears the contradiction; otherwise the message says what else to change, such as a primary category. A zone
+  that no Archidekt category gives, such as `companion`, gets only the `leave` fix.
 - A wrong confirmation phrase on `archidekt_snapshot_restore_apply`, `archidekt_snapshot_delete`,
   `archidekt_folder_delete`, and `archidekt_deck_delete` (`confirmation-required`) now shows the exact phrase to pass,
   such as `restore snapshot <snapshotId>`.

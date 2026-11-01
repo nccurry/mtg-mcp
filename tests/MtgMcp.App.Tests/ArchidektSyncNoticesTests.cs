@@ -71,6 +71,31 @@ public sealed partial class ArchidektSyncNoticesTests
     }
 
     /// <summary>
+    /// Verifies a contradiction in a zone that has no zone category offers only the leave change and says the match
+    /// change is refused for that zone, without the primary category advice that applies to the main zone.
+    /// </summary>
+    [Fact]
+    public void DescribeZoneContradictions_InAZoneWithoutAZoneCategory_OffersOnlyTheLeaveFix()
+    {
+        ArchidektZoneContradiction companion = Contradiction(
+            "Lurrus",
+            "companion",
+            "main",
+            ArchidektMatchFix.NotAvailableForZone);
+
+        string text = ArchidektSyncNotices.DescribeZoneContradictions([companion]);
+
+        JsonElement change = Assert.Single(ChangesIn(text));
+        Assert.Equal(("main", "leave"), (Zone(change), Mode(change)));
+        Assert.Contains(
+            "zoneCategories \"match\" is refused for zone 'companion', because no Archidekt category gives that zone",
+            text,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("primaryCategoryId", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("change the entry's primary category", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies more entries than one change may name are split into changes of at most 100 entries, and that every
     /// entry is named once in each kind of change.
     /// </summary>

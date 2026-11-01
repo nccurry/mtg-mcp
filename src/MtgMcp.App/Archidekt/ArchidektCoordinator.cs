@@ -16,6 +16,14 @@ internal sealed class ArchidektSynchronizationContext
     private const string ProviderName = "archidekt";
 
     /// <summary>
+    /// Tells the caller of a partial push that was read back what the new baseline holds.
+    /// </summary>
+    private const string PartialBaselineNotice =
+        "The local baseline now records the Archidekt deck as read after the push, with the operations that were " +
+        "applied. The local changes whose operations were not applied stay local changes, so the next " +
+        "archidekt_push_preview offers only those.";
+
+    /// <summary>
     /// Provides revisioned local state and transactional baseline updates.
     /// </summary>
     private readonly SqliteDeckStore deckStore;
@@ -761,7 +769,9 @@ internal sealed class ArchidektSynchronizationContext
     /// <summary>
     /// Applies one unchanged push preview and updates its local baseline only after remote verification. When the
     /// verification finds a difference, the operations that were applied are still recorded, so a created card is
-    /// linked to its Archidekt row and is not added again by the next push.
+    /// linked to its Archidekt row and is not added again by the next push. A partial push is read back the same way:
+    /// the baseline becomes the Archidekt deck as read, the entries whose operations were applied are linked, and the
+    /// rest stay local changes for the next push.
     /// </summary>
     internal async Task<OperationResult<ArchidektApplyResult>> ApplyPushAsync(
         ArchidektPushApplyRequest request,
@@ -892,7 +902,7 @@ internal sealed class ArchidektSynchronizationContext
             operationScope,
             cancellationToken).ConfigureAwait(false);
         if (appliedResult is not OperationSuccess<ArchidektApplyResult> applied ||
-            applied.Data.Outcome is not ("applied" or "verification-mismatch"))
+            applied.Data.Outcome is not ("applied" or "verification-mismatch" or "partial"))
         {
             return appliedResult;
         }
@@ -918,11 +928,15 @@ internal sealed class ArchidektSynchronizationContext
             BaselineFingerprint = verified.Data.RemoteFingerprint,
             LastPushedAtUtc = DateTimeOffset.UtcNow,
         };
+        bool partial = applied.Data.Outcome == "partial";
+        IReadOnlySet<Guid>? notLanded = partial
+            ? EntriesNotLanded(local.Data, target, planned.Data.Plan, applied.Data.Operations)
+            : null;
         // An entry whose zone an earlier version gave is written with the zone the push sent, so the local deck agrees
         // with the baseline and with Archidekt.
-        IReadOnlyList<DeckEntry> zoneCorrections = ArchidektLocalMapper.CorrectStaleZones(
+        IReadOnlyList<DeckEntry> zoneCorrections = [.. ArchidektLocalMapper.CorrectStaleZones(
             local.Data,
-            state.Data.Baseline);
+            state.Data.Baseline).Where(value => notLanded?.Contains(value.EntryId) != true)];
         Dictionary<Guid, DeckEntry> corrected = zoneCorrections.ToDictionary(value => value.EntryId);
         DeckDocument synchronized = local.Data with
         {
@@ -933,7 +947,8 @@ internal sealed class ArchidektSynchronizationContext
                 synchronized,
                 verified.Data,
                 target,
-                verificationMismatch: applied.Data.Outcome == "verification-mismatch");
+                verificationMismatch: applied.Data.Outcome == "verification-mismatch",
+                notLanded);
         List<DeckChange> baselineChanges = [.. zoneCorrections.Select(value => new UpdateDeckEntryChange(value))];
         baselineChanges.Add(new UpsertDeckProviderBindingChange(binding, baseline));
         OperationResult<DeckDocument> baselineUpdate = await deckStore.ApplyChangesAsync(
@@ -952,7 +967,34 @@ internal sealed class ArchidektSynchronizationContext
             LocalRevision = updated.Data.Revision,
             FinalRemoteFingerprint = verified.Data.RemoteFingerprint,
             UnlinkedLocalIds = unlinkedLocalIds,
+            Notice = partial ? PartialBaselineNotice : applied.Data.Notice,
         });
+    }
+
+    /// <summary>
+    /// Lists the local entries whose add or update in the plan was not applied, as each status reports it; an
+    /// unknown status counts as not applied. The plan's rows are the rows of <paramref name="target"/>, which was
+    /// built from the local entries in order.
+    /// </summary>
+    private static HashSet<Guid> EntriesNotLanded(
+        DeckDocument local,
+        RemoteDeckSnapshot target,
+        ArchidektRemotePlan plan,
+        IReadOnlyList<ArchidektOperationStatus> statuses)
+    {
+        HashSet<int> landed = [.. statuses.Where(value => value.Status == "applied").Select(value => value.Sequence)];
+        Dictionary<RemoteDeckEntry, Guid> entryIds = ArchidektLocalMapper.EntryIdsByRow(local.Entries, target.Entries);
+        HashSet<Guid> notLanded = [];
+        foreach (ArchidektPlannedOperation operation in plan.PlannedOperations)
+        {
+            if (operation.TargetEntry is { } row && !landed.Contains(operation.Public.Sequence) &&
+                entryIds.TryGetValue(row, out Guid entryId))
+            {
+                notLanded.Add(entryId);
+            }
+        }
+
+        return notLanded;
     }
 
     /// <summary>

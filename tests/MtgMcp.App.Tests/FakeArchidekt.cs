@@ -100,6 +100,11 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     internal HashSet<int> RefusedCardIds { get; } = [];
 
     /// <summary>
+    /// Gets the Archidekt card ids the fake adds but leaves out of its answer, so the client cannot confirm them.
+    /// </summary>
+    internal HashSet<int> UnconfirmedCardIds { get; } = [];
+
+    /// <summary>
     /// Gets or sets an action that runs before the fake answers a read, with the request path; a test uses it to
     /// change something between two steps of a tool call.
     /// </summary>
@@ -280,7 +285,27 @@ internal sealed class FakeArchidekt : HttpMessageHandler
         string answer = path == $"api/decks/{DeckId}/modifyCards/v2/"
             ? AcceptedCardsAnswer.Build(body, nextRelationId - AcceptedCardsAnswer.CountAdds(body))
             : "{}";
-        return Task.FromResult(Json(answer));
+        return Task.FromResult(Json(WithoutUnconfirmedCards(answer)));
+    }
+
+    /// <summary>
+    /// Leaves the cards in <see cref="UnconfirmedCardIds"/> out of a card answer.
+    /// </summary>
+    private string WithoutUnconfirmedCards(string answer)
+    {
+        JsonNode root = JsonNode.Parse(answer)!;
+        if (root["add"] is not JsonArray added)
+        {
+            return answer;
+        }
+
+        foreach (JsonNode? card in added.Where(card => UnconfirmedCardIds.Contains(card!["cardId"]!.GetValue<int>()))
+            .ToList())
+        {
+            _ = added.Remove(card);
+        }
+
+        return root.ToJsonString();
     }
 
     /// <summary>
