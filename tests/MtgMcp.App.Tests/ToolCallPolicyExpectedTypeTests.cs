@@ -104,6 +104,7 @@ public sealed class ToolCallPolicyExpectedTypeTests : IClassFixture<ToolCatalogF
         "changes[3].printing.printingId",
         "must be a UUID.")]
     [InlineData("{\"kind\":\"remove-entry\",\"entryId\":5}", "changes[3].entryId", "must be a UUID.")]
+    [InlineData("{\"kind\":\"remove-entry\",\"entryIds\":[7]}", "changes[3].entryIds[0]", "must be a UUID.")]
     public void DiagnoseArguments_PatchChange_ResolvesThroughTheUnion(string change, string path, string expected)
     {
         string valid = "{\"kind\":\"remove-entry\",\"entryId\":\"0193e97a-ef95-7700-8000-000000000003\"}";

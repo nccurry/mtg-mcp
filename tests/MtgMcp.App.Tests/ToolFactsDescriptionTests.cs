@@ -83,6 +83,10 @@ public sealed class ToolFactsDescriptionTests
     [InlineData("scryfall_autocomplete", "from 1 through 100; default 25.")]
     [InlineData("scryfall_tags_search", "from 1 through 100; default 25.")]
     [InlineData("scryfall_card_details", "or through 25 with includeRaw; default 25.")]
+    [InlineData("scryfall_search", "or through 25 when responseFormat is full; default 25.")]
+    [InlineData("scryfall_cards_get", "or through 25 when responseFormat is full; default 25.")]
+    [InlineData("scryfall_installed_cards_by_tag", "or through 25 when responseFormat is full; default 25.")]
+    [InlineData("card_lists_compare", "or through 25 for full; default 25.")]
     public void ListTools_StateTheirDefaultPageSize(string name, string expected)
     {
         string schema = FindTool(name).ProtocolTool.InputSchema.GetRawText();
