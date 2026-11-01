@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -282,37 +283,16 @@ internal static partial class ToolCallPolicy
     private static partial Regex MissingRequiredProperties();
 
     /// <summary>
-    /// Matches the serializer message that names the type a JSON value could not be converted to.
+    /// Matches one segment of a serializer path: a member name, a list index, or a quoted member name.
     /// </summary>
-    [GeneratedRegex(@"could not be converted to (\S+?)\.(?: |$)")]
-    private static partial Regex ConversionTarget();
+    [GeneratedRegex(@"\.([^.\[]+)|\[(\d+)\]|\['([^']*)'\]")]
+    private static partial Regex PathSegment();
 
     /// <summary>
-    /// Describes the type a failed conversion targeted in plain words, or returns null when it cannot be told.
+    /// Describes a type that a failed conversion targeted in plain words, or returns null when it cannot be told.
     /// </summary>
-    private static string? DescribeExpectedType(string message)
+    internal static string? DescribeExpectedType(Type type)
     {
-        Match match = ConversionTarget().Match(message);
-        if (!match.Success)
-        {
-            return null;
-        }
-
-        string name = match.Groups[1].Value;
-        const string nullable = "System.Nullable`1[";
-        if (name.StartsWith(nullable, StringComparison.Ordinal) && name.EndsWith(']'))
-        {
-            name = name[nullable.Length..^1];
-        }
-
-        Type? type = name.Contains('`', StringComparison.Ordinal) ? null : FindType(name);
-        if (type is null)
-        {
-            return name.Contains("List`1", StringComparison.Ordinal) || name.EndsWith("[]", StringComparison.Ordinal)
-                ? "a list"
-                : null;
-        }
-
         if (type.IsEnum)
         {
             List<string> names = [];
@@ -329,7 +309,7 @@ internal static partial class ToolCallPolicy
             return "a UUID";
         }
 
-        if (type == typeof(DateTimeOffset))
+        if (type == typeof(DateTimeOffset) || type == typeof(DateTime))
         {
             return "a date and time";
         }
@@ -341,24 +321,83 @@ internal static partial class ToolCallPolicy
             TypeCode.Double or TypeCode.Single or TypeCode.Decimal => "a number",
             TypeCode.Boolean => "true or false",
             TypeCode.String => "text",
-            TypeCode.DateTime => "a date and time",
-            TypeCode.Object when type.IsArray || typeof(System.Collections.IEnumerable).IsAssignableFrom(type) => "a list",
+            TypeCode.Object when type.IsArray || typeof(System.Collections.IEnumerable).IsAssignableFrom(type) =>
+                "a list",
             TypeCode.Object => "an object",
             _ => null,
         };
     }
 
     /// <summary>
-    /// Finds a type by full name among the loaded assemblies.
+    /// Follows a serializer path such as <c>$.changes[3].entryIds[0]</c> down from the bound parameter type and
+    /// returns the type of the value the path names, or null when a segment matches no member.
     /// </summary>
-    private static Type? FindType(string name)
+    internal static Type? ResolveTarget(Type root, string? serializerPath)
     {
-        foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+        Type? type = root;
+        foreach (Match segment in PathSegment().Matches(serializerPath ?? string.Empty))
         {
-            Type? type = assembly.GetType(name, throwOnError: false);
-            if (type is not null)
+            type = segment.Groups[2].Success
+                ? FindElementType(type)
+                : FindMemberType(type, segment.Groups[1].Success ? segment.Groups[1].Value : segment.Groups[3].Value);
+            if (type is null)
             {
-                return type;
+                return null;
+            }
+        }
+
+        return Nullable.GetUnderlyingType(type) ?? type;
+    }
+
+    /// <summary>
+    /// Finds the item type of an array or enumerable type, looking through a nullable wrapper.
+    /// </summary>
+    private static Type? FindElementType(Type type)
+    {
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        if (type.IsArray)
+        {
+            return type.GetElementType();
+        }
+
+        foreach (Type candidate in type.GetInterfaces().Prepend(type))
+        {
+            if (candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            {
+                return candidate.GetGenericArguments()[0];
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Finds the type of a member by its JSON name. A union type searches its derived types in declaration order,
+    /// because the path does not say which one the value was read as.
+    /// </summary>
+    private static Type? FindMemberType(Type type, string name)
+    {
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        JsonTypeInfo info = SerializerOptions.GetTypeInfo(type);
+        foreach (JsonPropertyInfo property in info.Properties)
+        {
+            if (string.Equals(property.Name, name, StringComparison.Ordinal))
+            {
+                return property.PropertyType;
+            }
+        }
+
+        if (info.PolymorphismOptions is null)
+        {
+            return null;
+        }
+
+        foreach (JsonDerivedType derived in info.PolymorphismOptions.DerivedTypes)
+        {
+            Type? found = FindMemberType(derived.DerivedType, name);
+            if (found is not null)
+            {
+                return found;
             }
         }
 
@@ -392,7 +431,10 @@ internal static partial class ToolCallPolicy
             Match unmapped = UnmappedMember().Match(exception.Message);
             string path = CombinePath(parameter.Name!, exception.Path);
             string message = $"The value at '{path}' could not be read: {TrimPathSuffix(exception.Message)}";
-            string? expected = DescribeExpectedType(exception.Message);
+            Type? target = exception.Message.Contains("could not be converted", StringComparison.Ordinal)
+                ? ResolveTarget(parameter.ParameterType, exception.Path)
+                : null;
+            string? expected = target is null ? null : DescribeExpectedType(target);
             if (expected is not null)
             {
                 message = $"The value at '{path}' must be {expected}.";

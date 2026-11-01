@@ -67,8 +67,8 @@ internal sealed class StatisticsSimulateTools
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Seeded sampling: an estimate, not exact math. Shuffles the main-zone cards of one local deck and plays " +
-        "your rules over many random games, then reports how often each condition you name held (hits, rate, 95% " +
+        "Seeded sampling: an estimate, not exact math. Shuffles one local deck's main zone, plays your rules over " +
+        "many random games, and reports how often each condition you name held (hits, rate, 95% " +
         "Wilson interval) with the seed that replays it. You state every choice; only these rules are fixed. " +
         "1) Groups pick main-zone entries by entry or category ID and must not overlap; cards in no group are " +
         "drawn and stay in hand. 2) Each turn: draw one card (none on turn 1 on the play), apply each eachTurn " +
@@ -88,8 +88,9 @@ internal sealed class StatisticsSimulateTools
         "C, or any of W/U/B/R/G); without it a card adds colorless mana for generic costs only. can-cast pays its " +
         "cost plus all mana spent that turn with one assignment; hybrid takes either color; Phyrexian needs its " +
         "color (life is not modeled). Limits: samples x turns x deck cards <= 50,000,000 and a cost estimate " +
-        "<= 400,000,000 (can-cast checks and target-first rules are costly), 1,000 units of mana in play. " +
-        "preset on-curve replaces groups, openingHand, eachTurn, turns, and conditions: one land a turn toward a " +
+        "<= 400,000,000 (can-cast and target-first are costly), 1,000 units of mana in play. " +
+        "preset on-curve (for land-count and on-curve questions) replaces groups, openingHand, eachTurn, turns, and " +
+        "conditions: one land a turn toward a " +
         "target card, from installed card data." +
         UntrustedTextNotes.CardListEntries +
         DeckToolExamples.ExamplePrefix + "minimal): " + ExampleMinimal +

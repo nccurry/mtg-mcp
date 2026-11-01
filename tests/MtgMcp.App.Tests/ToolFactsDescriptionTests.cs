@@ -56,7 +56,7 @@ public sealed class ToolFactsDescriptionTests
     public void AnalysisTools_NameTheQuestionsTheyAnswer()
     {
         Assert.Contains("subtypes (Aura, Equipment) or tags", FindTool("card_list_query").ProtocolTool.Description!, StringComparison.Ordinal);
-        foreach (string name in new[] { "stats_castability", "stats_mana_availability" })
+        foreach (string name in new[] { "stats_castability", "stats_mana_availability", "stats_simulate" })
         {
             Assert.Contains("land-count and on-curve", FindTool(name).ProtocolTool.Description!, StringComparison.Ordinal);
         }
@@ -78,13 +78,16 @@ public sealed class ToolFactsDescriptionTests
     /// Verifies the page-size descriptions state the default.
     /// </summary>
     [Theory]
-    [InlineData("local_deck_list")]
-    [InlineData("archidekt_deck_list")]
-    public void ListTools_StateTheirDefaultPageSize(string name)
+    [InlineData("local_deck_list", "from 1 through 100; default 50.")]
+    [InlineData("archidekt_deck_list", "from 1 through 100; default 50.")]
+    [InlineData("scryfall_autocomplete", "from 1 through 100; default 25.")]
+    [InlineData("scryfall_tags_search", "from 1 through 100; default 25.")]
+    [InlineData("scryfall_card_details", "or through 25 with includeRaw; default 25.")]
+    public void ListTools_StateTheirDefaultPageSize(string name, string expected)
     {
         string schema = FindTool(name).ProtocolTool.InputSchema.GetRawText();
 
-        Assert.Contains("from 1 through 100; default 50.", schema, StringComparison.Ordinal);
+        Assert.Contains(expected, schema, StringComparison.Ordinal);
     }
 
     /// <summary>
