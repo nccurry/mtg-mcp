@@ -42,11 +42,21 @@ internal sealed class DeckCardViewCoordinator
     internal const int MaximumCardNames = 100;
 
     /// <summary>
+    /// Gives the most category names a caller can ask for in one read.
+    /// </summary>
+    internal const int MaximumCategoryNames = 100;
+
+    /// <summary>
     /// Says why entry card data is missing when no card data is installed.
     /// </summary>
     private const string NotInstalledLimit =
         "Card fields and tags are not available because Scryfall card data is not installed. " +
         "Run scryfall_card_data_sync to install it.";
+
+    /// <summary>
+    /// Lists the zone codes a zones filter accepts.
+    /// </summary>
+    private static readonly string AllowedZones = string.Join(", ", DeckZoneCounts.ZoneOrder);
 
     /// <summary>
     /// Says how to change the page when a stored deck is too large for one result.
@@ -89,10 +99,13 @@ internal sealed class DeckCardViewCoordinator
         string? cursor,
         int? pageSize,
         IReadOnlyList<string>? cardNames,
+        IReadOnlyList<string>? zones,
+        IReadOnlyList<string>? categoryNames,
         string? responseFormat,
         CancellationToken cancellationToken)
     {
-        OperationInvalidInput? invalid = Validate(include, fields, cursor, pageSize, cardNames, responseFormat);
+        OperationInvalidInput? invalid = Validate(
+            include, fields, cursor, pageSize, cardNames, zones, categoryNames, responseFormat);
         if (invalid is not null)
         {
             return invalid;
@@ -106,8 +119,8 @@ internal sealed class DeckCardViewCoordinator
 
         DeckDocument deck = success.Data;
         bool concise = IsConcise(responseFormat);
-        CardSelection selection = CardSelection.Of(deck, cardNames);
-        string fingerprint = Fingerprint(deckId, include ?? [], fields, cardNames, concise);
+        CardSelection selection = CardSelection.Of(deck, cardNames, zones, categoryNames);
+        string fingerprint = Fingerprint(deckId, include ?? [], fields, cardNames, zones, categoryNames, concise);
         if (include is null)
         {
             return GetStored(deck, selection, concise, fingerprint, cursor, pageSize);
@@ -170,7 +183,7 @@ internal sealed class DeckCardViewCoordinator
         int? pageSize)
     {
         List<DeckEntryView> all = ToViews(deck, selection.Entries, concise);
-        if (cursor is null && pageSize is null && selection.NotFound is null)
+        if (cursor is null && pageSize is null && !selection.Filtered)
         {
             IReadOnlyList<DeckCategoryAssignment> rows = AssignmentRows(deck, concise);
             ResultPageSlice whole = ResultPage.Take(
@@ -244,9 +257,12 @@ internal sealed class DeckCardViewCoordinator
         string? cursor,
         int? pageSize,
         IReadOnlyList<string>? cardNames,
+        IReadOnlyList<string>? zones,
+        IReadOnlyList<string>? categoryNames,
         string? responseFormat)
     {
-        OperationInvalidInput? shape = ValidateCardNames(cardNames) ?? ValidateResponseFormat(responseFormat);
+        OperationInvalidInput? shape = ValidateCardNames(cardNames) ?? ValidateZones(zones) ??
+            ValidateCategoryNames(categoryNames) ?? ValidateResponseFormat(responseFormat);
         if (shape is not null)
         {
             return shape;
@@ -297,27 +313,82 @@ internal sealed class DeckCardViewCoordinator
     /// </summary>
     private static OperationInvalidInput? ValidateCardNames(IReadOnlyList<string>? cardNames)
     {
-        if (cardNames is null)
+        return ValidateNames(cardNames, "cardNames", "invalid-card-names", "card", MaximumCardNames);
+    }
+
+    /// <summary>
+    /// Checks that the category names, when given, hold 1 through 100 names and none is blank.
+    /// </summary>
+    private static OperationInvalidInput? ValidateCategoryNames(IReadOnlyList<string>? categoryNames)
+    {
+        return ValidateNames(
+            categoryNames, "categoryNames", "invalid-category-names", "category", MaximumCategoryNames);
+    }
+
+    /// <summary>
+    /// Checks that the zones, when given, hold at least one zone code and every code is a known zone.
+    /// </summary>
+    private static OperationInvalidInput? ValidateZones(IReadOnlyList<string>? zones)
+    {
+        if (zones is null)
         {
             return null;
         }
 
-        if (cardNames.Count is < 1 or > MaximumCardNames)
+        if (zones.Count == 0)
         {
             return new OperationInvalidInput(
-                "invalid-card-names",
-                $"cardNames must name from 1 through {MaximumCardNames} cards. Omit it to read every entry.",
-                "cardNames");
+                "invalid-zones",
+                $"zones must name at least one zone: {AllowedZones}. Omit it to read every zone.",
+                "zones");
         }
 
-        for (int index = 0; index < cardNames.Count; index++)
+        for (int index = 0; index < zones.Count; index++)
         {
-            if (string.IsNullOrWhiteSpace(cardNames[index]))
+            string zone = zones[index]?.Trim().ToLowerInvariant() ?? string.Empty;
+            if (!DeckZoneCounts.ZoneOrder.Contains(zone, StringComparer.Ordinal))
             {
                 return new OperationInvalidInput(
-                    "invalid-card-names",
-                    "Every card name must have text.",
-                    $"cardNames[{index}]");
+                    "invalid-zones",
+                    $"Unknown zone '{zones[index]}'. Allowed zones: {AllowedZones}.",
+                    $"zones[{index}]");
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Checks that a name list, when given, holds 1 through a maximum number of names and none is blank.
+    /// </summary>
+    private static OperationInvalidInput? ValidateNames(
+        IReadOnlyList<string>? names,
+        string parameter,
+        string reasonCode,
+        string noun,
+        int maximum)
+    {
+        if (names is null)
+        {
+            return null;
+        }
+
+        if (names.Count < 1 || names.Count > maximum)
+        {
+            return new OperationInvalidInput(
+                reasonCode,
+                $"{parameter} must name from 1 through {maximum} {noun}s. Omit it to read every entry.",
+                parameter);
+        }
+
+        for (int index = 0; index < names.Count; index++)
+        {
+            if (string.IsNullOrWhiteSpace(names[index]))
+            {
+                return new OperationInvalidInput(
+                    reasonCode,
+                    $"Every {noun} name must have text.",
+                    $"{parameter}[{index}]");
             }
         }
 
@@ -358,17 +429,14 @@ internal sealed class DeckCardViewCoordinator
         IReadOnlyList<string> include,
         IReadOnlyList<string>? fields,
         IReadOnlyList<string>? cardNames,
+        IReadOnlyList<string>? zones,
+        IReadOnlyList<string>? categoryNames,
         bool concise)
     {
         string text = $"{deckId:D}|{string.Join(',', include.Order(StringComparer.Ordinal))}|" +
             string.Join(',', (fields ?? []).Order(StringComparer.Ordinal));
-        if (cardNames is not null)
-        {
-            text += "|names:" + string.Join(
-                '\n',
-                cardNames.Select(name => name.Trim().ToUpperInvariant()).Distinct(StringComparer.Ordinal)
-                    .Order(StringComparer.Ordinal));
-        }
+        text += FilterText("names", cardNames) + FilterText("zones", zones) +
+            FilterText("categories", categoryNames);
 
         if (concise)
         {
@@ -376,6 +444,19 @@ internal sealed class DeckCardViewCoordinator
         }
 
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..32];
+    }
+
+    /// <summary>
+    /// Writes one filter for the fingerprint, ignoring case, order, and repeats. A missing filter writes nothing.
+    /// </summary>
+    private static string FilterText(string label, IReadOnlyList<string>? values)
+    {
+        return values is null
+            ? string.Empty
+            : $"|{label}:" + string.Join(
+                '\n',
+                values.Select(value => value.Trim().ToUpperInvariant()).Distinct(StringComparer.Ordinal)
+                    .Order(StringComparer.Ordinal));
     }
 
     /// <summary>
@@ -436,7 +517,7 @@ internal sealed class DeckCardViewCoordinator
         return new OperationInvalidInput(
             "invalid-cursor",
             "The cursor is not valid for this request. Pass nextCursor unchanged with the same deckId, include, " +
-            "fields, cardNames, and responseFormat, or start again without a cursor.",
+            "fields, cardNames, zones, categoryNames, and responseFormat, or start again without a cursor.",
             "cursor");
     }
 
@@ -455,7 +536,12 @@ internal sealed class DeckCardViewCoordinator
     {
         int total = selection.Entries.Count;
         IReadOnlyList<DeckCategoryAssignment> rows = AssignmentRows(deck, concise);
-        DeckDocumentView header = PageHeader(deck, offset) with { CardNamesNotFound = selection.NotFound };
+        DeckDocumentView header = PageHeader(deck, offset) with
+        {
+            CardNamesNotFound = selection.NotFound,
+            ZonesNotFound = selection.ZonesNotFound,
+            CategoryNamesNotFound = selection.CategoryNamesNotFound,
+        };
         ResultPageSlice slice = ResultPage.Take(
             entries,
             0,
@@ -485,7 +571,7 @@ internal sealed class DeckCardViewCoordinator
     /// </summary>
     private static string NarrowText(CardSelection selection, int shown, int total, string narrowHint)
     {
-        return selection.NotFound is null
+        return !selection.Filtered
             ? $"This page shows {shown} of {total} entries; the deck is not missing the rest. " +
                 $"Follow nextCursor. {narrowHint}"
             : $"This page shows {shown} of {total} matching entries; follow nextCursor for the rest. {narrowHint}";
@@ -562,26 +648,75 @@ internal sealed class DeckCardViewCoordinator
     }
 
     /// <summary>
-    /// Holds the entries a read covers and, when the caller named cards, the names that match no entry.
+    /// Holds the entries a read covers and, for each filter the caller gave, the values that match no entry of the
+    /// whole deck.
     /// </summary>
-    private sealed record CardSelection(IReadOnlyList<DeckEntry> Entries, IReadOnlyList<string>? NotFound)
+    private sealed record CardSelection(
+        IReadOnlyList<DeckEntry> Entries,
+        IReadOnlyList<string>? NotFound,
+        IReadOnlyList<string>? ZonesNotFound,
+        IReadOnlyList<string>? CategoryNamesNotFound)
     {
         /// <summary>
-        /// Selects every entry, or only the entries whose card name matches one of the requested names.
+        /// Gets true when the caller gave at least one filter.
         /// </summary>
-        internal static CardSelection Of(DeckDocument deck, IReadOnlyList<string>? cardNames)
+        internal bool Filtered => NotFound is not null || ZonesNotFound is not null ||
+            CategoryNamesNotFound is not null;
+
+        /// <summary>
+        /// Selects every entry, or the entries that match every filter given. Values inside one filter combine with
+        /// OR, and the filters combine with AND.
+        /// </summary>
+        internal static CardSelection Of(
+            DeckDocument deck,
+            IReadOnlyList<string>? cardNames,
+            IReadOnlyList<string>? zones,
+            IReadOnlyList<string>? categoryNames)
         {
-            if (cardNames is null)
+            Dictionary<Guid, IReadOnlyList<string>> namesByEntry = categoryNames is null
+                ? []
+                : DeckEntryCategories.NamesByEntry(deck);
+            IReadOnlyList<DeckEntry> entries = deck.Entries;
+            IReadOnlyList<string>? namesNotFound = Narrow(
+                ref entries,
+                deck,
+                cardNames,
+                (entry, name) => CardNames.Match(entry.CardName, name));
+            IReadOnlyList<string>? zonesNotFound = Narrow(
+                ref entries,
+                deck,
+                zones,
+                (entry, zone) => string.Equals(entry.Zone, zone, StringComparison.OrdinalIgnoreCase));
+            IReadOnlyList<string>? categoriesNotFound = Narrow(
+                ref entries,
+                deck,
+                categoryNames,
+                (entry, category) => namesByEntry.TryGetValue(entry.EntryId, out IReadOnlyList<string>? names) &&
+                    names.Contains(category, StringComparer.OrdinalIgnoreCase));
+            return new CardSelection(entries, namesNotFound, zonesNotFound, categoriesNotFound);
+        }
+
+        /// <summary>
+        /// Keeps the entries that match one of the requested values and returns the values that match no entry of the
+        /// whole deck, or null when the filter was not given.
+        /// </summary>
+        private static List<string>? Narrow(
+            ref IReadOnlyList<DeckEntry> entries,
+            DeckDocument deck,
+            IReadOnlyList<string>? requested,
+            Func<DeckEntry, string, bool> matches)
+        {
+            if (requested is null)
             {
-                return new CardSelection(deck.Entries, null);
+                return null;
             }
 
             List<string> notFound = [];
             HashSet<Guid> matched = [];
             HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
-            foreach (string requested in cardNames)
+            foreach (string value in requested)
             {
-                string name = requested.Trim();
+                string name = value.Trim();
                 if (!seen.Add(name))
                 {
                     continue;
@@ -590,7 +725,7 @@ internal sealed class DeckCardViewCoordinator
                 bool found = false;
                 foreach (DeckEntry entry in deck.Entries)
                 {
-                    if (CardNames.Match(entry.CardName, name))
+                    if (matches(entry, name))
                     {
                         matched.Add(entry.EntryId);
                         found = true;
@@ -603,7 +738,8 @@ internal sealed class DeckCardViewCoordinator
                 }
             }
 
-            return new CardSelection([.. deck.Entries.Where(entry => matched.Contains(entry.EntryId))], notFound);
+            entries = [.. entries.Where(entry => matched.Contains(entry.EntryId))];
+            return notFound;
         }
     }
 

@@ -282,6 +282,16 @@ internal sealed class CardListCoordinator
             return changed;
         }
 
+        if (list.Data.HasDeckFields && !IsLocalDeck(list.Data.Sources) &&
+            FindEntryIdUse(where, groupBy, rows) is { } entryIdPath)
+        {
+            return new OperationInvalidInput(
+                "invalid-field",
+                "Unknown or unavailable field 'entryId'. Archidekt sources have no local entry IDs; " +
+                "use a local deck source.",
+                entryIdPath);
+        }
+
         ScryfallListQueryRequest request = new(
             [.. (where ?? []).Select(filter => new ScryfallListCondition(filter.Field, filter.Op, filter.Value))],
             groupBy ?? [],
@@ -302,7 +312,8 @@ internal sealed class CardListCoordinator
                 entry.Card.CheapestPriceUsd,
                 entry.Quantity,
                 entry.Zone,
-                entry.Categories)),
+                entry.Categories,
+                entry.EntryId)),
         ];
         OperationResult<ScryfallListQueryResult> run = ScryfallListQuery.Run(entries, request);
         if (run is not OperationSuccess<ScryfallListQueryResult> answer)
@@ -378,6 +389,57 @@ internal sealed class CardListCoordinator
                     : GroupNarrowHint
                 : null,
         };
+    }
+
+    /// <summary>
+    /// Finds the path of the first filter, group, row field, or sort key that names entryId, or null when none does.
+    /// </summary>
+    private static string? FindEntryIdUse(
+        IReadOnlyList<CardListFilterInput>? where,
+        IReadOnlyList<string>? groupBy,
+        CardListRowsInput? rows)
+    {
+        for (int index = 0; index < (where?.Count ?? 0); index++)
+        {
+            if (where![index].Field == "entryId")
+            {
+                return $"where[{index}].field";
+            }
+        }
+
+        for (int index = 0; index < (groupBy?.Count ?? 0); index++)
+        {
+            if (groupBy![index] == "entryId")
+            {
+                return $"groupBy[{index}]";
+            }
+        }
+
+        for (int index = 0; index < (rows?.Fields?.Count ?? 0); index++)
+        {
+            if (rows!.Fields![index] == "entryId")
+            {
+                return $"rows.fields[{index}]";
+            }
+        }
+
+        for (int index = 0; index < (rows?.SortBy?.Count ?? 0); index++)
+        {
+            if (rows!.SortBy![index].Field == "entryId")
+            {
+                return $"rows.sortBy[{index}].field";
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reports whether the sources are local decks or deck backups, the only lists whose entry IDs are local entry IDs.
+    /// </summary>
+    private static bool IsLocalDeck(IReadOnlyList<CardListSourceInfo> sources)
+    {
+        return sources.All(source => source.Kind is "deck" or "deck-backup");
     }
 
     /// <summary>

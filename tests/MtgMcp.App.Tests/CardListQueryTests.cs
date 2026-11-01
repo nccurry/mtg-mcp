@@ -118,6 +118,78 @@ public sealed class CardListQueryTests
     }
 
     /// <summary>
+    /// Verifies a deck and a deck backup return the local entry ID as a row field, and a filter on subtypes and zone
+    /// returns the IDs of the matching entries only.
+    /// </summary>
+    [Fact]
+    public async Task Query_EntryIdRowField_ReturnsLocalEntryIdsForDeckAndBackupSources()
+    {
+        using CardListWorld world = await CardListWorld.CreateAsync();
+        Guid mainGoblin = Guid.CreateVersion7();
+        Guid sideboardGoblin = Guid.CreateVersion7();
+        DeckCreateRequest request = new(
+            "Goblins",
+            Format: "custom",
+            Entries:
+            [
+                new DeckEntryDraft(
+                    1, "Alpha", PrintingId: CardJson.PrintingOf(world.Alpha), EntryId: Guid.CreateVersion7()),
+                new DeckEntryDraft(
+                    1, "Delta", OracleId: CardJson.OracleOf(world.Delta), Zone: "main", EntryId: mainGoblin),
+                new DeckEntryDraft(
+                    1, "Delta", OracleId: CardJson.OracleOf(world.Delta), Zone: "sideboard", EntryId: sideboardGoblin),
+            ]);
+        DeckDocument deck = Success(await world.Data.Store.CreateAsync(request, TestContext.Current.CancellationToken));
+        DeckBackup backup = Success(await world.Data.Store.Backups.CreateAsync(TestContext.Current.CancellationToken));
+        CardListRowsInput rows = new(["name", "zone", "entryId"]);
+        CardListFilterInput[] goblinsInTheSideboard =
+        [
+            new("subtypes", "contains", JsonElement.Parse("\"Goblin\"")),
+            new("zone", "eq", JsonElement.Parse("\"sideboard\"")),
+        ];
+
+        CardListQueryResult all = Success(await Query(world, new DeckSourceInput(deck.DeckId), rows: rows));
+        CardListQueryResult filtered = Success(await Query(
+            world, new DeckSourceInput(deck.DeckId), goblinsInTheSideboard, rows: rows));
+        CardListQueryResult fromBackup = Success(await Query(
+            world, new DeckBackupSourceInput(backup.BackupId, deck.DeckId), goblinsInTheSideboard, rows: rows));
+
+        Assert.Equal(3, all.Rows!.Items.Count);
+        Assert.Contains(mainGoblin.ToString("D"), all.Rows.Items.Select(row => (string)row.Get("entryId")!));
+        Assert.Equal(
+            [sideboardGoblin.ToString("D")],
+            filtered.Rows!.Items.Select(row => (string)row.Get("entryId")!));
+        Assert.Equal(
+            [sideboardGoblin.ToString("D")],
+            fromBackup.Rows!.Items.Select(row => (string)row.Get("entryId")!));
+    }
+
+    /// <summary>
+    /// Verifies a source without deck entries refuses entryId as it refuses zone, and an Archidekt deck, whose
+    /// entry IDs are not local, refuses it with a message that says so.
+    /// </summary>
+    [Fact]
+    public async Task Query_EntryIdOnOtherSources_IsRefusedLikeZoneOrEmpty()
+    {
+        using CardListWorld world = await CardListWorld.CreateAsync();
+        Guid snapshot = await world.Data.SaveSearchAsync();
+        world.QueueRemoteDeck(world.Echo, world.Foxtrot);
+
+        OperationInvalidInput entryId = Failure(await Query(
+            world, new ScryfallSnapshotSourceInput(snapshot), groupBy: ["entryId"]));
+        OperationInvalidInput zone = Failure(await Query(
+            world, new ScryfallSnapshotSourceInput(snapshot), groupBy: ["zone"]));
+        OperationInvalidInput remote = Failure(await Query(
+            world, new ArchidektDeckSourceInput("42"), rows: new CardListRowsInput(["name", "entryId"])));
+
+        Assert.Equal(zone.ReasonCode, entryId.ReasonCode);
+        Assert.Equal(zone.Path, entryId.Path);
+        Assert.Equal("invalid-field", remote.ReasonCode);
+        Assert.Equal("rows.fields[1]", remote.Path);
+        Assert.Contains("no local entry IDs", remote.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies every other source kind works: a saved search, a card list, a backup, Archidekt, and a nested
     /// comparison. Deck fields exist only for deck-like sources.
     /// </summary>
