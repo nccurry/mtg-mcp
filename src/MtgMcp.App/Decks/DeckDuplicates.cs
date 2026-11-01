@@ -34,7 +34,15 @@ internal sealed record DuplicateEntry(
 /// <summary>
 /// Describes a card that has more copies than a deck may hold, and the plan that leaves the allowed number.
 /// </summary>
-internal sealed record DuplicateGroup(DuplicateCard Card, int Limit, IReadOnlyList<DuplicateEntry> Entries);
+internal sealed record DuplicateGroup(DuplicateCard Card, int Limit, IReadOnlyList<DuplicateEntry> Entries)
+{
+    /// <summary>
+    /// Gets how a tie at the cut line was settled, or null when the keep order alone chose the entries.
+    /// </summary>
+    [JsonPropertyName("tieBrokenBy")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TieBrokenBy { get; init; }
+}
 
 /// <summary>
 /// Describes an entry that has no identity for the chosen match mode, so it is left alone.
@@ -111,6 +119,16 @@ internal sealed record DuplicateCandidate(
 internal static class DeckDuplicateFinder
 {
     /// <summary>
+    /// Names the way a tie is settled when the tied entries are identical, so the first in deck order is kept.
+    /// </summary>
+    internal const string IdenticalEntries = "identical-entries";
+
+    /// <summary>
+    /// Lists the entry fields that can differ between tied entries, in the order the next step names them.
+    /// </summary>
+    private static readonly string[] ComparedFields = ["printing", "language", "finish", "zone", "categories"];
+
+    /// <summary>
     /// Finds duplicates and plans the edits.
     /// </summary>
     /// <param name="deck">The deck that was read.</param>
@@ -126,6 +144,7 @@ internal static class DeckDuplicateFinder
         List<DuplicateGroup> duplicates = [];
         List<DeckChangeInput> changes = [];
         List<DuplicateGroup> ambiguous = [];
+        HashSet<string> differing = [];
         foreach (IGrouping<string, DuplicateCandidate> group in candidates
             .Where(candidate => candidate.Key is not null)
             .GroupBy(candidate => candidate.Key!, StringComparer.Ordinal)
@@ -139,7 +158,7 @@ internal static class DeckDuplicateFinder
                 continue;
             }
 
-            Plan(group.ToList(), allowed, keepPriority, duplicates, changes, ambiguous);
+            Plan(group.ToList(), allowed, keepPriority, duplicates, changes, ambiguous, differing);
         }
 
         List<DuplicateUnmatched> unmatched =
@@ -151,7 +170,7 @@ internal static class DeckDuplicateFinder
                     candidate.Entry.CardName,
                     candidate.UnmatchedReason ?? "no-scryfall-identity")),
         ];
-        string next = NextStep(deck, duplicates.Count, ambiguous.Count);
+        string next = NextStep(deck, duplicates.Count, ambiguous.Count, differing);
         return new DeckDuplicatesPreview(
             new DuplicateDeckRef(deck.DeckId, deck.Revision),
             duplicates,
@@ -164,7 +183,7 @@ internal static class DeckDuplicateFinder
     /// <summary>
     /// Tells the caller what to do with the plan.
     /// </summary>
-    private static string NextStep(DeckDocument deck, int duplicates, int ambiguous)
+    private static string NextStep(DeckDocument deck, int duplicates, int ambiguous, HashSet<string> differing)
     {
         List<string> steps = [];
         if (duplicates > 0)
@@ -176,9 +195,15 @@ internal static class DeckDuplicateFinder
 
         if (ambiguous > 0)
         {
+            List<string> fields = [.. ComparedFields.Where(differing.Contains)];
+            string differs = $"For the ambiguous cards, the tied entries differ in {string.Join(", ", fields)}.";
             steps.Add(
-                "For each ambiguous card, add a keepPriority group that ranks one entry above the others, then " +
-                "ask again.");
+                fields.Exists(field => field is "zone" or "categories")
+                    ? differs + " For a zone or category difference, add a keepPriority group that ranks one " +
+                        "entry above the others, then ask again. For other differences, choose the entries to " +
+                        "remove and send remove-entry changes to local_deck_apply_changes."
+                    : differs + " keepPriority cannot separate them: choose the entries to remove and send " +
+                        "remove-entry changes to local_deck_apply_changes.");
         }
 
         return steps.Count == 0 ? "No duplicates need a change." : string.Join(' ', steps);
@@ -214,8 +239,9 @@ internal static class DeckDuplicateFinder
     }
 
     /// <summary>
-    /// Plans one card: ranks its entries, keeps the allowed copies on the best ranked entries, and reports a tie at
-    /// the cut line as ambiguous without planning a change.
+    /// Plans one card: ranks its entries and keeps the allowed copies on the best ranked entries. When the cut line
+    /// splits entries of the same rank, identical entries keep the first in deck order; any other split is reported
+    /// as ambiguous without a planned change and without marking a tied entry as kept.
     /// </summary>
     private static void Plan(
         List<DuplicateCandidate> group,
@@ -223,7 +249,8 @@ internal static class DeckDuplicateFinder
         IReadOnlyList<DuplicateKeepGroupInput> keepPriority,
         List<DuplicateGroup> duplicates,
         List<DeckChangeInput> changes,
-        List<DuplicateGroup> ambiguous)
+        List<DuplicateGroup> ambiguous,
+        HashSet<string> differing)
     {
         List<(DuplicateCandidate Candidate, int Rank)> ranked =
         [
@@ -237,7 +264,15 @@ internal static class DeckDuplicateFinder
             remaining -= keptQuantities[index];
         }
 
-        bool tied = IsTiedAtTheCut(ranked, keptQuantities);
+        List<int[]> ties = TiesAtTheCut(ranked, keptQuantities);
+        HashSet<string> differences = [];
+        foreach (int[] tie in ties)
+        {
+            differences.UnionWith(DifferingFields([.. tie.Select(index => ranked[index].Candidate)]));
+        }
+
+        bool unresolved = differences.Count > 0;
+        HashSet<int> tiedIndexes = unresolved ? [.. ties.SelectMany(tie => tie)] : [];
         DuplicateCandidate first = ranked[0].Candidate;
         DuplicateGroup summary = new(
             new DuplicateCard(NameOf(first), first.OracleId),
@@ -248,10 +283,14 @@ internal static class DeckDuplicateFinder
                 pair.Candidate.Entry.Zone,
                 pair.Candidate.Categories,
                 pair.Rank,
-                keptQuantities[index] > 0,
-                keptQuantities[index]))]);
-        if (tied)
+                !tiedIndexes.Contains(index) && keptQuantities[index] > 0,
+                tiedIndexes.Contains(index) ? 0 : keptQuantities[index]))])
         {
+            TieBrokenBy = ties.Count > 0 && !unresolved ? IdenticalEntries : null,
+        };
+        if (unresolved)
+        {
+            differing.UnionWith(differences);
             ambiguous.Add(summary);
             return;
         }
@@ -272,11 +311,12 @@ internal static class DeckDuplicateFinder
     }
 
     /// <summary>
-    /// Reports whether entries of the same rank are split by the cut line, so the choice between them would be a
-    /// guess. Entries that all keep or all lose their copies are not a tie.
+    /// Finds the sets of same-rank entries that the cut line splits, so the choice between them would be a guess.
+    /// Entries that all keep or all lose their copies are not a tie.
     /// </summary>
-    private static bool IsTiedAtTheCut(List<(DuplicateCandidate Candidate, int Rank)> ranked, int[] keptQuantities)
+    private static List<int[]> TiesAtTheCut(List<(DuplicateCandidate Candidate, int Rank)> ranked, int[] keptQuantities)
     {
+        List<int[]> ties = [];
         foreach (IGrouping<int, int> sameRank in Enumerable.Range(0, ranked.Count).GroupBy(index => ranked[index].Rank))
         {
             int[] indexes = [.. sameRank];
@@ -289,11 +329,76 @@ internal static class DeckDuplicateFinder
             bool anyCut = indexes.Any(index => keptQuantities[index] < ranked[index].Candidate.Entry.Quantity);
             if (anyKept && anyCut)
             {
-                return true;
+                ties.Add(indexes);
             }
         }
 
-        return false;
+        return ties;
+    }
+
+    /// <summary>
+    /// Names the fields in which tied entries differ: printing, language, finish, zone (letter case ignored), and
+    /// the set of categories (letter case and order ignored). Quantity and sort order are not compared.
+    /// </summary>
+    private static HashSet<string> DifferingFields(List<DuplicateCandidate> tied)
+    {
+        HashSet<string> fields = [];
+        DuplicateCandidate head = tied[0];
+        foreach (DuplicateCandidate other in tied.Skip(1))
+        {
+            if (PrintingKeyOf(head.Entry) != PrintingKeyOf(other.Entry))
+            {
+                fields.Add("printing");
+            }
+
+            if (head.Entry.Language != other.Entry.Language)
+            {
+                fields.Add("language");
+            }
+
+            if (head.Entry.Finish != other.Entry.Finish)
+            {
+                fields.Add("finish");
+            }
+
+            if (!head.Entry.Zone.Equals(other.Entry.Zone, StringComparison.OrdinalIgnoreCase))
+            {
+                fields.Add("zone");
+            }
+
+            if (!CategorySet(head).SetEquals(CategorySet(other)))
+            {
+                fields.Add("categories");
+            }
+        }
+
+        return fields;
+    }
+
+    /// <summary>
+    /// Reads the categories of a candidate as a set that ignores letter case.
+    /// </summary>
+    private static HashSet<string> CategorySet(DuplicateCandidate candidate)
+    {
+        return new HashSet<string>(candidate.Categories, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Reads the printing of an entry: its printing ID, else its set and collector number, else its normalized name.
+    /// </summary>
+    private static string PrintingKeyOf(DeckEntry entry)
+    {
+        if (entry.PrintingId is Guid printing)
+        {
+            return "id:" + printing.ToString("D");
+        }
+
+        if (!string.IsNullOrWhiteSpace(entry.SetCode) && !string.IsNullOrWhiteSpace(entry.CollectorNumber))
+        {
+            return $"set:{entry.SetCode.Trim().ToLowerInvariant()}/{entry.CollectorNumber.Trim().ToLowerInvariant()}";
+        }
+
+        return "name:" + ScryfallCardSets.NormalizeName(entry.CardName);
     }
 
     /// <summary>
