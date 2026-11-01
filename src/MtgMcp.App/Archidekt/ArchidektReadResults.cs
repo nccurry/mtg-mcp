@@ -93,7 +93,7 @@ internal sealed record ArchidektSyncDiffView(
     bool HasConflicts,
     int DifferenceCount,
     int DifferenceOffset,
-    IReadOnlyList<ArchidektDifference> Differences)
+    IReadOnlyList<ArchidektDifferenceRow> Differences)
 {
     /// <summary>
     /// Gets true when rows were left out to keep the result under the size limit.
@@ -374,8 +374,19 @@ internal sealed record ArchidektSyncPreviewView(
     int OperationOffset,
     int DifferenceOffset,
     IReadOnlyList<ArchidektRemoteOperation> Operations,
-    IReadOnlyList<ArchidektDifference> Differences)
+    IReadOnlyList<ArchidektDifferenceRow> Differences)
 {
+    /// <summary>
+    /// Gets the most provider requests one operation may use, which <c>predictedProviderRequests</c> counts against;
+    /// null for a pull, which makes no such prediction.
+    /// </summary>
+    public int? ProviderRequestLimit { get; init; }
+
+    /// <summary>
+    /// Gets the options the apply tool must repeat from this preview, or null when it needs none.
+    /// </summary>
+    public string? ApplyOptions { get; init; }
+
     /// <summary>
     /// Gets true when rows were left out to keep the result under the size limit.
     /// </summary>

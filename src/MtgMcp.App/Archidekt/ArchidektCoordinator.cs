@@ -112,6 +112,7 @@ internal sealed class ArchidektSynchronizationContext
     /// Holds a pull preview with what the pull keeps of the local deck, and why the pull would be refused, if it would.
     /// </summary>
     private sealed record PullPreviewState(
+        RemoteDeckSnapshot Remote,
         ArchidektSyncPreview Preview,
         ArchidektPullKeep? Keep,
         string? ConflictReason);
@@ -142,6 +143,23 @@ internal sealed class ArchidektSynchronizationContext
             return OperationFailure.Forward<RemoteDeckSnapshot, PullPreviewState>(classified);
         }
 
+        return await BuildPullPreviewAsync(
+            remote.Data,
+            localDeckId,
+            discardLocalChanges,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Builds a pull preview from an Archidekt deck that was already read, so it sends no provider request. It reads
+    /// the local deck store only.
+    /// </summary>
+    private async Task<OperationResult<PullPreviewState>> BuildPullPreviewAsync(
+        RemoteDeckSnapshot remoteDeck,
+        Guid? localDeckId,
+        bool discardLocalChanges,
+        CancellationToken cancellationToken)
+    {
         if (discardLocalChanges && localDeckId is null)
         {
             return new OperationInvalidInput(
@@ -155,22 +173,23 @@ internal sealed class ArchidektSynchronizationContext
             ArchidektRemoteOperation operation = new(
                 1,
                 "local-deck-create",
-                remote.Data.RemoteId,
+                remoteDeck.RemoteId,
                 "Create one local deck from fresh Archidekt evidence.");
             string fingerprint = PullPreviewFingerprint(
-                remote.Data,
+                remoteDeck,
                 localDeckId: null,
                 localRevision: null,
                 discardLocalChanges: false,
                 [operation]);
             return new OperationSuccess<PullPreviewState>(new PullPreviewState(
+                remoteDeck,
                 new ArchidektSyncPreview(
                     "pull",
                     LocalDeckId: null,
                     LocalRevision: null,
-                    remote.Data.RemoteId,
-                    remote.Data.RemoteFingerprint,
-                    remote.Data.ContentFingerprint,
+                    remoteDeck.RemoteId,
+                    remoteDeck.RemoteFingerprint,
+                    remoteDeck.ContentFingerprint,
                     fingerprint,
                     HasConflicts: false,
                     Differences: [],
@@ -201,7 +220,7 @@ internal sealed class ArchidektSynchronizationContext
         string? conflictReason = null;
         if (binding is not null)
         {
-            if (!string.Equals(binding.RemoteId, remote.Data.RemoteId, StringComparison.Ordinal))
+            if (!string.Equals(binding.RemoteId, remoteDeck.RemoteId, StringComparison.Ordinal))
             {
                 return new OperationConflict(
                     "binding-remote-mismatch",
@@ -222,17 +241,17 @@ internal sealed class ArchidektSynchronizationContext
                     local.Data,
                     state.Data.Baseline,
                     state.Data.Baseline.RemoteSnapshot),
-                remote.Data,
+                remoteDeck,
                 state.Data.Baseline);
             differences.AddRange(diff.Differences);
             IReadOnlyList<ArchidektDifference> staleZoneMoves = ArchidektSyncPlanner.FindStaleZoneMoves(
                 state.Data.Baseline.RemoteSnapshot,
-                remote.Data);
+                remoteDeck);
             differences.AddRange(
                 staleZoneMoves.Where(move => differences.TrueForAll(shown => shown.Path != move.Path)));
             if (HasLocalChanges(diff) && !discardLocalChanges)
             {
-                keep = ArchidektSyncPlanner.PlanPullKeep(local.Data, state.Data.Baseline, remote.Data, diff);
+                keep = ArchidektSyncPlanner.PlanPullKeep(local.Data, state.Data.Baseline, remoteDeck, diff);
                 conflictReason = ArchidektSyncNotices.DescribePullConflict(keep, differences);
                 keep = conflictReason is null ? keep : null;
             }
@@ -259,19 +278,20 @@ internal sealed class ArchidektSynchronizationContext
         }
 
         string previewFingerprint = PullPreviewFingerprint(
-            remote.Data,
+            remoteDeck,
             local.Data.DeckId,
             local.Data.Revision,
             discardLocalChanges,
             operations);
         return new OperationSuccess<PullPreviewState>(new PullPreviewState(
+            remoteDeck,
             new ArchidektSyncPreview(
                 "pull",
                 local.Data.DeckId,
                 local.Data.Revision,
-                remote.Data.RemoteId,
-                remote.Data.RemoteFingerprint,
-                remote.Data.ContentFingerprint,
+                remoteDeck.RemoteId,
+                remoteDeck.RemoteFingerprint,
+                remoteDeck.ContentFingerprint,
                 previewFingerprint,
                 conflictReason is not null,
                 differences,
@@ -281,9 +301,39 @@ internal sealed class ArchidektSynchronizationContext
                 ApplyBlockedNotice = conflictReason is null
                     ? null
                     : $"archidekt_pull_apply would refuse this pull: {conflictReason}",
+                ApplyOptionsNotice = discardLocalChanges
+                    ? "archidekt_pull_apply must repeat discardLocalChanges: true, the value this preview used."
+                    : null,
             },
             keep,
             conflictReason));
+    }
+
+    /// <summary>
+    /// Tells a pull apply that its preview fingerprint belongs to the preview with the other
+    /// <c>discardLocalChanges</c> value, or returns null when it does not. It rebuilds that preview from the Archidekt
+    /// deck the apply already read, so it sends no provider request.
+    /// </summary>
+    private async Task<OperationInvalidInput?> DescribeOtherDiscardValueAsync(
+        ArchidektPullApplyRequest request,
+        RemoteDeckSnapshot remote,
+        CancellationToken cancellationToken)
+    {
+        bool previewValue = !request.DiscardLocalChanges;
+        OperationResult<PullPreviewState> other = await BuildPullPreviewAsync(
+            remote,
+            request.LocalDeckId,
+            previewValue,
+            cancellationToken).ConfigureAwait(false);
+        return other is OperationSuccess<PullPreviewState> built &&
+            string.Equals(request.PreviewFingerprint, built.Data.Preview.PreviewFingerprint, StringComparison.Ordinal)
+                ? new OperationInvalidInput(
+                    "pull-discard-option-mismatch",
+                    $"The preview used discardLocalChanges {(previewValue ? "true" : "false")}, but this call passed " +
+                        $"{(request.DiscardLocalChanges ? "true" : "false")}. Pass discardLocalChanges: " +
+                        $"{(previewValue ? "true" : "false")}, the same value as the preview.",
+                    "discardLocalChanges")
+                : null;
     }
 
     /// <summary>
@@ -306,6 +356,15 @@ internal sealed class ArchidektSynchronizationContext
         }
 
         ArchidektSyncPreview preview = previewState.Data.Preview;
+        if (!string.Equals(request.PreviewFingerprint, preview.PreviewFingerprint, StringComparison.Ordinal) &&
+            await DescribeOtherDiscardValueAsync(
+                request,
+                previewState.Data.Remote,
+                cancellationToken).ConfigureAwait(false) is { } differentOption)
+        {
+            return differentOption;
+        }
+
         if (preview.HasConflicts)
         {
             return new OperationConflict(
@@ -637,6 +696,10 @@ internal sealed class ArchidektSynchronizationContext
                 planned.Data.Operations,
                 planned.Data.PredictedProviderRequests)
             {
+                ProviderRequestLimit = planned.Data.ProviderRequestLimit,
+                ApplyOptionsNotice = ArchidektRemovalGuard.DescribeRepeat(
+                    ArchidektRemovalGuard.CountRemovals(inputs.Plan!.PublicOperations),
+                    inputs.Remote.Entries.Count),
                 ApplyBlockedNotice = removalNotice is not null && planNotice is not null
                     ? $"{removalNotice} {planNotice}"
                     : removalNotice ?? planNotice,

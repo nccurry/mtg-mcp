@@ -16,7 +16,7 @@ namespace MtgMcp.App.Tests;
 /// Runs pull, edit, push preview, push apply, and pull preview against an offline fake that behaves like Archidekt
 /// where it has caused false differences, and checks the size limit and the apply notice of the previews.
 /// </summary>
-public sealed class ArchidektWorkflowTests
+public sealed partial class ArchidektWorkflowTests
 {
     /// <summary>
     /// Holds the most characters a tool text result may have before Claude Code warns (10,000 tokens); the hard
@@ -325,11 +325,11 @@ public sealed class ArchidektWorkflowTests
         Assert.All(pull.Differences, value => Assert.Equal("remote-changed", value.State));
         Assert.Equal(
             ["Bloodthirsty Blade", "Osteomancer Adept", "Revival // Revenge"],
-            pull.Differences
+            pull.Differences.Cast<ArchidektDifference>()
                 .Select(value => JsonNode.Parse(value.RemoteValue!)!["cardName"]!.GetValue<string>())
                 .Order(StringComparer.Ordinal));
         Assert.All(
-            pull.Differences,
+            pull.Differences.Cast<ArchidektDifference>(),
             value => Assert.Equal("maybeboard", JsonNode.Parse(value.RemoteValue!)!["zone"]!.GetValue<string>()));
 
         ArchidektApplyResult applied = Success(await world.LocalWrites.ApplyPullAsync(
@@ -465,7 +465,7 @@ public sealed class ArchidektWorkflowTests
         ArchidektSyncPreviewView pull = Success(
             await world.Reads.PreviewPullAsync("42", local.DeckId, cancellationToken: token));
 
-        ArchidektDifference row = Assert.Single(
+        ArchidektDifferenceRow row = Assert.Single(
             diff.Differences,
             value => value.Path.StartsWith("/entries/", StringComparison.Ordinal));
         Assert.Equal("local-added", row.State);
@@ -955,7 +955,7 @@ public sealed class ArchidektWorkflowTests
 
         while (true)
         {
-            OperationResult<ArchidektSyncDiffView> result = await world.Reads.DiffAsync(localDeckId, offset, token);
+            OperationResult<ArchidektSyncDiffView> result = await world.Reads.DiffAsync(localDeckId, offset, cancellationToken: token);
             ArchidektSyncDiffView page = Success(result);
             Assert.True(
                 JsonLength(result) < MaximumResultCharacters,

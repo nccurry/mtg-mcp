@@ -242,14 +242,22 @@ public sealed record RemoteNamedSnapshot(
     ArchidektRetrievalEvidence Evidence);
 
 /// <summary>
-/// Describes one exact local, baseline, and remote comparison path.
+/// Names one comparison path and its state; the full and the concise difference rows both start with these two fields.
+/// </summary>
+[JsonDerivedType(typeof(ArchidektDifference))]
+[JsonDerivedType(typeof(ArchidektConciseDifference))]
+public abstract record ArchidektDifferenceRow(string Path, string State);
+
+/// <summary>
+/// Describes one exact local, baseline, and remote comparison path with the whole value of each side.
 /// </summary>
 public sealed record ArchidektDifference(
     string Path,
     string State,
     string? BaselineValue,
     string? LocalValue,
-    string? RemoteValue);
+    string? RemoteValue)
+    : ArchidektDifferenceRow(Path, State);
 
 /// <summary>
 /// Carries the three-way state required for an explicit synchronization decision.
@@ -287,6 +295,18 @@ public sealed record ArchidektSyncPreview(
     int PredictedProviderRequests)
 {
     /// <summary>
+    /// Gets the most provider requests one operation may use, which <see cref="PredictedProviderRequests"/> counts
+    /// against; null when the preview makes no such prediction.
+    /// </summary>
+    public int? ProviderRequestLimit { get; init; }
+
+    /// <summary>
+    /// Gets the options the apply tool must repeat from this preview, such as <c>discardLocalChanges</c>; null when it
+    /// needs none.
+    /// </summary>
+    public string? ApplyOptionsNotice { get; init; }
+
+    /// <summary>
     /// Gets the reason the apply tool would refuse this preview, such as a card with no Archidekt printing or a change
     /// on the other side; null when it would not.
     /// </summary>
@@ -314,6 +334,7 @@ public sealed record ArchidektPushPlan(
     ArchidektRemotePlan Plan,
     IReadOnlyList<ArchidektRemoteOperation> Operations,
     int PredictedProviderRequests,
+    int ProviderRequestLimit,
     ArchidektPushBlock? Block,
     ArchidektPrintingChoices Choices);
 
