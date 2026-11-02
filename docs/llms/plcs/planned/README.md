@@ -26,6 +26,11 @@ is complete.
 [focused-agent-tool-surface](../completed/focused-agent-tool-surface/README.md)
 was completed and released as 0.12.0 on 2026-10-29.
 
+[surface-consistency](surface-consistency/README.md) is drafted: one paging form, one
+`responseFormat` meaning, one preview fingerprint name, flat apply arguments, unified change
+codes, error paths on every refusal, and consistent identifier and confirmation names.
+Breaking, with no backwards compatibility (owner, 2026-11-02).
+
 
 ## Retired Reference Packets
 
