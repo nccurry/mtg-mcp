@@ -97,7 +97,7 @@ Each decision has a recommendation, and the requirements assume it.
     `scryfall_request_snapshot_delete`, and an activation change on `scryfall_card_data_sync`. Phase 0 confirms the
     list and each phrase. The Scryfall `acknowledge*` booleans become these phrases.
   - `confirmRemovals` stays a count: it restates a number the caller saw, not a target.
-  - Local deck and backup deletes keep their revision guard and take no phrase, because backups undo them.
+  - Local deck deletes, backup deletes and restores, and a discarding pull also take a phrase (see Phase 0 Decisions; the original exemption rested on an automatic backup that does not exist).
   - Alternative: keep the booleans. They are cheaper for agents, but they don't bind the target.
 - **D-6, version `0.15.0` (recommended).** Pre-1.0 breaking changes go in a minor release.
   - `docs/versioning.md` gains an "Approved 0.15.0 clean-break exception" section beside the 0.9.0 and 0.12.0 ones.
@@ -242,9 +242,13 @@ accepted D-1 to D-6 rules on 2026-11-02:
   flat.
 - **The activation boolean is on `scryfall_card_data_rollback`**, not on sync. D-5 covers `scryfall_card_data_delete`,
   `scryfall_request_snapshot_delete`, and `scryfall_card_data_rollback`, plus the Archidekt deck, folder, and
-  snapshot deletes and the snapshot restore. `local_deck_backup_delete` has no guard and nothing undoes it, so it
-  takes the phrase `delete backup <backupId>` under D-5's rule. `archidekt_pull_apply` with `discardLocalChanges`
-  keeps no phrase, because the pull takes a local backup first and `local_deck_backup_restore` undoes it.
+  snapshot deletes and the snapshot restore. D-5 had exempted local deletes because "backups undo them", but no
+  backup is taken automatically. On 2026-11-02 the owner chose to apply the rule instead, so these local operations
+  also take a phrase:
+  - `local_deck_delete`: `delete deck <deckId>`
+  - `local_deck_backup_delete`: `delete backup <backupId>`
+  - `local_deck_backup_restore`: `restore backup <backupId>`
+  - `archidekt_pull_apply` when `discardLocalChanges` is true: `discard local changes <localDeckId>`
 - **Spellbook tool arguments are already flat.** Only the adapter's page options and the echoed `request.page` are
   nested; the tool takes `cursor` and `pageSize` and keeps the adapter contract.
 - **Archidekt reads gain a new `pageSize` argument**, since none has one today.
