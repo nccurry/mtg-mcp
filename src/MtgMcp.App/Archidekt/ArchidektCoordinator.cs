@@ -24,6 +24,13 @@ internal sealed class ArchidektSynchronizationContext
         "archidekt_push_preview offers only those.";
 
     /// <summary>
+    /// Tells the caller that the read after the push shows an edit the push did not make, which the baseline keeps as a
+    /// change on Archidekt.
+    /// </summary>
+    internal const string ChangedDuringPushNotice =
+        "Archidekt changed during the push; preview a pull (archidekt_pull_preview) before pushing again.";
+
+    /// <summary>
     /// Provides revisioned local state and transactional baseline updates.
     /// </summary>
     private readonly SqliteDeckStore deckStore;
@@ -771,7 +778,8 @@ internal sealed class ArchidektSynchronizationContext
     /// verification finds a difference, the operations that were applied are still recorded, so a created card is
     /// linked to its Archidekt row and is not added again by the next push. A partial push is read back the same way:
     /// the baseline becomes the Archidekt deck as read, the entries whose operations were applied are linked, and the
-    /// rest stay local changes for the next push.
+    /// rest stay local changes for the next push. When that read shows an edit the push did not make, the baseline takes
+    /// from it only what the push touched, so the edit stays a change on Archidekt, and the notice says to pull first.
     /// </summary>
     internal async Task<OperationResult<ArchidektApplyResult>> ApplyPushAsync(
         ArchidektPushApplyRequest request,
@@ -923,20 +931,41 @@ internal sealed class ArchidektSynchronizationContext
             });
         }
 
+        // An edit someone else made on Archidekt during the push would become a local change in a baseline taken from
+        // the read, and the next push would revert it. The baseline then takes from the read only what the push
+        // touched, so that edit stays a change on Archidekt for a pull.
+        bool changedOutside = applied.Data.Outcome is "partial" or "verification-mismatch" &&
+            ArchidektSyncPlanner.ChangedOutsidePush(
+                current.Data,
+                verified.Data,
+                planned.Data.Plan,
+                applied.Data.Operations);
+        RemoteDeckSnapshot recorded = changedOutside
+            ? ArchidektSyncPlanner.ComposeAfterOutsideEdit(
+                current.Data,
+                verified.Data,
+                planned.Data.Plan,
+                applied.Data.Operations)
+            : verified.Data;
         DeckProviderBinding binding = state.Data.Binding with
         {
-            BaselineFingerprint = verified.Data.RemoteFingerprint,
+            BaselineFingerprint = recorded.RemoteFingerprint,
             LastPushedAtUtc = DateTimeOffset.UtcNow,
         };
         bool partial = applied.Data.Outcome == "partial";
         IReadOnlySet<Guid>? notLanded = partial
             ? EntriesNotLanded(local.Data, target, planned.Data.Plan, applied.Data.Operations)
             : null;
-        // An entry whose zone an earlier version gave is written with the zone the push sent, so the local deck agrees
-        // with the baseline and with Archidekt.
-        IReadOnlyList<DeckEntry> zoneCorrections = [.. ArchidektLocalMapper.CorrectStaleZones(
+        // A verification mismatch that the outside edit alone explains is a finished push: the composed deck holds
+        // everything that was pushed, so the local deck is recorded as synchronized and a pull can take the edit.
+        bool mismatch = applied.Data.Outcome == "verification-mismatch" &&
+            !(changedOutside &&
+                ArchidektSyncPlanner.PlanRemoteVerification(recorded, target).PlannedOperations.Count == 0);
+        // An entry whose zone an earlier version gave is written with the zone its local categories give, so the local
+        // deck agrees with the baseline and with Archidekt whether or not its own operation landed.
+        IReadOnlyList<DeckEntry> zoneCorrections = ArchidektLocalMapper.CorrectStaleZones(
             local.Data,
-            state.Data.Baseline).Where(value => notLanded?.Contains(value.EntryId) != true)];
+            state.Data.Baseline);
         Dictionary<Guid, DeckEntry> corrected = zoneCorrections.ToDictionary(value => value.EntryId);
         DeckDocument synchronized = local.Data with
         {
@@ -945,9 +974,9 @@ internal sealed class ArchidektSynchronizationContext
         (string baseline, IReadOnlyList<Guid>? unlinkedLocalIds) =
             ArchidektLocalMapper.CreatePushBaseline(
                 synchronized,
-                verified.Data,
+                recorded,
                 target,
-                verificationMismatch: applied.Data.Outcome == "verification-mismatch",
+                verificationMismatch: mismatch,
                 notLanded);
         List<DeckChange> baselineChanges = [.. zoneCorrections.Select(value => new UpdateDeckEntryChange(value))];
         baselineChanges.Add(new UpsertDeckProviderBindingChange(binding, baseline));
@@ -961,13 +990,19 @@ internal sealed class ArchidektSynchronizationContext
             return OperationFailure.Forward<DeckDocument, ArchidektApplyResult>(baselineUpdate);
         }
 
+        string? resultNotice = partial ? PartialBaselineNotice : applied.Data.Notice;
+        if (changedOutside)
+        {
+            resultNotice = resultNotice is null ? ChangedDuringPushNotice : $"{resultNotice} {ChangedDuringPushNotice}";
+        }
+
         return new OperationSuccess<ArchidektApplyResult>(applied.Data with
         {
             LocalDeckId = updated.Data.DeckId,
             LocalRevision = updated.Data.Revision,
             FinalRemoteFingerprint = verified.Data.RemoteFingerprint,
             UnlinkedLocalIds = unlinkedLocalIds,
-            Notice = partial ? PartialBaselineNotice : applied.Data.Notice,
+            Notice = resultNotice,
         });
     }
 

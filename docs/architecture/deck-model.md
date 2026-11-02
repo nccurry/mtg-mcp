@@ -132,10 +132,21 @@ Push sends card changes for one deck through `modifyCards/v2`, which takes a lis
   new baseline is that read, and the local entries whose operations were `applied` are linked to their Archidekt rows.
   An entry whose add or update was `not-applied`, `not-sent`, `not-attempted`, or `unknown` keeps no new link
   (`ArchidektLocalMapper.CreatePushBaseline`), so it stays a local change and the next push preview offers only those
-  changes. An `unknown` add that did land shows as a local removal of its Archidekt row plus the local add, so the
-  next push replaces it instead of adding it twice. Stale-zone corrections are written only for entries whose
-  operations landed. When the read fails or the request limit is reached, the baseline stays as it was and the
-  `notice` says so.
+  changes. A new entry that did not land is left out of the linking, so it cannot take the row of a landed entry with
+  the same card. An `unknown` add that did land shows as a local removal of its Archidekt row plus the local add, so
+  the next push replaces it instead of adding it twice. A category whose rename did not land stays linked by its
+  Archidekt ID, so the next push keeps its flags. Every stale zone is corrected from the entry's local categories,
+  whether or not the entry's own operation landed. When the read fails or the request limit is reached, the baseline
+  stays as it was and the `notice` says so.
+- After a `partial` push or a `verification-mismatch`, the read is compared with the read before the push
+  (`ArchidektSyncPlanner.ChangedOutsidePush`). When the deck details, a category, or a card row that no `applied` or
+  `unknown` operation touched changed, or more rows or categories appeared than such operations created, someone else
+  edited the deck during the push. The baseline then records a composed deck (`ComposeAfterOutsideEdit`): what those
+  operations touched or created comes from the read after the push and is linked as usual, and everything else comes
+  from the read before it, with fingerprints computed from that content. The outside edit is then a change on
+  Archidekt: the push preview asks for a pull, the pull takes the edit and keeps the local additions, and the push
+  does not revert it. A mismatch that the outside edit alone explains is recorded as a finished push. The `notice`
+  says to preview a pull before pushing again.
 - A local row that names no printing takes the printing of its linked baseline row in the comparison
   (`ArchidektSyncPlanner.Diff`), so the printing Archidekt chose for a card added by name is not a local change.
 - `ArchidektSyncPlanner.OperationRequests` counts one request per batch or other operation, plus the cards of the
