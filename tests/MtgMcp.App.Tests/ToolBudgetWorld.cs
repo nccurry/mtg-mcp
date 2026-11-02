@@ -87,6 +87,11 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
     internal FakeArchidekt Fake { get; } = new();
 
     /// <summary>
+    /// Gets the record of invalid-input results the server returned without an argument path.
+    /// </summary>
+    internal InvalidInputPathAudit PathAudit { get; } = new();
+
+    /// <summary>
     /// Gets the fixture cards, in order.
     /// </summary>
     internal IReadOnlyList<JsonObject> Cards { get; private set; } = [];
@@ -275,6 +280,7 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
         Pipe serverToClient = new();
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
         builder.Logging.ClearProviders();
+        builder.Services.AddSingleton(PathAudit);
         IMcpServerBuilder mcp = builder.Services
             .AddMcpServer()
             .WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream())
