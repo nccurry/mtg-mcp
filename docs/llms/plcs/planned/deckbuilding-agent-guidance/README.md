@@ -2,8 +2,8 @@
 
 ## Current Work
 
-- Status: Planned. Drafted from observed agent usage and revised after one independent review; not reviewed by
-  the owner yet.
+- Status: Planned. Drafted from observed agent usage, revised after one independent review, and its evidence
+  recounted across every local transcript on 2026-11-02; not reviewed by the owner yet.
 - Owner: mtg-mcp (owner session)
 - Last updated: 2026-11-02, drafted against `main` at `847c965` (`0.14.0`).
 - Implementation authorized: No. Approval of this packet is not permission to start; the owner must say so.
@@ -33,23 +33,46 @@ they do not rank cards, call a card good, or infer intent (see Constraints).
 
 ## Sources
 
-Evidence from Claude Code sessions in this project between 2026-10-31 and 2026-11-02, counted from the local
-transcripts. Some sessions were development or test sessions, not deckbuilding, so the counts are a rough
-baseline, not a controlled sample.
+Evidence from every local agent transcript that called an mtg-mcp tool, as of 2026-11-02:
+
+- 11 Claude Code transcripts (about 8 separate conversations, counting continuations once) and 1 subagent, from
+  2026-10-29 to 2026-11-02. All but one call came from real deckbuilding work; the exception is one card lookup
+  in a development worktree.
+- No Codex session called an mtg-mcp tool.
+- Calls are counted once by call ID. Forked and continued sessions repeat earlier calls in their files, and an
+  earlier draft of this table counted those repeats twice.
+- The 5 `scryfall_tags_search` calls made while drafting this packet are left out.
+
+The sample is small and comes from one user.
 
 | Observation | Count |
 | --- | --- |
-| mtg-mcp tool calls | 361 |
-| `scryfall_search` calls | 37 (about 25 distinct queries) |
-| Searches using `otag:` | 1 query, with 5 guessed slugs |
-| Guessed slugs that are not tags | at least 2: `board-wipe` (the tag is `sweeper`) and `token-generator` (the tag is `repeatable-token-generator`) |
-| `scryfall_tags_search` or `scryfall_installed_cards_by_tag` calls | 0 |
-| Search pages cut short (`truncated`) | 9 |
-| Search follow-ups with a cursor | 1 |
-| `card_list_query` calls | 17, all with a `deck` source; none with the `scryfall-snapshot` source that reads a whole search |
-| Searches ordered by `edhrec` (popularity) | 25 of 37 |
-| Archidekt sync calls (pull and push, preview and apply) | 126 of 361 |
-| Failed or refused sync calls | `archidekt_push_preview` 7, `archidekt_pull_preview` 5, `archidekt_push_apply` 3 |
+| mtg-mcp tool calls | 229 |
+| `scryfall_search` calls | 32 (30 distinct queries) |
+| Searches matching rules text (`o:`) | 22 of 32; 4 of them regular expressions |
+| Searches using `otag:` | 3 of 32, in 3 sessions |
+| Guessed slugs that are not tags | 2 of the 3 tag searches guessed: `board-wipe` (the tag is `sweeper`) and `token-generator` (the tag is `repeatable-token-generator`) |
+| Result of those guesses | Both searches succeeded (623 and 746 cards) with an empty `warnings` list: the wrong tags failed silently inside `or` groups |
+| `scryfall_tags_search` calls | 2, both in one session on 2026-11-02, before its one search with real slugs |
+| `scryfall_installed_cards_by_tag` calls | 0 |
+| First search pages that left cards unread | 11 of the 16 whose counts could be read; 705 cards unread in total |
+| Search follow-ups with a cursor | 2 |
+| `card_list_query` calls | 8, all with a `deck` source; none with the `scryfall-snapshot` source that reads a whole search |
+| Searches ordered by `edhrec` (popularity) | 25 of 32 |
+| Archidekt sync calls (pull and push, preview and apply) | 73 of 229 (32 percent) |
+| Failed sync calls | `archidekt_push_preview` 3, `archidekt_pull_preview` 3, `archidekt_push_apply` 2, `archidekt_snapshot_create` 1 |
+| MCP prompts run | 0 |
+
+Jobs the sessions did, which the skills map to:
+
+| Job | Sessions | What the agent did |
+| --- | --- | --- |
+| Find cards for a theme, role, or upgrade | 7 | Text and regular-expression searches, ordered by popularity |
+| Review a deck against the user's plan | 4 | Read the deck and reasoned about it; `card_list_query` counts in 1 session and draw odds in 2 |
+| Sync edits with Archidekt | 4 | Pull, patch, push loops, with conflicts when the user edited during the work |
+| Draw odds | 2 | `stats_hypergeometric` |
+| Bring in decks from another site | 1 | Fetched Moxfield pages with WebFetch and added cards change by change; `local_deck_import_preview` was not used |
+| Compare a deck with an Archidekt snapshot | 1 | Read both and compared them with a PowerShell script; `card_lists_compare` with `archidekt-snapshot` sources was not used |
 
 Concrete failures:
 
@@ -60,15 +83,19 @@ Concrete failures:
   `sweeper-one-sided` tag the user wanted ("2-3 one-sided board wipes") was never found.
 - Agents wrote text matches such as `o:goad` and `o:landfall` where tags exist.
 
+What works: in the newest session (2026-11-02, "forced combat" deck), the agent called `scryfall_tags_search`
+for `goad` and `attack` first, then searched with four real slugs. It also ran a rules-text search at the same
+time. So agents can follow the tag-first order; the change is to make it the usual path, not a rare one.
+
 What the server already says: the server instructions, the `scryfall_search` and `scryfall_tags_search`
-descriptions, and the `build-from-commander` prompt all mention `otag:`. Agents ignored it. Advice placed in
-descriptions is not enough; the guidance has to be in the skill the agent loads for the job and in the result the
-agent reads next.
+descriptions, and the `build-from-commander` prompt all mention `otag:`. Most agents still did not use tags, and no
+session ran a prompt. Advice placed in descriptions is not enough; the guidance has to be in the skill the agent
+loads for the job and in the result the agent reads next.
 
 ## Scope
 
 - A Claude Code plugin and marketplace manifest in this repository.
-- Four skills: card search, deck review, Archidekt sync, and draw and game math.
+- Five skills: card search, deck review, Archidekt sync, draw and game math, and deck lists (import and compare).
 - A generated oracle-tag reference that the card-search skill ships with.
 - `scryfall_search` and `scryfall_tags_search` input and output changes.
 - Token facts for installed card data, readable by `scryfall_cards_get`, `scryfall_search`, and `card_list_query`.
@@ -109,7 +136,7 @@ Must-have unless marked Should.
 - **REQ-001 Plugin install.** The repository is a Claude Code plugin marketplace with one plugin, `mtg-mcp`, that
   registers the MCP server and ships the skills.
   - Acceptance: on a clean Claude Code profile, `/plugin marketplace add nccurry/mtg-mcp` then
-    `/plugin install mtg-mcp@mtg-mcp` makes the mtg-mcp tools and the four skills available after a restart, with
+    `/plugin install mtg-mcp@mtg-mcp` makes the mtg-mcp tools and the five skills available after a restart, with
     each tool listed once.
   - Validation:
     - A Task command runs `claude plugin validate --strict` on the marketplace and plugin.
@@ -156,8 +183,8 @@ Must-have unless marked Should.
   4. Use `stats_hypergeometric` or `stats_simulate` for "how often do I have X by turn N".
   - It reports numbers and gaps and leaves the judgment to the agent and user.
   - Acceptance: the skill content test finds each section and only registered tool names.
-- **REQ-007 Archidekt-sync skill.** A skill for the pull, edit, push loop that the sources show takes a third of
-  all calls. Sections:
+- **REQ-007 Archidekt-sync skill.** A skill for the pull, edit, push loop, which took 32 percent of all calls in
+  the sources. Sections:
   1. Snapshot first.
   2. Pull before editing, and what to do on a fingerprint conflict.
   3. What to do when the user edits on Archidekt during the work.
@@ -169,6 +196,15 @@ Must-have unless marked Should.
   "odds of N of X by turn T", "how many lands", "on-curve odds", and "sample games with a rule".
   - Acceptance: the skill content test finds an example for each of those four questions, and every tool and
     input field it names exists in that tool's input schema.
+- **REQ-018 Deck-lists skill.** A skill for bringing in, exporting, and comparing deck lists, which the sources
+  show agents did by hand. Sections:
+  1. Bring in a deck from another site: paste or fetch its text export and use `local_deck_import_preview`, then
+     `local_deck_import_create`, instead of adding cards one change at a time.
+  2. Export a deck with `local_deck_export_bundle`.
+  3. Compare a deck with another deck or an Archidekt snapshot using `card_lists_compare`, including the
+     `archidekt-deck` and `archidekt-snapshot` sources.
+  - Acceptance: the skill content test finds each section, and every tool, input field, source kind, and option
+    value it names exists in that tool's input schema.
 
 ### Tool input and output
 
@@ -228,14 +264,18 @@ Must-have unless marked Should.
 - **REQ-016 Usage report.** A Task command reads Claude Code transcript files from a path the user gives and prints
   counts per tool.
   - It counts tools named `mcp__mtg-mcp__*` and plugin tools named `mcp__plugin_mtg-mcp_mtg-mcp__*`.
+  - It reads subagent transcripts in nested folders, and counts each call once by its call ID, because forked and
+    continued sessions repeat earlier calls.
   - It reports the rows of the Sources table. The "guessed slugs that are not tags" row is reported only when a
     slug list is given, such as `oracle-tag-slugs.txt`.
   - It prints counts only. It copies no transcript text into the output or the repository.
-  - Acceptance: on fixture transcripts with both tool-name forms it prints the expected counts; on real
+  - Acceptance: on fixture transcripts with both tool-name forms, a subagent file, and a repeated call ID, it
+    prints the expected counts; on real
     transcripts it never prints query text, deck names, or card names.
   - The Sources table is the baseline. After release the owner reruns the report and records the results here as
     observations, not as a release gate.
-- **REQ-017 Skill content test.** One test covers REQ-003 and REQ-005 to REQ-008. For each skill it checks:
+- **REQ-017 Skill content test.** One test covers REQ-003, REQ-005 to REQ-008, and REQ-018. For each skill it
+  checks:
   - the file exists with valid front matter;
   - the listed sections are present;
   - every tool name is registered, and every named input field and option value is in that tool's input schema;
@@ -331,6 +371,7 @@ plugins/mtg-mcp/
     deck-review/SKILL.md
     archidekt-sync/SKILL.md
     deck-math/SKILL.md
+    deck-lists/SKILL.md
 ```
 
 Project boundaries:
@@ -358,7 +399,7 @@ Tests:
 | 1 | Tag normalization, tag check and hints, tag search matching (REQ-009, REQ-010). | Unit tests pass; `task lint`. |
 | 2 | Coverage, tag counts, compact rows (REQ-012 to REQ-014). | Unit and surface tests pass. |
 | 3 | Token facts (REQ-011). | Fixture tests pass; measured cost within the phase 0 budget. |
-| 4 | Plugin, skills, tag reference and slug list, prompts, instructions, and tests (REQ-001 to REQ-008, REQ-015, REQ-017). | Skill content, manifest, and validate checks pass. |
+| 4 | Plugin, skills, tag reference and slug list, prompts, instructions, and tests (REQ-001 to REQ-008, REQ-015, REQ-017, REQ-018). | Skill content, manifest, and validate checks pass. |
 | 5 | README, CHANGELOG, and `docs/toolsets.md`; release workflow sets plugin versions; `task ci`; full audit; release; install through the plugin. | REQ-001 and REQ-002 install check recorded; release installed. |
 
 Phases 1 to 3 are independent of each other. Phase 4 writes skill text against the shapes from phases 1 to 3, so
@@ -373,9 +414,11 @@ owner, not added to scope.
   - Require `dotnet tool install` first and run `mtg-mcp`, which matches what users register today.
   - The package targets `net11.0` while `global.json` pins a preview SDK, so either option needs a .NET 11 runtime.
     Phase 0 checks what a user without the repository must install.
-- **OQ-2, Scryfall's unknown-tag behavior (sets the REQ-009 failure field).** A search that matches nothing returns
-  Scryfall's 404, which the server reports as `scryfall-not-found`. Whether Scryfall instead returns 400 or a
-  warning for an unknown `otag:` is unverified. Phase 0 records it from one live query.
+- **OQ-2, Scryfall's unknown-tag behavior (sets the REQ-009 failure field).** Partly answered by the sources: an
+  unknown tag inside an `or` group gives a normal result with an empty `warnings` list, so the success path needs
+  the hint most. A search that matches nothing returns Scryfall's 404, which the server reports as
+  `scryfall-not-found`. What Scryfall returns for an unknown tag on its own (404, 400, or a warning) is unverified.
+  Phase 0 records it from one live query.
 - **OQ-3, other clients.** Codex and other clients may load `SKILL.md` folders; whether to package for them is
   deferred until the Claude Code plugin is in use.
 - **OQ-4, skill evaluation.** The usage report measures behavior after release. A scripted check that runs an
@@ -400,6 +443,6 @@ owner, not added to scope.
 
 | Check | Date | Result |
 | --- | --- | --- |
-| Baseline usage counts (Sources) | 2026-11-02 | Recorded above from local transcripts; method: count `tool_use` and `tool_result` blocks for `mcp__mtg-mcp__*` tools. |
+| Baseline usage counts (Sources) | 2026-11-02 | Recounted across 1,016 Claude transcript files (including subagent folders) and 2,722 Codex session files. Method: parse each `tool_use` block for `mcp__mtg-mcp__*` tools, count each call ID once, and match its `tool_result`. The first draft's counts (361 calls) double-counted repeated calls and were replaced. |
 | Tag slugs checked with `scryfall_tags_search` | 2026-11-02 | `sweeper`, `sweeper-one-sided`, `repeatable-token-generator`, `repeatable-creature-tokens`, `card-advantage` exist; `board-wipe` returns no tag; no tag for "creates a flying token". |
 | Independent PLC review | 2026-11-02 | 17 findings, all accepted and fixed in this revision. Plugin layout, duplicate-server rule, plugin tool naming, and `claude plugin validate` checked against the Claude Code docs by the reviewer. |
