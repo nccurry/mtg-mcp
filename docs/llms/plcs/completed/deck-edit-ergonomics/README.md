@@ -2,39 +2,27 @@
 
 ## Current Work
 
-- Status: Implemented and audited on the integration branch; not yet merged into `main` or released.
+- Status: Complete
 - Owner: mtg-mcp (owner session)
-- Last updated: 2026-11-01, branch `deck-edit-ergonomics/integration` at `2e5053c` (latest `main`, `5c70a90`,
-  merged in)
+- Last updated: 2026-11-02, `main` at `847c965` (release `0.14.0`)
 - Implementation authorized: Yes (owner, 2026-11-01: "Start implementing")
-- Selected work and endpoint: phases 0 to 6, merged into `main`, audited, released in the next version, and
-  installed.
-- State:
-  - All 18 requirements are implemented, with evidence below. Phases 0 to 6 and every audit repair are merged into
-    integration.
-  - The full audit is closed after three passes (see Audit Ledger). No P0, P1, or P2 is open; one P3 is left as
+- Selected work and endpoint: phases 0 to 6, merged into `main`, audited, released, and installed.
+- State: delivered.
+  - Merged into `main` in `34c8e42`. Released as `0.14.0` (`847c965`) through the release workflow on its first
+    run: NuGet (trusted publishing), the GitHub Release, and the MCP Registry, whose latest version is `0.14.0`.
+  - Before tagging, `task release:verify`, `task test:integration`, and `task test:e2e` passed on the release
+    commit: 2,345 tests, 77 smoke tests, every assembly over 90 percent line coverage, and the package install
+    smoke test.
+  - Installed globally as `0.14.0`. A stdio probe answered `io.github.nccurry/mtg-mcp 0.14.0`, listed 86 tools
+    including `patch-entries`, and every output schema is an object.
+  - The full audit closed after three passes (see Audit Ledger). One P3 and two narrow limits are recorded as
     known.
-  - `task ci` passed on `c09c0c2`: 2,305 tests, 77 smoke tests, and every assembly over 90 percent line coverage.
-    `task test:integration` and `task test:e2e` also passed there.
-  - `main` was merged in with five conflicts resolved: line wraps against `main`'s new recorded-fixture tests, the
-    folder `subfolders` field, the CHANGELOG, and the in-progress index. `task ci`, `task test:integration`, and
-    `task test:e2e` are running on `2e5053c`.
-- Decisions: the owner accepted D-2, D-3, and D-5 and approved the D-7 live probe on 2026-11-01. Deviations decided
-  during the work are in the Evidence table and the Audit Ledger: the draft `zoneCategories` defaults to `leave`;
-  `zones` accepts any code; the batch fallback continues past a refused card.
-- Next action:
-  1. When the checks on `2e5053c` pass, merge integration into `main`.
-  2. Ask the owner whether to release. Additive features suggest a minor version, `0.14.0`, per
-     `docs/versioning.md`.
-  3. Release, install, and move this packet to `completed/`.
-- Blocker: none. Releasing and pushing need the owner's go-ahead.
+- Decisions: the owner accepted D-2, D-3, and D-5, approved the D-7 live probe, and approved the `0.14.0` release.
+  Deviations decided during the work are in the Evidence table and the Audit Ledger: the draft `zoneCategories`
+  defaults to `leave`; `zones` accepts any code; the batch fallback continues past a refused card.
+- Next action: none.
 - Open for the owner, not blocking: the eight breaking consistency findings (below).
-- Where the work lives:
-  - The only worktree left is `../mtg-mcp-wt/deck-edit-ergonomics/integration`.
-  - The scrubbed D-7 probe responses are in `../mtg-mcp-wt/deck-edit-ergonomics/_output/archidekt-probe-2026-11-01/`.
-  - Nothing is pushed.
-- Resume check: `git log --oneline -1 deck-edit-ergonomics/integration` shows `2e5053c` or a later plan commit;
-  `git branch --list "deck-edit-ergonomics/*"` lists only `integration`.
+- Resume check: `git log --oneline origin/main` contains `847c965`.
 
 ## Sources
 
