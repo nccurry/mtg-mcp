@@ -225,8 +225,8 @@ public static class ArchidektLocalMapper
     /// fields no row shows only for the linked rows, so a pull can still keep the local additions.</param>
     /// <returns>
     /// The baseline JSON and the local entry IDs the push could not link to a provider row, or null when all linked.
-    /// The entries in <paramref name="notLanded"/> are not listed. A category with no verified match stores no link,
-    /// and the next push plans it by name.
+    /// The entries in <paramref name="notLanded"/> are not listed. A category with no verified match by name or by its
+    /// own provider ID stores no link, and the next push plans it by name.
     /// </returns>
     public static (string Json, IReadOnlyList<Guid>? UnlinkedLocalIds) CreatePushBaseline(
         DeckDocument local,
@@ -243,7 +243,14 @@ public static class ArchidektLocalMapper
             throw new ArgumentException("The pushed target must be built from the local deck.", nameof(target));
         }
 
-        ArchidektRowLinks links = ArchidektSyncPlanner.LinkRows(verified, target);
+        // A new row that did not land is left out of the linking, so it cannot take the Archidekt row of a landed row
+        // with the same content or count as its rival.
+        bool[] skipped = [.. local.Entries.Select((value, index) =>
+            notLanded?.Contains(value.EntryId) == true &&
+            string.IsNullOrWhiteSpace(target.Entries[index].ProviderRelationId))];
+        ArchidektRowLinks links = ArchidektSyncPlanner.LinkRows(
+            verified,
+            target with { Entries = [.. target.Entries.Where((_, index) => !skipped[index])] });
         Dictionary<Guid, string> entryRelations = [];
         foreach (RemoteDeckEntry value in verified.Entries)
         {
@@ -263,16 +270,16 @@ public static class ArchidektLocalMapper
         }
 
         List<Guid> unlinked = [];
+        int linkIndex = 0;
         for (int index = 0; index < local.Entries.Count; index++)
         {
             Guid entryId = local.Entries[index].EntryId;
-            if (notLanded?.Contains(entryId) == true &&
-                string.IsNullOrWhiteSpace(target.Entries[index].ProviderRelationId))
+            if (skipped[index])
             {
                 continue;
             }
 
-            if (links.EntryRelationIds[index] is { } relationId)
+            if (links.EntryRelationIds[linkIndex++] is { } relationId)
             {
                 entryRelations[entryId] = relationId;
             }

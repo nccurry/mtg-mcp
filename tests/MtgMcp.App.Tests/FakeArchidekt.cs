@@ -111,6 +111,13 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     internal Action<string>? BeforeRead { get; set; }
 
     /// <summary>
+    /// Gets or sets a check that runs before the fake applies a write, with the method and path and the request body;
+    /// a status it returns is answered instead, and the write is not applied. A test uses it to make one operation of
+    /// a push fail.
+    /// </summary>
+    internal Func<string, string, HttpStatusCode?>? FailWrite { get; set; }
+
+    /// <summary>
     /// Gets the methods and paths of every request, in order.
     /// </summary>
     internal List<string> Requests { get; } = [];
@@ -215,6 +222,14 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     }
 
     /// <summary>
+    /// Gets whether the category of a name counts toward the deck, as stored.
+    /// </summary>
+    internal bool IsIncludedInDeck(string categoryName)
+    {
+        return categories.Single(value => value.Name == categoryName).IncludedInDeck;
+    }
+
+    /// <summary>
     /// Gets the quantity of a card by name across the deck, or zero when it is not in the deck.
     /// </summary>
     internal int QuantityOf(string cardName)
@@ -267,6 +282,14 @@ internal sealed class FakeArchidekt : HttpMessageHandler
             }
 
             return Task.FromResult(Read(path));
+        }
+
+        if (FailWrite?.Invoke($"{request.Method.Method} {path}", body) is { } failure)
+        {
+            return Task.FromResult(new HttpResponseMessage(failure)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+            });
         }
 
         if (path == $"api/decks/{DeckId}/modifyCards/v2/" && RefusesAny(body))
@@ -442,7 +465,10 @@ internal sealed class FakeArchidekt : HttpMessageHandler
             categories.Add(new FakeCategory(
                 nextCategoryId++,
                 created["name"]!.GetValue<string>(),
-                created["includedInDeck"]?.GetValue<bool>() ?? true));
+                created["includedInDeck"]?.GetValue<bool>() ?? true)
+            {
+                IncludedInPrice = created["includedInPrice"]?.GetValue<bool>() ?? true,
+            });
         }
         else if (path.StartsWith("api/decks/category/", StringComparison.Ordinal))
         {
@@ -459,6 +485,7 @@ internal sealed class FakeArchidekt : HttpMessageHandler
                 JsonNode updated = JsonNode.Parse(body)!;
                 existing.Name = updated["name"]!.GetValue<string>();
                 existing.IncludedInDeck = updated["includedInDeck"]?.GetValue<bool>() ?? true;
+                existing.IncludedInPrice = updated["includedInPrice"]?.GetValue<bool>() ?? true;
             }
         }
         else if (method == HttpMethod.Patch && path == $"api/decks/{DeckId}/modifyCards/v2/")
@@ -517,7 +544,7 @@ internal sealed class FakeArchidekt : HttpMessageHandler
                 ["name"] = category.Name,
                 ["includedInDeck"] = category.IncludedInDeck,
                 ["isPremier"] = false,
-                ["includedInPrice"] = true,
+                ["includedInPrice"] = category.IncludedInPrice,
                 ["sortOrder"] = (index * 10) + read,
             });
         }
@@ -715,6 +742,9 @@ internal sealed class FakeArchidekt : HttpMessageHandler
 
         /// <summary>Gets or sets whether cards in the category count in the deck.</summary>
         internal bool IncludedInDeck { get; set; } = includedInDeck;
+
+        /// <summary>Gets or sets whether cards in the category count in the deck price.</summary>
+        internal bool IncludedInPrice { get; set; } = true;
     }
 
     /// <summary>

@@ -919,7 +919,116 @@ public static class ArchidektSyncPlanner
             categoryIds.Add(loose.Length == 1 ? verifiedCategories[loose[0]] : null);
         }
 
+        // A category whose rename did not land keeps its own provider ID while Archidekt still has that category and
+        // no other target category took it by name, so its flags are not lost.
+        HashSet<string> verifiedIds = new(verifiedCategories.Values, StringComparer.Ordinal);
+        for (int index = 0; index < categoryIds.Count; index++)
+        {
+            string providerId = target.Categories[index].ProviderCategoryId;
+            if (categoryIds[index] is null && verifiedIds.Contains(providerId) && !categoryIds.Contains(providerId))
+            {
+                categoryIds[index] = providerId;
+            }
+        }
+
         return new ArchidektRowLinks(entryRelationIds, categoryIds);
+    }
+
+    /// <summary>
+    /// Tells whether Archidekt changed during a push in a way the push did not: the deck metadata, a category, or a
+    /// card row that no <c>applied</c> or <c>unknown</c> operation touched differs between the reads before and after
+    /// the push, or more categories or rows appeared than such operations created. A row in a category such an
+    /// operation changed is not compared, because the category change can reach the row.
+    /// </summary>
+    public static bool ChangedOutsidePush(
+        RemoteDeckSnapshot before,
+        RemoteDeckSnapshot after,
+        ArchidektRemotePlan plan,
+        IReadOnlyList<ArchidektOperationStatus> statuses)
+    {
+        ArgumentNullException.ThrowIfNull(before);
+        ArgumentNullException.ThrowIfNull(after);
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(statuses);
+        HashSet<int> sentSequences = [.. statuses
+            .Where(value => value.Status is "applied" or "unknown")
+            .Select(value => value.Sequence)];
+        List<ArchidektPlannedOperation> sent = [.. plan.PlannedOperations
+            .Where(value => sentSequences.Contains(value.Public.Sequence))];
+        if (!sent.Exists(value => value.Public.Kind == "metadata-update") && !MetadataEqual(before, after))
+        {
+            return true;
+        }
+
+        HashSet<string> touchedCategories = new(StringComparer.Ordinal);
+        HashSet<string> touchedCategoryNames = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> touchedRows = new(StringComparer.Ordinal);
+        foreach (ArchidektPlannedOperation operation in sent)
+        {
+            if (operation.CurrentCategory is { } category)
+            {
+                touchedCategories.Add(category.ProviderCategoryId);
+                touchedCategoryNames.Add(category.Name);
+            }
+
+            if (operation.CurrentEntry is { } entry)
+            {
+                touchedRows.Add(entry.ProviderRelationId);
+            }
+        }
+
+        Dictionary<string, RemoteDeckCategory> afterCategories = ById(after.Categories, value => value.ProviderCategoryId);
+        foreach (RemoteDeckCategory category in before.Categories)
+        {
+            if (!touchedCategories.Contains(category.ProviderCategoryId) &&
+                (!afterCategories.TryGetValue(category.ProviderCategoryId, out RemoteDeckCategory? now) ||
+                    !CategoryEqual(category, now)))
+            {
+                return true;
+            }
+        }
+
+        Dictionary<string, RemoteDeckCategory> beforeCategories = ById(before.Categories, value => value.ProviderCategoryId);
+        if (after.Categories.Count(value => !beforeCategories.ContainsKey(value.ProviderCategoryId)) >
+            sent.Count(value => value.Public.Kind == "category-create"))
+        {
+            return true;
+        }
+
+        Dictionary<string, RemoteDeckEntry> afterEntries = ById(after.Entries, value => value.ProviderRelationId);
+        string[] categoryNames = [.. after.Categories.Select(value => value.Name)];
+        foreach (RemoteDeckEntry entry in before.Entries)
+        {
+            if (touchedRows.Contains(entry.ProviderRelationId) ||
+                entry.CategoryNames.Any(touchedCategoryNames.Contains))
+            {
+                continue;
+            }
+
+            if (!afterEntries.TryGetValue(entry.ProviderRelationId, out RemoteDeckEntry? now) ||
+                !EntryEqual(now, entry, lenientNames: true, categoryNames))
+            {
+                return true;
+            }
+        }
+
+        Dictionary<string, RemoteDeckEntry> beforeEntries = ById(before.Entries, value => value.ProviderRelationId);
+        return after.Entries.Count(value => !beforeEntries.ContainsKey(value.ProviderRelationId)) >
+            sent.Count(value => value.Public.Kind == EntryAddKind);
+    }
+
+    /// <summary>
+    /// Indexes provider rows by their provider ID; the first row wins when a read repeats one.
+    /// </summary>
+    private static Dictionary<string, TRow> ById<TRow>(IEnumerable<TRow> rows, Func<TRow, string> id)
+    {
+        Dictionary<string, TRow> index = new(StringComparer.Ordinal);
+        foreach (TRow row in rows)
+        {
+            index.TryAdd(id(row), row);
+        }
+
+        return index;
     }
 
     /// <summary>
