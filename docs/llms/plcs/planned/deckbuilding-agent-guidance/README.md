@@ -8,7 +8,8 @@
 - Last updated: 2026-11-02, drafted against `main` at `847c965` (`0.14.0`).
 - Implementation authorized: No. Approval of this packet is not permission to start; the owner must say so.
 - Selected work and endpoint: phases 0 to 5, merged into `main`, released, and installed through the new plugin.
-- Next action: owner review of decisions D-1 to D-7 and open questions OQ-1 to OQ-4.
+- Next action: owner review of decisions D-1 to D-7, the skill authoring rules S-1 to S-15, and open questions
+  OQ-1 to OQ-5.
 - Blocker: none.
 - Where the work lives: branch `docs/deckbuilding-agent-guidance-plc` in
   `../mtg-mcp-wt/deckbuilding-agent-guidance/plc`. Nothing is pushed.
@@ -279,7 +280,52 @@ Must-have unless marked Should.
   - the file exists with valid front matter;
   - the listed sections are present;
   - every tool name is registered, and every named input field and option value is in that tool's input schema;
-  - every tag slug is in the committed slug list.
+  - every tag slug is in the committed slug list;
+  - the mechanical authoring rules in "Skill Authoring Rules" (S-1 to S-4, S-7, S-8).
+- **REQ-019 Skill evaluations.** Each skill has at least three evaluation scenarios, written before its text, in
+  `docs/llms/plcs/planned/deckbuilding-agent-guidance/evals/` (moved with the packet).
+  - Scenarios come from the jobs in Sources. Each gives the user request, the deck or fixture it uses, and the
+    expected behavior as checkable statements, such as "calls `scryfall_tags_search` before the first
+    `scryfall_search`" or "reads every card of the saved search".
+  - Each skill also lists at least three requests that should load it and three that should not.
+  - Method, following Anthropic's evaluation-first guidance:
+    1. Run each scenario without the plugin to record a baseline.
+    2. Run it again with the plugin, on Haiku, Sonnet, and Opus.
+    3. Record pass or fail per statement, and whether the right skill loaded.
+  - Runs are manual and cost model calls, so they are not part of `task ci`. They run once before release in phase
+    5, and again after any skill text change.
+  - Acceptance: every scenario passes on Sonnet and Opus with the plugin. Haiku failures are recorded, and fixed
+    when the fix does not lengthen the skill past S-3. Every "should load" request loads its skill, and no
+    "should not load" request does.
+
+## Skill Authoring Rules
+
+These rules come from Anthropic's and OpenAI's published skill guidance, read on 2026-11-02:
+
+- [Anthropic: Skill authoring best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)
+- [Claude Code: Skills](https://code.claude.com/docs/en/skills)
+- [OpenAI: Build skills](https://learn.chatgpt.com/docs/build-skills) (formerly `developers.openai.com/codex/skills`)
+
+Where the two differ, the stricter rule applies, so one skill folder works in both. REQ-017 checks the rules marked
+"tested"; review checks the rest.
+
+| ID | Rule | Source | Check |
+| --- | --- | --- | --- |
+| S-1 | Front matter has `name` and `description`. `name` is at most 64 characters, uses only lowercase letters, digits, and hyphens, and contains neither `anthropic` nor `claude`. `description` is non-empty, at most 1,024 characters, and has no XML tags. | Anthropic | Tested |
+| S-2 | The description is in the third person and says what the skill does and when to use it, with the main use case and trigger words first. It also says when not to use it. Claude Code cuts the listing at 1,536 characters, and Codex shortens descriptions when many skills are installed, so the start must carry the meaning. | Anthropic, Claude Code, OpenAI | Tested for length; review for wording |
+| S-3 | The `SKILL.md` body stays under 500 lines. Detail moves to reference files. | Anthropic, Claude Code | Tested |
+| S-4 | Reference files are linked directly from `SKILL.md`, never from another reference file. A reference file over 100 lines starts with a table of contents. The tag reference also gives search patterns in `SKILL.md`, because it is long. | Anthropic, OpenAI | Tested |
+| S-5 | One skill per job. Each fact lives in one place: `SKILL.md` or a reference file, not both. The skill folder holds only files the skill uses, with no README or CHANGELOG. | OpenAI | Review |
+| S-6 | Add only what the model does not already know. Skip explaining Magic rules or what a Scryfall search is; explain this server's tools, fields, tag names, and limits. | Anthropic | Review |
+| S-7 | Tools are named with the server prefix, as `mtg-mcp:scryfall_search`, so the agent finds the right tool when several servers are loaded. | Anthropic | Tested |
+| S-8 | Paths use forward slashes. No dates or "new in" notes in skill text; the only date is the tag reference's data stamp. | Anthropic | Tested |
+| S-9 | Freedom matches risk. Archidekt sync is low freedom: an exact order with a copyable checklist, and the preview, check, apply pattern. Card search is medium: a default query shape with a fallback. Deck review is high: steps to follow, with the judgment left to the agent. | Anthropic | Review |
+| S-10 | One default per step, with at most one fallback, never a menu of options. For example: "Look up tag slugs with `mtg-mcp:scryfall_tags_search`; match rules text only when no tag fits." | Anthropic | Review |
+| S-11 | One term per idea, used the same way in every skill: "oracle tag", "saved search", "card data", "deck entry". | Anthropic | Review |
+| S-12 | Steps are imperative, with explicit inputs and outputs. Examples are concrete input and result pairs. | OpenAI, Anthropic | Review |
+| S-13 | Instructions, not scripts. These skills call MCP tools, and no step needs a bundled script. | OpenAI | Review |
+| S-14 | Every skill can be loaded by the model: none sets `disable-model-invocation`. Writes are already guarded by operation mode and Claude Code's approval of destructive tools. | Claude Code | Review |
+| S-15 | Write evaluations before the skill text, measure a baseline without the skill, and test on every model the skill will run on (REQ-019). | Anthropic, OpenAI | REQ-019 |
 
 ## Public Surface Changes
 
@@ -352,9 +398,9 @@ in `limits`.
 - **Coverage and tag counts use the saved search.** Every `scryfall_search` already saves its full result as a
   request snapshot with members. Coverage comes from the snapshot header. Tag counts read each member's Oracle ID
   and join to installed tag assignments, capped as REQ-013 says; phase 0 measures the cost alongside D-5.
-- **Skills' content rules.** Each skill: a one-paragraph overview, the steps with tool names, worked examples, the
-  facts to report, and the limits of each fact. No card is called good or bad. Example decks and cards are
-  illustrations of a query, not suggestions.
+- **Skills' content rules.** Each skill has a one-paragraph overview, the steps with tool names, worked examples,
+  the facts to report, and the limits of each fact. It follows the authoring rules S-1 to S-15. No card is called
+  good or bad. Example decks and cards are illustrations of a query, not suggestions.
 
 Plugin layout (paths from the Claude Code plugin reference):
 
@@ -399,8 +445,8 @@ Tests:
 | 1 | Tag normalization, tag check and hints, tag search matching (REQ-009, REQ-010). | Unit tests pass; `task lint`. |
 | 2 | Coverage, tag counts, compact rows (REQ-012 to REQ-014). | Unit and surface tests pass. |
 | 3 | Token facts (REQ-011). | Fixture tests pass; measured cost within the phase 0 budget. |
-| 4 | Plugin, skills, tag reference and slug list, prompts, instructions, and tests (REQ-001 to REQ-008, REQ-015, REQ-017, REQ-018). | Skill content, manifest, and validate checks pass. |
-| 5 | README, CHANGELOG, and `docs/toolsets.md`; release workflow sets plugin versions; `task ci`; full audit; release; install through the plugin. | REQ-001 and REQ-002 install check recorded; release installed. |
+| 4 | Write the REQ-019 scenarios and run the baselines first. Then build the plugin, skills, tag reference and slug list, prompts, instructions, and tests (REQ-001 to REQ-008, REQ-015, REQ-017, REQ-018). | Skill content, manifest, and validate checks pass; baselines recorded. |
+| 5 | README, CHANGELOG, and `docs/toolsets.md`; release workflow sets plugin versions; `task ci`; REQ-019 runs with the plugin; full audit; release; install through the plugin. | REQ-001, REQ-002, and REQ-019 results recorded; release installed. |
 
 Phases 1 to 3 are independent of each other. Phase 4 writes skill text against the shapes from phases 1 to 3, so
 it starts after them. If phase 0 finds sync failures that `0.14.0` did not fix, they are listed here for the
@@ -419,12 +465,19 @@ owner, not added to scope.
   the hint most. A search that matches nothing returns Scryfall's 404, which the server reports as
   `scryfall-not-found`. What Scryfall returns for an unknown tag on its own (404, 400, or a warning) is unverified.
   Phase 0 records it from one live query.
-- **OQ-3, other clients.** Codex and other clients may load `SKILL.md` folders; whether to package for them is
-  deferred until the Claude Code plugin is in use.
-- **OQ-4, skill evaluation.** The usage report measures behavior after release. A scripted check that runs an
-  agent on fixed questions would catch regressions earlier, but costs model calls on every run; deferred unless the
-  owner wants it.
+- **OQ-3, other clients.** OpenAI's guidance says plugins carry skills and MCP configuration to Codex and
+  ChatGPT, and that Codex finds repository skills in `.agents/skills`. The skill text follows the shared rules
+  (S-1 to S-15), so a Codex plugin can reuse the same folders. Building that plugin is deferred until the Claude
+  Code plugin is in use. One difference: Codex declares MCP tool dependencies in `agents/openai.yaml`.
+- **OQ-4, automated evaluation.** REQ-019 evaluations are run by hand. Running them automatically on every change
+  would catch regressions sooner, but costs model calls on every run. Deferred unless the owner wants it.
+- **OQ-5, tool prefix in skill text.** S-7 names tools as `mtg-mcp:<tool>`. A plugin install exposes them as
+  `mcp__plugin_mtg-mcp_mtg-mcp__<tool>`, and a hand-registered server as `mcp__mtg-mcp__<tool>`. Phase 4 checks
+  that agents resolve the short form in both setups through the REQ-019 runs. If they do not, the skills switch to
+  a form that does, and the REQ-017 check is updated to match.
 - Risk: skill text drifts from the tool surface. REQ-005 and REQ-017 fail on drift.
+- Risk: a skill that tests well in the content checks still does not change behavior. REQ-019 compares against
+  a baseline, and the usage report (REQ-016) checks real sessions after release.
 - Risk: the plugin version and server version drift. The plugin pins the server version, and the release workflow
   sets both from `server.json`.
 - Risk: installed tags lag Scryfall's live tags. The hint says "not in installed tag data from <date>".
