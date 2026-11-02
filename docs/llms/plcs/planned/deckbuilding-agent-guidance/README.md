@@ -11,8 +11,8 @@
 - Next action: owner review of decisions D-1 to D-7, the skill authoring rules S-1 to S-15, and open questions
   OQ-1 to OQ-5.
 - Blocker: none.
-- Where the work lives: branch `docs/deckbuilding-agent-guidance-plc` in
-  `../mtg-mcp-wt/deckbuilding-agent-guidance/plc`. Nothing is pushed.
+- Where the work lives: this packet is merged into local `main`; no implementation branch or worktree exists yet.
+  Nothing is pushed.
 
 ## Outcome
 
