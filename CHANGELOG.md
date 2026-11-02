@@ -1,11 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.14.0 - 2026-11-01
 
 Four agent sessions reported real Archidekt deck work on `0.13.0` and `0.13.1`: finding entries meant paging through
 the whole deck, one zone move took three changes (one copying eleven fields), zones and Archidekt categories had to be
 kept in step by hand, an 18-edit push preview was about 25 KB, and a push of about 40 operations hit the request
-limit. This release adds the options that fix those. The release step sets the version number.
+limit. This release adds the options that fix those.
 
 Upgrade note: An MCP client keeps the mtg-mcp process it started. After upgrading, restart or reconnect mtg-mcp in the
 client (in Claude Code, /mcp or a new session) before relying on new behavior.
