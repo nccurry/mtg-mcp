@@ -326,17 +326,17 @@ Phase 0 (2026-11-01, integration at `9b1279c`):
 | REQ-005 | implemented (phase 3a, merged `e32c001`) | `f8cab78`: an 18-edit push on a 347-entry fake deck is 36,996 characters full (cut at 17 of 19 rows) and 6,923 characters concise (all 19 rows), with the same fingerprint and apply availability. `responseFormat` also accepts `standard` as an alias of `full`, the shared rule for this parameter. |
 | REQ-006 | implemented (phases 3a and 3b) | `f8cab78`: `pull-discard-option-mismatch` with no second provider read; previews return `applyOptions`; the `push-removals-unconfirmed` regression test. `2a6d92b`: restore and every delete tool say "Pass confirmation exactly as: <phrase>". |
 | REQ-007 | implemented (phase 3b, merged `12bfbb9`) | `b02a011`: `ArchidektZoneContradiction` carries the local entry ID; the notice groups entries by fix and gives both `patch-entries` changes (`leave` with the zone the categories give, or `match` with the current zone; `match` creates a missing zone category). `PushPreview_AfterAZoneOnlyEdit_NamesBothFixesAndEitherFixClearsIt` covers a deck with no Sideboard category. Known gap for the audit: a contradiction from a primary category that is not included in the deck, with local zone `main`, is not fixed by `match`. |
-| REQ-008 | planned | |
-| REQ-009 | planned | |
+| REQ-008 | implemented (phase 6, merged `c239f8a`; docs `82b593d` and later) | `d1ca9fd`, `3d7d469`, `82b593d`: descriptions point to `patch-entries` and name the filters; README, CHANGELOG `## Unreleased`, `docs/output-control.md`, and `docs/architecture/` describe what landed. `ToolFactsDescriptionTests` and the 4,096-character test pass. |
+| REQ-009 | implemented (phase 6) | `e49b5b2`: `DeckEditWorkflowScenarioTests` run in-process against a fake Archidekt (the E2E project starts the server as a child process with no fake HTTP). Workflow (a) takes 4 calls and (b) takes 3; each asserts the exact tool list (no category or Scryfall lookup) and the pushed Sideboard categories. It uses a 300-entry deck. |
 | REQ-010 | implemented with a recorded deviation (phase 2) | `ca6505e`: `zoneCategories` is required on `patch-entries` when it sets a zone. On drafts it is optional and defaults to `leave`, because a draft zone defaults to `main` and an explicit zone cannot be told apart from the default without breaking existing `add-entry`, `local_deck_create`, and Archidekt pull callers. The 13-entry `match` move ends with one zone category on each entry; a missing zone category is created. |
 | REQ-011 | implemented (phase 1) | `8ec45c9`, `c307cce`: `entryId` rows for deck and deck-backup sources; snapshot and Archidekt sources refuse it as `invalid-field`. |
 | REQ-012 | implemented (phase 4, merged `5353e31`) | `d30adcb`: messages read "The value at 'changes[3].entry.sortOrder' must be an integer." and "... must be a UUID", including nullable targets; the 11 `ChangeListArgumentErrorTests` cover a bool, text, a list, and an object. No registered tool binds an enum argument, so the enum wording has no public-surface test. A string `"2"` for `sortOrder` stays accepted. |
 | REQ-013 | implemented (phase 3a) | `f8cab78`: an over-limit push preview and apply name the limit, the predicted count, how many operations fit, and the split advice. The preview shows `providerRequestLimit`, and `predictedProviderRequests` now includes the retry reserve, the figure checked against the limit; the CHANGELOG must name this changed meaning. |
 | REQ-014 | implemented (phase 3b) | `b02a011`: consecutive card adds go in batches of up to 25 (`ArchidektSyncPlanner.CardBatchSize`); modifies and removes stay single, since the probe covered adds only. A 400 on a batch resends its cards one at a time. The prediction counts batches plus the largest batch again as the fallback reserve. 40 adds make 2 requests (`ArchidektPrintingResolverTests`); `ApplyPush_WithABadCardInTheBatch_NamesItAndLeavesTheBaseline`. Open for the audit: two rejected batches in one push can exceed the reserve and end as `not-sent`. |
-| REQ-015 | planned | |
+| REQ-015 | implemented (phase 6 and repairs) | `d1ca9fd`, `d972346`: `add-entry` by name and printing choice, push verification, `card_list_query` subtypes and tags, the land-count and on-curve sentence on `stats_castability`, `stats_mana_availability`, and `stats_simulate`, and zone moves in server instructions. `ToolFactsDescriptionTests`, `ServerInstructionsTests`. |
 | REQ-016 | implemented (phase 5) | `378c134`, `f32c320`: `docs/architecture/` with `README.md` (moved), `mcp-surface.md`, `deck-model.md`, `code-style.md`. Links updated in `AGENTS.md`, `llms.txt`, `docs/AGENTS.md`, `src/AGENTS.md`, `.codex/project-instructions.md`; 0 broken links over the 9 changed docs. Phase 6 updates the pages for phases 1 to 3. |
 | REQ-017 | implemented (phase 5) | `be1d4e9`: `ToolNamingRuleTests` (in App.Tests, where registered tools can be listed) checks tool names, every input and output schema property, serializer property names, discriminators, and enum values. It found no violations; the provider allowlists are empty. |
-| REQ-018 | partly implemented (phase 5) | `5a684fa`: Scryfall lookup `kind` publishes its values, Playgroup input fields gain descriptions, and `invalid-page-size` names `pageSize`. Still open for phase 6 (non-breaking): about 170 undescribed nested input fields (`ToolInputDescriptionTests.OpenGaps`), a lowercase `freshnessPolicy` description, the category rules apply not naming the options it repeats, and `pageSize` descriptions without their default. Breaking findings for the owner are listed below. |
+| REQ-018 | implemented (phases 5 and 6) | `5a684fa`, `523c875`, `d972346`, `e9df4be`: every nested input field is described (`ToolInputDescriptionTests` covers every tool); `freshnessPolicy` is capitalized; category rules apply names the options it repeats; `pageSize` defaults are stated and tested for every list tool. Breaking findings are listed below for the owner. |
 
 The plan is complete when every requirement is verified, or dropped with recorded evidence where the plan allows it
 (REQ-012, REQ-014). Every requirement must be verified on both the merge commit and the release commit, the audit
@@ -401,3 +401,53 @@ Decided during repair:
   replaces REQ-001's refusal of unknown codes, because the local store has no closed zone set.
 - A batch fallback continues past a refused card. The reserve covers one rejected batch; a second rejected batch is
   not retried card by card, and its cards are reported as not sent.
+
+Pass 1 repairs (merged `ce1eecd`, `d74015b`, `cdf2e14`, plus `e9df4be` and docs `82b593d`) fixed every accepted P2
+and P3, except one P3 left as known. A `zoneCategories: "match"` primary assigned by a patch is not recorded by the
+batch's second-primary check, so a later `assign-category` primary in the same batch takes over instead of being
+refused. One primary remains either way.
+
+The repairs changed behavior in these ways:
+
+- Unverifiable patch printings refuse the batch.
+- Refusals name the caller's change number.
+- Zone rules have one owner in Core.
+- Draft category refusals use `invalid-deck-change`.
+- Argument errors take the expected type from the bound parameter type.
+- Archidekt batch adds are confirmed by `patchId`.
+- A refused card is `not-applied` and the push continues. The reserve covers one rejected batch.
+- The zone notice offers `match` only when it works.
+
+Pass 2 (re-audit; trigger: the repairs changed push write behavior) reviewed `c239f8a..cdf2e14` with correctness
+and test quality. No P0 or P1. It found three P2 findings:
+
+- A partial push left the deck stuck: pull refused duplicates.
+- A 404 mid-push dropped earlier statuses.
+- A zone with no zone category could be offered a refused `match` fix.
+
+Repaired in `f48f190` (merged `735d983`). A partial push now reads Archidekt back and records what landed. 404s
+keep earlier statuses. `NotAvailableForZone` offers only `leave`.
+
+Pass 3 (final; trigger: `f48f190` changed what sync persists) reviewed `f48f190` with correctness. No P0 or P1. It
+found one P2 and three P3s:
+
+- P2: stale-zone corrections were skipped for entries whose operations did not land.
+- P3: rows that did not land took part in row linking.
+- P3: a category rename that did not land lost its link.
+- P3: an edit made on Archidekt during the push became a local change.
+
+Repaired in `175fa08` and `09fe62c` (merged `c09c0c2`) and checked by diff inspection and tests, not by a further
+audit. The fixes:
+
+- Every stale zone is corrected.
+- Linking skips rows that did not land.
+- A category keeps its Archidekt ID.
+- An edit made during the push is recorded as a remote change in a composed baseline. Touched rows come from the
+  read-back and are linked; everything else comes from the read before the push, with a recomputed fingerprint.
+  The push is then blocked until a pull.
+
+Known limits after the repairs:
+
+- A category reorder made on Archidekt during a push is not kept.
+- An outside edit combined with a change Archidekt did not take still needs a pull with `discardLocalChanges`.
+  This is the existing mismatch rule.
