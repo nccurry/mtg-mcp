@@ -1,0 +1,172 @@
+{
+  "count": 58,
+  "next": null,
+  "results": [
+    {
+      "id": 4843751,
+      "name": "Baeloth Barrityl, Entertainer - Group Slug",
+      "size": 0,
+      "updatedAt": "2026-01-01T00:00:00Z",
+      "createdAt": "2023-07-03T23:16:22.383313Z",
+      "deckFormat": 3,
+      "edhBracket": null,
+      "featured": "https://storage.googleapis.com/archidekt-card-images/clb/ec983aac-9eda-4086-ad7e-34da9b2987cc_art_crop.jpg",
+      "customFeatured": "",
+      "comments": 0,
+      "private": false,
+      "unlisted": false,
+      "theorycrafted": false,
+      "game": 1,
+      "tags": [
+        {
+          "id": 103214,
+          "tag": 67,
+          "deck": 4843751,
+          "name": "Forced Combat",
+          "position": "M-500000"
+        },
+        {
+          "id": 103215,
+          "tag": 107,
+          "deck": 4843751,
+          "name": "Group Slug",
+          "position": "M-510000"
+        }
+      ],
+      "parentFolderId": 0,
+      "parentFolderName": null,
+      "parentFolderCreatedAt": null,
+      "hasPrimer": false,
+      "description": null,
+      "owner": {
+        "id": 0,
+        "moderator": false,
+        "pledgeLevel": null,
+        "roles": []
+      },
+      "colors": {
+        "W": 0,
+        "U": 0,
+        "B": 0,
+        "R": 0,
+        "G": 0
+      },
+      "cardPackage": null,
+      "deckHelp": null,
+      "contest": null
+    },
+    {
+      "id": 5850815,
+      "name": "Tinybones, Trinket Thief",
+      "size": 0,
+      "updatedAt": "2026-01-01T00:00:00Z",
+      "createdAt": "2023-11-11T15:23:56.847158Z",
+      "deckFormat": 3,
+      "edhBracket": null,
+      "featured": "https://storage.googleapis.com/archidekt-card-images/jmp/4063be5b-bfd9-43c5-bc39-09a40bc793bf_art_crop.jpg",
+      "customFeatured": "",
+      "comments": 0,
+      "private": false,
+      "unlisted": false,
+      "theorycrafted": false,
+      "game": null,
+      "tags": [
+        {
+          "id": 240593,
+          "tag": 46,
+          "deck": 5850815,
+          "name": "Discard",
+          "position": "M-510000"
+        }
+      ],
+      "parentFolderId": 0,
+      "parentFolderName": null,
+      "parentFolderCreatedAt": null,
+      "hasPrimer": false,
+      "description": null,
+      "owner": {
+        "id": 0,
+        "moderator": false,
+        "pledgeLevel": null,
+        "roles": []
+      },
+      "colors": {
+        "W": 0,
+        "U": 0,
+        "B": 0,
+        "R": 0,
+        "G": 0
+      },
+      "cardPackage": null,
+      "deckHelp": null,
+      "contest": null
+    },
+    {
+      "id": 21174268,
+      "name": "Raggadragga - Mana Dork Combo",
+      "size": 0,
+      "updatedAt": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-03-27T18:38:41.266325Z",
+      "deckFormat": 3,
+      "edhBracket": 3,
+      "featured": "https://card-images.archidekt.com/art/front/5/9/59d8f9c5-b5b6-451c-be60-ce8d16423f31.webp",
+      "customFeatured": "",
+      "comments": 0,
+      "private": false,
+      "unlisted": false,
+      "theorycrafted": false,
+      "game": 1,
+      "tags": [
+        {
+          "id": 2110219,
+          "tag": 5,
+          "deck": 21174268,
+          "name": "Combo",
+          "position": "M-500000"
+        },
+        {
+          "id": 2110220,
+          "tag": 416,
+          "deck": 21174268,
+          "name": "Mana Dorks",
+          "position": "M-510000"
+        },
+        {
+          "id": 2110221,
+          "tag": 328,
+          "deck": 21174268,
+          "name": "Triggered Abilities",
+          "position": "M-520000"
+        },
+        {
+          "id": 2110222,
+          "tag": 20,
+          "deck": 21174268,
+          "name": "Ramp",
+          "position": "M-530000"
+        }
+      ],
+      "parentFolderId": 0,
+      "parentFolderName": null,
+      "parentFolderCreatedAt": null,
+      "hasPrimer": false,
+      "description": null,
+      "owner": {
+        "id": 0,
+        "moderator": false,
+        "pledgeLevel": null,
+        "roles": []
+      },
+      "colors": {
+        "W": 0,
+        "U": 0,
+        "B": 0,
+        "R": 0,
+        "G": 0
+      },
+      "cardPackage": null,
+      "deckHelp": null,
+      "contest": null
+    }
+  ]
+}

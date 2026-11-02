@@ -111,6 +111,10 @@ client (in Claude Code, /mcp or a new session) before relying on new behavior.
 - The Scryfall card lookup publishes its `kind` values (`scryfall-id`, `oracle-id`, `exact-name`, `fuzzy-name`,
   `printing`) in the tool schema with descriptions, and the Playgroup inputs gain field descriptions.
 - `invalid-page-size` on the Scryfall tools names `pageSize` in its `path`.
+- Archidekt folder reads now list child folder IDs; the adapter read only `children`, but real folder reads use
+  `subfolders`.
+- Archidekt deck lists and folder reads now report each deck's card count from Archidekt's `size` field; it was always
+  empty before.
 
 ## 0.13.3 - 2026-11-01
 

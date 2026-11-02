@@ -1,0 +1,44 @@
+{
+  "id": 397567,
+  "name": "Home",
+  "parentFolder": null,
+  "private": false,
+  "owner": {
+    "id": 0
+  },
+  "subfolders": [
+    {
+      "id": 1679105,
+      "name": "LLM",
+      "createdAt": "2026-06-10T22:55:34.421540Z",
+      "private": false
+    },
+    {
+      "id": 1719432,
+      "name": "Nah",
+      "createdAt": "2026-07-03T23:27:55.900347Z",
+      "private": false
+    },
+    {
+      "id": 401005,
+      "name": "Owned",
+      "createdAt": "2023-07-08T13:27:35.390071Z",
+      "private": false
+    },
+    {
+      "id": 1539236,
+      "name": "Packages",
+      "createdAt": "2026-03-28T13:34:59.089668Z",
+      "private": false
+    },
+    {
+      "id": 1672766,
+      "name": "WIP",
+      "createdAt": "2026-06-07T14:06:46.257432Z",
+      "private": false
+    }
+  ],
+  "decks": [],
+  "count": 0,
+  "next": null
+}
