@@ -239,20 +239,60 @@ internal sealed class ArchidektDeckTransport
     }
 
     /// <summary>
-    /// Sends exactly one card-relation mutation through the observed v2 route.
+    /// Sends card-relation mutations for one deck in one request through the observed v2 route. Returns the patch IDs
+    /// of the added relations the answer lists, or null when the answer cannot be read.
     /// </summary>
-    internal Task SendCardMutationAsync(
+    internal async Task<IReadOnlySet<string>?> SendCardMutationsAsync(
         string deckId,
-        object payload,
+        IReadOnlyList<object> payloads,
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
-        return session.SendMutationAsync(
+        ArchidektSession.ProviderResponse response = await session.SendAsync(
             HttpMethod.Patch,
             $"api/decks/{Uri.EscapeDataString(deckId)}/modifyCards/v2/",
-            new { cards = new[] { payload } },
+            new { cards = payloads },
+            requiresAuthentication: true,
+            idempotentRead: false,
             budget,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
+        return ReadAddedPatchIds(response.Json);
+    }
+
+    /// <summary>
+    /// Reads the patch IDs of the <c>add</c> objects of a card-mutation answer, or returns null when the answer is not
+    /// JSON or holds no <c>add</c> list. A patch ID is compared as a GUID, so its spelling does not matter.
+    /// </summary>
+    private static HashSet<string>? ReadAddedPatchIds(string json)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Object ||
+                !document.RootElement.TryGetProperty("add", out JsonElement added) ||
+                added.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            HashSet<string> ids = new(StringComparer.Ordinal);
+            foreach (JsonElement relation in added.EnumerateArray())
+            {
+                if (relation.ValueKind == JsonValueKind.Object &&
+                    relation.TryGetProperty("patchId", out JsonElement patchId) &&
+                    patchId.ValueKind == JsonValueKind.String &&
+                    Guid.TryParse(patchId.GetString(), out Guid parsed))
+                {
+                    ids.Add(parsed.ToString("N"));
+                }
+            }
+
+            return ids;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

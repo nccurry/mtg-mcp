@@ -11,6 +11,15 @@ public static class DeckEntryDraftRules
     /// </summary>
     public static string? FirstProblem(DeckEntryDraft draft)
     {
+        return FirstEntryProblem(draft) ?? CategoryProblem(draft);
+    }
+
+    /// <summary>
+    /// Returns the first reason the store would refuse the entry fields of the draft, leaving its categories aside,
+    /// or null when the fields are acceptable.
+    /// </summary>
+    public static string? FirstEntryProblem(DeckEntryDraft draft)
+    {
         ArgumentNullException.ThrowIfNull(draft);
         if (draft.Quantity <= 0)
         {
@@ -38,6 +47,23 @@ public static class DeckEntryDraftRules
         }
 
         return FirstBlank(draft);
+    }
+
+    /// <summary>
+    /// Returns the first reason the store would refuse the category fields of the draft, or null when they are
+    /// acceptable.
+    /// </summary>
+    public static string? CategoryProblem(DeckEntryDraft draft)
+    {
+        ArgumentNullException.ThrowIfNull(draft);
+        if (draft.ZoneCategories is not null && !DeckZoneCategories.IsMode(draft.ZoneCategories))
+        {
+            return "zoneCategories must be \"match\" or \"leave\".";
+        }
+
+        return draft.PrimaryCategoryId == Guid.Empty || draft.CategoryIds?.Contains(Guid.Empty) == true
+            ? "A category ID is invalid."
+            : null;
     }
 
     /// <summary>

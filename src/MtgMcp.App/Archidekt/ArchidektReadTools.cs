@@ -28,6 +28,15 @@ internal sealed class ArchidektReadTools
         "full or standard (every entry field: provider IDs, finish, language, sort order, and the rest).";
 
     /// <summary>
+    /// Describes the responseFormat argument of the tools that return difference rows.
+    /// </summary>
+    private const string DifferenceFormatDescription =
+        "Difference rows: full or standard (default full: the whole baseline, local, and remote value of each row) " +
+        "or concise (path, state, and fields, each with only the fields whose values differ, as baseline, local, " +
+        "and remote; far smaller). The fingerprints, guards, summary, operations, and apply availability are the " +
+        "same in both.";
+
+    /// <summary>
     /// Gets the allowed item values of the list parameters, published in the tool schema.
     /// </summary>
     internal static IReadOnlyDictionary<string, IReadOnlyList<string>> ItemChoices { get; } =
@@ -73,7 +82,7 @@ internal sealed class ArchidektReadTools
         UntrustedTextNotes.Archidekt)]
     internal Task<OperationResult<RemoteDeckPage>> ListDecksAsync(
         [Description("Opaque continuation returned by a prior archidekt_deck_list call.")] string? cursor = null,
-        [Description("Remote deck summaries to return, from 1 through 100.")] int pageSize = 50,
+        [Description("Remote deck summaries to return, from 1 through 100; default 50.")] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
         return coordinator.Service.ListDecksAsync(cursor, pageSize, cancellationToken);
@@ -127,19 +136,37 @@ internal sealed class ArchidektReadTools
     [Description(
         "Archidekt: returns explicit local, baseline, and fresh-remote differences without selecting a conflict " +
         "winner. The result starts with the difference count; rows come in pages that fit the size limit, so when " +
-        "truncated is true, call again with differenceOffset set to nextDifferenceOffset." +
+        "truncated is true, call again with differenceOffset set to nextDifferenceOffset. Pass responseFormat " +
+        "\"concise\" to list only the differing fields of each row." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSyncDiffView>> DiffAsync(
         [Description("Stable local deck UUID with an Archidekt provider binding.")] Guid localDeckId,
         [Description("Number of differences to skip; use nextDifferenceOffset from the previous page. Default 0.")]
         int differenceOffset = 0,
+        [Description(DifferenceFormatDescription), ResponseFormatValues]
+        string responseFormat = "full",
         CancellationToken cancellationToken = default)
     {
+        OperationResult<ArchidektResponseFormat> format = ParseDifferenceFormat(responseFormat);
+        if (format is not OperationSuccess<ArchidektResponseFormat> chosen)
+        {
+            return OperationFailure.Forward<ArchidektResponseFormat, ArchidektSyncDiffView>(format);
+        }
+
         OperationResult<ArchidektSyncDiff> diff = await coordinator
             .DiffAsync(localDeckId, cancellationToken).ConfigureAwait(false);
         return diff is OperationSuccess<ArchidektSyncDiff> success
-            ? ArchidektResultPaging.PageDiff(success.Data, differenceOffset)
+            ? ArchidektResultPaging.PageDiff(success.Data, differenceOffset, chosen.Data)
             : OperationFailure.Forward<ArchidektSyncDiff, ArchidektSyncDiffView>(diff);
+    }
+
+    /// <summary>
+    /// Reads the responseFormat of a tool that returns difference rows, which is full when it is omitted, or refuses a
+    /// value that is not concise, standard, or full.
+    /// </summary>
+    private static OperationResult<ArchidektResponseFormat> ParseDifferenceFormat(string? responseFormat)
+    {
+        return ArchidektDeckReadOptions.ParseFormat(responseFormat, ArchidektResponseFormat.Full);
     }
 
     /// <summary>
@@ -153,9 +180,10 @@ internal sealed class ArchidektReadTools
         "needs no credentials; a private deck needs Archidekt credentials (see archidekt_auth_status). A pull keeps " +
         "cards and categories added locally since the last sync (a local-keep operation; the next push adds them) " +
         "and replaces everything else from Archidekt; any other local change is a conflict that needs " +
-        "discardLocalChanges. Rows come in pages that fit the size limit; the guards cover the whole preview, so " +
+        "discardLocalChanges; applyOptions names the option the apply must repeat. Rows come in pages that fit " +
+        "the size limit; the guards cover the whole preview, so " +
         "the apply tool needs no page. On later pages pass expectedPreviewFingerprint, the previewFingerprint of " +
-        "the first page." +
+        "the first page. Pass responseFormat \"concise\" to list only the differing fields of each difference." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSyncPreviewView>> PreviewPullAsync(
         [Description("Exact Archidekt deck identifier to read.")] string remoteDeckId,
@@ -171,8 +199,16 @@ internal sealed class ArchidektReadTools
         [Description("Number of differences to skip; use nextDifferenceOffset from the previous page. Default 0.")]
         int differenceOffset = 0,
         [Description(ResultPage.FingerprintHelp)] string? expectedPreviewFingerprint = null,
+        [Description(DifferenceFormatDescription), ResponseFormatValues]
+        string responseFormat = "full",
         CancellationToken cancellationToken = default)
     {
+        OperationResult<ArchidektResponseFormat> format = ParseDifferenceFormat(responseFormat);
+        if (format is not OperationSuccess<ArchidektResponseFormat> chosen)
+        {
+            return OperationFailure.Forward<ArchidektResponseFormat, ArchidektSyncPreviewView>(format);
+        }
+
         OperationResult<ArchidektSyncPreview> preview = await coordinator
             .PreviewPullAsync(remoteDeckId, localDeckId, discardLocalChanges, cancellationToken)
             .ConfigureAwait(false);
@@ -181,7 +217,8 @@ internal sealed class ArchidektReadTools
             operationOffset,
             differenceOffset,
             ArchidektApplyAvailability.PullNotice(mode),
-            expectedPreviewFingerprint);
+            expectedPreviewFingerprint,
+            chosen.Data);
     }
 
     /// <summary>
@@ -197,7 +234,11 @@ internal sealed class ArchidektReadTools
         "printing it will use, and applyAvailable is false, with the card names, when Archidekt has no match. On " +
         "later pages pass expectedPreviewFingerprint, the previewFingerprint of the first page. A push that " +
         "removes more than 10 Archidekt entries, or 3 or more entries that are more than 10 percent of them, is " +
-        "not available until confirmRemovals equals the removal count." +
+        "not available until confirmRemovals equals the removal count (applyOptions then names it for the apply). " +
+        "predictedProviderRequests counts the " +
+        "requests the push needs, with reads and room to retry them, against providerRequestLimit; a push over " +
+        "it is refused and can be split by applying part of the local changes first. Pass responseFormat " +
+        "\"concise\" to list only the differing fields of each difference." +
         UntrustedTextNotes.Archidekt)]
     internal async Task<OperationResult<ArchidektSyncPreviewView>> PreviewPushAsync(
         [Description("Stable local deck UUID with an Archidekt provider binding.")] Guid localDeckId,
@@ -210,8 +251,16 @@ internal sealed class ArchidektReadTools
             "Number of Archidekt entries the push removes, to allow a large removal (more than 10 entries or 10 " +
             "percent). Use the count the preview names; pass the same value to archidekt_push_apply.")]
         int? confirmRemovals = null,
+        [Description(DifferenceFormatDescription), ResponseFormatValues]
+        string responseFormat = "full",
         CancellationToken cancellationToken = default)
     {
+        OperationResult<ArchidektResponseFormat> format = ParseDifferenceFormat(responseFormat);
+        if (format is not OperationSuccess<ArchidektResponseFormat> chosen)
+        {
+            return OperationFailure.Forward<ArchidektResponseFormat, ArchidektSyncPreviewView>(format);
+        }
+
         OperationResult<ArchidektSyncPreview> preview = await coordinator
             .PreviewPushAsync(localDeckId, cancellationToken, confirmRemovals).ConfigureAwait(false);
         return ToView(
@@ -219,7 +268,8 @@ internal sealed class ArchidektReadTools
             operationOffset,
             differenceOffset,
             ArchidektApplyAvailability.PushNotice(mode, ReadAuthStatus()),
-            expectedPreviewFingerprint);
+            expectedPreviewFingerprint,
+            chosen.Data);
     }
 
     /// <summary>
@@ -244,7 +294,8 @@ internal sealed class ArchidektReadTools
         int operationOffset,
         int differenceOffset,
         string? applyNotice,
-        string? expectedPreviewFingerprint)
+        string? expectedPreviewFingerprint,
+        ArchidektResponseFormat format)
     {
         return preview is OperationSuccess<ArchidektSyncPreview> success
             ? ArchidektResultPaging.PagePreview(
@@ -252,7 +303,8 @@ internal sealed class ArchidektReadTools
                 operationOffset,
                 differenceOffset,
                 applyNotice,
-                expectedPreviewFingerprint)
+                expectedPreviewFingerprint,
+                format)
             : OperationFailure.Forward<ArchidektSyncPreview, ArchidektSyncPreviewView>(preview);
     }
 

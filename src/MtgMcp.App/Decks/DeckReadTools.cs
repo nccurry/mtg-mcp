@@ -64,7 +64,7 @@ internal sealed class DeckReadTools
     [Description("Local deck store: lists canonically ordered local deck summaries using an opaque stable cursor.")]
     internal Task<OperationResult<DeckPage>> ListAsync(
         [Description("Opaque cursor returned by a prior local_deck_list call.")] string? cursor = null,
-        [Description("Number of summaries to return, from 1 through 100.")] int pageSize = 50,
+        [Description("Number of summaries to return, from 1 through 100; default 50.")] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
         return store.ListAsync(cursor, pageSize, cancellationToken);
@@ -90,7 +90,9 @@ internal sealed class DeckReadTools
         "A deck too large for one result is also returned in pages: truncated is true with a narrow hint, and " +
         "nextCursor reads the rest. Every page carries the whole deck's entryCount, cardCount, and cardsByZone. " +
         "To check whether cards are in the deck before adding them, pass cardNames: only the matching entries " +
-        "come back, and cardNamesNotFound lists the names with no match. For a large deck, pass responseFormat " +
+        "come back, and cardNamesNotFound lists the names with no match. Pass zones and categoryNames the same way; " +
+        "values in one filter combine with OR, filters combine with AND, and zonesNotFound and " +
+        "categoryNamesNotFound list the values with no match. For a large deck, pass responseFormat " +
         "concise to get only entryId, cardName, quantity, zone, and categoryNames for each entry.")]
     internal Task<OperationResult<DeckDocumentView>> GetAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
@@ -105,7 +107,7 @@ internal sealed class DeckReadTools
         IReadOnlyList<string>? fields = null,
         [Description(
             "Opaque cursor from nextCursor of a previous local_deck_get call with the same deckId, include, " +
-            "fields, cardNames, and responseFormat.")]
+            "fields, cardNames, zones, categoryNames, and responseFormat.")]
         string? cursor = null,
         [Description(
             "Entries per page, from 1 through 100. With include the default is 25; without include the deck " +
@@ -118,6 +120,17 @@ internal sealed class DeckReadTools
             "cardNames with a cursor.")]
         IReadOnlyList<string>? cardNames = null,
         [Description(
+            "Optional zone codes to read, such as commander, main, sideboard, or maybeboard; the deck may use " +
+            "any zone code. Only entries in one of these zones are returned, and zonesNotFound lists the codes " +
+            "with no entry. An empty list or a blank code is refused. Pass the same zones with a cursor.")]
+        IReadOnlyList<string>? zones = null,
+        [Description(
+            "Optional category names, from 1 through 100. Names match ignoring case and surrounding space, and " +
+            "an entry matches by its primary or any other assigned category. Only matching entries are " +
+            "returned, and categoryNamesNotFound lists the names no entry is assigned to. Pass the same " +
+            "categoryNames with a cursor.")]
+        IReadOnlyList<string>? categoryNames = null,
+        [Description(
             "Entry fields: full (default: every stored entry field plus the category assignment rows), or " +
             "concise (entryId, cardName, quantity, zone, and categoryNames only, with no assignment rows). " +
             "Standard is the same as full. With include, concise still adds cardData, card, and tags. Pass the " +
@@ -127,7 +140,16 @@ internal sealed class DeckReadTools
         CancellationToken cancellationToken = default)
     {
         return cardViews.GetAsync(
-            deckId, include, fields, cursor, pageSize, cardNames, responseFormat, cancellationToken);
+            deckId,
+            include,
+            fields,
+            cursor,
+            pageSize,
+            cardNames,
+            zones,
+            categoryNames,
+            responseFormat,
+            cancellationToken);
     }
 
     /// <summary>

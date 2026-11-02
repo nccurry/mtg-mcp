@@ -74,4 +74,33 @@ public sealed class ScryfallToolTests
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await ScryfallToolExecution.RunAsync<int>(() => throw new InvalidOperationException("bug")));
     }
+
+    /// <summary>
+    /// Verifies a page size outside its bounds is refused with the argument named in the failure path, so a caller
+    /// can tell which argument to change.
+    /// </summary>
+    [Fact]
+    public async Task PageSizeFailures_NameThePageSizeArgument()
+    {
+        using TemporaryDirectory temporary = new();
+        using ScryfallService service = new(
+            Path.Combine(temporary.Path, "data"),
+            allowLocalWrites: false,
+            "0.9.0-preview.1",
+            ToolCallPolicy.SerializerOptions);
+        CancellationToken token = TestContext.Current.CancellationToken;
+
+        OperationInvalidInput search = Assert.IsType<OperationInvalidInput>(
+            (await service.SearchAsync("x", pageSize: 0, cancellationToken: token)).Value);
+        OperationInvalidInput list = Assert.IsType<OperationInvalidInput>(
+            (await service.ListSnapshotsAsync(pageSize: 101, cancellationToken: token)).Value);
+        OperationInvalidInput snapshot = Assert.IsType<OperationInvalidInput>(
+            (await service.GetSnapshotAsync(Guid.NewGuid(), pageSize: 0, cancellationToken: token)).Value);
+
+        Assert.All([search, list, snapshot], failure =>
+        {
+            Assert.Equal("invalid-page-size", failure.ReasonCode);
+            Assert.Equal("pageSize", failure.Path);
+        });
+    }
 }

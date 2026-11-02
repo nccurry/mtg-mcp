@@ -197,7 +197,8 @@ internal sealed class ArchidektPrintingResolver
                     choices.Add(entry, choice);
                 }
             }
-            catch (ArchidektProviderException exception) when (exception.ReasonCode == "request-limit-exceeded")
+            catch (ArchidektProviderException exception)
+                when (exception.ReasonCode == ArchidektProviderException.RequestLimitReasonCode)
             {
                 choices.StoppedAtRequestLimit = true;
                 choices.AddUnresolved(entry.CardName);

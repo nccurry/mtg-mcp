@@ -38,15 +38,33 @@ internal static class ArchidektRemovalGuard
     }
 
     /// <summary>
+    /// Tells whether a push that removes this many entries needs <c>confirmRemovals</c>.
+    /// </summary>
+    private static bool NeedsConfirmation(int removals, int remoteEntryCount)
+    {
+        return removals > MaximumUnconfirmedRemovals ||
+            (removals >= MinimumRemovalsForPercentRule && removals * 10 > remoteEntryCount);
+    }
+
+    /// <summary>
+    /// Names the option the push apply must repeat from its preview, or returns null when the push needs no
+    /// confirmation.
+    /// </summary>
+    internal static string? DescribeRepeat(int removals, int remoteEntryCount)
+    {
+        return NeedsConfirmation(removals, remoteEntryCount)
+            ? $"archidekt_push_apply must repeat confirmRemovals: {removals}, the removal count of this push."
+            : null;
+    }
+
+    /// <summary>
     /// Explains why the apply would refuse the push, or returns null when it removes few enough entries or the caller
     /// confirmed the exact removal count. A push removes too many when it removes more than 10 entries, or at least 3
     /// entries and more than 10 percent of the Archidekt entries.
     /// </summary>
     internal static string? Describe(int removals, int remoteEntryCount, int? confirmRemovals)
     {
-        bool tooMany = removals > MaximumUnconfirmedRemovals ||
-            (removals >= MinimumRemovalsForPercentRule && removals * 10 > remoteEntryCount);
-        if (!tooMany || confirmRemovals == removals)
+        if (!NeedsConfirmation(removals, remoteEntryCount) || confirmRemovals == removals)
         {
             return null;
         }

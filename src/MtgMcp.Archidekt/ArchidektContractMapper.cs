@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using MtgMcp.Core.Decks;
 
 namespace MtgMcp.Archidekt;
 
@@ -484,24 +485,22 @@ internal static class ArchidektJsonContract
         IReadOnlyList<string> ordered = PrimaryFirst(names, primary);
         foreach (string name in ordered)
         {
-            if (name.Equals("commander", StringComparison.OrdinalIgnoreCase) ||
+            string? zone = DeckZoneCategories.ZoneForName(name);
+            if (zone == DeckZoneCategories.CommanderZone ||
                 (CategoryNames.TryFind(categoriesByName, name, out RemoteDeckCategory? category) && category.IsPremier))
             {
-                return "commander";
+                return DeckZoneCategories.CommanderZone;
             }
 
-            if (name.Equals("sideboard", StringComparison.OrdinalIgnoreCase))
+            if (zone is not null)
             {
-                return "sideboard";
-            }
-
-            if (name.Equals("maybeboard", StringComparison.OrdinalIgnoreCase))
-            {
-                return "maybeboard";
+                return zone;
             }
         }
 
-        return IsInDeck(ordered, primary, categoriesByName) ? "main" : "maybeboard";
+        return IsInDeck(ordered, primary, categoriesByName)
+            ? DeckZoneCategories.MainZone
+            : DeckZoneCategories.MaybeboardZone;
     }
 
     /// <summary>
@@ -599,7 +598,12 @@ internal static class ArchidektJsonContract
             path,
             childIds,
             decks,
-            CopyUnknown(item, ["id", "name", "private", "unlisted", "parent", "parentFolder", "parent_folder", "path", "children", "subfolders", "decks"])));
+            CopyUnknown(
+                item,
+                [
+                    "id", "name", "private", "unlisted", "parent", "parentFolder", "parent_folder", "path", "children",
+                    "subfolders", "decks",
+                ])));
         foreach (JsonElement child in childElements)
         {
             MapFolderNode(child, folderId, path, destination);

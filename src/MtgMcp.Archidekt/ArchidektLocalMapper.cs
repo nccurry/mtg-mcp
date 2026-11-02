@@ -219,15 +219,21 @@ public static class ArchidektLocalMapper
     /// <param name="target">The pushed target, built from <paramref name="local"/> in entry and category order.</param>
     /// <param name="verificationMismatch">True when the verification found a difference; the baseline then keeps every
     /// local difference visible as a local change.</param>
+    /// <param name="notLanded">For a partial push, the local entries whose add or update was not applied (or may not
+    /// have been); null for a finished push. A new entry among them is not linked, even to a row that matches it, so
+    /// it stays a local addition; the baseline keeps every local difference visible as a local change, and records the
+    /// fields no row shows only for the linked rows, so a pull can still keep the local additions.</param>
     /// <returns>
     /// The baseline JSON and the local entry IDs the push could not link to a provider row, or null when all linked.
-    /// A category with no verified match stores no link, and the next push plans it by name.
+    /// The entries in <paramref name="notLanded"/> are not listed. A category with no verified match by name or by its
+    /// own provider ID stores no link, and the next push plans it by name.
     /// </returns>
     public static (string Json, IReadOnlyList<Guid>? UnlinkedLocalIds) CreatePushBaseline(
         DeckDocument local,
         RemoteDeckSnapshot verified,
         RemoteDeckSnapshot target,
-        bool verificationMismatch = false)
+        bool verificationMismatch = false,
+        IReadOnlySet<Guid>? notLanded = null)
     {
         ArgumentNullException.ThrowIfNull(local);
         ArgumentNullException.ThrowIfNull(verified);
@@ -237,7 +243,14 @@ public static class ArchidektLocalMapper
             throw new ArgumentException("The pushed target must be built from the local deck.", nameof(target));
         }
 
-        ArchidektRowLinks links = ArchidektSyncPlanner.LinkRows(verified, target);
+        // A new row that did not land is left out of the linking, so it cannot take the Archidekt row of a landed row
+        // with the same content or count as its rival.
+        bool[] skipped = [.. local.Entries.Select((value, index) =>
+            notLanded?.Contains(value.EntryId) == true &&
+            string.IsNullOrWhiteSpace(target.Entries[index].ProviderRelationId))];
+        ArchidektRowLinks links = ArchidektSyncPlanner.LinkRows(
+            verified,
+            target with { Entries = [.. target.Entries.Where((_, index) => !skipped[index])] });
         Dictionary<Guid, string> entryRelations = [];
         foreach (RemoteDeckEntry value in verified.Entries)
         {
@@ -257,10 +270,16 @@ public static class ArchidektLocalMapper
         }
 
         List<Guid> unlinked = [];
+        int linkIndex = 0;
         for (int index = 0; index < local.Entries.Count; index++)
         {
             Guid entryId = local.Entries[index].EntryId;
-            if (links.EntryRelationIds[index] is { } relationId)
+            if (skipped[index])
+            {
+                continue;
+            }
+
+            if (links.EntryRelationIds[linkIndex++] is { } relationId)
             {
                 entryRelations[entryId] = relationId;
             }
@@ -278,18 +297,24 @@ public static class ArchidektLocalMapper
             }
         }
 
-        // After a verification mismatch the local deck is not what was synchronized: the baseline keeps the verified
-        // remote state and a local fingerprint no deck can have, so every difference Archidekt did not take stays
-        // visible as a local change until a later push or pull succeeds.
+        // After a verification mismatch or a partial push the local deck is not what was synchronized: the baseline
+        // keeps the verified remote state and a local fingerprint no deck can have, so every difference Archidekt did
+        // not take stays visible as a local change until a later push or pull succeeds.
+        bool unsynchronized = verificationMismatch || notLanded is not null;
         ArchidektSyncBaseline baseline = new(
             2,
             verified.RemoteId,
             verified.RemoteFingerprint,
-            verificationMismatch ? UnsynchronizedFingerprint : LocalFingerprint(local),
+            unsynchronized ? UnsynchronizedFingerprint : LocalFingerprint(local),
             verified,
             entryRelations,
             categoryRelations,
             verificationMismatch ? null : LocalInvisibleFingerprint(local));
+        if (notLanded is not null)
+        {
+            baseline = baseline with { LocalInvisibleFingerprint = LinkedInvisibleFingerprint(local, baseline) };
+        }
+
         string json = JsonSerializer.Serialize(baseline, ArchidektContract.JsonOptions);
         return (json, unlinked.Count == 0 ? null : unlinked);
     }
@@ -368,7 +393,7 @@ public static class ArchidektLocalMapper
                 baselineCategories);
             string providerId = baselineRow?.ProviderCategoryId ?? string.Empty;
             bool isMaybeboard = localCategory.Name.Equals(
-                "maybeboard",
+                DeckZoneCategories.Maybeboard,
                 StringComparison.OrdinalIgnoreCase);
             categories.Add(new RemoteDeckCategory(
                 providerId,
@@ -437,6 +462,31 @@ public static class ArchidektLocalMapper
             ContentFingerprint = contentFingerprint,
             RemoteFingerprint = contentFingerprint,
         };
+    }
+
+    /// <summary>
+    /// Links each row of a target built by <see cref="ToRemoteTarget"/> to the local entry it was made from. That
+    /// method writes one row per local entry in local entry order, so the rows pair up by position. The two lists
+    /// must be the same length, or the rows were not built from those entries and the pairing would be wrong.
+    /// </summary>
+    public static Dictionary<RemoteDeckEntry, Guid> EntryIdsByRow(
+        IReadOnlyList<DeckEntry> local,
+        IReadOnlyList<RemoteDeckEntry> rows)
+    {
+        ArgumentNullException.ThrowIfNull(local);
+        ArgumentNullException.ThrowIfNull(rows);
+        if (local.Count != rows.Count)
+        {
+            throw new ArgumentException("The rows must be built from the local entries, one row each.", nameof(rows));
+        }
+
+        Dictionary<RemoteDeckEntry, Guid> ids = new(ReferenceEqualityComparer.Instance);
+        for (int index = 0; index < local.Count; index++)
+        {
+            ids[rows[index]] = local[index].EntryId;
+        }
+
+        return ids;
     }
 
     /// <summary>

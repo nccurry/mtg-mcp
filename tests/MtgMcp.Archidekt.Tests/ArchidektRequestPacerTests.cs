@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Text.Json;
 
 namespace MtgMcp.Archidekt.Tests;
 
@@ -73,7 +74,7 @@ public sealed class ArchidektRequestPacerTests
     }
 
     /// <summary>
-    /// Verifies the rolling ceiling applies even when minimum spacing is disabled for the test.
+    /// Verifies the rolling limit applies even when minimum spacing is disabled for the test.
     /// </summary>
     [Fact]
     public async Task WaitForPermitAsync_EnforcesRollingWindowCeiling()
@@ -230,7 +231,7 @@ public sealed class ArchidektRequestPacerTests
     }
 
     /// <summary>
-    /// Verifies the per-operation ceiling fails before an additional provider start can be recorded.
+    /// Verifies the per-operation limit fails before an additional provider start can be recorded.
     /// </summary>
     [Fact]
     public async Task WaitForPermitAsync_RejectsRequestBeyondOperationBudget()
@@ -250,6 +251,81 @@ public sealed class ArchidektRequestPacerTests
         Assert.Equal(1, budget.RequestCount);
     }
 
+    /// <summary>
+    /// Verifies a planned total over the limit is refused with the limit and the predicted count for an operation that
+    /// is not a push, and that a total at the limit passes.
+    /// </summary>
+    [Fact]
+    public void EnsureRequestBound_OverTheLimit_NamesTheLimitAndTheCount()
+    {
+        ArchidektOperationBudget budget = new(100);
+
+        ArchidektProviderException refused = Assert.Throws<ArchidektProviderException>(
+            () => budget.EnsureRequestBound(130));
+
+        Assert.Equal("request-limit-exceeded", refused.ReasonCode);
+        Assert.Equal(
+            "The operation needs about 130 requests to Archidekt, over the 100-request limit for one call; no remote " +
+            "writes were attempted.",
+            refused.Message);
+        budget.EnsureRequestBound(100);
+    }
+
+    /// <summary>
+    /// Verifies a push over the limit says how many of its changes fit and that it can be split, with numbers worked
+    /// out by hand for 400 batched adds: 16 batches of 25 and a reserve of 25 cards to send one batch again card by
+    /// card make 41 requests, so with 119 other requests under a limit of 150, 31 of the 41 fit, which is 302 of the
+    /// 400 changes (400 * 31 / 41, rounded down).
+    /// </summary>
+    [Fact]
+    public void EnsurePushRequestBound_WithBatchedAdds_CountsRequestsNotChanges()
+    {
+        (RemoteDeckSnapshot current, RemoteDeckSnapshot target) = DeckWithNewCards(400);
+        ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current, target);
+        ArchidektOperationBudget budget = new(150);
+
+        ArchidektProviderException refused = Assert.Throws<ArchidektProviderException>(
+            () => budget.EnsurePushRequestBound(160, plan.PlannedOperations.Count, plan.OperationRequestCount));
+
+        Assert.Equal(400, plan.PlannedOperations.Count);
+        Assert.Equal(41, plan.OperationRequestCount);
+        Assert.Equal("request-limit-exceeded", refused.ReasonCode);
+        Assert.Equal(
+            "This push needs about 160 requests to Archidekt, over the 150-request limit for one " +
+            "archidekt_push_apply call. About 302 of the 400 changes fit (an estimate). Split the push: apply about " +
+            "302 changes first, then preview and push the rest. No remote writes were attempted.",
+            refused.Message);
+        budget.EnsurePushRequestBound(150, plan.PlannedOperations.Count, plan.OperationRequestCount);
+    }
+
+    /// <summary>
+    /// Builds the canonical test deck and a target that adds the given number of cards that carry an Archidekt card ID.
+    /// </summary>
+    private static (RemoteDeckSnapshot Current, RemoteDeckSnapshot Target) DeckWithNewCards(int count)
+    {
+        using JsonDocument document = JsonDocument.Parse(ArchidektTestPayloads.Deck);
+        RemoteDeckSnapshot current = ArchidektDeckContractMapper.MapDeck(
+            document.RootElement,
+            ArchidektTestPayloads.Deck,
+            DateTimeOffset.UtcNow,
+            "GET");
+        IEnumerable<RemoteDeckEntry> added = Enumerable.Range(1, count).Select(number => new RemoteDeckEntry(
+            string.Empty,
+            (5000 + number).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            1,
+            $"Card {number:000}",
+            OracleId: null,
+            PrintingId: null,
+            SetCode: null,
+            CollectorNumber: null,
+            "en",
+            "nonfoil",
+            "main",
+            ["Mainboard"],
+            "Mainboard",
+            number));
+        return (current, current with { Entries = [.. current.Entries, .. added] });
+    }
     /// <summary>
     /// Verifies cancellation during a pacing delay releases the shared lane for a later caller.
     /// </summary>

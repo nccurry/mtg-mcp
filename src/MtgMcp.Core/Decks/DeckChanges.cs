@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace MtgMcp.Core.Decks;
 
 /// <summary>
@@ -17,6 +19,44 @@ public sealed record AddDeckEntryChange(DeckEntryDraft Entry);
 /// Replaces the editable fields of one entry identified by its stable ID.
 /// </summary>
 public sealed record UpdateDeckEntryChange(DeckEntry Entry);
+
+/// <summary>
+/// Names the printing a patch gives each entry: a printing ID, or a set code with a collector number.
+/// </summary>
+public sealed record DeckPrintingPatch(
+    [property: Description("The Scryfall printing ID; give it alone.")] Guid? PrintingId = null,
+    [property: Description("The set code; give it with collectorNumber.")] string? SetCode = null,
+    [property: Description("The collector number; give it with setCode.")] string? CollectorNumber = null);
+
+/// <summary>
+/// Holds the printing a patch gives one entry after the card data lookup, so the printing matches that entry's card.
+/// </summary>
+public sealed record DeckEntryPrinting(
+    Guid EntryId,
+    Guid? PrintingId,
+    string? SetCode,
+    string? CollectorNumber,
+    string? Language);
+
+/// <summary>
+/// Changes only the listed fields of every listed entry, against each entry's state when the change runs. A field
+/// that is null stays as it is. A new primary category removes the previous primary assignment unless the previous
+/// primary is also in the added categories. A zone requires a zone categories mode, match or leave. Printings holds
+/// the per-entry result of looking up Printing; an entry without a row there gets Printing as given.
+/// </summary>
+public sealed record PatchDeckEntriesChange(
+    IReadOnlyList<Guid> EntryIds,
+    int? Quantity = null,
+    string? Zone = null,
+    int? SortOrder = null,
+    string? Finish = null,
+    string? Language = null,
+    DeckPrintingPatch? Printing = null,
+    Guid? PrimaryCategoryId = null,
+    IReadOnlyList<Guid>? AddCategoryIds = null,
+    IReadOnlyList<Guid>? RemoveCategoryIds = null,
+    string? ZoneCategories = null,
+    IReadOnlyList<DeckEntryPrinting>? Printings = null);
 
 /// <summary>
 /// Removes one entry and its category assignments.
@@ -72,6 +112,7 @@ public readonly union DeckChange(
     UpdateDeckMetadataChange,
     AddDeckEntryChange,
     UpdateDeckEntryChange,
+    PatchDeckEntriesChange,
     RemoveDeckEntryChange,
     AddDeckCategoryChange,
     UpdateDeckCategoryChange,

@@ -94,10 +94,28 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     internal int? DeckReadsThatSucceedAfterWrites { get; set; }
 
     /// <summary>
+    /// Gets the Archidekt card ids the fake refuses to add: a card request that holds one answers 400 and changes
+    /// nothing, as Archidekt answered a batch with one invalid card.
+    /// </summary>
+    internal HashSet<int> RefusedCardIds { get; } = [];
+
+    /// <summary>
+    /// Gets the Archidekt card ids the fake adds but leaves out of its answer, so the client cannot confirm them.
+    /// </summary>
+    internal HashSet<int> UnconfirmedCardIds { get; } = [];
+
+    /// <summary>
     /// Gets or sets an action that runs before the fake answers a read, with the request path; a test uses it to
     /// change something between two steps of a tool call.
     /// </summary>
     internal Action<string>? BeforeRead { get; set; }
+
+    /// <summary>
+    /// Gets or sets a check that runs before the fake applies a write, with the method and path and the request body;
+    /// a status it returns is answered instead, and the write is not applied. A test uses it to make one operation of
+    /// a push fail.
+    /// </summary>
+    internal Func<string, string, HttpStatusCode?>? FailWrite { get; set; }
 
     /// <summary>
     /// Gets the methods and paths of every request, in order.
@@ -204,6 +222,14 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     }
 
     /// <summary>
+    /// Gets whether the category of a name counts toward the deck, as stored.
+    /// </summary>
+    internal bool IsIncludedInDeck(string categoryName)
+    {
+        return categories.Single(value => value.Name == categoryName).IncludedInDeck;
+    }
+
+    /// <summary>
     /// Gets the quantity of a card by name across the deck, or zero when it is not in the deck.
     /// </summary>
     internal int QuantityOf(string cardName)
@@ -258,9 +284,60 @@ internal sealed class FakeArchidekt : HttpMessageHandler
             return Task.FromResult(Read(path));
         }
 
+        if (FailWrite?.Invoke($"{request.Method.Method} {path}", body) is { } failure)
+        {
+            return Task.FromResult(new HttpResponseMessage(failure)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+            });
+        }
+
+        if (path == $"api/decks/{DeckId}/modifyCards/v2/" && RefusesAny(body))
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = new StringContent(
+                    """{"error":"Unable to add one or more cards"}""",
+                    Encoding.UTF8,
+                    "application/json"),
+            });
+        }
+
         Mutations++;
         Write(request.Method, path, body);
-        return Task.FromResult(Json("{}"));
+        string answer = path == $"api/decks/{DeckId}/modifyCards/v2/"
+            ? AcceptedCardsAnswer.Build(body, nextRelationId - AcceptedCardsAnswer.CountAdds(body))
+            : "{}";
+        return Task.FromResult(Json(WithoutUnconfirmedCards(answer)));
+    }
+
+    /// <summary>
+    /// Leaves the cards in <see cref="UnconfirmedCardIds"/> out of a card answer.
+    /// </summary>
+    private string WithoutUnconfirmedCards(string answer)
+    {
+        JsonNode root = JsonNode.Parse(answer)!;
+        if (root["add"] is not JsonArray added)
+        {
+            return answer;
+        }
+
+        foreach (JsonNode? card in added.Where(card => UnconfirmedCardIds.Contains(card!["cardId"]!.GetValue<int>()))
+            .ToList())
+        {
+            _ = added.Remove(card);
+        }
+
+        return root.ToJsonString();
+    }
+
+    /// <summary>
+    /// Tells whether a card request holds a card the fake refuses.
+    /// </summary>
+    private bool RefusesAny(string body)
+    {
+        return JsonNode.Parse(body)!["cards"]!.AsArray()
+            .Any(card => RefusedCardIds.Contains(card!["cardid"]!.GetValue<int>()));
     }
 
     /// <summary>
@@ -388,7 +465,10 @@ internal sealed class FakeArchidekt : HttpMessageHandler
             categories.Add(new FakeCategory(
                 nextCategoryId++,
                 created["name"]!.GetValue<string>(),
-                created["includedInDeck"]?.GetValue<bool>() ?? true));
+                created["includedInDeck"]?.GetValue<bool>() ?? true)
+            {
+                IncludedInPrice = created["includedInPrice"]?.GetValue<bool>() ?? true,
+            });
         }
         else if (path.StartsWith("api/decks/category/", StringComparison.Ordinal))
         {
@@ -405,6 +485,7 @@ internal sealed class FakeArchidekt : HttpMessageHandler
                 JsonNode updated = JsonNode.Parse(body)!;
                 existing.Name = updated["name"]!.GetValue<string>();
                 existing.IncludedInDeck = updated["includedInDeck"]?.GetValue<bool>() ?? true;
+                existing.IncludedInPrice = updated["includedInPrice"]?.GetValue<bool>() ?? true;
             }
         }
         else if (method == HttpMethod.Patch && path == $"api/decks/{DeckId}/modifyCards/v2/")
@@ -463,7 +544,7 @@ internal sealed class FakeArchidekt : HttpMessageHandler
                 ["name"] = category.Name,
                 ["includedInDeck"] = category.IncludedInDeck,
                 ["isPremier"] = false,
-                ["includedInPrice"] = true,
+                ["includedInPrice"] = category.IncludedInPrice,
                 ["sortOrder"] = (index * 10) + read,
             });
         }
@@ -735,6 +816,9 @@ internal sealed class FakeArchidekt : HttpMessageHandler
 
         /// <summary>Gets or sets whether cards in the category count in the deck.</summary>
         internal bool IncludedInDeck { get; set; } = includedInDeck;
+
+        /// <summary>Gets or sets whether cards in the category count in the deck price.</summary>
+        internal bool IncludedInPrice { get; set; } = true;
     }
 
     /// <summary>
@@ -753,5 +837,51 @@ internal sealed class FakeArchidekt : HttpMessageHandler
 
         /// <summary>Gets or sets the category names, the primary first.</summary>
         internal List<string> Categories { get; set; } = categories;
+    }
+}
+
+/// <summary>
+/// Builds the answer the real service gives to accepted card requests: one <c>add</c> object per added card in request
+/// order, each echoing the patch ID that was sent.
+/// </summary>
+internal static class AcceptedCardsAnswer
+{
+    /// <summary>
+    /// Counts the cards a card request adds.
+    /// </summary>
+    internal static int CountAdds(string requestBody)
+    {
+        return AddsIn(requestBody).Count;
+    }
+
+    /// <summary>
+    /// Builds the answer to a card request, numbering the added relations from <paramref name="firstRelationId"/>.
+    /// </summary>
+    internal static string Build(string requestBody, int firstRelationId = 9001)
+    {
+        List<JsonNode> cards = AddsIn(requestBody);
+        JsonArray added = [];
+        for (int index = 0; index < cards.Count; index++)
+        {
+            added.Add(new JsonObject
+            {
+                ["deckRelationId"] = firstRelationId + index,
+                ["patchId"] = cards[index]["patchId"]!.GetValue<string>(),
+                ["cardId"] = cards[index]["cardid"]!.GetValue<int>(),
+                ["quantity"] = cards[index]["modifications"]!["quantity"]!.GetValue<int>(),
+            });
+        }
+
+        return new JsonObject { ["add"] = added, ["createdCategories"] = null }.ToJsonString();
+    }
+
+    /// <summary>
+    /// Lists the cards of a card request whose action is add.
+    /// </summary>
+    private static List<JsonNode> AddsIn(string requestBody)
+    {
+        return [.. JsonNode.Parse(requestBody)!["cards"]!.AsArray()
+            .Where(card => card!["action"]!.GetValue<string>() == "add")
+            .Select(card => card!)];
     }
 }

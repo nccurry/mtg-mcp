@@ -13,6 +13,11 @@ public static class ArchidektSyncPlanner
     public const string EntryRemoveKind = "entry-remove";
 
     /// <summary>
+    /// Names the planned operation that adds one card relation to the Archidekt deck.
+    /// </summary>
+    public const string EntryAddKind = "entry-add";
+
+    /// <summary>
     /// Computes the three-way comparison for a stored local deck, using the local fingerprints of that deck: the full
     /// one, the one for fields no row shows, and the two orders an earlier version recorded.
     /// </summary>
@@ -77,7 +82,7 @@ public static class ArchidektSyncPlanner
         // compared with the zones a read gives now, so such a zone is not a difference (a pull still moves the entry).
         RemoteDeckSnapshot baselineRows = ArchidektJsonContract.WithCurrentZones(baseline.RemoteSnapshot);
         RemoteDeckSnapshot effectiveLocal = localChanged
-            ? localProjection
+            ? WithChosenPrintings(localProjection, baselineRows)
             : baselineRows;
         RemoteDeckSnapshot effectiveRemote = remoteChanged
             ? remote
@@ -132,6 +137,41 @@ public static class ArchidektSyncPlanner
             baseline.RemoteFingerprint,
             localChanged && remoteChanged,
             differences);
+    }
+
+    /// <summary>
+    /// Gives each local row that names no printing the printing, Oracle ID, and card name of the baseline row it is
+    /// linked to, when the names match. A card added by name accepts the printing Archidekt chose (see
+    /// <c>PrintingEqual</c>), so that choice is not a local change.
+    /// </summary>
+    private static RemoteDeckSnapshot WithChosenPrintings(RemoteDeckSnapshot local, RemoteDeckSnapshot baseline)
+    {
+        Dictionary<string, RemoteDeckEntry> baselineRows = baseline.Entries
+            .Where(value => !string.IsNullOrWhiteSpace(value.ProviderRelationId))
+            .GroupBy(value => value.ProviderRelationId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        List<RemoteDeckEntry> entries = [];
+        foreach (RemoteDeckEntry entry in local.Entries)
+        {
+            bool namesNoPrinting = entry.PrintingId is null &&
+                string.IsNullOrWhiteSpace(entry.SetCode) &&
+                string.IsNullOrWhiteSpace(entry.CollectorNumber);
+            entries.Add(namesNoPrinting &&
+                !string.IsNullOrWhiteSpace(entry.ProviderRelationId) &&
+                baselineRows.TryGetValue(entry.ProviderRelationId, out RemoteDeckEntry? chosen) &&
+                CardNames.Match(chosen.CardName, entry.CardName)
+                    ? entry with
+                    {
+                        CardName = chosen.CardName,
+                        OracleId = entry.OracleId ?? chosen.OracleId,
+                        PrintingId = chosen.PrintingId,
+                        SetCode = chosen.SetCode,
+                        CollectorNumber = chosen.CollectorNumber,
+                    }
+                    : entry);
+        }
+
+        return local with { Entries = entries };
     }
 
     /// <summary>
@@ -466,7 +506,10 @@ public static class ArchidektSyncPlanner
             entries,
             [.. newCategories.Values],
             duplicates,
-            FindZoneContradictions(arrivingRows, shownCategories),
+            FindZoneContradictions(
+                arrivingRows,
+                shownCategories,
+                ArchidektLocalMapper.EntryIdsByRow(entries, arrivingRows)),
             renamedCategories);
     }
 
@@ -495,6 +538,50 @@ public static class ArchidektSyncPlanner
         return (kept.PrintingId is not null && kept.PrintingId == added.PrintingId) ||
             (kept.OracleId is not null && kept.OracleId == added.OracleId) ||
             string.Equals(kept.CardName, added.CardName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Gives the most cards one add request carries.
+    /// </summary>
+    internal const int CardBatchSize = 25;
+
+    /// <summary>
+    /// Counts the entry adds that one request carries from <paramref name="start"/>: the adds that follow one another
+    /// there, up to <see cref="CardBatchSize"/>. An operation that is not an add is one request by itself, so this is
+    /// 1.
+    /// </summary>
+    internal static int RequestSize(IReadOnlyList<ArchidektPlannedOperation> operations, int start)
+    {
+        int size = 1;
+        if (operations[start].Public.Kind == EntryAddKind)
+        {
+            while (start + size < operations.Count &&
+                size < CardBatchSize &&
+                operations[start + size].Public.Kind == EntryAddKind)
+            {
+                size++;
+            }
+        }
+
+        return size;
+    }
+
+    /// <summary>
+    /// Counts the requests the operations of a plan send, one for each run of adds up to <see cref="CardBatchSize"/>
+    /// and one for every other operation, plus the cards of the largest batch again. That is the reserve for one batch
+    /// that Archidekt refuses without saying which card: the batch is sent again one card at a time, once per push.
+    /// </summary>
+    internal static int CountOperationRequests(IReadOnlyList<ArchidektPlannedOperation> operations)
+    {
+        int requests = 0;
+        int largestBatch = 1;
+        for (int index = 0; index < operations.Count; index += RequestSize(operations, index))
+        {
+            requests++;
+            largestBatch = Math.Max(largestBatch, RequestSize(operations, index));
+        }
+
+        return largestBatch > 1 ? requests + largestBatch : requests;
     }
 
     /// <summary>
@@ -586,7 +673,11 @@ public static class ArchidektSyncPlanner
             if (currentEntry is null)
             {
                 planned.Add(new ArchidektPlannedOperation(
-                    new ArchidektRemoteOperation(sequence++, "entry-add", targetEntry.CardName, "Add one exact card relation."),
+                    new ArchidektRemoteOperation(
+                        sequence++,
+                        EntryAddKind,
+                        targetEntry.CardName,
+                        "Add one exact card relation."),
                     TargetCategory: null,
                     CurrentCategory: null,
                     targetEntry,
@@ -626,9 +717,10 @@ public static class ArchidektSyncPlanner
         }
 
         int unresolvedAdds = planned.Count(value =>
-            value.Public.Kind == "entry-add" &&
+            value.Public.Kind == EntryAddKind &&
             string.IsNullOrWhiteSpace(value.TargetEntry?.ProviderCardId));
-        int predictedRequests = planned.Count + unresolvedAdds + 1;
+        int operationRequestCount = CountOperationRequests(planned);
+        int predictedRequests = operationRequestCount + unresolvedAdds + 1;
         string planFingerprint = ArchidektContract.Fingerprint(new
         {
             current.RemoteFingerprint,
@@ -636,7 +728,7 @@ public static class ArchidektSyncPlanner
             operations = planned.Select(value => value.Public),
             predictedRequests,
         });
-        return new ArchidektRemotePlan(planned, predictedRequests, planFingerprint);
+        return new ArchidektRemotePlan(planned, predictedRequests, planFingerprint, operationRequestCount);
     }
 
     /// <summary>
@@ -685,28 +777,32 @@ public static class ArchidektSyncPlanner
     /// </summary>
     public static IReadOnlyList<ArchidektZoneContradiction> FindZoneContradictions(
         ArchidektRemotePlan plan,
-        RemoteDeckSnapshot target)
+        RemoteDeckSnapshot target,
+        IReadOnlyDictionary<RemoteDeckEntry, Guid> entryIds)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(target);
         return FindZoneContradictions(
             plan.PlannedOperations
-                .Where(operation => operation.Public.Kind is "entry-add" or "entry-update")
+                .Where(operation => operation.Public.Kind is EntryAddKind or "entry-update")
                 .Select(operation => operation.TargetEntry),
-            target.Categories);
+            target.Categories,
+            entryIds);
     }
 
     /// <summary>
     /// Finds entries whose zone is not the zone their category names give them among the given categories, by the
-    /// same rule as <see cref="FindZoneContradictions(ArchidektRemotePlan, RemoteDeckSnapshot)"/>. A null entry is
-    /// skipped.
+    /// same rule as the overload that takes a plan. A null entry is skipped. Every other entry must have a local
+    /// entry ID in <paramref name="entryIds"/>.
     /// </summary>
     public static IReadOnlyList<ArchidektZoneContradiction> FindZoneContradictions(
         IEnumerable<RemoteDeckEntry?> entries,
-        IReadOnlyList<RemoteDeckCategory> categories)
+        IReadOnlyList<RemoteDeckCategory> categories,
+        IReadOnlyDictionary<RemoteDeckEntry, Guid> entryIds)
     {
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentNullException.ThrowIfNull(categories);
+        ArgumentNullException.ThrowIfNull(entryIds);
         Dictionary<string, RemoteDeckCategory> byName = CategoryNames.Index(categories, value => value.Name);
         List<ArchidektZoneContradiction> found = [];
         foreach (RemoteDeckEntry? entry in entries)
@@ -719,11 +815,64 @@ public static class ArchidektSyncPlanner
             string expected = ArchidektJsonContract.MapZone(entry.CategoryNames, entry.PrimaryCategoryName, byName);
             if (!string.Equals(entry.Zone, expected, StringComparison.Ordinal))
             {
-                found.Add(new ArchidektZoneContradiction(entry.CardName, entry.Zone, expected));
+                found.Add(new ArchidektZoneContradiction(
+                    entryIds.TryGetValue(entry, out Guid entryId)
+                        ? entryId
+                        : throw new ArgumentException(
+                            $"Entry '{entry.CardName}' has no local entry ID.",
+                            nameof(entryIds)),
+                    entry.CardName,
+                    entry.Zone,
+                    expected,
+                    MatchFixFor(entry, byName)));
             }
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// Tells whether a patch-entries change that sets the entry's zone with <c>zoneCategories</c> "match" would clear
+    /// its zone contradiction, by following what that change does to the categories. A zone with a zone category (a
+    /// commander, sideboard, or maybeboard zone) makes that category the only primary one, which a read always maps to
+    /// that zone. The main zone only removes the zone categories, which clears the contradiction when what is left maps
+    /// to main; the change is refused when the primary category is one of them and other categories remain, unless it
+    /// names a new primary category. Any other zone has no zone category, so the change is refused there.
+    /// </summary>
+    private static ArchidektMatchFix MatchFixFor(
+        RemoteDeckEntry entry,
+        IReadOnlyDictionary<string, RemoteDeckCategory> byName)
+    {
+        if (DeckZoneCategories.NameForZone(entry.Zone) is not null)
+        {
+            return ArchidektMatchFix.Clears;
+        }
+
+        if (!DeckZoneCategories.IsMain(entry.Zone))
+        {
+            return ArchidektMatchFix.NotAvailableForZone;
+        }
+
+        List<string> remaining = [.. entry.CategoryNames.Where(value => DeckZoneCategories.ZoneForName(value) is null)];
+        if (remaining.Count == entry.CategoryNames.Count)
+        {
+            return ArchidektMatchFix.DoesNotClear;
+        }
+
+        bool primaryIsZoneCategory = entry.PrimaryCategoryName is not null &&
+            DeckZoneCategories.ZoneForName(entry.PrimaryCategoryName) is not null;
+        if (primaryIsZoneCategory && remaining.Count > 0)
+        {
+            return ArchidektMatchFix.NeedsPrimaryCategory;
+        }
+
+        string? primary = primaryIsZoneCategory ? null : entry.PrimaryCategoryName;
+        return string.Equals(
+            ArchidektJsonContract.MapZone(remaining, primary, byName),
+            entry.Zone,
+            StringComparison.Ordinal)
+                ? ArchidektMatchFix.Clears
+                : ArchidektMatchFix.DoesNotClear;
     }
 
     /// <summary>
@@ -770,7 +919,211 @@ public static class ArchidektSyncPlanner
             categoryIds.Add(loose.Length == 1 ? verifiedCategories[loose[0]] : null);
         }
 
+        // A category whose rename did not land keeps its own provider ID while Archidekt still has that category and
+        // no other target category took it by name, so its flags are not lost.
+        HashSet<string> verifiedIds = new(verifiedCategories.Values, StringComparer.Ordinal);
+        for (int index = 0; index < categoryIds.Count; index++)
+        {
+            string providerId = target.Categories[index].ProviderCategoryId;
+            if (categoryIds[index] is null && verifiedIds.Contains(providerId) && !categoryIds.Contains(providerId))
+            {
+                categoryIds[index] = providerId;
+            }
+        }
+
         return new ArchidektRowLinks(entryRelationIds, categoryIds);
+    }
+
+    /// <summary>
+    /// Tells whether Archidekt changed during a push in a way the push did not: the deck metadata, a category, or a
+    /// card row that no <c>applied</c> or <c>unknown</c> operation touched differs between the reads before and after
+    /// the push, or more categories or rows appeared than such operations created. A row in a category such an
+    /// operation changed is not compared, because the category change can reach the row.
+    /// </summary>
+    public static bool ChangedOutsidePush(
+        RemoteDeckSnapshot before,
+        RemoteDeckSnapshot after,
+        ArchidektRemotePlan plan,
+        IReadOnlyList<ArchidektOperationStatus> statuses)
+    {
+        ArgumentNullException.ThrowIfNull(before);
+        ArgumentNullException.ThrowIfNull(after);
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(statuses);
+        PushTouch touch = Touched(plan, statuses);
+        List<ArchidektPlannedOperation> sent = touch.Sent;
+        if (!touch.Metadata && !MetadataEqual(before, after))
+        {
+            return true;
+        }
+
+        Dictionary<string, RemoteDeckCategory> afterCategories = ById(after.Categories, value => value.ProviderCategoryId);
+        foreach (RemoteDeckCategory category in before.Categories)
+        {
+            if (!touch.Categories.Contains(category.ProviderCategoryId) &&
+                (!afterCategories.TryGetValue(category.ProviderCategoryId, out RemoteDeckCategory? now) ||
+                    !CategoryEqual(category, now)))
+            {
+                return true;
+            }
+        }
+
+        Dictionary<string, RemoteDeckCategory> beforeCategories = ById(before.Categories, value => value.ProviderCategoryId);
+        if (after.Categories.Count(value => !beforeCategories.ContainsKey(value.ProviderCategoryId)) >
+            sent.Count(value => value.Public.Kind == "category-create"))
+        {
+            return true;
+        }
+
+        Dictionary<string, RemoteDeckEntry> afterEntries = ById(after.Entries, value => value.ProviderRelationId);
+        string[] categoryNames = [.. after.Categories.Select(value => value.Name)];
+        foreach (RemoteDeckEntry entry in before.Entries)
+        {
+            if (touch.Reaches(entry))
+            {
+                continue;
+            }
+
+            if (!afterEntries.TryGetValue(entry.ProviderRelationId, out RemoteDeckEntry? now) ||
+                !EntryEqual(now, entry, lenientNames: true, categoryNames))
+            {
+                return true;
+            }
+        }
+
+        Dictionary<string, RemoteDeckEntry> beforeEntries = ById(before.Entries, value => value.ProviderRelationId);
+        return after.Entries.Count(value => !beforeEntries.ContainsKey(value.ProviderRelationId)) >
+            sent.Count(value => value.Public.Kind == EntryAddKind);
+    }
+
+    /// <summary>
+    /// Composes the Archidekt deck a baseline records after a push during which Archidekt also changed (see
+    /// <see cref="ChangedOutsidePush"/>): the metadata, categories, and rows an <c>applied</c> or <c>unknown</c>
+    /// operation touched or created come from the read after the push, and everything else from the read before it.
+    /// Both fingerprints are computed from the composed content, so the outside edit stays a change on Archidekt that
+    /// a pull takes, while the rows the push created stay linked.
+    /// </summary>
+    public static RemoteDeckSnapshot ComposeAfterOutsideEdit(
+        RemoteDeckSnapshot before,
+        RemoteDeckSnapshot after,
+        ArchidektRemotePlan plan,
+        IReadOnlyList<ArchidektOperationStatus> statuses)
+    {
+        ArgumentNullException.ThrowIfNull(before);
+        ArgumentNullException.ThrowIfNull(after);
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(statuses);
+        PushTouch touch = Touched(plan, statuses);
+        Dictionary<string, RemoteDeckCategory> afterCategories = ById(after.Categories, value => value.ProviderCategoryId);
+        List<RemoteDeckCategory> categories = [];
+        foreach (RemoteDeckCategory category in before.Categories)
+        {
+            if (!touch.Categories.Contains(category.ProviderCategoryId))
+            {
+                categories.Add(category);
+            }
+            else if (afterCategories.TryGetValue(category.ProviderCategoryId, out RemoteDeckCategory? now))
+            {
+                categories.Add(now);
+            }
+        }
+
+        // A new category or row is the push's own only when it matches what a sent operation created.
+        Dictionary<string, RemoteDeckCategory> beforeCategories = ById(before.Categories, value => value.ProviderCategoryId);
+        List<string> created = [.. touch.Sent
+            .Where(value => value.Public.Kind == "category-create")
+            .Select(value => value.TargetCategory!.Name)];
+        foreach (RemoteDeckCategory category in after.Categories)
+        {
+            int match = created.FindIndex(name => string.Equals(name, category.Name, StringComparison.OrdinalIgnoreCase));
+            if (!beforeCategories.ContainsKey(category.ProviderCategoryId) && match >= 0)
+            {
+                created.RemoveAt(match);
+                categories.Add(category);
+            }
+        }
+
+        Dictionary<string, RemoteDeckEntry> afterEntries = ById(after.Entries, value => value.ProviderRelationId);
+        List<RemoteDeckEntry> entries = [];
+        foreach (RemoteDeckEntry entry in before.Entries)
+        {
+            if (!touch.Reaches(entry))
+            {
+                entries.Add(entry);
+            }
+            else if (afterEntries.TryGetValue(entry.ProviderRelationId, out RemoteDeckEntry? now))
+            {
+                entries.Add(now);
+            }
+        }
+
+        Dictionary<string, RemoteDeckEntry> beforeEntries = ById(before.Entries, value => value.ProviderRelationId);
+        List<RemoteDeckEntry> added = [.. touch.Sent
+            .Where(value => value.Public.Kind == EntryAddKind)
+            .Select(value => value.TargetEntry!)];
+        foreach (RemoteDeckEntry entry in after.Entries)
+        {
+            int match = added.FindIndex(target => target.Quantity == entry.Quantity && CardIdentityEqual(entry, target));
+            if (!beforeEntries.ContainsKey(entry.ProviderRelationId) && match >= 0)
+            {
+                added.RemoveAt(match);
+                entries.Add(entry);
+            }
+        }
+
+        RemoteDeckSnapshot metadata = touch.Metadata ? after : before;
+        RemoteDeckSnapshot composed = after with
+        {
+            Name = metadata.Name,
+            Description = metadata.Description,
+            Format = metadata.Format,
+            Visibility = metadata.Visibility,
+            ParentFolderId = metadata.ParentFolderId,
+            Categories = categories,
+            Entries = entries,
+        };
+        (string content, string remote) = ArchidektJsonContract.Recompute(composed);
+        return composed with { ContentFingerprint = content, RemoteFingerprint = remote };
+    }
+
+    /// <summary>
+    /// Collects the operations a push sent (<c>applied</c> or <c>unknown</c>) and the provider rows they touched.
+    /// </summary>
+    private static PushTouch Touched(ArchidektRemotePlan plan, IReadOnlyList<ArchidektOperationStatus> statuses)
+    {
+        HashSet<int> sentSequences = [.. statuses
+            .Where(value => value.Status is "applied" or "unknown")
+            .Select(value => value.Sequence)];
+        PushTouch touch = new([.. plan.PlannedOperations.Where(value => sentSequences.Contains(value.Public.Sequence))]);
+        foreach (ArchidektPlannedOperation operation in touch.Sent)
+        {
+            if (operation.CurrentCategory is { } category)
+            {
+                touch.Categories.Add(category.ProviderCategoryId);
+                touch.CategoryNames.Add(category.Name);
+            }
+
+            if (operation.CurrentEntry is { } entry)
+            {
+                touch.Rows.Add(entry.ProviderRelationId);
+            }
+        }
+
+        return touch;
+    }
+
+    /// <summary>
+    /// Indexes provider rows by their provider ID; the first row wins when a read repeats one.
+    /// </summary>
+    private static Dictionary<string, TRow> ById<TRow>(IEnumerable<TRow> rows, Func<TRow, string> id)
+    {
+        Dictionary<string, TRow> index = new(StringComparer.Ordinal);
+        foreach (TRow row in rows)
+        {
+            index.TryAdd(id(row), row);
+        }
+
+        return index;
     }
 
     /// <summary>
@@ -1024,6 +1377,46 @@ public static class ArchidektSyncPlanner
 }
 
 /// <summary>
+/// Holds the operations a push sent and the provider categories and rows they touched.
+/// </summary>
+internal sealed class PushTouch(List<ArchidektPlannedOperation> sent)
+{
+    /// <summary>
+    /// Gets the operations whose status is <c>applied</c> or <c>unknown</c>, in plan order.
+    /// </summary>
+    internal List<ArchidektPlannedOperation> Sent { get; } = sent;
+
+    /// <summary>
+    /// Gets whether a metadata update was sent.
+    /// </summary>
+    internal bool Metadata => Sent.Exists(value => value.Public.Kind == "metadata-update");
+
+    /// <summary>
+    /// Gets the provider IDs of the existing categories a sent operation changed or deleted.
+    /// </summary>
+    internal HashSet<string> Categories { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Gets the names those categories had before the push.
+    /// </summary>
+    internal HashSet<string> CategoryNames { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets the relation IDs of the existing rows a sent operation changed or removed.
+    /// </summary>
+    internal HashSet<string> Rows { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Tells whether the push may have changed a row read before it: a sent operation touched the row or one of its
+    /// categories.
+    /// </summary>
+    internal bool Reaches(RemoteDeckEntry entry)
+    {
+        return Rows.Contains(entry.ProviderRelationId) || entry.CategoryNames.Any(CategoryNames.Contains);
+    }
+}
+
+/// <summary>
 /// Carries the provider IDs matched to pushed target rows, in target order; null means no exact match.
 /// </summary>
 internal sealed record ArchidektRowLinks(
@@ -1033,10 +1426,16 @@ internal sealed record ArchidektRowLinks(
 /// <summary>
 /// Carries one deterministic internal plan plus its model-facing descriptors and request bound.
 /// </summary>
+/// <param name="PlannedOperations">The operations in execution order.</param>
+/// <param name="PredictedProviderRequests">The requests to Archidekt the push needs in all, with its reads.</param>
+/// <param name="PlanFingerprint">The fingerprint a preview and its apply must share.</param>
+/// <param name="OperationRequestCount">The requests the operations send. It includes the reserve for sending the
+/// largest batch of adds again card by card, which a push may use once.</param>
 public sealed record ArchidektRemotePlan(
     IReadOnlyList<ArchidektPlannedOperation> PlannedOperations,
     int PredictedProviderRequests,
-    string PlanFingerprint)
+    string PlanFingerprint,
+    int OperationRequestCount)
 {
     /// <summary>
     /// Gets immutable internal operations in execution order.
@@ -1062,9 +1461,45 @@ public sealed record ArchidektPlannedOperation(
     RemoteDeckEntry? CurrentEntry);
 
 /// <summary>
-/// Names one entry whose zone differs from the zone its categories give it.
+/// Names one entry whose zone differs from the zone its categories give it, and says whether setting the categories to
+/// match the zone would clear that.
 /// </summary>
-public sealed record ArchidektZoneContradiction(string CardName, string Zone, string ExpectedZone);
+public sealed record ArchidektZoneContradiction(
+    Guid EntryId,
+    string CardName,
+    string Zone,
+    string ExpectedZone,
+    ArchidektMatchFix MatchFix);
+
+/// <summary>
+/// Says whether a patch-entries change that sets the zone of an entry with zoneCategories "match" is accepted and
+/// leaves the zone its categories give equal to the zone set.
+/// </summary>
+public enum ArchidektMatchFix
+{
+    /// <summary>
+    /// The change is accepted and the categories then give the zone that was set.
+    /// </summary>
+    Clears,
+
+    /// <summary>
+    /// The change is refused unless it also names a primary category that is not a zone category, because the primary
+    /// category is one and other categories remain.
+    /// </summary>
+    NeedsPrimaryCategory,
+
+    /// <summary>
+    /// The zone comes from a category the change does not touch, such as a primary category that is not included in the
+    /// deck or a commander category, so the contradiction stays.
+    /// </summary>
+    DoesNotClear,
+
+    /// <summary>
+    /// The change is refused, because the zone is neither main nor a zone with a zone category (such as a companion
+    /// zone), so no category gives it.
+    /// </summary>
+    NotAvailableForZone,
+}
 
 /// <summary>
 /// Holds what a pull keeps of the local deck: the entries and categories added locally since the last sync, and what

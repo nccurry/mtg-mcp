@@ -208,9 +208,51 @@ with the entries you hold before you add a card you think is missing. To check w
 pass `cardNames` (1 to 100 names, matched ignoring case, a double-faced card by either face): only the matching entries
 come back, `cardNamesNotFound` lists the names with no match, and the totals still cover the whole deck. Pass the same
 `cardNames` with `nextCursor`. With `cardNames`, `totalEntries` and `nextCursor` count the matching entries, while
-`entryCount`, `cardCount`, and `cardsByZone` still cover the whole deck. `responseFormat: "concise"` returns only `entryId`, `cardName`, `quantity`, `zone`, and
+`entryCount`, `cardCount`, and `cardsByZone` still cover the whole deck. To read one part of a deck, also pass
+`zones` (any non-empty zone codes, such as `commander`, `main`, `sideboard`, `maybeboard`; a code with no entry is listed in `zonesNotFound`) and `categoryNames` (1 to
+100 names, matched ignoring case against an entry's primary and other categories). Values in one filter combine with
+OR and the filters combine with AND; `zonesNotFound` and `categoryNamesNotFound` list the values that match no entry of
+the deck, and no match is a normal result with no entries. The cursor covers every filter, so pass the same ones with
+`nextCursor`. `responseFormat: "concise"` returns only `entryId`, `cardName`, `quantity`, `zone`, and
 `categoryNames` for each entry, so a large deck fits in fewer pages; the default `full` is unchanged. The summary of every tool that writes a deck
 carries the same totals (`cardsByZone` with the entry count).
+
+To change many entries at once, send one `patch-entries` change in `local_deck_apply_changes`. It names 1 to 100
+`entryIds` (entries added earlier in the same batch count) and only the fields that change: `quantity`, `zone`,
+`sortOrder`, `finish`, `language`, a `printing`, `primaryCategoryId`, `addCategoryIds`, and `removeCategoryIds`.
+The same patch applies to every listed entry, and a field left out stays as it is. A new primary category
+replaces the previous primary assignment unless the old one is in `addCategoryIds`. Whenever the patch sets
+`zone`, it must also set `zoneCategories`: `match` makes the zone's category (Commander, Sideboard, or Maybeboard) the
+entry's primary category, creating it when the deck lacks it and dropping the entry's other zone categories (for zone
+`main`, it drops zone categories, and a lost primary needs `primaryCategoryId`); `leave` changes only the zone. Use
+`match` for a deck bound to Archidekt, which reads a card's zone from its categories. The caller always chooses; the
+server never picks one. A refused patch (no field, an unknown or repeated ID, the same category in two category
+fields) writes nothing. The example moves two maybeboard entries to the sideboard and keeps both zone and category in
+step:
+
+```json
+{
+  "deckId": "0193e97a-ef95-7700-8000-000000000001",
+  "expectedRevision": 7,
+  "changes": [
+    {
+      "kind": "patch-entries",
+      "entryIds": [
+        "0193e97a-ef95-7700-8000-0000000000b1",
+        "0193e97a-ef95-7700-8000-0000000000b2"
+      ],
+      "zone": "sideboard",
+      "zoneCategories": "match"
+    }
+  ]
+}
+```
+
+`remove-entry` takes either `entryId` or `entryIds` (1 to 100, exactly one of the two). An `add-entry` or a
+`local_deck_create` entry takes `categoryIds`, `primaryCategoryId`, and `zoneCategories` beside its other fields, so a card is
+added into its categories in one change, and a category added earlier in the same batch can be named by its
+`categoryId`. On an entry draft `zoneCategories` is optional and defaults to `leave`; a skipped add (below) assigns no
+category. `update-entry`, `assign-category`, and `unassign-category` keep working.
 
 The tools that write a deck (`local_deck_apply_changes`, `local_deck_create`,
 `local_deck_import_create`, `local_deck_identity_reconcile_apply`, and
@@ -337,7 +379,8 @@ A paged deck cuts its name to 1,000 UTF-8 bytes (`nameTruncated`) and its descri
 SHA-256 of the whole content) and returns one chunk of one artifact's content of at most 30,000 UTF-8 bytes of
 JSON text; pass `artifact` and `offset` (the previous `chunk.nextOffset`, a count of UTF-16 code units) to read on.
 The chunks joined in order are the exact file. The field-preservation report comes only with the chunk at
-offset 0. The Scryfall card tools cut a page of cards, in any `responseFormat`, to the size limit and return
+offset 0. `local_deck_get` takes `zones`, `categoryNames`, and `cardNames` filters, and the Archidekt diff and
+preview tools take `responseFormat: "concise"`, to read less of a large deck or push. The Scryfall card tools cut a page of cards, in any `responseFormat`, to the size limit and return
 `nextCursor` for the rest; they also report `returnedCount`, `requestedCount`, and `cutReason` (see
 [Query Scryfall](#query-scryfall)).
 
@@ -433,7 +476,10 @@ These tools return facts only. They never say a deck is legal or illegal.
   to two card lists. A list is a saved `scryfall_search`, up to 150 Scryfall or Oracle IDs, a local
   deck, a deck backup, an Archidekt deck or snapshot, or another comparison.
 - `card_list_query` filters, groups, and totals any one card list by named
-  fields, with a cursor for large results.
+  fields, with a cursor for large results. For a local deck or deck backup source, `entryId` is a field too, so a
+  query on card properties and zone (every Aura in the maybeboard) returns the entry IDs that
+  `local_deck_apply_changes` needs. An Archidekt deck or snapshot source has no local entry IDs and refuses it
+  (`invalid-field`).
 - `local_deck_validate` takes an optional `rules: "commander"` and then adds
   Commander facts from installed Scryfall data: deck size, commander
   eligibility, color identity, copy limits, format legality, Game Changers,
@@ -678,10 +724,16 @@ folders, and named snapshots. Apply operations require current revisions,
 fingerprints, and preview evidence. The MCP never chooses a conflict winner.
 
 Requests start at least two seconds apart per configured account. The adapter
-allows at most 30 starts in 60 seconds and 150 requests per tool invocation.
-It stops on `403` and `429`. Ambiguous mutations are not retried. A push of more
-than about 140 operations needs more than 150 requests, so `archidekt_push_apply`
-cannot run it in one call; push the change in smaller edits.
+allows at most 30 starts in 60 seconds and 150 requests to Archidekt per tool call (for a push, per `archidekt_push_apply` call).
+It stops on `403` and `429`. Ambiguous mutations are not retried. A push sends added cards in
+batches of up to 25 cards per request; other operations, and every card after a rejected batch,
+are one request each. A rejected batch of adds is resent one card at a time, once per push: a refused card is
+`not-applied` and the push continues (outcome `partial`); a second rejected batch is `not-sent`, so push again. Each
+added card is confirmed by the `patchId` Archidekt echoes; a `403`, `404`, or `422` leaves the operation `unknown`
+and keeps the statuses of the operations before it. `archidekt_push_preview` shows `predictedProviderRequests` (the
+operations, printing searches, reads, and room to retry the reads and one batch fallback) beside
+`providerRequestLimit`. A push predicted over the limit is refused in the preview and the apply, naming an
+estimate of how many of its operations fit. Apply part of the local changes first, then preview and push again for the rest.
 
 Results are cut to fit the client. Claude Code saves a tool result longer than
 50,000 characters to a file and shows the agent only the path, so these tools aim
@@ -699,6 +751,17 @@ the later pages `expectedPreviewFingerprint`, the `previewFingerprint` of the fi
 preview that changed in between is refused instead of paged out of line.
 `archidekt_deck_get` leaves out unknown provider fields over 8,000 bytes and sets
 `extensionsOmitted`; they cannot be read through this tool.
+
+`archidekt_sync_diff`, `archidekt_pull_preview`, and `archidekt_push_preview` take `responseFormat`: `full` (the
+default; `standard` is the same) returns the whole baseline, local, and remote value of each difference row, and
+`concise` returns `path`, `state`, and `fields`, each field with its `name` and `baseline`, `local`, and `remote`
+values, listing only the fields whose values differ. The preview fingerprint, guards, summary, operations, and
+`applyAvailable` are the same in both formats, and a page is cut by the size of the format returned, so a concise
+page holds more rows. Use `concise` to review an edit-sized push; an 18-edit push preview of a 347-entry deck fits
+in about 7,000 characters, against more than 36,000 in `full`. `archidekt_snapshot_restore_preview` does not take it. Each pull and push preview also returns
+`applyOptions` when its apply call must repeat an option: `discardLocalChanges: true` for a pull, or `confirmRemovals`
+with the removal count for a push. A pull apply that passes the other `discardLocalChanges` value than its preview is
+refused with `pull-discard-option-mismatch`, naming the value the preview used.
 
 `archidekt_deck_get` and `archidekt_snapshots_get` (kind `get`) take:
 
@@ -749,6 +812,16 @@ and links created entries, but the local deck is not marked synchronized: what
 Archidekt did not take stays visible as a local change: a pull keeps leftover additions and conflicts on any other
 leftover change, and the next push plans only that difference.
 
+After a `partial` push or a `verification-mismatch`, the read after the push is
+compared with the read before it. If someone else changed the deck on Archidekt
+during the push (the details, a category, or a card the push did not touch),
+the baseline takes only what the push touched or created from the read after it
+and keeps everything else as read before, so the outside edit shows as an
+Archidekt change instead of a local one, and the cards the push added stay
+linked. The `notice` says Archidekt changed during the push: preview a pull
+before pushing again; the push preview asks for that pull, and the pull takes
+the edit. Otherwise the baseline records the read after the push.
+
 Category names are case-sensitive, as on Archidekt: `Sideboard` and `SIDEBOARD`
 are two categories. A push compares names exactly. Archidekt keeps no card zone
 of its own; it comes from the categories (a category named Commander, Sideboard
@@ -759,7 +832,12 @@ look at the primary category first. A deck pulled by `0.13.0` still reads as unc
 such entry's move to `maybeboard` as an ordinary change from Archidekt, a push before that pull plans nothing for
 it and writes the zone `maybeboard` into those local entries, and a card added locally before the pull does not
 make those entries show as local changes. A push that would send a card whose zone differs from that is refused
-with `entry-zone-contradicts-category`, naming the cards.
+with `entry-zone-contradicts-category`, naming each card and local entry ID and giving both fixes as ready
+`patch-entries` changes: set the zone to what the categories give (`zoneCategories: "leave"`), or keep the zone and
+make the categories match it (`zoneCategories: "match"`, which creates a missing Sideboard, Maybeboard, or Commander
+category; offered only when it is accepted and clears the contradiction, else the message says what else to change).
+The server chooses neither. To move cards between zones on a bound deck, send `patch-entries` with
+`zoneCategories: "match"` and then push.
 
 A difference where the local deck and Archidekt changed the same field to the
 same value is `converged`: no conflict, no operation, and the next apply
@@ -826,12 +904,19 @@ How a push reports what happened (`archidekt_push_apply`, field `outcome` and th
   ("Nothing was sent to Archidekt for this operation."), and the operations after it are `not-attempted`. A
   `429` on a write is `not-sent` (Archidekt did not process it) and is never retried automatically.
 - `partial`: some operations were applied, or one failed after its write was sent (`unknown`: it may or may not
-  have been applied). The rest are `not-sent` or `not-attempted`.
+  have been applied). The rest are `not-sent` or `not-attempted`. The push reads Archidekt back and records what
+  landed as the new baseline, so the next `archidekt_push_preview` offers only the changes that were not applied,
+  and a pull keeps the cards that were not added. An `unknown` card is not linked: if it did land, the next push replaces it rather than adding
+  it twice. When the read fails, the baseline stays as it was and the `notice` says so. When the read shows an edit
+  someone else made on Archidekt during the push, that edit is recorded as an Archidekt change, and the `notice`
+  says to preview a pull before pushing again.
 - `applied-unverified`: the writes were sent, but Archidekt could not be read afterwards (for example it returned
   `429`). The applied statuses are kept, the local baseline is not updated, and the `notice` says to run
   `archidekt_pull_preview` before pushing again.
 - `verification-mismatch`: the check after the writes found a difference. It reads once more after about a second
-  (Archidekt can lag behind its own writes), and `differences` lists the rows that still differ (up to 25).
+  (Archidekt can lag behind its own writes), and `differences` lists the rows that still differ (up to 25). When
+  an edit someone else made during the push explains the difference, it is recorded as an Archidekt change, as for
+  `partial`, and the `notice` says to preview a pull before pushing again.
 
 Reads that get a `429` wait for `Retry-After` (at most about 10 seconds) and retry up to twice.
 
@@ -905,7 +990,9 @@ A failed tool call sets the MCP `isError` flag and keeps the structured body
 (`kind`, `reasonCode`, `message`). Check `isError` first, then read `kind`.
 A call whose arguments cannot be read returns `kind: "invalid-input"`, reason
 `invalid-arguments`, and a top-level `path` to the rejected value, for example
-`changes[0].entryDraft.quantity`. A union's `kind` property (such as a deck
+`changes[0].entryDraft.quantity`. The message names the expected type in plain words ("The value at
+'changes[3].entry.sortOrder' must be an integer."; "... must be a UUID"). A wrong confirmation phrase on a
+destructive Archidekt tool (`confirmation-required`) shows the exact phrase to pass. A union's `kind` property (such as a deck
 change's `add-entry`) may appear anywhere in its object. A `conflict` caused by
 stale state includes `current`, the current local revision, remote fingerprint,
 or both, to preview again against.
@@ -974,8 +1061,9 @@ Each production assembly must maintain at least 90 percent line coverage.
 | `MtgMcp.Simulation` | Pure seeded sampling engine behind `stats_simulate` and its on-curve preset |
 | `MtgMcp.App` | MCP host, configuration, composition, and schemas |
 
-Read [North Star](docs/north-star.md), [Design Goals](docs/design-goals.md), and
-the [rewrite guide](docs/rewrite-guide.md) for durable constraints.
+The [architecture pages](docs/architecture/) cover the project map, the MCP surface rules (naming, paging, errors,
+preview and apply pairs), and the deck model (zones, categories, change kinds). Read [North Star](docs/north-star.md),
+[Design Goals](docs/design-goals.md), and the [rewrite guide](docs/rewrite-guide.md) for durable constraints.
 
 ## License
 

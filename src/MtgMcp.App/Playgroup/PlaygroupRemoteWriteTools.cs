@@ -34,7 +34,9 @@ internal sealed class PlaygroupRemoteWriteTools
         UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> CreateGameEventsBatchAsync(
         [Description("Exact Playgroup game identifier receiving the events.")] int gameId,
-        [Description("Caller-supplied ordered event batch sent exactly once.")]
+        [Description(
+            "Caller-supplied ordered event batch sent exactly once. An event's optional metadata is a free-form " +
+            "JSON object, such as {\"tag\":\"good_sport\"} for an Endorsement.")]
         IReadOnlyList<PlaygroupEventImport> events,
         CancellationToken cancellationToken = default)
     {

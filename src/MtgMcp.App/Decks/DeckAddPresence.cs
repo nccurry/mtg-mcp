@@ -36,12 +36,19 @@ internal static class DeckAddPresence
     /// <summary>
     /// Checks every change in order, as the batch will apply them, and returns the batch without the adds to leave
     /// out. Skipping applies to every card, basic lands included, because the caller asked for it. An add is left
-    /// out only when the entry it matches is still in the same zone after the whole batch.
+    /// out only when the entry it matches is still in the same zone after the whole batch. The caller indexes give,
+    /// for each change, the position of the input the caller sent it in, so a message names the change the caller
+    /// wrote.
     /// </summary>
-    internal static DeckAddPresenceResult Check(DeckDocument deck, IReadOnlyList<DeckChange> changes, bool skipPresent)
+    internal static DeckAddPresenceResult Check(
+        DeckDocument deck,
+        IReadOnlyList<DeckChange> changes,
+        IReadOnlyList<int> callerIndexes,
+        bool skipPresent)
     {
         ArgumentNullException.ThrowIfNull(deck);
         ArgumentNullException.ThrowIfNull(changes);
+        ArgumentNullException.ThrowIfNull(callerIndexes);
         List<Present> present = FromDeck(deck);
         Dictionary<Guid, Skipped> skippedById = [];
         List<DeckChange> kept = new(changes.Count);
@@ -49,12 +56,19 @@ internal static class DeckAddPresence
         for (int index = 0; index < changes.Count; index++)
         {
             DeckChange change = changes[index];
-            if (ReferencedEntry(change) is Guid referenced && skippedById.TryGetValue(referenced, out Skipped? gone))
+            foreach (Guid referenced in ReferencedEntries(change))
             {
-                return new DeckAddPresenceResult(changes, [], Refusal(index + 1, gone));
+                if (skippedById.TryGetValue(referenced, out Skipped? gone))
+                {
+                    return new DeckAddPresenceResult(changes, [], Refusal(callerIndexes[index] + 1, gone));
+                }
             }
 
-            if (change is UpdateDeckEntryChange update)
+            if (change is PatchDeckEntriesChange patch)
+            {
+                ApplyPatch(present, patch);
+            }
+            else if (change is UpdateDeckEntryChange update)
             {
                 Present? before = present.Find(value => value.EntryId == update.Entry.EntryId);
                 present.RemoveAll(value => value.EntryId == update.Entry.EntryId);
@@ -76,7 +90,7 @@ internal static class DeckAddPresence
             Present? sameZone = skipPresent ? FindSkipTarget(present, changes, index, added) : null;
             if (sameZone is not null)
             {
-                string? refusal = LeaveOut(present, skippedById, issues, index + 1, draft, sameZone);
+                string? refusal = LeaveOut(present, skippedById, issues, callerIndexes[index] + 1, draft, sameZone);
                 if (refusal is not null)
                 {
                     return new DeckAddPresenceResult(changes, [], refusal);
@@ -98,6 +112,25 @@ internal static class DeckAddPresence
         }
 
         return new DeckAddPresenceResult(kept, issues, null);
+    }
+
+    /// <summary>
+    /// Gives each patched entry the zone and quantity the patch sets, so later adds compare against them.
+    /// </summary>
+    private static void ApplyPatch(List<Present> present, PatchDeckEntriesChange patch)
+    {
+        for (int position = 0; position < present.Count; position++)
+        {
+            Present value = present[position];
+            if (value.EntryId is Guid id && patch.EntryIds.Contains(id))
+            {
+                present[position] = value with
+                {
+                    Zone = patch.Zone?.Trim() ?? value.Zone,
+                    Quantity = patch.Quantity ?? value.Quantity,
+                };
+            }
+        }
     }
 
     /// <summary>
@@ -194,6 +227,10 @@ internal static class DeckAddPresence
                 Present updated = Present.From(update.Entry, NoCategories);
                 stays = SameCard(updated, added) && SameZone(updated, added);
             }
+            else if (changes[index] is PatchDeckEntriesChange { Zone: not null } patch && patch.EntryIds.Contains(id))
+            {
+                stays = stays && string.Equals(patch.Zone.Trim(), added.Zone, StringComparison.OrdinalIgnoreCase);
+            }
         }
 
         return stays;
@@ -237,17 +274,18 @@ internal static class DeckAddPresence
     }
 
     /// <summary>
-    /// Gives the entry ID an entry-level change refers to, or null for a change that does not name an entry.
+    /// Gives the entry IDs an entry-level change refers to, or none for a change that does not name an entry.
     /// </summary>
-    private static Guid? ReferencedEntry(DeckChange change)
+    private static IReadOnlyList<Guid> ReferencedEntries(DeckChange change)
     {
         return change switch
         {
-            UpdateDeckEntryChange update => update.Entry.EntryId,
-            RemoveDeckEntryChange remove => remove.EntryId,
-            AssignDeckCategoryChange assign => assign.EntryId,
-            UnassignDeckCategoryChange unassign => unassign.EntryId,
-            _ => null,
+            UpdateDeckEntryChange update => [update.Entry.EntryId],
+            PatchDeckEntriesChange patch => patch.EntryIds,
+            RemoveDeckEntryChange remove => [remove.EntryId],
+            AssignDeckCategoryChange assign => [assign.EntryId],
+            UnassignDeckCategoryChange unassign => [unassign.EntryId],
+            _ => [],
         };
     }
 

@@ -8,12 +8,31 @@ namespace MtgMcp.Decks;
 internal static class DeckContractValidator
 {
     /// <summary>
-    /// Validates and normalizes one new entry while preserving all explicit identities.
+    /// Validates and normalizes one new entry while preserving all explicit identities and the categories the draft
+    /// asks for.
     /// </summary>
-    internal static DeckEntry Normalize(DeckEntryDraft value, Func<Guid> createId)
+    internal static DeckNewEntry Normalize(DeckEntryDraft value, Func<Guid> createId)
     {
         ArgumentNullException.ThrowIfNull(value);
-        if (DeckEntryDraftRules.FirstProblem(value) is string problem)
+        DeckEntry entry = NormalizeEntry(value, createId);
+        if (DeckEntryDraftRules.CategoryProblem(value) is string problem)
+        {
+            throw new DeckInputException(problem);
+        }
+
+        return new DeckNewEntry(
+            entry,
+            [.. (value.CategoryIds ?? []).Distinct()],
+            value.PrimaryCategoryId,
+            value.ZoneCategories);
+    }
+
+    /// <summary>
+    /// Validates and normalizes the entry fields of a draft, leaving its categories aside.
+    /// </summary>
+    private static DeckEntry NormalizeEntry(DeckEntryDraft value, Func<Guid> createId)
+    {
+        if (DeckEntryDraftRules.FirstEntryProblem(value) is string problem)
         {
             throw new DeckInputException(problem);
         }
@@ -38,7 +57,7 @@ internal static class DeckContractValidator
     internal static DeckEntry Normalize(DeckEntry value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        DeckEntry normalized = Normalize(
+        DeckEntry normalized = NormalizeEntry(
             new DeckEntryDraft(
                 value.Quantity,
                 value.CardName,
@@ -141,6 +160,23 @@ internal static class DeckContractValidator
 }
 
 /// <summary>
+/// Holds a normalized new entry together with the categories its draft asked for. The category IDs are distinct, and
+/// the zone categories mode is as the caller gave it, or null.
+/// </summary>
+internal sealed record DeckNewEntry(
+    DeckEntry Entry,
+    IReadOnlyList<Guid> CategoryIds,
+    Guid? PrimaryCategoryId,
+    string? ZoneCategories)
+{
+    /// <summary>
+    /// Tells whether the draft asked for any category work.
+    /// </summary>
+    internal bool HasCategories => CategoryIds.Count > 0 || PrimaryCategoryId is not null ||
+        DeckZoneCategories.IsMatch(ZoneCategories);
+}
+
+/// <summary>
 /// Signals caller-owned deck input that cannot enter the local store.
 /// </summary>
 internal sealed class DeckInputException : Exception
@@ -148,10 +184,25 @@ internal sealed class DeckInputException : Exception
     /// <summary>
     /// Creates a bounded validation failure safe for conversion to structured invalid input.
     /// </summary>
-    internal DeckInputException(string message)
+    internal DeckInputException(string message, string reasonCode = DeckReasonCodes.InvalidDeckInput)
         : base(message)
     {
+        ReasonCode = reasonCode;
     }
+
+    /// <summary>
+    /// Builds the refusal of a change or draft the deck cannot take. The whole request is rolled back or never
+    /// started, so the message says nothing was written.
+    /// </summary>
+    internal static DeckInputException Refusal(string message)
+    {
+        return new DeckInputException(message + " Nothing was written.", DeckReasonCodes.InvalidDeckChange);
+    }
+
+    /// <summary>
+    /// Gets the lowercase reason code projected to the public result union.
+    /// </summary>
+    internal string ReasonCode { get; }
 }
 
 /// <summary>

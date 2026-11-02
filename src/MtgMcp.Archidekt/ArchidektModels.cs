@@ -242,14 +242,170 @@ public sealed record RemoteNamedSnapshot(
     ArchidektRetrievalEvidence Evidence);
 
 /// <summary>
-/// Describes one exact local, baseline, and remote comparison path.
+/// Names one comparison path and its state; the full and the concise difference rows both start with these two fields.
+/// </summary>
+[JsonDerivedType(typeof(ArchidektDifference))]
+[JsonDerivedType(typeof(ArchidektConciseDifference))]
+public abstract record ArchidektDifferenceRow(string Path, string State);
+
+/// <summary>
+/// Describes one exact local, baseline, and remote comparison path with the whole value of each side.
 /// </summary>
 public sealed record ArchidektDifference(
     string Path,
     string State,
     string? BaselineValue,
     string? LocalValue,
-    string? RemoteValue);
+    string? RemoteValue)
+    : ArchidektDifferenceRow(Path, State);
+
+/// <summary>
+/// Shows one differing field of a row: its value on each side. A side that does not hold the row has no value, and a
+/// side that holds the row with an empty field has a JSON null.
+/// </summary>
+public sealed record ArchidektDifferenceField(
+    string Name,
+    JsonElement? Baseline,
+    JsonElement? Local,
+    JsonElement? Remote);
+
+/// <summary>
+/// Describes one comparison path by the fields whose values differ, instead of the whole value of each side. The whole
+/// values on a full row are the JSON of one entry or category (or one text value), so the fields are read back from
+/// that JSON and nothing is recomputed from the decks.
+/// </summary>
+public sealed record ArchidektConciseDifference(
+    string Path,
+    string State,
+    IReadOnlyList<ArchidektDifferenceField> Fields)
+    : ArchidektDifferenceRow(Path, State)
+{
+    /// <summary>
+    /// Gets the differing fields in the order the entry or category lists them.
+    /// </summary>
+    public IReadOnlyList<ArchidektDifferenceField> Fields { get; init; } = Array.AsReadOnly(Fields.ToArray());
+
+    /// <summary>
+    /// Lists the fields of a row whose values are not the same on the baseline, local, and remote side. A side that
+    /// lacks the row counts as a different value, so an added or removed row lists the fields of the sides that hold
+    /// it. A row for one text value, such as the deck name, lists that one value under its last path segment. A
+    /// remote change whose local side was not compared (a stale zone move) takes the baseline row as the local row, so
+    /// it lists only the fields Archidekt changed and does not look like a local removal.
+    /// </summary>
+    public static ArchidektConciseDifference From(ArchidektDifference difference)
+    {
+        ArgumentNullException.ThrowIfNull(difference);
+        bool holdsObject = difference.Path.StartsWith("/entries/", StringComparison.Ordinal) ||
+            difference.Path.StartsWith("/categories/", StringComparison.Ordinal);
+        return new ArchidektConciseDifference(
+            difference.Path,
+            difference.State,
+            holdsObject ? ObjectFields(difference) : [TextField(difference)]);
+    }
+    /// <summary>
+    /// Builds the one field of a row that holds a single text value.
+    /// </summary>
+    private static ArchidektDifferenceField TextField(ArchidektDifference difference)
+    {
+        return new ArchidektDifferenceField(
+            difference.Path[(difference.Path.LastIndexOf('/') + 1)..],
+            Text(difference.BaselineValue),
+            Text(difference.LocalValue),
+            Text(difference.RemoteValue));
+    }
+
+    /// <summary>
+    /// Wraps a text value as a JSON string, or returns null when the side has no value.
+    /// </summary>
+    private static JsonElement? Text(string? value)
+    {
+        return value is null ? null : JsonSerializer.SerializeToElement(value);
+    }
+
+    /// <summary>
+    /// Lists the fields of an entry or category row that differ between its three sides.
+    /// </summary>
+    private static List<ArchidektDifferenceField> ObjectFields(ArchidektDifference difference)
+    {
+        Dictionary<string, JsonElement>? baseline = Properties(difference.BaselineValue);
+        bool localNotCompared = difference.State == ArchidektDifferenceStates.RemoteChanged &&
+            difference.LocalValue is null;
+        Dictionary<string, JsonElement>?[] sides =
+        [
+            baseline,
+            localNotCompared ? baseline : Properties(difference.LocalValue),
+            Properties(difference.RemoteValue),
+        ];
+        List<string> names = [];
+        foreach (Dictionary<string, JsonElement>? side in sides)
+        {
+            if (side is null)
+            {
+                continue;
+            }
+
+            foreach (string name in side.Keys)
+            {
+                if (!names.Contains(name, StringComparer.Ordinal))
+                {
+                    names.Add(name);
+                }
+            }
+        }
+
+        List<ArchidektDifferenceField> fields = [];
+        foreach (string name in names)
+        {
+            JsonElement? baselineValue = ValueOf(sides[0], name);
+            JsonElement? localValue = ValueOf(sides[1], name);
+            JsonElement? remoteValue = ValueOf(sides[2], name);
+            if (!SameValue(baselineValue, localValue) || !SameValue(localValue, remoteValue))
+            {
+                fields.Add(new ArchidektDifferenceField(name, baselineValue, localValue, remoteValue));
+            }
+        }
+
+        return fields;
+    }
+
+    /// <summary>
+    /// Reads the properties of the JSON object a row side holds, or returns null when the side lacks the row.
+    /// </summary>
+    private static Dictionary<string, JsonElement>? Properties(string? json)
+    {
+        if (json is null)
+        {
+            return null;
+        }
+
+        using JsonDocument document = JsonDocument.Parse(json);
+        Dictionary<string, JsonElement> properties = new(StringComparer.Ordinal);
+        foreach (JsonProperty property in document.RootElement.EnumerateObject())
+        {
+            properties[property.Name] = property.Value.Clone();
+        }
+
+        return properties;
+    }
+
+    /// <summary>
+    /// Gets one property of a row side, or null when the side lacks the row or the property.
+    /// </summary>
+    private static JsonElement? ValueOf(Dictionary<string, JsonElement>? side, string name)
+    {
+        return side is not null && side.TryGetValue(name, out JsonElement value) ? value : null;
+    }
+
+    /// <summary>
+    /// Tells whether two sides hold the same JSON value, or both hold none.
+    /// </summary>
+    private static bool SameValue(JsonElement? left, JsonElement? right)
+    {
+        return left is null || right is null
+            ? left is null && right is null
+            : string.Equals(left.Value.GetRawText(), right.Value.GetRawText(), StringComparison.Ordinal);
+    }
+}
 
 /// <summary>
 /// Carries the three-way state required for an explicit synchronization decision.
@@ -287,6 +443,18 @@ public sealed record ArchidektSyncPreview(
     int PredictedProviderRequests)
 {
     /// <summary>
+    /// Gets the request limit: the most requests to Archidekt one tool call may send, which
+    /// <see cref="PredictedProviderRequests"/> counts against; null when the preview makes no such prediction.
+    /// </summary>
+    public int? ProviderRequestLimit { get; init; }
+
+    /// <summary>
+    /// Gets the options the apply tool must repeat from this preview, such as <c>discardLocalChanges</c>; null when it
+    /// needs none.
+    /// </summary>
+    public string? ApplyOptionsNotice { get; init; }
+
+    /// <summary>
     /// Gets the reason the apply tool would refuse this preview, such as a card with no Archidekt printing or a change
     /// on the other side; null when it would not.
     /// </summary>
@@ -314,6 +482,7 @@ public sealed record ArchidektPushPlan(
     ArchidektRemotePlan Plan,
     IReadOnlyList<ArchidektRemoteOperation> Operations,
     int PredictedProviderRequests,
+    int ProviderRequestLimit,
     ArchidektPushBlock? Block,
     ArchidektPrintingChoices Choices);
 

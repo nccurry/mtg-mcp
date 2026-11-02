@@ -511,7 +511,8 @@ public sealed class FoundationMcpTests
             ["local_deck_delete"] = ["deckId", "expectedRevision"],
             ["local_deck_duplicates_preview"] = ["deckId", "exempt", "expectedRevision", "keepPriority", "matchBy"],
             ["local_deck_export_bundle"] = ["artifact", "deckId", "formatId", "offset", "options"],
-            ["local_deck_get"] = ["cardNames", "cursor", "deckId", "fields", "include", "pageSize", "responseFormat"],
+            ["local_deck_get"] =
+                ["cardNames", "categoryNames", "cursor", "deckId", "fields", "include", "pageSize", "responseFormat", "zones"],
             ["local_deck_identity_reconcile_apply"] =
                 ["allowPartial", "applyToken", "deckId", "expectedRevision", "previewFingerprint", "returnDeck"],
             ["local_deck_identity_reconcile_preview"] =
@@ -585,11 +586,14 @@ public sealed class FoundationMcpTests
             ["archidekt_pull_preview"] =
                 [
                     "differenceOffset", "discardLocalChanges", "expectedPreviewFingerprint", "localDeckId",
-                    "operationOffset", "remoteDeckId",
+                    "operationOffset", "remoteDeckId", "responseFormat",
                 ],
             ["archidekt_push_apply"] = ["request"],
             ["archidekt_push_preview"] =
-                ["confirmRemovals", "differenceOffset", "expectedPreviewFingerprint", "localDeckId", "operationOffset"],
+                [
+                    "confirmRemovals", "differenceOffset", "expectedPreviewFingerprint", "localDeckId", "operationOffset",
+                    "responseFormat",
+                ],
             ["archidekt_snapshot_create"] = ["request"],
             ["archidekt_snapshot_delete"] = ["request"],
             ["archidekt_snapshots_get"] = ["deckId", "kind", "offset", "responseFormat", "snapshotId", "zones"],
@@ -597,7 +601,7 @@ public sealed class FoundationMcpTests
             ["archidekt_snapshot_restore_preview"] =
                 ["deckId", "differenceOffset", "expectedPreviewFingerprint", "operationOffset", "snapshotId"],
             ["archidekt_snapshot_update"] = ["request"],
-            ["archidekt_sync_diff"] = ["differenceOffset", "localDeckId"],
+            ["archidekt_sync_diff"] = ["differenceOffset", "localDeckId", "responseFormat"],
         };
         HashSet<string> reads = [.. ArchidektReadToolNames];
         HashSet<string> destructive =
@@ -742,7 +746,12 @@ public sealed class FoundationMcpTests
             ["update-metadata"] = ["description", "format", "kind", "name"],
             ["add-entry"] = ["entryDraft", "kind"],
             ["update-entry"] = ["entry", "kind"],
-            ["remove-entry"] = ["entryId", "kind"],
+            ["patch-entries"] =
+            [
+                "addCategoryIds", "entryIds", "finish", "kind", "language", "primaryCategoryId", "printing", "quantity",
+                "removeCategoryIds", "sortOrder", "zone", "zoneCategories",
+            ],
+            ["remove-entry"] = ["entryId", "entryIds", "kind"],
             ["add-category"] = ["categoryDraft", "kind"],
             ["update-category"] = ["category", "kind"],
             ["remove-category"] = ["categoryId", "kind"],
@@ -761,10 +770,10 @@ public sealed class FoundationMcpTests
                 expectedVariants[kind],
                 properties.EnumerateObject().Select(value => value.Name).Order(StringComparer.Ordinal));
             Assert.Equal(
-                expectedVariants[kind].Where(value => value != "kind"),
-                variant.GetProperty("required").EnumerateArray()
-                    .Select(value => value.GetString())
-                    .Order(StringComparer.Ordinal));
+                expectedVariants[kind].Where(value => value != "kind" && !OptionalFields(kind).Contains(value)),
+                variant.TryGetProperty("required", out JsonElement required)
+                    ? required.EnumerateArray().Select(value => value.GetString()!).Order(StringComparer.Ordinal)
+                    : []);
             foreach (JsonProperty property in properties.EnumerateObject())
             {
                 if (!HasDescription(property.Value))
@@ -777,6 +786,23 @@ public sealed class FoundationMcpTests
         Assert.Equal(expectedVariants.Keys.Order(StringComparer.Ordinal), observedKinds.Order(StringComparer.Ordinal));
 
         Assert.True(missing.Count == 0, $"Missing MCP input descriptions: {string.Join(", ", missing)}");
+    }
+
+    /// <summary>
+    /// Lists the fields of a deck change kind that a caller may leave out.
+    /// </summary>
+    private static string[] OptionalFields(string kind)
+    {
+        return kind switch
+        {
+            "patch-entries" =>
+            [
+                "addCategoryIds", "finish", "language", "primaryCategoryId", "printing", "quantity",
+                "removeCategoryIds", "sortOrder", "zone", "zoneCategories",
+            ],
+            "remove-entry" => ["entryId", "entryIds"],
+            _ => [],
+        };
     }
 
     /// <summary>

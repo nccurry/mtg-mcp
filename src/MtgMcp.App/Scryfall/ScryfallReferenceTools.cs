@@ -102,7 +102,7 @@ internal sealed class ScryfallReferenceTools
         string? printsCursor = null,
         [Description("Only with rulings: opaque cursor from a previous rulings section.")]
         string? rulingsCursor = null,
-        [Description("Items to return in each requested section, from 1 through 100, or through 25 with includeRaw.")]
+        [Description("Items to return in each requested section, from 1 through 100, or through 25 with includeRaw; default 25.")]
         int pageSize = 25,
         CancellationToken cancellationToken = default)
     {
@@ -195,7 +195,7 @@ internal sealed class ScryfallReferenceTools
         [Description("Only with kind get: include each exact raw snapshot member; limits pages to 25 when true.")]
         bool includeRaw = false,
         [Description("Opaque cursor from a previous result of the same kind.")] string? cursor = null,
-        [Description("Items to return, from 1 through 100, or through 25 when includeRaw; the default is 25.")]
+        [Description("Items to return, from 1 through 100, or through 25 when includeRaw; default 25.")]
         int pageSize = 25,
         CancellationToken cancellationToken = default)
     {

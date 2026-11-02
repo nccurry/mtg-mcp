@@ -24,7 +24,8 @@ internal sealed class ListOperatorValuesAttribute()
 /// Describes one filter of <c>card_list_query</c>.
 /// </summary>
 internal sealed record CardListFilterInput(
-    [property: Description("Field to test. Deck fields (zone, category, quantity) work only for deck sources."),
+    [property: Description(
+        "Field to test. Deck fields (zone, category, quantity, entryId) work only for deck sources."),
      ListFieldValues]
     string Field,
     [property: Description(

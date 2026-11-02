@@ -581,6 +581,7 @@ public sealed class SqliteDeckStore : IDisposable
     /// <summary>
     /// Refuses a batch that makes two different categories primary for one entry at the same time. A single primary
     /// assignment demotes the entry's earlier primary category, so only a conflict inside one request is an error.
+    /// The primary category of an added entry and of a patch counts as an assignment made by the request.
     /// The entry forgets its remembered primary when the batch unassigns that category, assigns it as non-primary,
     /// removes the category, or removes the entry.
     /// </summary>
@@ -592,7 +593,7 @@ public sealed class SqliteDeckStore : IDisposable
                 if (primaryAssigned.TryGetValue(assignment.EntryId, out Guid current) &&
                     current != assignment.CategoryId)
                 {
-                    throw new DeckInputException("An entry may have only one primary category.");
+                    throw DeckInputException.Refusal("An entry may have only one primary category.");
                 }
 
                 primaryAssigned[assignment.EntryId] = assignment.CategoryId;
@@ -613,6 +614,23 @@ public sealed class SqliteDeckStore : IDisposable
                 break;
             case RemoveDeckEntryChange removal:
                 primaryAssigned.Remove(removal.EntryId);
+                break;
+            case AddDeckEntryChange { Entry: { EntryId: Guid addedId, PrimaryCategoryId: Guid addedPrimary } }:
+                primaryAssigned[addedId] = addedPrimary;
+                break;
+            case PatchDeckEntriesChange patch:
+                foreach (Guid entryId in patch.EntryIds)
+                {
+                    if (patch.PrimaryCategoryId is Guid patchPrimary)
+                    {
+                        primaryAssigned[entryId] = patchPrimary;
+                    }
+                    else
+                    {
+                        primaryAssigned.Remove(entryId);
+                    }
+                }
+
                 break;
         }
     }
@@ -645,11 +663,32 @@ public sealed class SqliteDeckStore : IDisposable
                     connection, transaction, deckId, value, cancellationToken).ConfigureAwait(false);
                 break;
             case AddDeckEntryChange value:
+                DeckNewEntry added = DeckContractValidator.Normalize(value.Entry, createId);
                 await DeckSql.InsertEntryAsync(
                     connection,
                     transaction,
                     deckId,
-                    DeckContractValidator.Normalize(value.Entry, createId),
+                    added.Entry,
+                    cancellationToken).ConfigureAwait(false);
+                if (added.HasCategories)
+                {
+                    await DeckDraftCategories.ApplyAsync(
+                        connection,
+                        transaction,
+                        deckId,
+                        added,
+                        createId,
+                        cancellationToken).ConfigureAwait(false);
+                }
+
+                break;
+            case PatchDeckEntriesChange value:
+                await DeckEntryPatcher.ApplyAsync(
+                    connection,
+                    transaction,
+                    deckId,
+                    value,
+                    createId,
                     cancellationToken).ConfigureAwait(false);
                 break;
             case UpdateDeckEntryChange value:
@@ -730,16 +769,32 @@ public sealed class SqliteDeckStore : IDisposable
     /// </summary>
     private DeckDocument BuildNewDeck(DeckCreateRequest request, DateTimeOffset now)
     {
-        DeckEntry[] entries = (request.Entries ?? [])
+        DeckNewEntry[] drafted = (request.Entries ?? [])
             .Select(value => DeckContractValidator.Normalize(value, createId))
             .ToArray();
-        DeckCategory[] categories = (request.Categories ?? [])
-            .Select(value => DeckContractValidator.Normalize(value, createId))
-            .ToArray();
+        List<DeckCategory> categories = [.. (request.Categories ?? [])
+            .Select(value => DeckContractValidator.Normalize(value, createId))];
         DeckProviderBinding[] bindings = (request.ProviderBindings ?? [])
             .Select(value => DeckContractValidator.Normalize(value, createId))
             .ToArray();
-        DeckCategoryAssignment[] assignments = (request.CategoryAssignments ?? []).ToArray();
+        List<DeckCategoryAssignment> assignments = [.. request.CategoryAssignments ?? []];
+        foreach (DeckNewEntry added in drafted)
+        {
+            if (added.HasCategories)
+            {
+                (IReadOnlyList<DeckCategoryAssignment> planned, DeckCategory? created) = DeckDraftCategories.Plan(
+                    added,
+                    categories,
+                    createId);
+                assignments.AddRange(planned);
+                if (created is not null)
+                {
+                    categories.Add(created);
+                }
+            }
+        }
+
+        DeckEntry[] entries = [.. drafted.Select(value => value.Entry)];
         return new DeckDocument(
             DeckContractValidator.NormalizeId(request.DeckId ?? createId(), "deck"),
             DeckContractValidator.Required(request.Name, "Deck name"),
@@ -898,7 +953,7 @@ public sealed class SqliteDeckStore : IDisposable
     {
         return exception switch
         {
-            DeckInputException value => Invalid<T>(value.Message),
+            DeckInputException value => new OperationInvalidInput(value.ReasonCode, value.Message),
             DeckEntityNotFoundException value => new OperationNotFound(
                 value.ReasonCode,
                 value.Message),
@@ -957,7 +1012,7 @@ public sealed class SqliteDeckStore : IDisposable
     /// </summary>
     private static OperationResult<T> Invalid<T>(string message)
     {
-        return new OperationInvalidInput("invalid-deck-input", message);
+        return new OperationInvalidInput(DeckReasonCodes.InvalidDeckInput, message);
     }
 
     /// <summary>

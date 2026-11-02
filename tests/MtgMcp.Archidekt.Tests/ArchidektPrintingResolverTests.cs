@@ -480,7 +480,8 @@ public sealed class ArchidektPrintingResolverTests
     }
 
     /// <summary>
-    /// Verifies a failure after a write was attempted stays unknown, and the rest are not sent.
+    /// Verifies a failure after a write was attempted stays unknown for every card in that request, and the rest are
+    /// not sent.
     /// </summary>
     [Fact]
     public async Task ApplyPlan_FailureAfterAWriteStarted_IsUnknown()
@@ -500,11 +501,348 @@ public sealed class ArchidektPrintingResolverTests
         ArchidektApplyResult result = await ApplyAsync(handler, current, target);
 
         Assert.Equal("partial", result.Outcome);
-        Assert.Equal("unknown", result.Operations[0].Status);
-        Assert.Equal("not-attempted", result.Operations[1].Status);
-        Assert.Equal("Not sent: an earlier operation stopped the push.", result.Operations[1].Message);
+        Assert.All(result.Operations, value => Assert.Equal("unknown", value.Status));
         Assert.Single(handler.Requests, value => value.Method == HttpMethod.Patch);
     }
+
+    /// <summary>
+    /// Verifies 40 new cards are sent in two requests of 25 and 15 cards, each card with its own patch ID, and that
+    /// the plan predicted at least those requests.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPlan_FortyNewCards_SendsTwoMutationRequests()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
+        handler.AddAcceptedCards(HttpMethod.Patch, "api/decks/42/modifyCards/v2/");
+        handler.AddAcceptedCards(HttpMethod.Patch, "api/decks/42/modifyCards/v2/");
+        handler.Add(HttpMethod.Get, "api/decks/42/", ArchidektTestPayloads.Deck);
+        handler.Add(HttpMethod.Get, "api/decks/42/", ArchidektTestPayloads.Deck);
+        (RemoteDeckSnapshot current, RemoteDeckSnapshot target) = DeckWithNewCard(NewCards(40));
+
+        ArchidektApplyResult result = await ApplyAsync(handler, current, target);
+
+        CapturedArchidektRequest[] sent = [.. handler.Requests.Where(value => value.Method == HttpMethod.Patch)];
+        Assert.Equal(2, sent.Length);
+        Assert.Equal([25, 15], sent.Select(value => CardsIn(value).Count));
+        List<string?> patchIds =
+            [.. sent.SelectMany(CardsIn).Select(value => value.GetProperty("patchId").GetString())];
+        Assert.Equal(40, patchIds.Distinct().Count());
+        Assert.All(result.Operations, value => Assert.NotEqual("unknown", value.Status));
+        Assert.Equal(40, result.Operations.Count(value => value.Status == "applied"));
+        Assert.True(sent.Length <= ArchidektSyncPlanner.PlanRemoteApply(current, target).OperationRequestCount);
+    }
+
+    /// <summary>
+    /// Verifies a card missing from the answer of an accepted batch is unknown, the others are applied, and the push
+    /// does not go on to verify.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPlan_CardMissingFromTheAcceptedAnswer_IsUnknown()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
+        handler.AddAcceptedCards(HttpMethod.Patch, Route, omitIndex: 1);
+        (RemoteDeckSnapshot current, RemoteDeckSnapshot target) = DeckWithNewCard(NewCards(3));
+
+        ArchidektApplyResult result = await ApplyAsync(handler, current, target);
+
+        Assert.Equal("partial", result.Outcome);
+        Assert.Equal(["applied", "unknown", "applied"], result.Operations.Select(value => value.Status));
+        Assert.Equal("Card 02", result.Operations[1].Subject);
+        Assert.Contains("did not list this card", result.Operations[1].Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(handler.Requests, value => value.Method == HttpMethod.Get);
+    }
+
+    /// <summary>
+    /// Verifies an answer that holds no patch IDs, or no JSON, leaves every added card unknown instead of applied.
+    /// </summary>
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"add":[{"deckRelationId":9001,"patchId":"00000000000000000000000000000000"}]}""")]
+    [InlineData("not json")]
+    public async Task ApplyPlan_AnswerWithoutTheSentPatchIds_LeavesEveryAddUnknown(string answer)
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
+        handler.Add(HttpMethod.Patch, Route, answer, HttpStatusCode.Created);
+        (RemoteDeckSnapshot current, RemoteDeckSnapshot target) = DeckWithNewCard(NewCards(2));
+
+        ArchidektApplyResult result = await ApplyAsync(handler, current, target);
+
+        Assert.Equal("partial", result.Outcome);
+        Assert.All(result.Operations, value => Assert.Equal("unknown", value.Status));
+    }
+
+    /// <summary>
+    /// Verifies a batch Archidekt refuses without naming a card is sent again one card at a time, the cards before and
+    /// after the refused one are applied, the refused card is named as not applied, the push goes on, and the requests
+    /// sent stay within the prediction.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPlan_BatchWithOneBadCard_AppliesTheGoodCardsAndNamesTheBadCard()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
+        handler.Add(HttpMethod.Patch, Route, RefusedBody, HttpStatusCode.BadRequest);
+        handler.AddAcceptedCards(HttpMethod.Patch, Route);
+        handler.AddAcceptedCards(HttpMethod.Patch, Route);
+        handler.Add(HttpMethod.Patch, Route, RefusedBody, HttpStatusCode.BadRequest);
+        handler.AddAcceptedCards(HttpMethod.Patch, Route);
+        handler.AddAcceptedCards(HttpMethod.Patch, Route);
+        (RemoteDeckSnapshot current, RemoteDeckSnapshot target) = DeckWithNewCard(NewCards(5));
+
+        ArchidektApplyResult result = await ApplyAsync(handler, current, target);
+
+        CapturedArchidektRequest[] sent = [.. handler.Requests.Where(value => value.Method == HttpMethod.Patch)];
+        Assert.Equal([5, 1, 1, 1, 1, 1], sent.Select(value => CardsIn(value).Count));
+        Assert.Equal("partial", result.Outcome);
+        Assert.Equal(
+            ["applied", "applied", "not-applied", "applied", "applied"],
+            result.Operations.Select(value => value.Status));
+        Assert.Equal("Card 03", result.Operations[2].Subject);
+        Assert.Null(result.FinalRemoteFingerprint);
+        Assert.True(handler.Requests.Count <= ArchidektSyncPlanner.PlanRemoteApply(current, target)
+            .PredictedProviderRequests);
+    }
+
+    /// <summary>
+    /// Verifies a second rejected batch in one push is not sent card by card, since the prediction reserves one
+    /// fallback: its cards are not sent, the earlier cards stay applied, and the requests sent stay within the
+    /// prediction.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPlan_TwoRejectedBatches_SendsTheSecondOneNoMoreAndStaysWithinThePrediction()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
+        handler.Add(HttpMethod.Patch, Route, RefusedBody, HttpStatusCode.BadRequest);
+        for (int card = 0; card < 25; card++)
+        {
+            handler.AddAcceptedCards(HttpMethod.Patch, Route);
+        }
+
+        handler.Add(HttpMethod.Patch, Route, RefusedBody, HttpStatusCode.BadRequest);
+        (RemoteDeckSnapshot current, RemoteDeckSnapshot target) = DeckWithNewCard(NewCards(30));
+
+        ArchidektApplyResult result = await ApplyAsync(handler, current, target);
+
+        Assert.Equal(27, handler.Requests.Count(value => value.Method == HttpMethod.Patch));
+        Assert.Equal("partial", result.Outcome);
+        Assert.Equal(25, result.Operations.Count(value => value.Status == "applied"));
+        Assert.Equal(5, result.Operations.Count(value => value.Status == "not-sent"));
+        Assert.Contains("Push again", result.Operations[^1].Message, StringComparison.Ordinal);
+        Assert.True(handler.Requests.Count <= ArchidektSyncPlanner.PlanRemoteApply(current, target)
+            .PredictedProviderRequests);
+    }
+
+    /// <summary>
+    /// Verifies a rate-limit answer to a batch of 25 leaves its cards not sent and the rest not attempted, with no
+    /// fallback and nothing applied.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPlan_RateLimitOnABatch_IsNotSentAndNotRetried()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
+        handler.Add(HttpMethod.Patch, Route, "{}", HttpStatusCode.TooManyRequests, "1");
+        (RemoteDeckSnapshot current, RemoteDeckSnapshot target) = DeckWithNewCard(NewCards(30));
+
+        ArchidektApplyResult result = await ApplyAsync(handler, current, target);
+
+        Assert.Equal("not-applied", result.Outcome);
+        Assert.Equal(25, result.Operations.Count(value => value.Status == "not-sent"));
+        Assert.Equal(5, result.Operations.Count(value => value.Status == "not-attempted"));
+        Assert.Single(handler.Requests, value => value.Method == HttpMethod.Patch);
+    }
+
+    /// <summary>
+    /// Verifies a rate-limit answer to one card sent during the fallback stops the push there: the cards before it stay
+    /// applied, it is not sent, and the cards after it are not attempted.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPlan_RateLimitDuringTheFallback_StopsThePush()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
+        handler.Add(HttpMethod.Patch, Route, RefusedBody, HttpStatusCode.BadRequest);
+        handler.AddAcceptedCards(HttpMethod.Patch, Route);
+        handler.Add(HttpMethod.Patch, Route, "{}", HttpStatusCode.TooManyRequests, "1");
+        (RemoteDeckSnapshot current, RemoteDeckSnapshot target) = DeckWithNewCard(NewCards(5));
+
+        ArchidektApplyResult result = await ApplyAsync(handler, current, target);
+
+        Assert.Equal("partial", result.Outcome);
+        Assert.Equal(
+            ["applied", "not-sent", "not-attempted", "not-attempted", "not-attempted"],
+            result.Operations.Select(value => value.Status));
+        Assert.Equal(3, handler.Requests.Count(value => value.Method == HttpMethod.Patch));
+    }
+
+    /// <summary>
+    /// Verifies a refusal that is not a 400 on a batch is not sent card by card: every card of the batch is unknown and
+    /// the push stops.
+    /// </summary>
+    [Theory]
+    [InlineData(HttpStatusCode.Forbidden)]
+    [InlineData(HttpStatusCode.UnprocessableEntity)]
+    public async Task ApplyPlan_RefusalThatIsNotA400_HasNoFallback(HttpStatusCode status)
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
+        handler.Add(HttpMethod.Patch, Route, "{}", status);
+        (RemoteDeckSnapshot current, RemoteDeckSnapshot target) = DeckWithNewCard(NewCards(3));
+
+        ArchidektApplyResult result = await ApplyAsync(handler, current, target);
+
+        Assert.Equal("partial", result.Outcome);
+        Assert.All(result.Operations, value => Assert.Equal("unknown", value.Status));
+        Assert.Single(handler.Requests, value => value.Method == HttpMethod.Patch);
+    }
+
+    /// <summary>
+    /// Verifies a 404 on an update after a batch of adds was applied stops the push with the update unknown and keeps
+    /// the applied statuses of the batch, instead of losing them in a failure.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPlan_NotFoundOnAnUpdateAfterAnAppliedBatch_KeepsTheEarlierStatuses()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
+        handler.AddAcceptedCards(HttpMethod.Patch, Route);
+        handler.Add(HttpMethod.Patch, Route, "{}", HttpStatusCode.NotFound);
+        (RemoteDeckSnapshot current, _) = DeckWithNewCard();
+        RemoteDeckSnapshot target = current with
+        {
+            Entries = [current.Entries[0], .. NewCards(2), current.Entries[1] with { Quantity = 4 }],
+        };
+
+        ArchidektApplyResult result = await ApplyAsync(handler, current, target);
+
+        Assert.Equal("partial", result.Outcome);
+        Assert.Equal(
+            [("entry-add", "applied"), ("entry-add", "applied"), ("entry-update", "unknown")],
+            result.Operations.Select(value => (value.Kind, value.Status)));
+    }
+
+    /// <summary>
+    /// Verifies a 400 on a write that is not an add stays unknown, because only a refused add is known to leave the
+    /// deck unchanged.
+    /// </summary>
+    [Theory]
+    [InlineData("entry-update")]
+    [InlineData("entry-remove")]
+    [InlineData("category-update")]
+    [InlineData("category-create")]
+    public async Task ApplyPlan_RejectedWriteThatIsNotAnAdd_IsUnknown(string kind)
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
+        (RemoteDeckSnapshot current, _) = DeckWithNewCard();
+        (HttpMethod method, string route, RemoteDeckSnapshot target) = kind switch
+        {
+            "entry-update" => (HttpMethod.Patch, Route, current with
+            {
+                Entries = [current.Entries[0], current.Entries[1] with { Quantity = 4 }],
+            }),
+            "entry-remove" => (HttpMethod.Patch, Route, current with { Entries = [current.Entries[0]] }),
+            "category-update" => (HttpMethod.Patch, "api/decks/category/10/", current with
+            {
+                Categories = [current.Categories[0] with { IncludedInPrice = false }, current.Categories[1]],
+            }),
+            _ => (HttpMethod.Post, "api/decks/createCategory/", current with
+            {
+                Categories = [.. current.Categories, new RemoteDeckCategory(string.Empty, "Ramp", true, true, false, 2)],
+            }),
+        };
+        handler.Add(method, route, RefusedBody, HttpStatusCode.BadRequest);
+
+        ArchidektApplyResult result = await ApplyAsync(handler, current, target);
+
+        Assert.Equal("partial", result.Outcome);
+        ArchidektOperationStatus status = Assert.Single(result.Operations);
+        Assert.Equal((kind, "unknown"), (status.Kind, status.Status));
+    }
+
+    /// <summary>
+    /// Verifies a 400 on a single add that is not part of a batch fallback marks that card not applied and the push
+    /// goes on to the next operation.
+    /// </summary>
+    [Fact]
+    public async Task ApplyPlan_RejectedSingleAdd_IsNotAppliedAndThePushGoesOn()
+    {
+        ArchidektTestHttpHandler handler = new();
+        handler.Add(HttpMethod.Post, "api/rest-auth/login/", "{\"token\":\"test-token\"}");
+        handler.Add(HttpMethod.Patch, Route, RefusedBody, HttpStatusCode.BadRequest);
+        handler.AddAcceptedCards(HttpMethod.Patch, Route);
+        (RemoteDeckSnapshot current, _) = DeckWithNewCard();
+        RemoteDeckSnapshot target = current with
+        {
+            Entries = [current.Entries[0], .. NewCards(1), current.Entries[1] with { Quantity = 4 }],
+        };
+
+        ArchidektApplyResult result = await ApplyAsync(handler, current, target);
+
+        Assert.Equal("partial", result.Outcome);
+        Assert.Equal(
+            [("entry-add", "not-applied"), ("entry-update", "applied")],
+            result.Operations.Select(value => (value.Kind, value.Status)));
+        Assert.Equal(2, handler.Requests.Count(value => value.Method == HttpMethod.Patch));
+    }
+
+    /// <summary>
+    /// Verifies the prediction counts one request per run of up to 25 adds, one request for any other operation, and
+    /// the cards of the largest batch again for the single sends after a refused batch.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(2, 1 + 2)]
+    [InlineData(25, 1 + 25)]
+    [InlineData(26, 2 + 25)]
+    [InlineData(40, 2 + 25)]
+    public void OperationRequests_CountsBatchesAndTheFallbackReserve(int adds, int expected)
+    {
+        (RemoteDeckSnapshot current, RemoteDeckSnapshot target) = DeckWithNewCard(NewCards(adds));
+
+        ArchidektRemotePlan plan = ArchidektSyncPlanner.PlanRemoteApply(current, target);
+
+        Assert.Equal(expected, plan.OperationRequestCount);
+        Assert.Equal(expected + 1, plan.PredictedProviderRequests);
+    }
+
+    /// <summary>
+    /// Builds new entries that already carry an Archidekt card ID, so no search is needed to send them.
+    /// </summary>
+    private static RemoteDeckEntry[] NewCards(int count)
+    {
+        return
+        [
+            .. Enumerable.Range(1, count).Select(number => Entry($"Card {number:00}") with
+            {
+                ProviderCardId = (5000 + number).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                SortOrder = number,
+            }),
+        ];
+    }
+
+    /// <summary>
+    /// Reads the card payloads of a recorded modifyCards request.
+    /// </summary>
+    private static List<JsonElement> CardsIn(CapturedArchidektRequest request)
+    {
+        using JsonDocument document = JsonDocument.Parse(request.Body);
+        return [.. document.RootElement.GetProperty("cards").EnumerateArray().Select(value => value.Clone())];
+    }
+
+    /// <summary>
+    /// Holds the card-mutation route of the test deck.
+    /// </summary>
+    private const string Route = "api/decks/42/modifyCards/v2/";
+
+    /// <summary>
+    /// Holds the answer Archidekt gave to a batch with one card it refused: 400, and the deck left unchanged.
+    /// </summary>
+    private const string RefusedBody = """{"error":"Unable to add one or more cards"}""";
 
     /// <summary>
     /// Runs the resolver over the given entries with an unlimited-enough budget.

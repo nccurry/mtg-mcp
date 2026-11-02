@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace MtgMcp.Core.Decks;
 
 /// <summary>
@@ -23,18 +25,21 @@ public sealed record DeckInterchangeFormat(
 /// Captures caller-controlled defaults used while interpreting manual deck text.
 /// </summary>
 public sealed record DeckImportOptions(
-    string? DeckName = null,
-    string Description = "",
-    string Format = "commander",
-    string DefaultZone = "main",
+    [property: Description("The deck name; omit to use the name the document gives.")] string? DeckName = null,
+    [property: Description("The deck description.")] string Description = "",
+    [property: Description("The format label; default commander.")] string Format = "commander",
+    [property: Description("The zone for cards the document does not place; default main.")]
+    string DefaultZone = DeckZoneCategories.MainZone,
+    [property: Description("Accept the lines that parse even when others have errors; default false.")]
     bool AllowPartial = false,
-    bool AllowExperimental = false);
+    [property: Description("Allow formats marked experimental; default false.")] bool AllowExperimental = false);
 
 /// <summary>
 /// Controls explicit experimental behavior during manual artifact generation.
 /// </summary>
 public sealed record DeckExportOptions(
-    bool AllowExperimental = false,
+    [property: Description("Allow formats marked experimental; default false.")] bool AllowExperimental = false,
+    [property: Description("Write Moxfield tags as global tags instead of the verified deck tags; default false.")]
     bool UseGlobalMoxfieldTags = false);
 
 /// <summary>

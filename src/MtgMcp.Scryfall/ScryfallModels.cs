@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MtgMcp.Core.Evidence;
@@ -29,10 +31,17 @@ internal enum ScryfallFreshnessPolicy
 /// Describes one exact Scryfall card lookup case without fuzzy field inference.
 /// </summary>
 public sealed record ScryfallCardLookup(
-    [property: JsonPropertyName("kind")] string Kind,
-    [property: JsonPropertyName("value")] string? Value = null,
-    [property: JsonPropertyName("setCode")] string? SetCode = null,
-    [property: JsonPropertyName("collectorNumber")] string? CollectorNumber = null);
+    [property: JsonPropertyName("kind"),
+     Description("Which lookup to run. Printing uses setCode and collectorNumber; every other kind uses value."),
+     AllowedValues("scryfall-id", "oracle-id", "exact-name", "fuzzy-name", "printing")]
+    string Kind,
+    [property: JsonPropertyName("value"),
+     Description("The Scryfall ID, Oracle ID, or card name to look up. Leave out for kind printing.")]
+    string? Value = null,
+    [property: JsonPropertyName("setCode"), Description("Set code. Only with kind printing.")]
+    string? SetCode = null,
+    [property: JsonPropertyName("collectorNumber"), Description("Collector number. Only with kind printing.")]
+    string? CollectorNumber = null);
 
 /// <summary>
 /// Adds an optional exact language requirement for internal deck-identity evidence resolution.

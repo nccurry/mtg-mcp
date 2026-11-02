@@ -84,14 +84,14 @@ public sealed partial class ServerInstructionsTests
             Find cards (Scryfall syntax, where otag finds oracle tags): scryfall_search.
             Read cards and card details: scryfall_cards_get, scryfall_card_details.
             See a local deck with card data: local_deck_get.
-            Build or edit a local deck: local_deck_create, local_deck_apply_changes.
-            Exact math on draws and decks, or sampled games: stats_hypergeometric, stats_turn_table, stats_simulate.
+            Build or edit a local deck (add-entry needs only a card name; zone moves use patch-entries and set zoneCategories to match or leave): local_deck_create, local_deck_apply_changes.
+            Exact math on draws and decks, or sampled games, including land counts and on-curve odds: stats_hypergeometric, stats_turn_table, stats_mana_availability, stats_simulate.
             Summarize a local deck: stats_local_deck_summary.
-            Analyze a card list: card_list_query, card_lists_compare, stats_castability.
+            Analyze a card list (it groups by subtypes, such as Aura, and by tags): card_list_query, card_lists_compare, stats_castability.
             Commander rule facts (rules "commander"): local_deck_validate.
             Find duplicate cards in a local deck: local_deck_duplicates_preview.
             Install card data that tags and card views need: scryfall_card_data_status, scryfall_card_data_sync.
-            Sync a local deck with Archidekt: archidekt_pull_preview, archidekt_push_preview, archidekt_push_apply.
+            Sync a local deck with Archidekt (applying a push reads Archidekt back and verifies each card): archidekt_pull_preview, archidekt_push_preview, archidekt_push_apply.
             Read Playgroup games and playgroups: playgroup_user_playgroups_list, playgroup_playgroup_games_list.
             Total Playgroup games by deck or player: playgroup_games_stats_get.
             Combos and bracket facts: spellbook_deck_combos_find, spellbook_deck_bracket_facts_get.
@@ -114,13 +114,13 @@ public sealed partial class ServerInstructionsTests
             Find cards (Scryfall syntax, where otag finds oracle tags): scryfall_search.
             Read cards and card details: scryfall_cards_get, scryfall_card_details.
             See a local deck with card data: local_deck_get.
-            Exact math on draws and decks, or sampled games: stats_hypergeometric, stats_turn_table, stats_simulate.
+            Exact math on draws and decks, or sampled games, including land counts and on-curve odds: stats_hypergeometric, stats_turn_table, stats_mana_availability, stats_simulate.
             Summarize a local deck: stats_local_deck_summary.
-            Analyze a card list: card_list_query, card_lists_compare, stats_castability.
+            Analyze a card list (it groups by subtypes, such as Aura, and by tags): card_list_query, card_lists_compare, stats_castability.
             Commander rule facts (rules "commander"): local_deck_validate.
             Find duplicate cards in a local deck: local_deck_duplicates_preview.
             Install card data that tags and card views need: scryfall_card_data_status.
-            Sync a local deck with Archidekt: archidekt_pull_preview, archidekt_push_preview.
+            Sync a local deck with Archidekt (applying a push reads Archidekt back and verifies each card): archidekt_pull_preview, archidekt_push_preview.
             Read Playgroup games and playgroups: playgroup_user_playgroups_list, playgroup_playgroup_games_list.
             Total Playgroup games by deck or player: playgroup_games_stats_get.
             Combos and bracket facts: spellbook_deck_combos_find, spellbook_deck_bracket_facts_get.

@@ -117,8 +117,23 @@ internal sealed record DeckDocumentView(
     public IReadOnlyList<string>? CardNamesNotFound { get; init; }
 
     /// <summary>
-    /// Gets the number of entries the page reads from: the whole deck, or the matching entries when the request named
-    /// cards. It is set only when the result is a page.
+    /// Gets the requested zones that match no entry of the whole deck, set only when the request named zones.
+    /// </summary>
+    [JsonPropertyName("zonesNotFound")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? ZonesNotFound { get; init; }
+
+    /// <summary>
+    /// Gets the requested category names that no entry of the whole deck is assigned to, set only when the request
+    /// named categories.
+    /// </summary>
+    [JsonPropertyName("categoryNamesNotFound")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? CategoryNamesNotFound { get; init; }
+
+    /// <summary>
+    /// Gets the number of entries the page reads from: the whole deck, or the matching entries when the request
+    /// filtered them. It is set only when the result is a page.
     /// </summary>
     [JsonPropertyName("totalEntries")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

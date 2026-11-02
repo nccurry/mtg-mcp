@@ -155,8 +155,8 @@ internal static class CommanderRules
     internal static CommanderRuleFacts Evaluate(IReadOnlyList<RuleEntry> entries)
     {
         ArgumentNullException.ThrowIfNull(entries);
-        List<RuleEntry> commanders = InZone(entries, "commander");
-        List<RuleEntry> main = InZone(entries, "main");
+        List<RuleEntry> commanders = InZone(entries, DeckZoneCategories.CommanderZone);
+        List<RuleEntry> main = InZone(entries, DeckZoneCategories.MainZone);
         List<RuleEntry> companions = InZone(entries, "companion");
         List<RuleEntry> starting = [.. commanders, .. main];
         CommandersFact commanderFact = EvaluateCommanders(commanders);
@@ -186,8 +186,8 @@ internal static class CommanderRules
     /// </summary>
     private static bool IsRuleZone(string zone)
     {
-        return zone.Equals("commander", StringComparison.OrdinalIgnoreCase) ||
-            zone.Equals("main", StringComparison.OrdinalIgnoreCase) ||
+        return zone.Equals(DeckZoneCategories.CommanderZone, StringComparison.OrdinalIgnoreCase) ||
+            DeckZoneCategories.IsMain(zone) ||
             zone.Equals("companion", StringComparison.OrdinalIgnoreCase);
     }
 

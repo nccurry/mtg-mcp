@@ -310,7 +310,7 @@ internal sealed class DeckCategorizationReadTools
         CategoryRuleSource source,
         [Description("Optional current deck revision; when given, a different revision returns conflict.")]
         long? expectedRevision = null,
-        [Description("default, cache-only, or refresh Scryfall evidence policy."), FreshnessPolicyValues]
+        [Description("Scryfall evidence policy: default, cache-only, or refresh."), FreshnessPolicyValues]
         string freshnessPolicy = "default",
         [Description("Number of decisions to skip; use nextOffset from the previous page. Default 0.")]
         int offset = 0,
@@ -352,15 +352,20 @@ internal sealed class DeckCategorizationWriteTools
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Local deck store: applies only an unchanged, complete category preview in one local deck revision. The " +
+        "Local deck store: applies only an unchanged, complete category preview in one local deck revision. Repeat " +
+        "the source and freshnessPolicy of the preview. The " +
         "result is a summary (new revision, counts, IDs of changed entries and categories); pass returnDeck true " +
         "to also get the whole deck.")]
     internal Task<OperationResult<DeckWriteResult>> ApplyAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
-        [Description("Scryfall card-data generation returned by the preview, or null when no card evidence was needed.")] Guid? expectedCorpusGeneration,
-        [Description("Inline category rules; the only supported source kind is inline.")] CategoryRuleSource source,
-        [Description("default, cache-only, or refresh Scryfall evidence policy."), FreshnessPolicyValues]
+        [Description(
+            "Scryfall card-data generation returned by the preview, or null when no card evidence was needed.")]
+        Guid? expectedCorpusGeneration,
+        [Description("Inline category rules; repeat the source used for the preview.")] CategoryRuleSource source,
+        [Description(
+            "Scryfall evidence policy: default, cache-only, or refresh. Repeat the value used for the preview."),
+         FreshnessPolicyValues]
         string freshnessPolicy,
         [Description("Fingerprint returned by local_deck_category_rules_preview.")] string previewFingerprint,
         [Description("Opaque token returned by local_deck_category_rules_preview.")] string applyToken,

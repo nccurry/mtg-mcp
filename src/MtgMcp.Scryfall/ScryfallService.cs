@@ -2006,7 +2006,10 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         int maximum = rawSource ? 25 : 100;
         return pageSize is >= 1 && pageSize <= maximum
             ? null
-            : new OperationInvalidInput("invalid-page-size", $"Page size must be from 1 through {maximum}.");
+            : new OperationInvalidInput(
+                "invalid-page-size",
+                $"Page size must be from 1 through {maximum}.",
+                "pageSize");
     }
 
     /// <summary>

@@ -2,8 +2,115 @@
 
 ## Unreleased
 
+Four agent sessions reported real Archidekt deck work on `0.13.0` and `0.13.1`: finding entries meant paging through
+the whole deck, one zone move took three changes (one copying eleven fields), zones and Archidekt categories had to be
+kept in step by hand, an 18-edit push preview was about 25 KB, and a push of about 40 operations hit the request
+limit. This release adds the options that fix those. The release step sets the version number.
+
+Upgrade note: An MCP client keeps the mtg-mcp process it started. After upgrading, restart or reconnect mtg-mcp in the
+client (in Claude Code, /mcp or a new session) before relying on new behavior.
+
+### Changed
+
+- **`predictedProviderRequests` now means something different.** On `archidekt_push_preview` it used to count the
+  operations, the printing searches, and one read. It now counts every request the push needs, including the
+  reads and the room to retry each read after a rate-limit response (the retry reserve). It is the figure checked
+  against the 150-request limit, so it is larger than before for the same push, and a push the old number let through
+  can now be refused in the preview. Compare it with the new `providerRequestLimit`, not with a count of operations.
+  The tool shape is the same; only what the number means changed.
+- A push sends added cards to Archidekt in batches of up to 25 cards per request (one `modifyCards/v2` call) instead
+  of one card per request, so a 40-card push makes 2 card requests, not 40. Archidekt refuses a batch with a bad
+  card as a whole and names no card, so after a rejected batch of adds the push sends that batch's cards one at a
+  time, once per push. A card Archidekt refuses is reported `not-applied` and the push continues; the outcome is
+  `partial`. A second rejected batch is not sent again: its cards are `not-sent`, so push again. A `429` stops the
+  push, and a `403`, `404`, or `422` leaves the operation `unknown` and keeps the statuses of the operations before
+  it. Each added card is confirmed by the `patchId` Archidekt echoes (adds only). `predictedProviderRequests`
+  includes the reserve for one batch fallback.
+- A `partial` push now reads Archidekt back and records what landed as the new baseline, linking the cards that were
+  applied. The next push preview offers only the changes that were not applied and can be applied, and a pull keeps
+  the cards that were not added instead of refusing them as duplicates. An `unknown` card is not linked; if it did
+  land, the next push replaces it rather than adding it twice. When the read fails, the baseline stays as it was and
+  the `notice` says so. When that read, or the read after a `verification-mismatch`, shows an edit someone else made
+  on Archidekt during the push, the baseline records that edit as an Archidekt change while the cards the push added
+  stay linked, so a pull takes the edit, the next push does not revert it, and the `notice` says to preview a pull
+  first. A local entry added by name no longer shows as changed because Archidekt chose its
+  printing.
+- A request-limit refusal on a push preview or apply names the limit (per `archidekt_push_apply` call, counting
+  requests to Archidekt), the predicted count, an estimate of how many of the operations fit, and that the push can be
+  split by applying part of the local changes first.
+- Argument errors name the expected type in plain words: "The value at 'changes[3].entry.sortOrder' must be an
+  integer." and "... must be a UUID", not `System.Int32` or `System.Guid`. The message comes from the bound parameter
+  type, so it also covers values inside the change list and nested drafts.
+- The `stats_simulate`, `stats_castability`, and `stats_mana_availability` descriptions say they answer land-count and
+  on-curve questions, the server instructions say a zone move sets `zoneCategories` to `match` or `leave`, and the
+  Scryfall tool descriptions state the `pageSize` default and that `responseFormat` defaults to `standard`.
+- The refusal for an entry whose zone disagrees with its Archidekt categories (`entry-zone-contradicts-category`)
+  names each local entry ID and offers both fixes as ready `patch-entries` changes: set the zone to what the
+  categories give (`zoneCategories: "leave"`), or keep the zone and make the categories match it
+  (`zoneCategories: "match"`). The server chooses neither. The `match` fix is offered only when that change is accepted
+  and clears the contradiction; otherwise the message says what else to change, such as a primary category. A zone
+  that no Archidekt category gives, such as `companion`, gets only the `leave` fix.
+- A wrong confirmation phrase on `archidekt_snapshot_restore_apply`, `archidekt_snapshot_delete`,
+  `archidekt_folder_delete`, and `archidekt_deck_delete` (`confirmation-required`) now shows the exact phrase to pass,
+  such as `restore snapshot <snapshotId>`.
+- The descriptions of `update-entry`, `assign-category`, and `unassign-category` point to `patch-entries`; they keep
+  working.
+- The docs have a new `docs/architecture/` folder: the old `docs/architecture.md` is now its index, beside pages for the
+  MCP surface, the deck model, and code style. They write down the naming rule: tool names are snake_case with a
+  registered prefix, property names are camelCase, and fixed values the server defines (change kinds, discriminators,
+  reason codes) are kebab-case. An architecture test enforces it.
+
+### Added
+
+- `local_deck_apply_changes` has a new change kind, `patch-entries`. It takes `entryIds` (1 to 100, no duplicates,
+  including entries added earlier in the same batch) and only the fields that change: `quantity`, `zone`,
+  `sortOrder`, `finish`, `language`, a `printing` (a `printingId`, or a `setCode` with a `collectorNumber`, resolved
+  against each entry's own card as `add-entry` resolves them; a printing that cannot be verified (unresolved, mismatched to the entry's card, set not found, or card data not installed) refuses the batch with `invalid-deck-change` and writes nothing), and the category edits `primaryCategoryId`,
+  `addCategoryIds`, and `removeCategoryIds`. A field left out stays as it is. A new primary category removes the
+  previous primary assignment unless that category is in `addCategoryIds`. A patch with no field, a duplicate or
+  unknown entry or category ID, or the same category in two category fields is refused with `invalid-deck-change` and
+  nothing is written. Card identity (`cardName`, `oracleId`) cannot be patched.
+- `zoneCategories` (`match` or `leave`) on `patch-entries`, required whenever the patch sets `zone`, so the caller
+  always chooses. `match` makes the zone's category (Commander, Sideboard, or Maybeboard, matched ignoring case) the
+  entry's primary category, creates it in the same batch when the deck lacks it, and removes the entry's other zone
+  categories. For zone `main` it removes zone categories; if the lost one was primary, give `primaryCategoryId` or the
+  entry must have no other category. `leave` changes only the zone. The three names come from one Core definition,
+  `DeckZoneCategories`, that the Archidekt adapter also reads.
+- `remove-entry` takes `entryIds` (1 to 100) in place of `entryId`; give exactly one of the two.
+- An entry draft takes `categoryIds`, `primaryCategoryId`, and `zoneCategories`, so an `add-entry` or a
+  `local_deck_create` entry can be categorized in the same call. A draft can name a category added earlier in the
+  same batch by its `categoryId`. On a draft `zoneCategories` is optional and defaults to `leave`, because a draft's
+  zone defaults to `main` and an explicit zone cannot be told from the default. `whenCardPresent: "skip"` skips the
+  categories together with the add. A draft that names an unknown category is refused with `invalid-deck-change`, as a patch that names one is, and a zone-category refusal has the same code for a draft and a patch. A refusal ends "Nothing was written." and names the change number of the caller's change.
+- `local_deck_get` takes `zones` (`commander`, `main`, `sideboard`, `maybeboard`) and `categoryNames` (1 to 100
+  names, matched ignoring case against primary and non-primary categories), beside `cardNames`. Values in one filter
+  combine with OR and the filters combine with AND. Values that match no entry of the whole deck are listed in
+  `zonesNotFound` and `categoryNamesNotFound`, as `cardNamesNotFound` already is; no match is a normal result with no
+  entries. `zones` takes any non-empty zone code; a code with no entry goes to `zonesNotFound`. An empty list or a blank
+  code is refused as `invalid-zones`, and a bad category list as `invalid-category-names`. The
+  cursor covers both filters, so a cursor with a changed filter is refused. Deck-wide totals are unchanged.
+- `card_list_query` has `entryId` as a field for local deck and deck backup sources (in rows, filters, groups, and
+  sorts), so a card-property query ("every Aura in the maybeboard") returns the IDs an edit needs. An Archidekt
+  deck or snapshot source refuses it as `invalid-field`.
+- `archidekt_sync_diff`, `archidekt_pull_preview`, and `archidekt_push_preview` take `responseFormat`: `full` (the
+  default, or `standard`) or `concise`. A concise difference row is `path`, `state`, and `fields`, each with `name`,
+  `baseline`, `local`, and `remote` and only the fields whose values differ. Fingerprints, guards, summaries,
+  operations, and apply availability are the same in both formats, and paging measures the format returned, so a
+  concise page holds more rows. An 18-edit push on a 347-entry deck is about 37,000 characters in `full` (cut at 17 of
+  19 rows) and about 6,900 in `concise` (all 19 rows). `archidekt_snapshot_restore_preview` does not take it.
+- The Archidekt pull and push previews return `applyOptions`, naming the options the apply call must repeat (for
+  example `discardLocalChanges: true` for a pull, or `confirmRemovals` with the removal count for a push).
+- `archidekt_push_preview` returns `providerRequestLimit` beside `predictedProviderRequests`.
+- New reason code `pull-discard-option-mismatch`: when `archidekt_pull_apply` gets a preview fingerprint that matches
+  the preview with the other `discardLocalChanges` value, the refusal says which value the preview used and to pass
+  the same value. The check sends no provider request.
+- New reason codes `invalid-zones` and `invalid-category-names`.
+
 ### Fixed
 
+- The Scryfall card lookup publishes its `kind` values (`scryfall-id`, `oracle-id`, `exact-name`, `fuzzy-name`,
+  `printing`) in the tool schema with descriptions, and the Playgroup inputs gain field descriptions.
+- `invalid-page-size` on the Scryfall tools names `pageSize` in its `path`.
 - Archidekt folder reads now list child folder IDs; the adapter read only `children`, but real folder reads use
   `subfolders`.
 - Archidekt deck lists and folder reads now report each deck's card count from Archidekt's `size` field; it was always

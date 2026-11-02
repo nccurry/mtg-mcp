@@ -1,4 +1,6 @@
+using System.Text.Json.Nodes;
 using MtgMcp.Archidekt;
+using MtgMcp.Core.Decks;
 
 namespace MtgMcp.App.Archidekt;
 
@@ -96,16 +98,85 @@ internal static class ArchidektSyncNotices
     }
 
     /// <summary>
-    /// Explains which entries a push cannot place, and what to change.
+    /// Explains which entries a push cannot place and what fixes the contradiction, without choosing for the caller.
+    /// A patch-entries change with the zone the categories give and zoneCategories "leave" always fixes it. A change
+    /// that keeps the zone and sets zoneCategories "match" is offered only when it would be accepted and would clear
+    /// the contradiction (it creates a missing zone category itself); otherwise the notice says what else to change.
+    /// Entries with the same zones and fixes share one change, up to the most entries one patch may name.
     /// </summary>
     internal static string DescribeZoneContradictions(IReadOnlyList<ArchidektZoneContradiction> contradictions)
     {
+        List<string> groups = [];
+        foreach (IGrouping<(string Zone, string ExpectedZone, ArchidektMatchFix MatchFix), ArchidektZoneContradiction>
+            group in contradictions.GroupBy(value => (value.Zone, value.ExpectedZone, value.MatchFix)))
+        {
+            foreach (ArchidektZoneContradiction[] chunk in group.Chunk(PatchDeckEntriesRules.MaxEntries))
+            {
+                groups.Add(
+                    $"{ListFirst(chunk, value => $"'{value.CardName}'", ", ")} (zone '{group.Key.Zone}', but its " +
+                    $"Archidekt categories put it in '{group.Key.ExpectedZone}'): " +
+                    DescribeFixes(chunk, group.Key.Zone, group.Key.ExpectedZone, group.Key.MatchFix));
+            }
+        }
+
         return "Archidekt keeps no zone of its own: a card's zone comes from its categories (a category named " +
             "Commander, Sideboard or Maybeboard, or the commander category; otherwise main, or maybeboard when its " +
             "primary category is not included in the deck). These cards would come back in another zone: " +
-            $"{DescribeContradictionList(contradictions)}. Change the zone, or add or remove the matching category.";
+            $"{string.Join("; ", groups)}. Send one of these as a change in local_deck_apply_changes.";
     }
 
+    /// <summary>
+    /// Writes the fixes for one group of entries that share a zone, the zone their categories give, and what a match
+    /// change would do.
+    /// </summary>
+    private static string DescribeFixes(
+        ArchidektZoneContradiction[] entries,
+        string zone,
+        string expectedZone,
+        ArchidektMatchFix matchFix)
+    {
+        string leave = $"{PatchChange(entries, expectedZone, DeckZoneCategories.Leave)} to follow the categories";
+        return matchFix switch
+        {
+            ArchidektMatchFix.Clears =>
+                $"either {leave}, or {PatchChange(entries, zone, DeckZoneCategories.Match)} to make the categories " +
+                "match the zone",
+            ArchidektMatchFix.NeedsPrimaryCategory =>
+                $"either {leave}, or the same change with zone '{zone}' and zoneCategories \"match\" plus a " +
+                "primaryCategoryId that names a category in the deck that is not Commander, Sideboard or " +
+                "Maybeboard (without it the change is refused, because the primary category is a zone category)",
+            ArchidektMatchFix.NotAvailableForZone =>
+                $"{leave}. zoneCategories \"match\" is refused for zone '{zone}', because no Archidekt category " +
+                "gives that zone, so the card cannot keep it on Archidekt",
+            _ =>
+                $"{leave}. Setting zoneCategories \"match\" would not keep the zone, because the zone comes from a " +
+                "category it does not change (a primary category that is not included in the deck, or a commander " +
+                $"category), so to keep the zone '{zone}' change the entry's primary category instead",
+        };
+    }
+
+    /// <summary>
+    /// Writes one patch-entries change for the entries of a group as JSON.
+    /// </summary>
+    private static string PatchChange(
+        IEnumerable<ArchidektZoneContradiction> entries,
+        string zone,
+        string zoneCategories)
+    {
+        JsonArray entryIds = [];
+        foreach (ArchidektZoneContradiction entry in entries)
+        {
+            entryIds.Add(entry.EntryId.ToString());
+        }
+
+        return new JsonObject
+        {
+            ["kind"] = "patch-entries",
+            ["entryIds"] = entryIds,
+            ["zone"] = zone,
+            ["zoneCategories"] = zoneCategories,
+        }.ToJsonString();
+    }
     /// <summary>
     /// Says why a push that Archidekt's own changes block would be refused.
     /// </summary>
@@ -124,7 +195,8 @@ internal static class ArchidektSyncNotices
     {
         return ListFirst(
             contradictions,
-            value => $"'{value.CardName}' (zone '{value.Zone}', but its categories give zone '{value.ExpectedZone}')",
+            value => $"'{value.CardName}' (zone '{value.Zone}', but its Archidekt categories put it in " +
+                $"'{value.ExpectedZone}')",
             "; ");
     }
 
