@@ -2,15 +2,14 @@
 
 ## Current Work
 
-- Status: Planned
+- Status: In progress (phase 0)
 - Owner: mtg-mcp (owner session)
-- Last updated: 2026-11-02, branch `docs/surface-consistency-plc` from `main` at `4125d0a` (release `0.14.0`)
-- Implementation authorized: No. The owner asked for the breaking fixes ("no backwards compat", 2026-11-02).
-  Implementation waits for the owner's answers to D-1 to D-6 and a go-ahead.
+- Last updated: 2026-11-02, branch `surface-consistency/integration` from `f542cd4`
+- Implementation authorized: Yes (owner, 2026-11-02: "Accept and implement"; D-1 to D-6 accepted as recommended)
 - Selected work and endpoint: phases 0 to 3, merged into `main`, audited, released as `0.15.0`, and installed.
 - State: drafted and reviewed once (independent read-only review, 2026-11-02; findings folded in).
-- Next action: the owner answers D-1 to D-6; then the plan moves to `in-progress/`.
-- Blocker: the owner's answers to D-1 to D-6.
+- Next action: phase 0 (facts) and phase 1 (shared foundation), then phase 2 by tool family.
+- Blocker: none.
 - Resume check: this file exists on `docs/surface-consistency-plc` or `main`.
 
 ## Problem
