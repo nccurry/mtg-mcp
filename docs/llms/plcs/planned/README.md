@@ -26,6 +26,9 @@ is complete.
 [focused-agent-tool-surface](../completed/focused-agent-tool-surface/README.md)
 was completed and released as 0.12.0 on 2026-10-29.
 
+[deckbuilding-agent-guidance](deckbuilding-agent-guidance/README.md) is planned:
+a Claude Code plugin with deckbuilding skills, plus search results that guide
+agents to oracle tags and whole-result reads.
 
 ## Retired Reference Packets
 
