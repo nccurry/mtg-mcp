@@ -141,8 +141,12 @@ Push sends card changes for one deck through `modifyCards/v2`, which takes a lis
 - After a `partial` push or a `verification-mismatch`, the read is compared with the read before the push
   (`ArchidektSyncPlanner.ChangedOutsidePush`). When the deck details, a category, or a card row that no `applied` or
   `unknown` operation touched changed, or more rows or categories appeared than such operations created, someone else
-  edited the deck during the push. The baseline then stays as it was, so the next push does not revert that edit,
-  and the `notice` says to run `archidekt_pull_preview` before pushing again.
+  edited the deck during the push. The baseline then records a composed deck (`ComposeAfterOutsideEdit`): what those
+  operations touched or created comes from the read after the push and is linked as usual, and everything else comes
+  from the read before it, with fingerprints computed from that content. The outside edit is then a change on
+  Archidekt: the push preview asks for a pull, the pull takes the edit and keeps the local additions, and the push
+  does not revert it. A mismatch that the outside edit alone explains is recorded as a finished push. The `notice`
+  says to preview a pull before pushing again.
 - A local row that names no printing takes the printing of its linked baseline row in the comparison
   (`ArchidektSyncPlanner.Diff`), so the printing Archidekt chose for a card added by name is not a local change.
 - `ArchidektSyncPlanner.OperationRequests` counts one request per batch or other operation, plus the cards of the

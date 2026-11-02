@@ -31,8 +31,9 @@ client (in Claude Code, /mcp or a new session) before relying on new behavior.
   the cards that were not added instead of refusing them as duplicates. An `unknown` card is not linked; if it did
   land, the next push replaces it rather than adding it twice. When the read fails, the baseline stays as it was and
   the `notice` says so. When that read, or the read after a `verification-mismatch`, shows an edit someone else made
-  on Archidekt during the push, the baseline also stays, so the next push does not revert the edit, and the `notice`
-  says to preview a pull first. A local entry added by name no longer shows as changed because Archidekt chose its
+  on Archidekt during the push, the baseline records that edit as an Archidekt change while the cards the push added
+  stay linked, so a pull takes the edit, the next push does not revert it, and the `notice` says to preview a pull
+  first. A local entry added by name no longer shows as changed because Archidekt chose its
   printing.
 - A request-limit refusal on a push preview or apply names the limit (per `archidekt_push_apply` call, counting
   requests to Archidekt), the predicted count, an estimate of how many of the operations fit, and that the push can be

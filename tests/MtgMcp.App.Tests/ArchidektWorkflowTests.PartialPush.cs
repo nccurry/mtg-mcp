@@ -260,13 +260,14 @@ public sealed partial class ArchidektWorkflowTests
 
     /// <summary>
     /// Verifies an edit made on Archidekt to a row the push did not touch, while a partial push or a push whose
-    /// verification differs ran, keeps the old baseline and the local deck, and says Archidekt changed during the push,
-    /// so the next preview shows the Archidekt changes instead of offering to revert the edit.
+    /// verification differs ran, links the cards the push created and says Archidekt changed during the push: the next
+    /// push preview shows the edit as the only Archidekt change and is blocked, and a pull takes the edit and keeps
+    /// every card once, so the push after it offers only the refused card.
     /// </summary>
     [Theory]
     [InlineData(true, "partial")]
     [InlineData(false, "verification-mismatch")]
-    public async Task ApplyPush_WithAnArchidektEditDuringThePush_KeepsTheOldBaseline(bool refuse, string outcome)
+    public async Task ApplyPush_WithAnArchidektEditDuringThePush_KeepsTheEditAsARemoteChange(bool refuse, string outcome)
     {
         FakeArchidekt fake = CreateDeckForNameOnlyAdds();
         using World world = new(OperationMode.Remote, fake);
@@ -301,12 +302,41 @@ public sealed partial class ArchidektWorkflowTests
             await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
 
         Assert.Equal(outcome, applied.Outcome);
-        Assert.Null(applied.LocalRevision);
+        Assert.NotNull(applied.LocalRevision);
+        Assert.Null(applied.UnlinkedLocalIds);
         Assert.EndsWith(ArchidektSynchronizationContext.ChangedDuringPushNotice, applied.Notice, StringComparison.Ordinal);
-        Assert.Equal(edited.Revision, Success(await world.Store.GetAsync(localDeckId, token)).Revision);
         Assert.False(next.ApplyAvailable);
-        Assert.Contains(next.Differences, value => value.State == "remote-changed");
-        Assert.Equal(refuse ? 2 : 3, next.Differences.Count(value => value.State == "remote-added"));
+        ArchidektDifferenceRow edit = Assert.Single(
+            next.Differences,
+            value => value.State.StartsWith("remote-", StringComparison.Ordinal));
+        Assert.Equal("remote-changed", edit.State);
+        Assert.DoesNotContain(next.Differences, value => value.State == "local-removed");
+        Assert.Equal(refuse ? 1 : 0, next.Differences.Count(value => value.State == "local-added"));
+
+        ArchidektSyncPreviewView pull = Success(
+            await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
+        Assert.True(pull.ApplyAvailable, pull.ApplyNotice);
+        ArchidektApplyResult pulled = Success(await world.LocalWrites.ApplyPullAsync(
+            new ArchidektPullApplyRequest(
+                "42",
+                localDeckId,
+                pull.LocalRevision,
+                pull.RemoteFingerprint,
+                pull.PreviewFingerprint),
+            token));
+        DeckDocument afterPull = Success(await world.Store.GetAsync(localDeckId, token));
+        ArchidektSyncPreviewView push = Success(
+            await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
+
+        Assert.Equal("applied", pulled.Outcome);
+        Assert.Equal("sideboard", afterPull.Entries.Single(value => value.CardName == "Bolt").Zone);
+        Assert.All(
+            ["Side Card 01", "Side Card 02", "Side Card 03"],
+            name => Assert.Single(afterPull.Entries, value => value.CardName == name));
+        Assert.Empty(push.Differences.Where(value => value.State.StartsWith("remote-", StringComparison.Ordinal)));
+        Assert.Equal(
+            refuse ? ["entry-add:Side Card 02"] : Array.Empty<string>(),
+            push.Operations.Select(value => $"{value.Kind}:{value.Subject}"));
     }
 
     /// <summary>

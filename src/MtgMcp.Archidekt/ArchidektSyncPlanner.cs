@@ -950,37 +950,17 @@ public static class ArchidektSyncPlanner
         ArgumentNullException.ThrowIfNull(after);
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(statuses);
-        HashSet<int> sentSequences = [.. statuses
-            .Where(value => value.Status is "applied" or "unknown")
-            .Select(value => value.Sequence)];
-        List<ArchidektPlannedOperation> sent = [.. plan.PlannedOperations
-            .Where(value => sentSequences.Contains(value.Public.Sequence))];
-        if (!sent.Exists(value => value.Public.Kind == "metadata-update") && !MetadataEqual(before, after))
+        PushTouch touch = Touched(plan, statuses);
+        List<ArchidektPlannedOperation> sent = touch.Sent;
+        if (!touch.Metadata && !MetadataEqual(before, after))
         {
             return true;
-        }
-
-        HashSet<string> touchedCategories = new(StringComparer.Ordinal);
-        HashSet<string> touchedCategoryNames = new(StringComparer.OrdinalIgnoreCase);
-        HashSet<string> touchedRows = new(StringComparer.Ordinal);
-        foreach (ArchidektPlannedOperation operation in sent)
-        {
-            if (operation.CurrentCategory is { } category)
-            {
-                touchedCategories.Add(category.ProviderCategoryId);
-                touchedCategoryNames.Add(category.Name);
-            }
-
-            if (operation.CurrentEntry is { } entry)
-            {
-                touchedRows.Add(entry.ProviderRelationId);
-            }
         }
 
         Dictionary<string, RemoteDeckCategory> afterCategories = ById(after.Categories, value => value.ProviderCategoryId);
         foreach (RemoteDeckCategory category in before.Categories)
         {
-            if (!touchedCategories.Contains(category.ProviderCategoryId) &&
+            if (!touch.Categories.Contains(category.ProviderCategoryId) &&
                 (!afterCategories.TryGetValue(category.ProviderCategoryId, out RemoteDeckCategory? now) ||
                     !CategoryEqual(category, now)))
             {
@@ -999,8 +979,7 @@ public static class ArchidektSyncPlanner
         string[] categoryNames = [.. after.Categories.Select(value => value.Name)];
         foreach (RemoteDeckEntry entry in before.Entries)
         {
-            if (touchedRows.Contains(entry.ProviderRelationId) ||
-                entry.CategoryNames.Any(touchedCategoryNames.Contains))
+            if (touch.Reaches(entry))
             {
                 continue;
             }
@@ -1015,6 +994,122 @@ public static class ArchidektSyncPlanner
         Dictionary<string, RemoteDeckEntry> beforeEntries = ById(before.Entries, value => value.ProviderRelationId);
         return after.Entries.Count(value => !beforeEntries.ContainsKey(value.ProviderRelationId)) >
             sent.Count(value => value.Public.Kind == EntryAddKind);
+    }
+
+    /// <summary>
+    /// Composes the Archidekt deck a baseline records after a push during which Archidekt also changed (see
+    /// <see cref="ChangedOutsidePush"/>): the metadata, categories, and rows an <c>applied</c> or <c>unknown</c>
+    /// operation touched or created come from the read after the push, and everything else from the read before it.
+    /// Both fingerprints are computed from the composed content, so the outside edit stays a change on Archidekt that
+    /// a pull takes, while the rows the push created stay linked.
+    /// </summary>
+    public static RemoteDeckSnapshot ComposeAfterOutsideEdit(
+        RemoteDeckSnapshot before,
+        RemoteDeckSnapshot after,
+        ArchidektRemotePlan plan,
+        IReadOnlyList<ArchidektOperationStatus> statuses)
+    {
+        ArgumentNullException.ThrowIfNull(before);
+        ArgumentNullException.ThrowIfNull(after);
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(statuses);
+        PushTouch touch = Touched(plan, statuses);
+        Dictionary<string, RemoteDeckCategory> afterCategories = ById(after.Categories, value => value.ProviderCategoryId);
+        List<RemoteDeckCategory> categories = [];
+        foreach (RemoteDeckCategory category in before.Categories)
+        {
+            if (!touch.Categories.Contains(category.ProviderCategoryId))
+            {
+                categories.Add(category);
+            }
+            else if (afterCategories.TryGetValue(category.ProviderCategoryId, out RemoteDeckCategory? now))
+            {
+                categories.Add(now);
+            }
+        }
+
+        // A new category or row is the push's own only when it matches what a sent operation created.
+        Dictionary<string, RemoteDeckCategory> beforeCategories = ById(before.Categories, value => value.ProviderCategoryId);
+        List<string> created = [.. touch.Sent
+            .Where(value => value.Public.Kind == "category-create")
+            .Select(value => value.TargetCategory!.Name)];
+        foreach (RemoteDeckCategory category in after.Categories)
+        {
+            int match = created.FindIndex(name => string.Equals(name, category.Name, StringComparison.OrdinalIgnoreCase));
+            if (!beforeCategories.ContainsKey(category.ProviderCategoryId) && match >= 0)
+            {
+                created.RemoveAt(match);
+                categories.Add(category);
+            }
+        }
+
+        Dictionary<string, RemoteDeckEntry> afterEntries = ById(after.Entries, value => value.ProviderRelationId);
+        List<RemoteDeckEntry> entries = [];
+        foreach (RemoteDeckEntry entry in before.Entries)
+        {
+            if (!touch.Reaches(entry))
+            {
+                entries.Add(entry);
+            }
+            else if (afterEntries.TryGetValue(entry.ProviderRelationId, out RemoteDeckEntry? now))
+            {
+                entries.Add(now);
+            }
+        }
+
+        Dictionary<string, RemoteDeckEntry> beforeEntries = ById(before.Entries, value => value.ProviderRelationId);
+        List<RemoteDeckEntry> added = [.. touch.Sent
+            .Where(value => value.Public.Kind == EntryAddKind)
+            .Select(value => value.TargetEntry!)];
+        foreach (RemoteDeckEntry entry in after.Entries)
+        {
+            int match = added.FindIndex(target => target.Quantity == entry.Quantity && CardIdentityEqual(entry, target));
+            if (!beforeEntries.ContainsKey(entry.ProviderRelationId) && match >= 0)
+            {
+                added.RemoveAt(match);
+                entries.Add(entry);
+            }
+        }
+
+        RemoteDeckSnapshot metadata = touch.Metadata ? after : before;
+        RemoteDeckSnapshot composed = after with
+        {
+            Name = metadata.Name,
+            Description = metadata.Description,
+            Format = metadata.Format,
+            Visibility = metadata.Visibility,
+            ParentFolderId = metadata.ParentFolderId,
+            Categories = categories,
+            Entries = entries,
+        };
+        (string content, string remote) = ArchidektJsonContract.Recompute(composed);
+        return composed with { ContentFingerprint = content, RemoteFingerprint = remote };
+    }
+
+    /// <summary>
+    /// Collects the operations a push sent (<c>applied</c> or <c>unknown</c>) and the provider rows they touched.
+    /// </summary>
+    private static PushTouch Touched(ArchidektRemotePlan plan, IReadOnlyList<ArchidektOperationStatus> statuses)
+    {
+        HashSet<int> sentSequences = [.. statuses
+            .Where(value => value.Status is "applied" or "unknown")
+            .Select(value => value.Sequence)];
+        PushTouch touch = new([.. plan.PlannedOperations.Where(value => sentSequences.Contains(value.Public.Sequence))]);
+        foreach (ArchidektPlannedOperation operation in touch.Sent)
+        {
+            if (operation.CurrentCategory is { } category)
+            {
+                touch.Categories.Add(category.ProviderCategoryId);
+                touch.CategoryNames.Add(category.Name);
+            }
+
+            if (operation.CurrentEntry is { } entry)
+            {
+                touch.Rows.Add(entry.ProviderRelationId);
+            }
+        }
+
+        return touch;
     }
 
     /// <summary>
@@ -1278,6 +1373,46 @@ public static class ArchidektSyncPlanner
             string.Equals(left.Finish, right.Finish, StringComparison.Ordinal) &&
             string.Equals(left.Zone, right.Zone, StringComparison.Ordinal) &&
             ArchidektEntryComparison.SameCategories(left, resolved, lenientNames);
+    }
+}
+
+/// <summary>
+/// Holds the operations a push sent and the provider categories and rows they touched.
+/// </summary>
+internal sealed class PushTouch(List<ArchidektPlannedOperation> sent)
+{
+    /// <summary>
+    /// Gets the operations whose status is <c>applied</c> or <c>unknown</c>, in plan order.
+    /// </summary>
+    internal List<ArchidektPlannedOperation> Sent { get; } = sent;
+
+    /// <summary>
+    /// Gets whether a metadata update was sent.
+    /// </summary>
+    internal bool Metadata => Sent.Exists(value => value.Public.Kind == "metadata-update");
+
+    /// <summary>
+    /// Gets the provider IDs of the existing categories a sent operation changed or deleted.
+    /// </summary>
+    internal HashSet<string> Categories { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Gets the names those categories had before the push.
+    /// </summary>
+    internal HashSet<string> CategoryNames { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets the relation IDs of the existing rows a sent operation changed or removed.
+    /// </summary>
+    internal HashSet<string> Rows { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Tells whether the push may have changed a row read before it: a sent operation touched the row or one of its
+    /// categories.
+    /// </summary>
+    internal bool Reaches(RemoteDeckEntry entry)
+    {
+        return Rows.Contains(entry.ProviderRelationId) || entry.CategoryNames.Any(CategoryNames.Contains);
     }
 }
 

@@ -812,6 +812,16 @@ and links created entries, but the local deck is not marked synchronized: what
 Archidekt did not take stays visible as a local change: a pull keeps leftover additions and conflicts on any other
 leftover change, and the next push plans only that difference.
 
+After a `partial` push or a `verification-mismatch`, the read after the push is
+compared with the read before it. If someone else changed the deck on Archidekt
+during the push (the details, a category, or a card the push did not touch),
+the baseline takes only what the push touched or created from the read after it
+and keeps everything else as read before, so the outside edit shows as an
+Archidekt change instead of a local one, and the cards the push added stay
+linked. The `notice` says Archidekt changed during the push: preview a pull
+before pushing again; the push preview asks for that pull, and the pull takes
+the edit. Otherwise the baseline records the read after the push.
+
 Category names are case-sensitive, as on Archidekt: `Sideboard` and `SIDEBOARD`
 are two categories. A push compares names exactly. Archidekt keeps no card zone
 of its own; it comes from the categories (a category named Commander, Sideboard
@@ -897,12 +907,16 @@ How a push reports what happened (`archidekt_push_apply`, field `outcome` and th
   have been applied). The rest are `not-sent` or `not-attempted`. The push reads Archidekt back and records what
   landed as the new baseline, so the next `archidekt_push_preview` offers only the changes that were not applied,
   and a pull keeps the cards that were not added. An `unknown` card is not linked: if it did land, the next push replaces it rather than adding
-  it twice. When the read fails, the baseline stays as it was and the `notice` says so.
+  it twice. When the read fails, the baseline stays as it was and the `notice` says so. When the read shows an edit
+  someone else made on Archidekt during the push, that edit is recorded as an Archidekt change, and the `notice`
+  says to preview a pull before pushing again.
 - `applied-unverified`: the writes were sent, but Archidekt could not be read afterwards (for example it returned
   `429`). The applied statuses are kept, the local baseline is not updated, and the `notice` says to run
   `archidekt_pull_preview` before pushing again.
 - `verification-mismatch`: the check after the writes found a difference. It reads once more after about a second
-  (Archidekt can lag behind its own writes), and `differences` lists the rows that still differ (up to 25).
+  (Archidekt can lag behind its own writes), and `differences` lists the rows that still differ (up to 25). When
+  an edit someone else made during the push explains the difference, it is recorded as an Archidekt change, as for
+  `partial`, and the `notice` says to preview a pull before pushing again.
 
 Reads that get a `429` wait for `Retry-After` (at most about 10 seconds) and retry up to twice.
 
