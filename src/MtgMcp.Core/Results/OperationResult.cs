@@ -212,13 +212,17 @@ public sealed record OperationConflict
 /// </summary>
 /// <param name="Revision">The current local deck revision, when a local deck is involved.</param>
 /// <param name="RemoteFingerprint">The current provider state fingerprint, when a provider deck is involved.</param>
+/// <param name="PreviewFingerprint">The fingerprint of the preview as it is now, when a preview no longer matches.</param>
 public sealed record ConflictState(
     [property: JsonPropertyName("revision")]
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     long? Revision = null,
     [property: JsonPropertyName("remoteFingerprint")]
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    string? RemoteFingerprint = null);
+    string? RemoteFingerprint = null,
+    [property: JsonPropertyName("previewFingerprint")]
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? PreviewFingerprint = null);
 
 /// <summary>
 /// Reports that caller input cannot be accepted by the operation contract.

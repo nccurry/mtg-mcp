@@ -2,7 +2,7 @@
 
 ## Current Work
 
-- Status: In progress (phase 0)
+- Status: In progress (phases 0 and 1 merged; phase 2 next)
 - Owner: mtg-mcp (owner session)
 - Last updated: 2026-11-02, branch `surface-consistency/integration` from `f542cd4`
 - Implementation authorized: Yes (owner, 2026-11-02: "Accept and implement"; D-1 to D-6 accepted as recommended)
@@ -231,3 +231,38 @@ owner's approval.
 
 The plan is complete when every requirement is verified on the merge and release commits, the audit is closed, and
 `0.15.0` is installed.
+
+## Phase 0 Decisions
+
+Phase 0 (`07fd8e0`, `PHASE0.md`) gives the exact lists that phase 2 follows. Its findings were settled under the
+accepted D-1 to D-6 rules on 2026-11-02:
+
+- **12 Archidekt tools take `request`**, not 11: `archidekt_pull_apply` too. All 12 go flat (D-3).
+  `playgroup_live_session_create` takes a scalar `request` and also goes flat. The `scryfall_*` writes are already
+  flat.
+- **The activation boolean is on `scryfall_card_data_rollback`**, not on sync. D-5 covers `scryfall_card_data_delete`,
+  `scryfall_request_snapshot_delete`, and `scryfall_card_data_rollback`, plus the Archidekt deck, folder, and
+  snapshot deletes and the snapshot restore. `local_deck_backup_delete` has no guard and nothing undoes it, so it
+  takes the phrase `delete backup <backupId>` under D-5's rule. `archidekt_pull_apply` with `discardLocalChanges`
+  keeps no phrase, because the pull takes a local backup first and `local_deck_backup_restore` undoes it.
+- **Spellbook tool arguments are already flat.** Only the adapter's page options and the echoed `request.page` are
+  nested; the tool takes `cursor` and `pageSize` and keeps the adapter contract.
+- **Archidekt reads gain a new `pageSize` argument**, since none has one today.
+- **`local_deck_list` gets a bound cursor** in place of its bare offset cursor.
+- **REQ-002's size bound comes from the byte cut where a tool has one**, and those tools keep their current default
+  `pageSize`. A page stops early when it reaches the result limit, and the result says so. The tools with no byte
+  cut gain one: `local_deck_list`, `archidekt_deck_list`, Spellbook, Playgroup games, and the raw modes of
+  `scryfall_tags_search` and `scryfall_request_snapshots_get`. Phase 0's smaller suggested defaults are not used.
+- **`ConflictState` gains `previewFingerprint`** in Core (integration, before phase 2), so `preview-changed` and
+  `cursor-stale` can carry the current preview.
+- **Revision names.** `deckRevision` in local previews and export becomes `revision` (REQ-005). Card-list sources
+  rename `archidektDeckId` to `remoteDeckId` (D-4).
+- **The card-list result `fingerprint` is not a preview fingerprint.** It identifies the analyzed list. It stays and
+  is exempt from the REQ-003 naming test, with that reason in the test.
+- **`card_list_query` moves `rows.pageSize` to a top-level `pageSize`** (D-1).
+- **Export `pageSize` counts UTF-16 code units** of the artifact text per chunk.
+- **A remote-fingerprint mismatch returns `remote-deck-changed`** on both pull and push apply.
+- **`metadataPolicy` becomes `freshnessPolicy`, and `expectedCorpusGeneration` becomes `expectedActiveGeneration`**:
+  phase 0 found the same meanings.
+- **New defect, fixed in family (a):** a category preview of an empty deck with tag selectors returns
+  `invalid-card-lookup`.
