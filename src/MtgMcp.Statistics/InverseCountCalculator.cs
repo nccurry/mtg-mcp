@@ -341,11 +341,13 @@ public sealed partial class ExactStatisticsCalculator
             case null:
                 return new OperationInvalidInput(
                     "invalid-statistics-request",
-                    "request.event is required.");
+                    "request.event is required.",
+                    "request.event");
             default:
                 return new OperationInvalidInput(
                     "invalid-statistics-request",
-                    "request.event contains invalid fixed population or success values.");
+                    "request.event contains invalid fixed population or success values.",
+                    "request.event");
         }
     }
 
@@ -367,7 +369,8 @@ public sealed partial class ExactStatisticsCalculator
         {
             return new OperationInvalidInput(
                 "invalid-statistics-request",
-                "request.event contains an invalid explicit turn schedule.");
+                "request.event contains an invalid explicit turn schedule.",
+                    "request.event");
         }
 
         int cardsSeen = input.OpeningHandSize;
@@ -386,7 +389,8 @@ public sealed partial class ExactStatisticsCalculator
 
         return new OperationInvalidInput(
             "invalid-statistics-request",
-            "request.event.turn must identify one supplied draw schedule row.");
+            "request.event.turn must identify one supplied draw schedule row.",
+                    "request.event.turn");
     }
 
     /// <summary>
@@ -404,7 +408,8 @@ public sealed partial class ExactStatisticsCalculator
         {
             return new OperationInvalidInput(
                 "invalid-statistics-request",
-                "request.event contains an invalid repeated-source mana case.");
+                "request.event contains an invalid repeated-source mana case.",
+                    "request.event");
         }
 
         return new PreparedManaMinimum(

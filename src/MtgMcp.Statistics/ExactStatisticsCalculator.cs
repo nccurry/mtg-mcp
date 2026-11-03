@@ -261,7 +261,7 @@ public sealed partial class ExactStatisticsCalculator
     /// </summary>
     private static OperationResult<StatisticsCalculation<T>> Invalid<T>(string message)
     {
-        return new OperationInvalidInput("invalid-statistics-request", message);
+        return new OperationInvalidInput("invalid-statistics-request", message, StatisticsFailurePath.FromMessage(message));
     }
 
     /// <summary>

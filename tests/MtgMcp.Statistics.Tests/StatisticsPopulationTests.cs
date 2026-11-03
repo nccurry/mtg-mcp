@@ -54,6 +54,7 @@ public sealed class StatisticsPopulationTests
 
         OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(result.Value);
         Assert.Equal("invalid-statistics-population", invalid.ReasonCode);
+        Assert.StartsWith("request.population", invalid.Path, StringComparison.Ordinal);
         Assert.DoesNotContain("\\", invalid.Message, StringComparison.Ordinal);
     }
 

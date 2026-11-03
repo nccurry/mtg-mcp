@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.Statistics;
@@ -215,16 +216,18 @@ internal static class StatisticsPopulationValidator
 
         Dictionary<string, int> countsBySignature = new(StringComparer.Ordinal);
         long total = 0;
-        foreach (StatisticsPopulationBucket? bucket in population.Buckets)
+        for (int index = 0; index < population.Buckets.Count; index++)
         {
+            StatisticsPopulationBucket? bucket = population.Buckets[index];
+            string at = $"population.buckets[{index.ToString(CultureInfo.InvariantCulture)}]";
             if (bucket is null || bucket.Count <= 0)
             {
-                return Invalid("population.buckets[].count must be positive.");
+                return Invalid($"{at}.count must be positive.");
             }
 
             if (bucket.Groups is null)
             {
-                return Invalid("population.buckets[].groups is required.");
+                return Invalid($"{at}.groups is required.");
             }
 
             HashSet<string> bucketGroups = new(StringComparer.Ordinal);
@@ -234,8 +237,7 @@ internal static class StatisticsPopulationValidator
                     !declared.Contains(group) ||
                     !bucketGroups.Add(group))
                 {
-                    return Invalid(
-                        "population.buckets[].groups must contain unique exact declared names.");
+                    return Invalid($"{at}.groups must contain unique exact declared names.");
                 }
             }
 
@@ -298,7 +300,7 @@ internal static class StatisticsPopulationValidator
     /// </summary>
     private static OperationInvalidInput Invalid(string message)
     {
-        return new OperationInvalidInput("invalid-statistics-population", message);
+        return new OperationInvalidInput("invalid-statistics-population", message, StatisticsFailurePath.FromMessage(message));
     }
 
     /// <summary>
