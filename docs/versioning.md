@@ -21,7 +21,7 @@ those tools and APIs or documented for extension authors.
 
 - Patch releases should be bug fixes, docs, test hardening, and additive fields.
 - Minor releases may remove or rename MCP tools or API entries when the
-  changelog, README, and tool/API tests are updated in the same change.
+  changelog, reference, and tool/API tests are updated in the same change.
 - Breaking changes should prefer a deprecation minor before a removal minor when
   the old shape has shipped in a tagged release.
 - Unreleased branch-only APIs may be replaced directly instead of carrying
@@ -81,7 +81,7 @@ removed or renamed:
 4. Add or update tests proving both the old and new behavior during the
    deprecation window.
 5. Remove the old tool or API only in the planned removal release and update
-   the complete README list in the same change.
+   the complete reference list in the same change.
 
 ## Result Shape Changes
 
@@ -99,7 +99,7 @@ of relying on a score of `0` to imply "not applicable."
 Before tagging a release:
 
 - Run `task lint`, `task test`, `task smoke:process`, and `task smoke:mcp`.
-- Confirm `README.md` covers every registered tool/resource/prompt.
+- Confirm `docs/reference.md` covers every registered tool/resource/prompt.
 - Confirm `CHANGELOG.md` describes public tool and API changes.
 - Build the package and run `task release:tool-smoke` to probe and establish an
   MCP session against the installed tool.

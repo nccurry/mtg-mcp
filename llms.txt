@@ -10,7 +10,8 @@ status log.
 
 ## Start here
 
-- [README](README.md): Local deck, Scryfall, Archidekt, Playgroup, Spellbook, exact statistics, and seeded simulation (`stats_simulate`) tools, the three workflow prompts, configuration, and development commands.
+- [README](README.md): Install and connect the server.
+- [Reference](docs/reference.md): Local deck, Scryfall, Archidekt, Playgroup, Spellbook, exact statistics, and seeded simulation (`stats_simulate`) tools, the three workflow prompts, configuration, and development commands.
 - [Agent instructions](AGENTS.md): Rules, architecture boundaries, commands, and worktree conventions.
 - [Contributing](CONTRIBUTING.md): Bootstrap, build, and change expectations.
 - [Taskfile](Taskfile.yml): Supported local and CI operations; run `task --list`.

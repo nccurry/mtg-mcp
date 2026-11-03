@@ -26,7 +26,7 @@ a .NET build.
 Keep future adapters isolated from Core domain logic. Normal tests must remain
 offline and must not mutate provider state.
 
-Public MCP tool or API changes must update `README.md`, `CHANGELOG.md`, and the
+Public MCP tool or API changes must update `docs/reference.md`, `CHANGELOG.md`, and the
 related tests. The clean-break rewrite is complete; use its completed records as
 design evidence and follow `docs/versioning.md` for current-server changes.
 

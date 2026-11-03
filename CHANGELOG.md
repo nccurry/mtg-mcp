@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The README is now a short install-and-connect page with a new logo. The full guide to every tool, setting, and
+  workflow is [docs/reference.md](docs/reference.md).
+
 ## 0.15.0 - 2026-11-03
 
 This release fixes eight inconsistencies in the MCP surface that an audit of `0.14.0` found: five ways to page, three

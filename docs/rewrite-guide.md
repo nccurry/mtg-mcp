@@ -12,7 +12,7 @@ stabilization child added no capability.
 Use these sources in order for the kind of question being answered:
 
 1. For what the current checkout actually does, use code, tests, project files,
-   configuration, `Taskfile.yml`, and [README.md](../README.md).
+   configuration, `Taskfile.yml`, and [the reference](reference.md).
 2. For repository-wide coding rules, use [AGENTS.md](../AGENTS.md) and the
    closest scoped `AGENTS.md`.
 3. For the rewrite's shared product and architecture constraints, use the
