@@ -61,7 +61,11 @@ internal static class DeckAddPresence
             {
                 if (skippedById.TryGetValue(referenced, out Skipped? gone))
                 {
-                    return new DeckAddPresenceResult(changes, [], Refusal(callerIndexes[index] + 1, gone), callerIndexes[index]);
+                    return new DeckAddPresenceResult(
+                        changes,
+                        [],
+                        Refusal(callerIndexes[index] + 1, gone),
+                        callerIndexes[index]);
                 }
             }
 

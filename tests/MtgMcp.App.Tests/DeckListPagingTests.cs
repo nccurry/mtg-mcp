@@ -1,5 +1,7 @@
 using MtgMcp.App.Decks;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
 
@@ -68,6 +70,25 @@ public sealed class DeckListPagingTests
         Assert.Equal("cursor-stale", created.ReasonCode);
     }
 
+    /// <summary>
+    /// Verifies a cursor issued for another tool is an invalid cursor at the cursor path, not a stale one.
+    /// </summary>
+    [Fact]
+    public async Task PageAsync_WithACursorOfAnotherTool_IsAnInvalidCursor()
+    {
+        CancellationToken token = TestContext.Current.CancellationToken;
+        using TemporaryDirectory temporary = new();
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        _ = await CreateDecksAsync(store, 1);
+        string foreign = PageCursor.Encode(
+            PageCursorPosition.AtOffset(1),
+            PageCursorBinding.ForRequest(RequestHash.Of(("archidekt_deck_list", typeof(string)))));
+
+        OperationInvalidInput refused = Assert.IsType<OperationInvalidInput>(
+            (await DeckListPaging.PageAsync(store, foreign, 1, token)).Value);
+
+        Assert.Equal(("invalid-cursor", "cursor"), (refused.ReasonCode, refused.Path));
+    }
     /// <summary>
     /// Verifies a long description is cut and flagged, so one deck cannot push the page over the size limit.
     /// </summary>

@@ -126,21 +126,62 @@ public sealed class SqliteDeckStoreTests
         using TemporaryDeckDirectory temporary = new();
         using SqliteDeckStore store = CreateStore(temporary.Path);
         CancellationToken token = TestContext.Current.CancellationToken;
-        string empty = RequireSuccess(await store.GetListFingerprintAsync(token));
+        string empty = await FingerprintAsync(store, token);
         DeckDocument deck = RequireSuccess(await store.CreateAsync(new DeckCreateRequest("Alpha"), token));
-        string created = RequireSuccess(await store.GetListFingerprintAsync(token));
-        Assert.Equal(created, RequireSuccess(await store.GetListFingerprintAsync(token)));
+        string created = await FingerprintAsync(store, token);
+        Assert.Equal(created, await FingerprintAsync(store, token));
         DeckDocument edited = RequireSuccess(await store.ApplyChangesAsync(
             deck.DeckId,
             deck.Revision,
             [new UpdateDeckMetadataChange("Beta", null, "custom")],
             token));
-        string changed = RequireSuccess(await store.GetListFingerprintAsync(token));
+        string changed = await FingerprintAsync(store, token);
         _ = RequireSuccess(await store.DeleteAsync(deck.DeckId, edited.Revision, token));
 
-        Assert.Equal(4, new[] { empty, created, changed, RequireSuccess(await store.GetListFingerprintAsync(token)) }
-            .Distinct().Count() + (empty == RequireSuccess(await store.GetListFingerprintAsync(token)) ? 1 : 0));
+        Assert.Equal(4, new[] { empty, created, changed, await FingerprintAsync(store, token) }
+            .Distinct().Count() + (empty == await FingerprintAsync(store, token) ? 1 : 0));
     }
+
+    /// <summary>
+    /// Reads the fingerprint of the deck list from a one-row page.
+    /// </summary>
+    private static async Task<string> FingerprintAsync(SqliteDeckStore store, CancellationToken token)
+    {
+        return RequireSuccess(await store.ListAsync(0, 1, token)).ListFingerprint;
+    }
+
+    /// <summary>
+    /// Verifies the offset resolver of a list page sees the fingerprint of the page it then reads, and a refusal from
+    /// the resolver is returned without a page.
+    /// </summary>
+    [Fact]
+    public async Task List_ResolvesTheOffsetFromTheFingerprintOfThePageItReads()
+    {
+        using TemporaryDeckDirectory temporary = new();
+        using SqliteDeckStore store = CreateStore(temporary.Path);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        string? seen = null;
+        _ = RequireSuccess(await store.CreateAsync(new DeckCreateRequest("Alpha"), token));
+        _ = RequireSuccess(await store.CreateAsync(new DeckCreateRequest("Beta"), token));
+
+        DeckListSlice slice = RequireSuccess(await store.ListAsync(
+            fingerprint =>
+            {
+                seen = fingerprint;
+                return new OperationSuccess<int>(1);
+            },
+            5,
+            token));
+        OperationInvalidInput refused = Assert.IsType<OperationInvalidInput>((await store.ListAsync(
+            _ => new OperationInvalidInput("invalid-cursor", "No.", "cursor"),
+            5,
+            token)).Value);
+
+        Assert.Equal("Beta", Assert.Single(slice.Items).Name);
+        Assert.Equal(seen, slice.ListFingerprint);
+        Assert.Equal("cursor", refused.Path);
+    }
+
     /// <summary>
     /// Verifies malformed initial fields and relationships fail atomically as caller input.
     /// </summary>
@@ -572,6 +613,57 @@ public sealed class SqliteDeckStoreTests
         Assert.Equal(DeckEntryDraftRules.FirstProblem(draft), invalid.Message);
     }
 
+    /// <summary>
+    /// Verifies a refused change names its own position in the batch as the path, not the whole changes argument.
+    /// </summary>
+    [Fact]
+    public async Task ApplyChanges_RefusedChange_NamesItsIndex()
+    {
+        using TemporaryDeckDirectory temporary = new();
+        using SqliteDeckStore store = CreateStore(temporary.Path);
+        DeckDocument deck = await CreateCommanderAsync(store);
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>((await store.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [
+                new AddDeckEntryChange(new DeckEntryDraft(1, "Sol Ring")),
+                new AddDeckEntryChange(new DeckEntryDraft(0, "Sol Ring")),
+            ],
+            TestContext.Current.CancellationToken)).Value);
+
+        Assert.Equal("changes[1]", invalid.Path);
+    }
+
+    /// <summary>
+    /// Verifies a create request names the entry, category assignment, or field it refused.
+    /// </summary>
+    [Fact]
+    public async Task Create_RefusedValue_NamesItsFieldOrIndex()
+    {
+        using TemporaryDeckDirectory temporary = new();
+        using SqliteDeckStore store = CreateStore(temporary.Path);
+        Guid entryId = Guid.CreateVersion7();
+        DeckCreateRequest[] requests =
+        [
+            new DeckCreateRequest("Deck", Entries: [new DeckEntryDraft(1, "Card"), new DeckEntryDraft(0, "Card")]),
+            new DeckCreateRequest("Deck", Categories: [new DeckCategoryDraft("One"), new DeckCategoryDraft(" ")]),
+            new DeckCreateRequest(" "),
+            new DeckCreateRequest("Deck", DeckId: Guid.Empty),
+            new DeckCreateRequest(
+                "Deck",
+                Entries: [new DeckEntryDraft(1, "Card", EntryId: entryId)],
+                CategoryAssignments: [new DeckCategoryAssignment(entryId, Guid.CreateVersion7(), false)]),
+        ];
+
+        string?[] paths =
+        [
+            .. await Task.WhenAll(requests.Select(async request => Assert.IsType<OperationInvalidInput>(
+                (await store.CreateAsync(request, TestContext.Current.CancellationToken)).Value).Path)),
+        ];
+
+        Assert.Equal(["entries[1]", "categories[1]", "name", "deckId", "categoryAssignments[0]"], paths);
+    }
     /// <summary>
     /// Verifies the database enforces one primary category per entry and rolls back the batch.
     /// </summary>

@@ -69,11 +69,26 @@ public sealed class SqliteDeckStore : IDisposable
     /// Lists one page of canonically ordered decks, from a row offset, without creating absent storage. The slice
     /// says whether decks follow it.
     /// </summary>
-    public async Task<OperationResult<DeckListSlice>> ListAsync(
+    public Task<OperationResult<DeckListSlice>> ListAsync(
         int offset,
         int pageSize,
         CancellationToken cancellationToken)
     {
+        return ListAsync(_ => new OperationSuccess<int>(offset), pageSize, cancellationToken);
+    }
+
+    /// <summary>
+    /// Lists one page of canonically ordered decks from the offset that <paramref name="resolveOffset"/> returns for
+    /// the fingerprint of the list, which changes when any deck is created, deleted, renamed, or edited. The
+    /// fingerprint and the page come from one read transaction, so a write cannot fall between them. The slice says
+    /// whether decks follow it and carries that fingerprint.
+    /// </summary>
+    public async Task<OperationResult<DeckListSlice>> ListAsync(
+        Func<string, OperationResult<int>> resolveOffset,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(resolveOffset);
         if (pageSize is < 1 or > 100)
         {
             return Invalid<DeckListSlice>("Page size must be between 1 and 100.", "pageSize");
@@ -81,7 +96,11 @@ public sealed class SqliteDeckStore : IDisposable
 
         if (!database.Exists)
         {
-            return new OperationSuccess<DeckListSlice>(new DeckListSlice([], false));
+            string empty = DeckSql.ListFingerprint([]);
+            OperationResult<int> first = resolveOffset(empty);
+            return first is OperationSuccess<int>
+                ? new OperationSuccess<DeckListSlice>(new DeckListSlice([], false, empty))
+                : OperationFailure.Forward<int, DeckListSlice>(first);
         }
 
         try
@@ -89,46 +108,30 @@ public sealed class SqliteDeckStore : IDisposable
             await using SqliteConnection connection = await database.OpenConnectionAsync(
                 writable: false,
                 cancellationToken).ConfigureAwait(false);
+            await using SqliteTransaction transaction = connection.BeginTransaction(deferred: true);
+            string fingerprint = DeckSql.ListFingerprint(
+                await DeckSql.ListRevisionsAsync(connection, cancellationToken).ConfigureAwait(false));
+            OperationResult<int> start = resolveOffset(fingerprint);
+            if (start is not OperationSuccess<int> offset)
+            {
+                return OperationFailure.Forward<int, DeckListSlice>(start);
+            }
+
             IReadOnlyList<DeckSummary> rows = await DeckSql.ListDecksAsync(
                 connection,
-                offset,
+                offset.Data,
                 pageSize + 1,
                 cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             bool hasMore = rows.Count > pageSize;
             return new OperationSuccess<DeckListSlice>(
-                new DeckListSlice(hasMore ? rows.Take(pageSize).ToArray() : rows, hasMore));
+                new DeckListSlice(hasMore ? rows.Take(pageSize).ToArray() : rows, hasMore, fingerprint));
         }
         catch (Exception exception) when (IsExpectedStorageFailure(exception))
         {
             return MapFailure<DeckListSlice>(exception, "pageSize");
         }
     }
-
-    /// <summary>
-    /// Fingerprints the deck list: it changes when any deck is created, deleted, renamed, or edited, so a cursor over
-    /// the list can tell that its pages no longer line up.
-    /// </summary>
-    public async Task<OperationResult<string>> GetListFingerprintAsync(CancellationToken cancellationToken)
-    {
-        if (!database.Exists)
-        {
-            return new OperationSuccess<string>(DeckSql.ListFingerprint([]));
-        }
-
-        try
-        {
-            await using SqliteConnection connection = await database.OpenConnectionAsync(
-                writable: false,
-                cancellationToken).ConfigureAwait(false);
-            return new OperationSuccess<string>(DeckSql.ListFingerprint(
-                await DeckSql.ListRevisionsAsync(connection, cancellationToken).ConfigureAwait(false)));
-        }
-        catch (Exception exception) when (IsExpectedStorageFailure(exception))
-        {
-            return MapFailure<string>(exception, "cursor");
-        }
-    }
-
     /// <summary>
     /// Gets one complete deck without creating absent storage.
     /// </summary>
@@ -181,7 +184,7 @@ public sealed class SqliteDeckStore : IDisposable
             await database.EnsureInitializedAsync(now, applicationVersion, cancellationToken)
                 .ConfigureAwait(false);
             DeckDocument deck = BuildNewDeck(request, now);
-            ValidateInitialRelationships(deck);
+            ValidateInitialRelationships(deck, "categoryAssignments");
             await using SqliteConnection connection = await database.OpenConnectionAsync(
                 writable: true,
                 cancellationToken).ConfigureAwait(false);
@@ -230,10 +233,12 @@ public sealed class SqliteDeckStore : IDisposable
             await database.EnsureInitializedAsync(now, applicationVersion, cancellationToken)
                 .ConfigureAwait(false);
             DeckDocument deck = BuildNewDeck(request, now);
-            ValidateInitialRelationships(deck);
+            ValidateInitialRelationships(deck, "categoryAssignments");
             if (!deck.ProviderBindings.Any(value => value.BindingId == baseline.BindingId))
             {
-                return Invalid<DeckDocument>("The synchronization baseline has no matching provider binding.", "localDeckId");
+                return Invalid<DeckDocument>(
+                    "The synchronization baseline has no matching provider binding.",
+                    "localDeckId");
             }
 
             string canonicalBaseline = DeckContractValidator.Required(
@@ -374,7 +379,7 @@ public sealed class SqliteDeckStore : IDisposable
         try
         {
             DeckDocument deck = NormalizeExact(snapshot.Deck);
-            ValidateInitialRelationships(deck);
+            ValidateInitialRelationships(deck, null);
             ValidateBaselines(deck, snapshot.SyncBaselines);
             await database.EnsureInitializedAsync(
                 timeProvider.GetUtcNow().ToUniversalTime(),
@@ -533,14 +538,15 @@ public sealed class SqliteDeckStore : IDisposable
                 }
 
                 Dictionary<Guid, Guid> primaryAssigned = [];
-                foreach (DeckChange change in changes)
+                for (int index = 0; index < changes.Count; index++)
                 {
-                    RejectSecondPrimaryInBatch(change, primaryAssigned);
-                    await ApplyChangeAsync(
+                    await ApplyIndexedChangeAsync(
                         connection,
                         transaction,
                         deckId,
-                        change,
+                        changes[index],
+                        index,
+                        primaryAssigned,
                         cancellationToken).ConfigureAwait(false);
                 }
 
@@ -605,6 +611,28 @@ public sealed class SqliteDeckStore : IDisposable
         mutationGate.Dispose();
     }
 
+    /// <summary>
+    /// Applies one change of a batch, naming the change as <c>changes[index]</c> when it is refused without a path.
+    /// </summary>
+    private async Task ApplyIndexedChangeAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid deckId,
+        DeckChange change,
+        int index,
+        Dictionary<Guid, Guid> primaryAssigned,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            RejectSecondPrimaryInBatch(change, primaryAssigned);
+            await ApplyChangeAsync(connection, transaction, deckId, change, cancellationToken).ConfigureAwait(false);
+        }
+        catch (DeckInputException exception) when (exception.Path is null)
+        {
+            throw exception.At($"changes[{index}]");
+        }
+    }
     /// <summary>
     /// Refuses a batch that makes two different categories primary for one entry at the same time. A single primary
     /// assignment demotes the entry's earlier primary category, so only a conflict inside one request is an error.
@@ -796,23 +824,27 @@ public sealed class SqliteDeckStore : IDisposable
     /// </summary>
     private DeckDocument BuildNewDeck(DeckCreateRequest request, DateTimeOffset now)
     {
-        DeckNewEntry[] drafted = (request.Entries ?? [])
-            .Select(value => DeckContractValidator.Normalize(value, createId))
-            .ToArray();
-        List<DeckCategory> categories = [.. (request.Categories ?? [])
-            .Select(value => DeckContractValidator.Normalize(value, createId))];
-        DeckProviderBinding[] bindings = (request.ProviderBindings ?? [])
-            .Select(value => DeckContractValidator.Normalize(value, createId))
-            .ToArray();
+        DeckNewEntry[] drafted = NormalizeEach(
+            request.Entries,
+            "entries",
+            value => DeckContractValidator.Normalize(value, createId));
+        List<DeckCategory> categories = [.. NormalizeEach(
+            request.Categories,
+            "categories",
+            value => DeckContractValidator.Normalize(value, createId))];
+        DeckProviderBinding[] bindings = NormalizeEach(
+            request.ProviderBindings,
+            "providerBindings",
+            value => DeckContractValidator.Normalize(value, createId));
         List<DeckCategoryAssignment> assignments = [.. request.CategoryAssignments ?? []];
-        foreach (DeckNewEntry added in drafted)
+        for (int index = 0; index < drafted.Length; index++)
         {
+            DeckNewEntry added = drafted[index];
             if (added.HasCategories)
             {
-                (IReadOnlyList<DeckCategoryAssignment> planned, DeckCategory? created) = DeckDraftCategories.Plan(
-                    added,
-                    categories,
-                    createId);
+                (IReadOnlyList<DeckCategoryAssignment> planned, DeckCategory? created) = WithPath(
+                    $"entries[{index}]",
+                    () => DeckDraftCategories.Plan(added, categories, createId));
                 assignments.AddRange(planned);
                 if (created is not null)
                 {
@@ -823,10 +855,10 @@ public sealed class SqliteDeckStore : IDisposable
 
         DeckEntry[] entries = [.. drafted.Select(value => value.Entry)];
         return new DeckDocument(
-            DeckContractValidator.NormalizeId(request.DeckId ?? createId(), "deck"),
-            DeckContractValidator.Required(request.Name, "Deck name"),
+            WithPath("deckId", () => DeckContractValidator.NormalizeId(request.DeckId ?? createId(), "deck")),
+            WithPath("name", () => DeckContractValidator.Required(request.Name, "Deck name")),
             DeckContractValidator.Optional(request.Description) ?? string.Empty,
-            DeckContractValidator.Required(request.Format, "Format").ToLowerInvariant(),
+            WithPath("format", () => DeckContractValidator.Required(request.Format, "Format").ToLowerInvariant()),
             1,
             now,
             now,
@@ -834,6 +866,40 @@ public sealed class SqliteDeckStore : IDisposable
             categories,
             assignments,
             bindings);
+    }
+
+    /// <summary>
+    /// Normalizes each item of one request collection, naming the item that fails as <c>collection[index]</c>.
+    /// </summary>
+    private static T[] NormalizeEach<TInput, T>(
+        IReadOnlyList<TInput>? items,
+        string collection,
+        Func<TInput, T> normalize)
+    {
+        IReadOnlyList<TInput> source = items ?? [];
+        T[] result = new T[source.Count];
+        for (int index = 0; index < result.Length; index++)
+        {
+            TInput item = source[index];
+            result[index] = WithPath($"{collection}[{index}]", () => normalize(item));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Runs a validation and names <paramref name="path"/> on a rejection that names no argument.
+    /// </summary>
+    private static T WithPath<T>(string path, Func<T> validate)
+    {
+        try
+        {
+            return validate();
+        }
+        catch (DeckInputException exception) when (exception.Path is null)
+        {
+            throw exception.At(path);
+        }
     }
 
     /// <summary>
@@ -893,23 +959,28 @@ public sealed class SqliteDeckStore : IDisposable
     }
 
     /// <summary>
-    /// Rejects initial relationships that do not reference rows in the same request.
+    /// Rejects initial relationships that do not reference rows in the same request. A rejection names the assignment
+    /// as <paramref name="assignmentsPath"/> and its index, when the caller gave a path.
     /// </summary>
-    private static void ValidateInitialRelationships(DeckDocument deck)
+    private static void ValidateInitialRelationships(DeckDocument deck, string? assignmentsPath)
     {
         HashSet<Guid> entryIds = deck.Entries.Select(value => value.EntryId).ToHashSet();
         HashSet<Guid> categoryIds = deck.Categories.Select(value => value.CategoryId).ToHashSet();
         HashSet<Guid> primaryEntries = [];
-        foreach (DeckCategoryAssignment assignment in deck.CategoryAssignments)
+        for (int index = 0; index < deck.CategoryAssignments.Count; index++)
         {
+            DeckCategoryAssignment assignment = deck.CategoryAssignments[index];
+            string? path = assignmentsPath is null ? null : $"{assignmentsPath}[{index}]";
             if (!entryIds.Contains(assignment.EntryId) || !categoryIds.Contains(assignment.CategoryId))
             {
-                throw new DeckInputException("An initial category assignment has an unknown reference.");
+                throw new DeckInputException(
+                    "An initial category assignment has an unknown reference.",
+                    path: path);
             }
 
             if (assignment.IsPrimary && !primaryEntries.Add(assignment.EntryId))
             {
-                throw new DeckInputException("An entry may have only one primary category.");
+                throw new DeckInputException("An entry may have only one primary category.", path: path);
             }
         }
     }

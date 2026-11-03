@@ -32,9 +32,10 @@ public sealed record DeckSummary(
 }
 
 /// <summary>
-/// Carries one page of canonically ordered deck summaries read from a row offset, and whether more decks follow.
+/// Carries one page of canonically ordered deck summaries read from a row offset, whether more decks follow, and the
+/// fingerprint of the whole list as it was when the page was read.
 /// </summary>
-public sealed record DeckListSlice(IReadOnlyList<DeckSummary> Items, bool HasMore);
+public sealed record DeckListSlice(IReadOnlyList<DeckSummary> Items, bool HasMore, string ListFingerprint);
 
 /// <summary>
 /// Carries a stable page of canonically ordered deck summaries.

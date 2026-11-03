@@ -2,6 +2,7 @@ using System.Text.Json;
 using MtgMcp.App.Decks;
 using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.App.Tests;
@@ -101,6 +102,54 @@ public sealed class DeckImportPreviewPagingTests
         Assert.Single(page.Proposal.CategoryAssignments);
     }
 
+    /// <summary>
+    /// Verifies a cursor whose offset is past the last entry is an invalid cursor at the cursor path, while an offset at
+    /// the end of the list still reads an empty last page.
+    /// </summary>
+    [Fact]
+    public void PageImport_WithAnOffsetPastTheEntries_IsAnInvalidCursor()
+    {
+        DeckImportPreview preview = new(
+            "generic-text-v1",
+            "complete",
+            "fingerprint",
+            Proposal([Entry(0)], [], [], [], []),
+            [],
+            0,
+            []);
+        PageCursorBinding binding = PageCursorBinding.ForPreview("fingerprint");
+
+        OperationInvalidInput past = Assert.IsType<OperationInvalidInput>(DeckPreviewPaging.PageImport(
+            preview,
+            PageCursor.Encode(PageCursorPosition.AtOffset(2), binding),
+            100).Value);
+        DeckImportPreviewView end = Assert.IsType<OperationSuccess<DeckImportPreviewView>>(DeckPreviewPaging.PageImport(
+            preview,
+            PageCursor.Encode(PageCursorPosition.AtOffset(1), binding),
+            100).Value).Data;
+
+        Assert.Equal(("invalid-cursor", "cursor"), (past.ReasonCode, past.Path));
+        Assert.Empty(end.Proposal!.Entries);
+    }
+
+    /// <summary>
+    /// Verifies a cursor whose offset is past the last identity row is an invalid cursor at the cursor path.
+    /// </summary>
+    [Fact]
+    public void PageIdentity_WithAnOffsetPastTheRows_IsAnInvalidCursor()
+    {
+        Guid deckId = Guid.NewGuid();
+        DeckIdentityReconciliationPreview preview = new(deckId, 3, [], true, 0, null, "fingerprint", "token");
+        PageCursorBinding binding = PageCursorBinding.ForPreview("fingerprint")
+            .And(PageCursorBinding.ForDeck(deckId, 3));
+
+        OperationInvalidInput past = Assert.IsType<OperationInvalidInput>(DeckPreviewPaging.PageIdentity(
+            preview,
+            PageCursor.Encode(PageCursorPosition.AtOffset(1), binding),
+            100).Value);
+
+        Assert.Equal(("invalid-cursor", "cursor"), (past.ReasonCode, past.Path));
+    }
     /// <summary>
     /// Builds an import of 300 entries with 400 categories, a heavy synchronization snapshot, and full-length lists of
     /// diagnostics and unresolved identities.

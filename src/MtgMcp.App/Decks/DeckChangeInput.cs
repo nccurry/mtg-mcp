@@ -162,10 +162,9 @@ internal sealed record RemoveDeckProviderBindingInput(
 internal static class DeckChangeInputMapper
 {
     /// <summary>
-    /// Maps all inputs or returns an indexed invalid-input result without partial execution, with the argument path of the
-    /// change that failed. A remove-entry with
-    /// entryIds maps to one change per ID, so callerIndexes gives, for each mapped change, the position of the input
-    /// the caller sent it in.
+    /// Maps all inputs or returns an indexed invalid-input result without partial execution, with the argument path
+    /// of the change that failed. A remove-entry with entryIds maps to one change per ID, so callerIndexes gives, for
+    /// each mapped change, the position of the input the caller sent it in.
     /// </summary>
     internal static bool TryMap(
         IReadOnlyList<DeckChangeInput>? inputs,
