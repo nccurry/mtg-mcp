@@ -139,9 +139,16 @@ public sealed class DeckBackupStore
         string expectedDatabaseFingerprint,
         CancellationToken cancellationToken)
     {
-        if (backupId == Guid.Empty || string.IsNullOrWhiteSpace(expectedDatabaseFingerprint))
+        if (backupId == Guid.Empty)
         {
-            return Invalid<DeckRestoreResult>("A backup ID and current database fingerprint are required.");
+            return Invalid<DeckRestoreResult>("The backup ID is invalid.", "backupId");
+        }
+
+        if (string.IsNullOrWhiteSpace(expectedDatabaseFingerprint))
+        {
+            return Invalid<DeckRestoreResult>(
+                "The current database fingerprint is required.",
+                "expectedDatabaseFingerprint");
         }
 
         await mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -234,7 +241,7 @@ public sealed class DeckBackupStore
     {
         if (backupId == Guid.Empty)
         {
-            return Invalid<DeckDeleteResult>("The backup ID is invalid.");
+            return Invalid<DeckDeleteResult>("The backup ID is invalid.", "backupId");
         }
 
         await mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -270,9 +277,14 @@ public sealed class DeckBackupStore
         Guid deckId,
         CancellationToken cancellationToken)
     {
-        if (backupId == Guid.Empty || deckId == Guid.Empty)
+        if (backupId == Guid.Empty)
         {
-            return Invalid<DeckDocument>("A backup ID and a deck ID are required.");
+            return Invalid<DeckDocument>("The backup ID is invalid.", "backupId");
+        }
+
+        if (deckId == Guid.Empty)
+        {
+            return Invalid<DeckDocument>("The deck ID is invalid.", "deckId");
         }
 
         (string backupPath, _) = GetBackupPaths(backupId);
@@ -567,9 +579,9 @@ public sealed class DeckBackupStore
     /// <summary>
     /// Creates a stable invalid backup input result.
     /// </summary>
-    private static OperationResult<T> Invalid<T>(string message)
+    private static OperationResult<T> Invalid<T>(string message, string path)
     {
-        return new OperationInvalidInput("invalid-deck-backup-input", message);
+        return new OperationInvalidInput("invalid-deck-backup-input", message, path);
     }
 
     /// <summary>

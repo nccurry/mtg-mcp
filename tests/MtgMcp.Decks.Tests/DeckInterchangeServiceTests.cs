@@ -59,17 +59,17 @@ public sealed class DeckInterchangeServiceTests
         DeckImportCreateResult created = RequireSuccess(await service.CreateAsync(
             "generic-text-v1",
             content,
-            first.Fingerprint!,
+            first.PreviewFingerprint!,
             options,
             TestContext.Current.CancellationToken));
         DeckImportCreateResult repeated = RequireSuccess(await service.CreateAsync(
             "generic-text-v1",
             content,
-            first.Fingerprint!,
+            first.PreviewFingerprint!,
             options,
             TestContext.Current.CancellationToken));
 
-        Assert.Equal(first.Fingerprint, second.Fingerprint);
+        Assert.Equal(first.PreviewFingerprint, second.PreviewFingerprint);
         Assert.Equal(first.Proposal!.Entries, second.Proposal!.Entries);
         Assert.Equal(first.Diagnostics, second.Diagnostics);
         Assert.Equal("complete", first.Completeness);
@@ -81,7 +81,7 @@ public sealed class DeckInterchangeServiceTests
         Assert.Empty(created.Diagnostics);
         Assert.Equal("Île", created.Deck.Entries.Single(value => value.CardName == "Île").CardName);
         Assert.Equal(2, RequireSuccess(await store.ListAsync(
-            null,
+            0,
             10,
             TestContext.Current.CancellationToken)).Items.Count);
     }
@@ -105,19 +105,19 @@ public sealed class DeckInterchangeServiceTests
         OperationResult<DeckImportCreateResult> refused = await service.CreateAsync(
             "generic-text-v1",
             content,
-            preview.Fingerprint!,
+            preview.PreviewFingerprint!,
             null,
             TestContext.Current.CancellationToken);
         OperationResult<DeckImportCreateResult> stale = await service.CreateAsync(
             "generic-text-v1",
             content + "\n1 Plains",
-            preview.Fingerprint!,
+            preview.PreviewFingerprint!,
             new DeckImportOptions(AllowPartial: true),
             TestContext.Current.CancellationToken);
         DeckImportCreateResult accepted = RequireSuccess(await service.CreateAsync(
             "generic-text-v1",
             content,
-            preview.Fingerprint!,
+            preview.PreviewFingerprint!,
             new DeckImportOptions(AllowPartial: true),
             TestContext.Current.CancellationToken));
 
@@ -192,13 +192,13 @@ public sealed class DeckInterchangeServiceTests
         DeckDocument restored = RequireSuccess(await targetService.CreateAsync(
             "mtg-mcp-json-v1",
             content,
-            preview.Fingerprint!,
+            preview.PreviewFingerprint!,
             null,
             TestContext.Current.CancellationToken)).Deck;
         OperationResult<DeckImportCreateResult> duplicate = await targetService.CreateAsync(
             "mtg-mcp-json-v1",
             content,
-            preview.Fingerprint!,
+            preview.PreviewFingerprint!,
             null,
             TestContext.Current.CancellationToken);
         DeckExportBundle reexported = RequireSuccess(await targetService.ExportAsync(
@@ -215,7 +215,7 @@ public sealed class DeckInterchangeServiceTests
         Assert.Equal(deck.ProviderBindings, restored.ProviderBindings);
         Assert.IsType<OperationInvalidInput>(duplicate.Value);
         Assert.Single(RequireSuccess(await target.ListAsync(
-            null,
+            0,
             10,
             TestContext.Current.CancellationToken)).Items);
         Assert.Equal(content, reexported.Artifacts[0].Content);
@@ -339,7 +339,7 @@ public sealed class DeckInterchangeServiceTests
             null,
             TestContext.Current.CancellationToken)).Value);
         Assert.Equal("invalid", invalidNative.Completeness);
-        Assert.Null(invalidNative.Fingerprint);
+        Assert.Null(invalidNative.PreviewFingerprint);
         Assert.Equal("$", Assert.Single(invalidNative.Diagnostics).Source);
         Assert.IsType<OperationInvalidInput>(invalidCreate.Value);
         Assert.False(File.Exists(Path.Combine(temporary.Path, "decks.db")));

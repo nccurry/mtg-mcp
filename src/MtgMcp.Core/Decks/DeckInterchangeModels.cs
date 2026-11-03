@@ -111,7 +111,7 @@ public sealed record DeckImportProposal(
 public sealed record DeckImportPreview(
     string FormatId,
     string Completeness,
-    string? Fingerprint,
+    string? PreviewFingerprint,
     DeckImportProposal? Proposal,
     IReadOnlyList<DeckInterchangeDiagnostic> Diagnostics,
     int OmittedDiagnosticCount,

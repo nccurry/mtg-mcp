@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using MtgMcp.Core.Decks;
@@ -114,6 +116,39 @@ internal static class DeckSql
         return items;
     }
 
+    /// <summary>
+    /// Reads the ID and revision of every deck in canonical list order.
+    /// </summary>
+    internal static async Task<IReadOnlyList<(string DeckId, long Revision)>> ListRevisionsAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        List<(string DeckId, long Revision)> items = [];
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT deck_id, revision FROM decks ORDER BY name COLLATE NOCASE, deck_id;";
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken)
+            .ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            items.Add((reader.GetString(0), reader.GetInt64(1)));
+        }
+
+        return items;
+    }
+
+    /// <summary>
+    /// Hashes the ID and revision of every deck in list order.
+    /// </summary>
+    internal static string ListFingerprint(IReadOnlyList<(string DeckId, long Revision)> decks)
+    {
+        StringBuilder text = new();
+        foreach ((string deckId, long revision) in decks)
+        {
+            text.Append(deckId).Append(':').Append(revision.ToString(CultureInfo.InvariantCulture)).Append('\n');
+        }
+
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())))[..32];
+    }
     /// <summary>
     /// Loads one complete deck in canonical entry, category, assignment, and binding order.
     /// </summary>
