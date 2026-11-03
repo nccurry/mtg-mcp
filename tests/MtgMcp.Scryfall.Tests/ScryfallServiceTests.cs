@@ -1178,11 +1178,11 @@ public sealed class ScryfallServiceTests
             first.Snapshot.Checksum,
             $"delete request-snapshot {first.Snapshot!.SnapshotId:D}",
             TestContext.Current.CancellationToken));
-        OperationUnavailable deletedEvidence = Assert.IsType<OperationUnavailable>((await service.ReadCollectionAsync(
+        OperationConflict deletedEvidence = Assert.IsType<OperationConflict>((await service.ReadCollectionAsync(
             lookups,
             cursor: first.Page.NextCursor,
             cancellationToken: TestContext.Current.CancellationToken)).Value);
-        Assert.Equal("collection-cursor-evidence-unavailable", deletedEvidence.ReasonCode);
+        Assert.Equal("cursor-stale", deletedEvidence.ReasonCode);
     }
 
     /// <summary>
@@ -1386,10 +1386,10 @@ public sealed class ScryfallServiceTests
     }
 
     /// <summary>
-    /// Verifies a collection cursor replays its retained generation and fails explicitly after pruning.
+    /// Verifies a collection cursor continues from local data without provider calls and is stale after a sync.
     /// </summary>
     [Fact]
-    public async Task CollectionCursor_ReplaysRetainedGenerationAndReportsPrunedEvidence()
+    public async Task CollectionCursor_ContinuesLocallyAndIsStaleAfterSync()
     {
         using TemporaryScryfallDirectory temporary = new();
         ScryfallCorpusSyncResult firstGeneration = await SyncRevisionAsync(temporary.Path, 1, "Venerable Knight");
@@ -1408,24 +1408,61 @@ public sealed class ScryfallServiceTests
         Assert.All(first.Page.Items, value => Assert.Equal("corpus", value.Origin));
         string cursor = first.Page.NextCursor!;
 
-        _ = await SyncRevisionAsync(temporary.Path, 2, "Renewed Knight");
-        ScryfallCollectionResult retained = RequireSuccess(await service.ReadCollectionAsync(
+        ScryfallCollectionResult second = RequireSuccess(await service.ReadCollectionAsync(
             lookups,
-            freshnessPolicy: "refresh",
             cursor: cursor,
             pageSize: 10,
             cancellationToken: TestContext.Current.CancellationToken));
-        Assert.Equal(firstGeneration.GenerationId, retained.CorpusGenerationId);
-        Assert.All(retained.Page.Items, value => Assert.Equal("Venerable Knight", value.Card!.Name));
+        Assert.Equal(firstGeneration.GenerationId, second.CorpusGenerationId);
+        Assert.Equal(Enumerable.Range(10, 10), second.Page.Items.Select(value => value.Index));
         Assert.Empty(handler.Requests);
 
-        _ = await SyncRevisionAsync(temporary.Path, 3, "Newest Knight");
-        OperationUnavailable unavailable = Assert.IsType<OperationUnavailable>((await service.ReadCollectionAsync(
+        _ = await SyncRevisionAsync(temporary.Path, 2, "Renewed Knight");
+        OperationConflict stale = Assert.IsType<OperationConflict>((await service.ReadCollectionAsync(
             lookups,
             cursor: cursor,
+            pageSize: 10,
             cancellationToken: TestContext.Current.CancellationToken)).Value);
-        Assert.Equal("collection-cursor-evidence-unavailable", unavailable.ReasonCode);
+        Assert.Equal("cursor-stale", stale.ReasonCode);
         Assert.Empty(handler.Requests);
+    }
+
+    /// <summary>
+    /// Verifies an installed-data ruling cursor is stale after a sync of the same data and invalid for another card.
+    /// </summary>
+    [Fact]
+    public async Task InstalledRulingCursor_IsStaleAfterSyncAndInvalidForAnotherCard()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        _ = await SyncRevisionAsync(temporary.Path, 1, "Venerable Knight");
+        using ScryfallService service = CreateService(temporary.Path, ScryfallTestFixture.Provider());
+        ScryfallRulingsResult first = RequireSuccess(await service.GetRulingsAsync(
+            ScryfallTestFixture.WhiteOracleId,
+            null,
+            "cache-only",
+            null,
+            1,
+            cancellationToken: TestContext.Current.CancellationToken));
+        string cursor = first.Page.NextCursor!;
+
+        OperationInvalidInput otherCard = Assert.IsType<OperationInvalidInput>((await service.GetPrintsAsync(
+            ScryfallTestFixture.RedOracleId,
+            "cache-only",
+            cursor,
+            1,
+            cancellationToken: TestContext.Current.CancellationToken)).Value);
+        Assert.Equal("invalid-cursor", otherCard.ReasonCode);
+        Assert.Equal("cursor", otherCard.Path);
+
+        _ = await SyncRevisionAsync(temporary.Path, 2, "Venerable Knight");
+        OperationConflict stale = Assert.IsType<OperationConflict>((await service.GetRulingsAsync(
+            ScryfallTestFixture.WhiteOracleId,
+            null,
+            "cache-only",
+            cursor,
+            1,
+            cancellationToken: TestContext.Current.CancellationToken)).Value);
+        Assert.Equal("cursor-stale", stale.ReasonCode);
     }
 
     /// <summary>

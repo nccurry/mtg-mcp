@@ -866,7 +866,7 @@ internal sealed class ScryfallCardDataStore
         bool includeRaw,
         string? cursor,
         int pageSize,
-        Func<IReadOnlyList<ScryfallTag>, int>? countFitting,
+        ScryfallRowFit<ScryfallTag>? countFitting,
         CancellationToken cancellationToken)
     {
         await using SqliteConnection? connection = await database.OpenReadAsync(cancellationToken).ConfigureAwait(false);
@@ -884,17 +884,20 @@ internal sealed class ScryfallCardDataStore
 
         string scope = $"tags:{tagType ?? "all"}:{query}";
         string checksum = ScryfallHash.Compute($"{generationId:D}|{scope}");
-        if (!ScryfallCursor.TryRead(cursor, scope, checksum, null, out int offset, out OperationResult<ScryfallPage<ScryfallTag>> cursorFailure))
-        {
-            return cursorFailure;
-        }
-
         await using SqliteCommand countCommand = connection.CreateCommand();
         ConfigureTagSearch(countCommand, generationId.Value, query, tagType);
         countCommand.CommandText = "SELECT COUNT(*) FROM tags t " + countCommand.CommandText;
         int total = Convert.ToInt32(
             await countCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
             CultureInfo.InvariantCulture);
+        OperationResult<int> read = ScryfallPaging.ReadOffset(cursor, scope, checksum, total);
+        if (read is not OperationSuccess<int> start)
+        {
+            return OperationFailure.Forward<int, ScryfallPage<ScryfallTag>>(read);
+        }
+
+        int offset = start.Data;
+
         await using SqliteCommand command = connection.CreateCommand();
         ConfigureTagSearch(command, generationId.Value, query, tagType);
         command.CommandText =
@@ -917,9 +920,7 @@ internal sealed class ScryfallCardDataStore
             tags.RemoveRange(fitting, tags.Count - fitting);
         }
 
-        string? next = offset + tags.Count < total
-            ? ScryfallCursor.Encode(scope, checksum, offset + tags.Count)
-            : null;
+        string? next = ScryfallPaging.NextCursor(scope, checksum, offset + tags.Count, total);
         return new OperationSuccess<ScryfallPage<ScryfallTag>>(
             new ScryfallPage<ScryfallTag>(tags, total, next) { Truncated = cut ? true : null });
     }

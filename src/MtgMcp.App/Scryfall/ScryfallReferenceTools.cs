@@ -271,7 +271,11 @@ internal sealed class ScryfallReferenceTools
 
             ScryfallPage<ScryfallCard> printsPage = printsSuccess.Data.Page;
             printsNext = printsPage.NextCursor;
-            prints = new(printsPage.Items, printsPage.TotalCount, printsSuccess.Data.Snapshot, printsSuccess.Data.CorpusGenerationId);
+            prints = new(
+                printsPage.Items,
+                printsPage.TotalCount,
+                printsSuccess.Data.Snapshot,
+                printsSuccess.Data.CorpusGenerationId);
         }
 
         ScryfallDetailsSection<ScryfallRuling>? rulings = null;
@@ -293,7 +297,11 @@ internal sealed class ScryfallReferenceTools
 
             ScryfallPage<ScryfallRuling> rulingsPage = rulingsSuccess.Data.Page;
             rulingsNext = rulingsPage.NextCursor;
-            rulings = new(rulingsPage.Items, rulingsPage.TotalCount, rulingsSuccess.Data.Snapshot, rulingsSuccess.Data.CorpusGenerationId);
+            rulings = new(
+                rulingsPage.Items,
+                rulingsPage.TotalCount,
+                rulingsSuccess.Data.Snapshot,
+                rulingsSuccess.Data.CorpusGenerationId);
         }
 
         string? next = printsNext is null && rulingsNext is null

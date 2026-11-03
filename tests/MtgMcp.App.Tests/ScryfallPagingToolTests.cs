@@ -194,7 +194,7 @@ public sealed class ScryfallPagingToolTests
     [Fact]
     public void CountFitting_BigRows_KeepsTheLeadingRowsThatFitAndAtLeastOne()
     {
-        Func<IReadOnlyList<string>, int> fit = ScryfallToolExecution.CountFitting<string>();
+        ScryfallRowFit<string> fit = ScryfallToolExecution.CountFitting<string>();
         string big = new('x', 15_000);
 
         Assert.Equal(2, fit([big, big, big, big]));

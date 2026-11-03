@@ -242,7 +242,13 @@ internal sealed class ScryfallReadTools
     {
         return ScryfallToolExecution.RunAsync(() =>
             service.SearchTagsAsync(
-                query, tagType, cursor, pageSize, includeRaw, ScryfallToolExecution.CountFitting<ScryfallTag>(), cancellationToken));
+                query,
+                tagType,
+                cursor,
+                pageSize,
+                includeRaw,
+                ScryfallToolExecution.CountFitting<ScryfallTag>(),
+                cancellationToken));
     }
 
     /// <summary>
