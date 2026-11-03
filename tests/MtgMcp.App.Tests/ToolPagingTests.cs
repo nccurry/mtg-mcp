@@ -256,6 +256,16 @@ public sealed class ToolPagingTests
             Apply("0" + guards.GetProperty("previewFingerprint").GetString()),
             token);
         Assert.NotEqual("success", stale.Kind);
+        JsonObject changedSource = Apply(guards.GetProperty("previewFingerprint").GetString()!);
+        changedSource["source"]!["ruleSet"]!["rules"]![0]!["categoryId"] =
+            deck.Categories.Single(value => value.Name == "Ramp").CategoryId.ToString();
+        ToolBudgetWorld.ToolOutcome changed = await world.CallAsync(
+            "local_deck_category_rules_apply",
+            changedSource,
+            token);
+        Assert.Equal("conflict", changed.Kind);
+        Assert.Equal("preview-changed", changed.Structured.GetProperty("reasonCode").GetString());
+        Assert.True(changed.Structured.GetProperty("current").TryGetProperty("previewFingerprint", out _));
         _ = (await world.CallAsync(
             "local_deck_category_rules_apply",
             Apply(guards.GetProperty("previewFingerprint").GetString()!),

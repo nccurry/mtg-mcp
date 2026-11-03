@@ -22,12 +22,15 @@ public sealed partial class ToolNamingRuleTests
     ];
 
     /// <summary>
-    /// Names the one document-shaped argument each write tool may keep as an object or a list of objects, by tool.
+    /// Names the one document-shaped argument each write tool may keep as an object or a list of objects, by tool. The import options and the
+    /// category rule source are documents the apply repeats from its preview.
     /// Every statistics tool takes request objects and no write tool of that family exists.
     /// </summary>
     private static readonly Dictionary<string, string> KeptObjectArguments = new(StringComparer.Ordinal)
     {
         ["local_deck_apply_changes"] = "changes",
+        ["local_deck_import_create"] = "options",
+        ["local_deck_category_rules_apply"] = "source",
         ["archidekt_folder_move_items"] = "items",
         ["playgroup_game_events_batch_create"] = "events",
     };
@@ -165,7 +168,8 @@ public sealed partial class ToolNamingRuleTests
     }
 
     /// <summary>
-    /// Verifies the argument that guards a preview is always named <c>previewFingerprint</c>.
+    /// Verifies the argument that guards a preview is always named <c>previewFingerprint</c>. The database fingerprint of a
+    /// backup restore guards the whole decks.db file, not a preview.
     /// </summary>
     [Fact]
     [Trait("Category", "SurfaceConsistencyTarget")]
@@ -176,7 +180,8 @@ public sealed partial class ToolNamingRuleTests
         foreach ((string tool, MethodInfo method) in SurfaceConsistencyTargetTests.Ordered(registered))
         {
             offenders.AddRange(SurfaceConsistencyTargetTests.ArgumentNames(method)
-                .Where(name => name.Contains("ingerprint", StringComparison.Ordinal) && name != "previewFingerprint")
+                .Where(name => name.Contains("ingerprint", StringComparison.Ordinal) &&
+                    name is not ("previewFingerprint" or "expectedDatabaseFingerprint"))
                 .Select(name => $"{tool}: {name}"));
         }
 
