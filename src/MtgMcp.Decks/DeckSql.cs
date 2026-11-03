@@ -1,6 +1,6 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using System.Globalization;
 using Microsoft.Data.Sqlite;
 using MtgMcp.Core.Decks;
 
