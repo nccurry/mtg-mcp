@@ -110,7 +110,8 @@ public sealed class DeckInterchangeService
         if (proposal.Entries.Count > MaximumEntries)
         {
             return Task.FromResult<OperationResult<DeckImportPreview>>(Invalid<DeckImportPreview>(
-                "The document contains more than 10000 deck entries."));
+                "The document contains more than 10000 deck entries.",
+                "content"));
         }
 
         bool partial = diagnostics.Any(value => value.Severity == "error");
@@ -143,7 +144,7 @@ public sealed class DeckInterchangeService
     public async Task<OperationResult<DeckImportCreateResult>> CreateAsync(
         string formatId,
         string content,
-        string expectedFingerprint,
+        string previewFingerprint,
         DeckImportOptions? options,
         CancellationToken cancellationToken)
     {
@@ -159,26 +160,29 @@ public sealed class DeckInterchangeService
         }
 
         DeckImportPreview preview = success.Data;
-        if (preview.Proposal is null || preview.Fingerprint is null)
+        if (preview.Proposal is null || preview.PreviewFingerprint is null)
         {
             return new OperationInvalidInput(
                 "invalid-import-preview",
-                "The document does not contain a creatable import proposal.");
+                "The document does not contain a creatable import proposal.",
+                "content");
         }
 
-        if (string.IsNullOrWhiteSpace(expectedFingerprint) ||
-            !string.Equals(preview.Fingerprint, expectedFingerprint.Trim(), StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(previewFingerprint) ||
+            !string.Equals(preview.PreviewFingerprint, previewFingerprint.Trim(), StringComparison.Ordinal))
         {
             return new OperationConflict(
-                "import-preview-changed",
-                "The import proposal does not match the supplied preview fingerprint.");
+                SharedReasonCodes.PreviewChanged,
+                "The import proposal does not match the supplied preview fingerprint.",
+                new ConflictState(PreviewFingerprint: preview.PreviewFingerprint));
         }
 
         if (preview.Completeness == "partial" && !options.AllowPartial)
         {
             return new OperationInvalidInput(
                 "partial-import-not-allowed",
-                "The import is partial; set allowPartial explicitly to accept skipped lines.");
+                "The import is partial; set allowPartial explicitly to accept skipped lines.",
+                "options.allowPartial");
         }
 
         DeckImportProposal proposal = preview.Proposal!;
@@ -283,7 +287,7 @@ public sealed class DeckInterchangeService
 
         if (content is null || Encoding.UTF8.GetByteCount(content) > MaximumInputBytes)
         {
-            return Invalid<DeckImportPreview>("The document exceeds the 5 MiB UTF-8 input limit.");
+            return Invalid<DeckImportPreview>("The document exceeds the 5 MiB UTF-8 input limit.", "content");
         }
 
         return null;
@@ -417,8 +421,8 @@ public sealed class DeckInterchangeService
     /// <summary>
     /// Creates a stable caller-input failure.
     /// </summary>
-    private static OperationResult<T> Invalid<T>(string message)
+    private static OperationResult<T> Invalid<T>(string message, string path)
     {
-        return new OperationInvalidInput("invalid-interchange-input", message);
+        return new OperationInvalidInput("invalid-interchange-input", message, path);
     }
 }

@@ -26,7 +26,7 @@ namespace MtgMcp.App.Decks;
 /// <param name="CorpusGenerationId">The Scryfall generation used.</param>
 internal sealed record DeckCategoryRulesPreview(
     [property: JsonPropertyName("deckId")] Guid DeckId,
-    [property: JsonPropertyName("deckRevision")] long DeckRevision,
+    [property: JsonPropertyName("revision")] long DeckRevision,
     [property: JsonPropertyName("source")] CategoryRuleSource Source,
     [property: JsonPropertyName("expandedRules")] CategoryRuleSet ExpandedRules,
     [property: JsonPropertyName("decisions")] IReadOnlyList<CategoryDecision> Decisions,
@@ -74,7 +74,7 @@ internal sealed class DeckCategorizationCoordinator
     internal async Task<OperationResult<DeckWriteResult>> ApplyAsync(
         Guid deckId,
         long expectedRevision,
-        Guid? expectedCorpusGeneration,
+        Guid? expectedActiveGeneration,
         CategoryRuleSource source,
         string freshnessPolicy,
         string previewFingerprint,
@@ -85,7 +85,10 @@ internal sealed class DeckCategorizationCoordinator
         string expectedToken = Hash(JsonSerializer.Serialize(new { deckId, expectedRevision, previewFingerprint }, SerializerOptions));
         if (!string.Equals(expectedToken, applyToken, StringComparison.Ordinal))
         {
-            return new OperationInvalidInput("invalid-category-apply-token", "The category apply token is invalid.");
+            return new OperationInvalidInput(
+                "invalid-category-apply-token",
+                "The category apply token is invalid.",
+                "applyToken");
         }
 
         OperationResult<DeckCategoryRulesPreview> previewResult = await BuildPreviewAsync(
@@ -97,17 +100,25 @@ internal sealed class DeckCategorizationCoordinator
 
         if (!string.Equals(preview.Data.PreviewFingerprint, previewFingerprint, StringComparison.Ordinal))
         {
-            return new OperationConflict("category-preview-mismatch", "The category evidence no longer reproduces the preview.");
+            return new OperationConflict(
+                SharedReasonCodes.PreviewChanged,
+                "The category evidence no longer reproduces the preview.",
+                new ConflictState(preview.Data.DeckRevision, PreviewFingerprint: preview.Data.PreviewFingerprint));
         }
 
-        if (preview.Data.CorpusGenerationId != expectedCorpusGeneration)
+        if (preview.Data.CorpusGenerationId != expectedActiveGeneration)
         {
-            return new OperationConflict("category-corpus-conflict", "The Scryfall card-data generation changed after preview.");
+            return new OperationConflict(
+                "stale-scryfall-generation",
+                "The Scryfall card-data generation changed after preview.");
         }
 
         if (!preview.Data.IsComplete)
         {
-            return new OperationInvalidInput("category-preview-incomplete", "Unknown evidence must be resolved before apply.");
+            return new OperationInvalidInput(
+                "category-preview-incomplete",
+                "Unknown evidence must be resolved before apply.",
+                "previewFingerprint");
         }
 
         OperationResult<DeckDocument> deckResult = await deckStore.GetAsync(deckId, cancellationToken).ConfigureAwait(false);
@@ -146,7 +157,7 @@ internal sealed class DeckCategorizationCoordinator
         if (expectedRevision is long revision && (revision <= 0 || revision != deck.Data.Revision))
         {
             return new OperationConflict(
-                "deck-revision-conflict",
+                SharedReasonCodes.StaleDeckRevision,
                 "The local deck revision changed before categorization.",
                 new ConflictState(Revision: deck.Data.Revision));
         }
@@ -163,7 +174,7 @@ internal sealed class DeckCategorizationCoordinator
 
         List<CategoryEntryEvidence> evidence = [];
         IReadOnlyList<DeckEntry> entries = deck.Data.Entries.OrderBy(value => value.SortOrder).ThenBy(value => value.EntryId).ToArray();
-        if (resolvedRules.Data.ScryfallGenerationId is not Guid generation)
+        if (entries.Count == 0 || resolvedRules.Data.ScryfallGenerationId is not Guid generation)
         {
             foreach (DeckEntry entry in entries)
             {
@@ -300,28 +311,29 @@ internal sealed class DeckCategorizationReadTools
         "Card tags come from installed card data (scryfall_card_data_sync). Rules are inline only; send " +
         "the tags you choose. Omit expectedRevision to only validate and preview. Decisions come in pages that fit " +
         "the size limit; the fingerprint and token cover the whole preview, so apply needs no page. When truncated " +
-        "is true, call again with offset set to nextOffset and expectedPreviewFingerprint set to the " +
-        "previewFingerprint of the first page." +
+        "is true, call again with the same arguments and cursor set to nextCursor. A preview that changed between " +
+        "pages returns cursor-stale with the current previewFingerprint." +
         DeckToolExamples.ExamplePrefix + "minimal): " + DeckToolExamples.RulesPreviewMinimal +
         DeckToolExamples.ExamplePrefix + "full): " + DeckToolExamples.RulesPreviewFull)]
     internal async Task<OperationResult<DeckCategoryRulesPreviewView>> PreviewAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description("Inline category rules; the only supported source kind is inline.")]
         CategoryRuleSource source,
-        [Description("Optional current deck revision; when given, a different revision returns conflict.")]
+        [Description("Optional current deck revision; when given, a different revision returns stale-deck-revision.")]
         long? expectedRevision = null,
         [Description("Scryfall evidence policy: default, cache-only, or refresh."), FreshnessPolicyValues]
         string freshnessPolicy = "default",
-        [Description("Number of decisions to skip; use nextOffset from the previous page. Default 0.")]
-        int offset = 0,
-        [Description(ResultPage.FingerprintHelp)] string? expectedPreviewFingerprint = null,
+        [Description("Opaque nextCursor of the previous page, with the same other arguments. Omit for the first page.")]
+        string? cursor = null,
+        [Description("Number of decisions per page, from 1 through 100; default 100. A page also stops at the result size limit.")]
+        int pageSize = DeckPreviewPaging.MaximumPageSize,
         CancellationToken cancellationToken = default)
     {
         OperationResult<DeckCategoryRulesPreview> preview = await coordinator
             .PreviewAsync(deckId, expectedRevision, source, freshnessPolicy, cancellationToken)
             .ConfigureAwait(false);
         return preview is OperationSuccess<DeckCategoryRulesPreview> success
-            ? DeckPreviewPaging.PageCategoryRules(success.Data, offset, expectedPreviewFingerprint)
+            ? DeckPreviewPaging.PageCategoryRules(success.Data, cursor, pageSize)
             : OperationFailure.Forward<DeckCategoryRulesPreview, DeckCategoryRulesPreviewView>(preview);
     }
 }
@@ -355,13 +367,16 @@ internal sealed class DeckCategorizationWriteTools
         "Local deck store: applies only an unchanged, complete category preview in one local deck revision. Repeat " +
         "the source and freshnessPolicy of the preview. The " +
         "result is a summary (new revision, counts, IDs of changed entries and categories); pass returnDeck true " +
-        "to also get the whole deck.")]
+        "to also get the whole deck. A deck changed since the preview returns stale-deck-revision, evidence that no " +
+        "longer reproduces the preview returns preview-changed with the current previewFingerprint, and a changed " +
+        "card-data generation returns stale-scryfall-generation.")]
     internal Task<OperationResult<DeckWriteResult>> ApplyAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
         [Description(
-            "Scryfall card-data generation returned by the preview, or null when no card evidence was needed.")]
-        Guid? expectedCorpusGeneration,
+            "Scryfall card-data generation returned by the preview as corpusGenerationId, or null when no card " +
+            "evidence was needed.")]
+        Guid? expectedActiveGeneration,
         [Description("Inline category rules; repeat the source used for the preview.")] CategoryRuleSource source,
         [Description(
             "Scryfall evidence policy: default, cache-only, or refresh. Repeat the value used for the preview."),
@@ -382,7 +397,7 @@ internal sealed class DeckCategorizationWriteTools
         return coordinator.ApplyAsync(
             deckId,
             expectedRevision,
-            expectedCorpusGeneration,
+            expectedActiveGeneration,
             source,
             freshnessPolicy,
             previewFingerprint,

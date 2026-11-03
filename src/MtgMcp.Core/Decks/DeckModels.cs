@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace MtgMcp.Core.Decks;
 
@@ -13,7 +14,27 @@ public sealed record DeckSummary(
     string Format,
     long Revision,
     DateTimeOffset CreatedAtUtc,
-    DateTimeOffset UpdatedAtUtc);
+    DateTimeOffset UpdatedAtUtc)
+{
+    /// <summary>
+    /// Gets true when <c>Description</c> is cut to the length a list page may show, or null when it is whole.
+    /// </summary>
+    [JsonPropertyName("descriptionTruncated")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? DescriptionTruncated { get; init; }
+
+    /// <summary>
+    /// Gets the length of the whole description in UTF-16 code units when it is cut, or null when it is whole.
+    /// </summary>
+    [JsonPropertyName("descriptionLength")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? DescriptionLength { get; init; }
+}
+
+/// <summary>
+/// Carries one page of canonically ordered deck summaries read from a row offset, and whether more decks follow.
+/// </summary>
+public sealed record DeckListSlice(IReadOnlyList<DeckSummary> Items, bool HasMore);
 
 /// <summary>
 /// Carries a stable page of canonically ordered deck summaries.

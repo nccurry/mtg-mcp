@@ -68,28 +68,32 @@ public sealed class SqliteDeckStoreTests
         using TemporaryDeckDirectory temporary = new();
         using SqliteDeckStore store = CreateStore(temporary.Path);
 
-        Assert.IsType<OperationInvalidInput>((await store.ListAsync(
-            null,
+        Assert.Equal("pageSize", Assert.IsType<OperationInvalidInput>((await store.ListAsync(
             0,
-            TestContext.Current.CancellationToken)).Value);
-        Assert.IsType<OperationInvalidInput>((await store.ListAsync(
-            "-1",
-            10,
-            TestContext.Current.CancellationToken)).Value);
+            0,
+            TestContext.Current.CancellationToken)).Value).Path);
+        Assert.Equal("pageSize", Assert.IsType<OperationInvalidInput>((await store.ListAsync(
+            0,
+            101,
+            TestContext.Current.CancellationToken)).Value).Path);
         Assert.Empty(RequireSuccess(await store.ListAsync(
-            null,
+            0,
             10,
             TestContext.Current.CancellationToken)).Items);
-        Assert.IsType<OperationInvalidInput>((await store.GetAsync(
+        Assert.Equal("deckId", Assert.IsType<OperationInvalidInput>((await store.GetAsync(
             Guid.Empty,
-            TestContext.Current.CancellationToken)).Value);
+            TestContext.Current.CancellationToken)).Value).Path);
         Assert.IsType<OperationNotFound>((await store.GetAsync(
             Guid.CreateVersion7(),
             TestContext.Current.CancellationToken)).Value);
-        Assert.IsType<OperationInvalidInput>((await store.DeleteAsync(
+        Assert.Equal("deckId", Assert.IsType<OperationInvalidInput>((await store.DeleteAsync(
             Guid.Empty,
             0,
-            TestContext.Current.CancellationToken)).Value);
+            TestContext.Current.CancellationToken)).Value).Path);
+        Assert.Equal("expectedRevision", Assert.IsType<OperationInvalidInput>((await store.DeleteAsync(
+            Guid.CreateVersion7(),
+            0,
+            TestContext.Current.CancellationToken)).Value).Path);
         Assert.IsType<OperationNotFound>((await store.DeleteAsync(
             Guid.CreateVersion7(),
             1,
@@ -99,11 +103,11 @@ public sealed class SqliteDeckStoreTests
             0,
             [],
             TestContext.Current.CancellationToken)).Value);
-        Assert.IsType<OperationInvalidInput>((await store.ApplyChangesAsync(
+        Assert.Equal("changes", Assert.IsType<OperationInvalidInput>((await store.ApplyChangesAsync(
             Guid.CreateVersion7(),
             1,
             [],
-            TestContext.Current.CancellationToken)).Value);
+            TestContext.Current.CancellationToken)).Value).Path);
         Assert.IsType<OperationNotFound>((await store.ApplyChangesAsync(
             Guid.CreateVersion7(),
             1,
@@ -112,6 +116,31 @@ public sealed class SqliteDeckStoreTests
         Assert.False(File.Exists(System.IO.Path.Combine(temporary.Path, "decks.db")));
     }
 
+
+    /// <summary>
+    /// Verifies the deck list fingerprint changes when a deck is created, edited, or deleted, and not otherwise.
+    /// </summary>
+    [Fact]
+    public async Task ListFingerprint_ChangesWithEveryDeckChange()
+    {
+        using TemporaryDeckDirectory temporary = new();
+        using SqliteDeckStore store = CreateStore(temporary.Path);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        string empty = RequireSuccess(await store.GetListFingerprintAsync(token));
+        DeckDocument deck = RequireSuccess(await store.CreateAsync(new DeckCreateRequest("Alpha"), token));
+        string created = RequireSuccess(await store.GetListFingerprintAsync(token));
+        Assert.Equal(created, RequireSuccess(await store.GetListFingerprintAsync(token)));
+        DeckDocument edited = RequireSuccess(await store.ApplyChangesAsync(
+            deck.DeckId,
+            deck.Revision,
+            [new UpdateDeckMetadataChange("Beta", null, "custom")],
+            token));
+        string changed = RequireSuccess(await store.GetListFingerprintAsync(token));
+        _ = RequireSuccess(await store.DeleteAsync(deck.DeckId, edited.Revision, token));
+
+        Assert.Equal(4, new[] { empty, created, changed, RequireSuccess(await store.GetListFingerprintAsync(token)) }
+            .Distinct().Count() + (empty == RequireSuccess(await store.GetListFingerprintAsync(token)) ? 1 : 0));
+    }
     /// <summary>
     /// Verifies malformed initial fields and relationships fail atomically as caller input.
     /// </summary>
@@ -164,7 +193,7 @@ public sealed class SqliteDeckStoreTests
         }
 
         Assert.Empty(RequireSuccess(await store.ListAsync(
-            null,
+            0,
             100,
             TestContext.Current.CancellationToken)).Items);
     }
@@ -673,15 +702,16 @@ public sealed class SqliteDeckStoreTests
                     "{\"name\":\"baseline-two\"}"),
             ],
             TestContext.Current.CancellationToken));
-        DeckPage firstPage = RequireSuccess(
-            await store.ListAsync(null, 1, TestContext.Current.CancellationToken));
-        DeckPage secondPage = RequireSuccess(
-            await store.ListAsync(firstPage.NextCursor, 1, TestContext.Current.CancellationToken));
+        DeckListSlice firstPage = RequireSuccess(
+            await store.ListAsync(0, 1, TestContext.Current.CancellationToken));
+        DeckListSlice secondPage = RequireSuccess(
+            await store.ListAsync(1, 1, TestContext.Current.CancellationToken));
 
         Assert.Equal(["archidekt", "other"], bound.ProviderBindings.Select(value => value.Provider));
         Assert.Equal("alpha", Assert.Single(firstPage.Items).Name);
         Assert.Equal(zulu.DeckId, Assert.Single(secondPage.Items).DeckId);
-        Assert.Null(secondPage.NextCursor);
+        Assert.True(firstPage.HasMore);
+        Assert.False(secondPage.HasMore);
 
         string databasePath = System.IO.Path.Combine(temporary.Path, "decks.db");
         DeckDatabase database = new(databasePath);

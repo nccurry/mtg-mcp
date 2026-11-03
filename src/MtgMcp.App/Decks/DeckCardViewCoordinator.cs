@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using MtgMcp.App.Hosting;
 using MtgMcp.App.Scryfall;
 using MtgMcp.Core.Decks;
@@ -120,13 +119,14 @@ internal sealed class DeckCardViewCoordinator
         DeckDocument deck = success.Data;
         bool concise = IsConcise(responseFormat);
         CardSelection selection = CardSelection.Of(deck, cardNames, zones, categoryNames);
-        string fingerprint = Fingerprint(deckId, include ?? [], fields, cardNames, zones, categoryNames, concise);
+        PageCursorBinding binding = PageCursorBinding.ForDeck(deck.DeckId, deck.Revision)
+            .And(PageCursorBinding.ForRequest(Fingerprint(include ?? [], fields, cardNames, zones, categoryNames, concise)));
         if (include is null)
         {
-            return GetStored(deck, selection, concise, fingerprint, cursor, pageSize);
+            return GetStored(deck, selection, concise, binding, cursor, pageSize);
         }
 
-        OperationResult<int> start = ReadStart(cursor, fingerprint, deck, selection.Entries.Count);
+        OperationResult<int> start = ReadStart(cursor, binding, deck, selection.Entries.Count);
         if (start is not OperationSuccess<int> offset)
         {
             return OperationFailure.Forward<int, DeckDocumentView>(start);
@@ -164,7 +164,7 @@ internal sealed class DeckCardViewCoordinator
             entries,
             concise,
             offset.Data,
-            fingerprint,
+            binding,
             views.Data.Installed ? null : [NotInstalledLimit],
             CardsNarrowHint);
     }
@@ -178,7 +178,7 @@ internal sealed class DeckCardViewCoordinator
         DeckDocument deck,
         CardSelection selection,
         bool concise,
-        string fingerprint,
+        PageCursorBinding binding,
         string? cursor,
         int? pageSize)
     {
@@ -197,18 +197,18 @@ internal sealed class DeckCardViewCoordinator
             }
         }
 
-        OperationResult<int> start = ReadStart(cursor, fingerprint, deck, all.Count);
+        OperationResult<int> start = ReadStart(cursor, binding, deck, all.Count);
         if (start is not OperationSuccess<int> offset)
         {
             return OperationFailure.Forward<int, DeckDocumentView>(start);
         }
 
         List<DeckEntryView> slice = [.. all.Skip(offset.Data).Take(pageSize ?? int.MaxValue)];
-        return BuildPage(deck, selection, slice, concise, offset.Data, fingerprint, null, StoredNarrowHint);
+        return BuildPage(deck, selection, slice, concise, offset.Data, binding, null, StoredNarrowHint);
     }
 
     /// <summary>
-    /// Tells whether a response format asks for concise entries. Standard and full both give every stored field.
+    /// Tells whether a response format asks for concise entries. Standard gives every stored field.
     /// </summary>
     private static bool IsConcise(string? responseFormat)
     {
@@ -384,15 +384,15 @@ internal sealed class DeckCardViewCoordinator
     }
 
     /// <summary>
-    /// Checks that the response format, when given, is concise, standard, or full.
+    /// Checks that the response format, when given, is concise or standard.
     /// </summary>
     private static OperationInvalidInput? ValidateResponseFormat(string? responseFormat)
     {
-        return responseFormat?.Trim().ToLowerInvariant() is null or "concise" or "standard" or "full"
+        return responseFormat?.Trim().ToLowerInvariant() is null or "concise" or "standard"
             ? null
             : new OperationInvalidInput(
                 "invalid-response-format",
-                "responseFormat must be concise, standard, or full.",
+                "responseFormat must be concise or standard.",
                 "responseFormat");
     }
 
@@ -413,7 +413,6 @@ internal sealed class DeckCardViewCoordinator
     /// Fingerprints the request fields that must stay the same from page to page, ignoring their order.
     /// </summary>
     private static string Fingerprint(
-        Guid deckId,
         IReadOnlyList<string> include,
         IReadOnlyList<string>? fields,
         IReadOnlyList<string>? cardNames,
@@ -421,7 +420,7 @@ internal sealed class DeckCardViewCoordinator
         IReadOnlyList<string>? categoryNames,
         bool concise)
     {
-        string text = $"{deckId:D}|{string.Join(',', include.Order(StringComparer.Ordinal))}|" +
+        string text = $"{string.Join(',', include.Order(StringComparer.Ordinal))}|" +
             string.Join(',', (fields ?? []).Order(StringComparer.Ordinal));
         text += FilterText("names", cardNames) + FilterText("zones", zones) +
             FilterText("categories", categoryNames);
@@ -448,65 +447,26 @@ internal sealed class DeckCardViewCoordinator
     }
 
     /// <summary>
-    /// Reads the first entry position of a page from its cursor. A cursor must belong to this request; only then is
-    /// the deck revision compared, and only an unchanged revision makes the entry position meaningful.
+    /// Reads the first entry position of a page from its cursor. A cursor must belong to this request and deck, and
+    /// only an unchanged revision keeps the entry position meaningful.
     /// </summary>
-    private static OperationResult<int> ReadStart(string? cursor, string fingerprint, DeckDocument deck, int total)
+    private static OperationResult<int> ReadStart(
+        string? cursor,
+        PageCursorBinding binding,
+        DeckDocument deck,
+        int total)
     {
-        if (cursor is null)
+        OperationResult<PageCursorPosition> start = PageCursor.Decode(
+            cursor,
+            binding,
+            current: new ConflictState(deck.Revision));
+        return start switch
         {
-            return new OperationSuccess<int>(0);
-        }
-
-        DeckViewCursor? decoded = DecodeCursor(cursor);
-        if (decoded?.Fingerprint is null ||
-            !CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(decoded.Fingerprint),
-                Encoding.UTF8.GetBytes(fingerprint)))
-        {
-            return InvalidCursor();
-        }
-
-        if (decoded.Revision != deck.Revision)
-        {
-            return new OperationConflict(
-                "deck-changed-between-pages",
-                "The deck changed since the first page. Start again without a cursor.",
-                new ConflictState(deck.Revision));
-        }
-
-        return decoded.Offset < 0 || decoded.Offset > total
-            ? InvalidCursor()
-            : new OperationSuccess<int>(decoded.Offset);
-    }
-
-    /// <summary>
-    /// Decodes a cursor, or returns null when it is malformed.
-    /// </summary>
-    private static DeckViewCursor? DecodeCursor(string cursor)
-    {
-        try
-        {
-            string padded = cursor.Replace('-', '+').Replace('_', '/');
-            padded = padded.PadRight((padded.Length + 3) / 4 * 4, '=');
-            return JsonSerializer.Deserialize<DeckViewCursor>(Convert.FromBase64String(padded));
-        }
-        catch (Exception exception) when (exception is FormatException or JsonException or ArgumentException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Builds the failure for a cursor that does not belong to this request.
-    /// </summary>
-    private static OperationInvalidInput InvalidCursor()
-    {
-        return new OperationInvalidInput(
-            "invalid-cursor",
-            "The cursor is not valid for this request. Pass nextCursor unchanged with the same deckId, include, " +
-            "fields, cardNames, zones, categoryNames, and responseFormat, or start again without a cursor.",
-            "cursor");
+            OperationSuccess<PageCursorPosition> { Data.First: var offset } when offset <= total =>
+                new OperationSuccess<int>(offset),
+            OperationSuccess<PageCursorPosition> => PageCursor.Invalid(),
+            _ => OperationFailure.Forward<PageCursorPosition, int>(start),
+        };
     }
 
     /// <summary>
@@ -518,7 +478,7 @@ internal sealed class DeckCardViewCoordinator
         List<DeckEntryView> entries,
         bool concise,
         int offset,
-        string fingerprint,
+        PageCursorBinding binding,
         IReadOnlyList<string>? limits,
         string narrowHint)
     {
@@ -547,7 +507,7 @@ internal sealed class DeckCardViewCoordinator
             Entries = kept,
             CategoryAssignments = assignments,
             TotalEntries = total,
-            NextCursor = next < total ? EncodeCursor(fingerprint, deck.Revision, next) : null,
+            NextCursor = next < total ? PageCursor.Encode(new PageCursorPosition(next), binding) : null,
             Limits = limits,
             Truncated = truncated ? true : null,
             Narrow = truncated ? NarrowText(selection, kept.Count, total, narrowHint) : null,
@@ -625,16 +585,6 @@ internal sealed class DeckCardViewCoordinator
             CardsByZone = DeckZoneCounts.Of(deck),
         };
     }
-
-    /// <summary>
-    /// Encodes the fingerprint, deck revision, and next entry position as an opaque cursor.
-    /// </summary>
-    private static string EncodeCursor(string fingerprint, long revision, int offset)
-    {
-        byte[] payload = JsonSerializer.SerializeToUtf8Bytes(new DeckViewCursor(fingerprint, revision, offset));
-        return Convert.ToBase64String(payload).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-    }
-
     /// <summary>
     /// Holds the entries a read covers and, for each filter the caller gave, the values that match no entry of the
     /// whole deck.
@@ -729,10 +679,4 @@ internal sealed class DeckCardViewCoordinator
             return ([.. entries.Where(entry => matched.Contains(entry.EntryId))], notFound);
         }
     }
-
-    /// <summary>
-    /// Carries the request fingerprint, deck revision, and next entry position before opaque encoding. A missing
-    /// fingerprint decodes as null and is refused.
-    /// </summary>
-    private sealed record DeckViewCursor(string? Fingerprint, long Revision, int Offset);
 }

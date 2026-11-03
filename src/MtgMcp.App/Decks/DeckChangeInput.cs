@@ -162,7 +162,8 @@ internal sealed record RemoveDeckProviderBindingInput(
 internal static class DeckChangeInputMapper
 {
     /// <summary>
-    /// Maps all inputs or returns an indexed invalid-input result without partial execution. A remove-entry with
+    /// Maps all inputs or returns an indexed invalid-input result without partial execution, with the argument path of the
+    /// change that failed. A remove-entry with
     /// entryIds maps to one change per ID, so callerIndexes gives, for each mapped change, the position of the input
     /// the caller sent it in.
     /// </summary>
@@ -170,10 +171,12 @@ internal static class DeckChangeInputMapper
         IReadOnlyList<DeckChangeInput>? inputs,
         out IReadOnlyList<DeckChange> changes,
         out IReadOnlyList<int> callerIndexes,
-        out string failureMessage)
+        out string failureMessage,
+        out string failurePath)
     {
         changes = [];
         callerIndexes = [];
+        failurePath = "changes";
         if (inputs is null || inputs.Count == 0)
         {
             failureMessage = "At least one deck change is required.";
@@ -196,6 +199,7 @@ internal static class DeckChangeInputMapper
 
             if (failure.Kind is not null)
             {
+                failurePath = $"changes[{index}]";
                 failureMessage = $"Deck change at index {index} with kind '{failure.Kind}' {failure.Detail}";
                 return false;
             }

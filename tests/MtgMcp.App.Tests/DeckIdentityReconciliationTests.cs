@@ -213,7 +213,7 @@ public sealed class DeckIdentityReconciliationTests
             true,
             false,
             TestContext.Current.CancellationToken)).Value);
-        Assert.Equal("deck-revision-conflict", stale.ReasonCode);
+        Assert.Equal("stale-deck-revision", stale.ReasonCode);
         Assert.Equal(new ConflictState(Revision: applied.Revision), stale.Current);
     }
 
@@ -239,7 +239,7 @@ public sealed class DeckIdentityReconciliationTests
             "default",
             TestContext.Current.CancellationToken)).Value);
 
-        Assert.Equal("deck-revision-conflict", conflict.ReasonCode);
+        Assert.Equal("stale-deck-revision", conflict.ReasonCode);
         Assert.Equal(new ConflictState(Revision: deck.Revision), conflict.Current);
         Assert.Empty(handler.RequestBodies);
     }

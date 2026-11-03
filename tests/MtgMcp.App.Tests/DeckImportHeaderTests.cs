@@ -50,28 +50,25 @@ public sealed class DeckImportHeaderTests
     }
 
     /// <summary>
-    /// Pages through a whole import preview by its next offsets and checks every page against the size limit.
+    /// Pages through a whole import preview by its next cursors and checks every page against the size limit.
     /// </summary>
     private static List<DeckImportPreviewView> ReadEveryPage(DeckImportPreview preview)
     {
         List<DeckImportPreviewView> pages = [];
-        int offset = 0;
+        string? cursor = null;
         while (true)
         {
-            OperationResult<DeckImportPreviewView> result = DeckPreviewPaging.PageImport(
-                preview,
-                offset,
-                pages.Count == 0 ? null : preview.Fingerprint);
+            OperationResult<DeckImportPreviewView> result = DeckPreviewPaging.PageImport(preview, cursor, 100);
             DeckImportPreviewView page = Assert.IsType<OperationSuccess<DeckImportPreviewView>>(result.Value).Data;
             int bytes = JsonSerializer.SerializeToUtf8Bytes(page, ToolCallPolicy.SerializerOptions).Length;
             Assert.True(bytes <= ResultSizeLimit.MaximumBytes, $"page {pages.Count} has {bytes} bytes");
             pages.Add(page);
-            if (page.NextOffset is not int next)
+            if (page.NextCursor is null)
             {
                 return pages;
             }
 
-            offset = next;
+            cursor = page.NextCursor;
         }
     }
 

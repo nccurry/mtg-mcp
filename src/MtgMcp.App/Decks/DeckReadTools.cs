@@ -61,13 +61,18 @@ internal sealed class DeckReadTools
         Idempotent = true,
         OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Local deck store: lists canonically ordered local deck summaries using an opaque stable cursor.")]
-    internal Task<OperationResult<DeckPage>> ListAsync(
-        [Description("Opaque cursor returned by a prior local_deck_list call.")] string? cursor = null,
+    [Description(
+        "Local deck store: lists canonically ordered local deck summaries, in pages that fit the size limit. " +
+        "nextCursor reads the next page; it is null on the last page. A deck created, edited, or deleted between " +
+        "pages makes the cursor stale: the call returns cursor-stale, so start again without a cursor. A long " +
+        "description is cut, with descriptionTruncated and descriptionLength.")]
+    internal async Task<OperationResult<DeckPage>> ListAsync(
+        [Description("Opaque nextCursor of a prior local_deck_list call. Omit for the first page.")]
+        string? cursor = null,
         [Description("Number of summaries to return, from 1 through 100; default 50.")] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
-        return store.ListAsync(cursor, pageSize, cancellationToken);
+        return await DeckListPaging.PageAsync(store, cursor, pageSize, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -106,8 +111,9 @@ internal sealed class DeckReadTools
             "same names as scryfall_search fields.")]
         IReadOnlyList<string>? fields = null,
         [Description(
-            "Opaque cursor from nextCursor of a previous local_deck_get call with the same deckId, include, " +
-            "fields, cardNames, zones, categoryNames, and responseFormat.")]
+            "Opaque nextCursor of a previous local_deck_get call with the same deckId, include, fields, " +
+            "cardNames, zones, categoryNames, and responseFormat. A deck edited between pages returns " +
+            "cursor-stale; start again without a cursor.")]
         string? cursor = null,
         [Description(
             "Entries per page, from 1 through 100. With include the default is 25; without include the deck " +
@@ -131,12 +137,12 @@ internal sealed class DeckReadTools
             "categoryNames with a cursor.")]
         IReadOnlyList<string>? categoryNames = null,
         [Description(
-            "Entry fields: full (default: every stored entry field plus the category assignment rows), or " +
+            "Entry fields: standard (default: every stored entry field plus the category assignment rows), or " +
             "concise (entryId, cardName, quantity, zone, and categoryNames only, with no assignment rows). " +
-            "Standard is the same as full. With include, concise still adds cardData, card, and tags. Pass the " +
-            "same responseFormat with a cursor."),
-         ResponseFormatValues]
-        string responseFormat = "full",
+            "With include, concise still adds cardData, card, and tags. Pass the same responseFormat with a " +
+            "cursor."),
+         DeckResponseFormatValues]
+        string responseFormat = "standard",
         CancellationToken cancellationToken = default)
     {
         return cardViews.GetAsync(

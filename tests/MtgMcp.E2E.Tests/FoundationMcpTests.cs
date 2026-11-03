@@ -497,28 +497,28 @@ public sealed class FoundationMcpTests
         {
             ["local_deck_apply_changes"] = ["changes", "deckId", "expectedRevision", "returnDeck", "whenCardPresent"],
             ["local_deck_backup_create"] = [],
-            ["local_deck_backup_delete"] = ["backupId"],
+            ["local_deck_backup_delete"] = ["backupId", "confirmation"],
             ["local_deck_backup_list"] = [],
-            ["local_deck_backup_restore"] = ["backupId", "expectedDatabaseFingerprint"],
+            ["local_deck_backup_restore"] = ["backupId", "confirmation", "expectedDatabaseFingerprint"],
             ["local_deck_category_rules_apply"] =
             [
-                "applyToken", "deckId", "expectedCorpusGeneration", "expectedRevision", "freshnessPolicy",
+                "applyToken", "deckId", "expectedActiveGeneration", "expectedRevision", "freshnessPolicy",
                 "previewFingerprint", "returnDeck", "source",
             ],
             ["local_deck_category_rules_preview"] =
-                ["deckId", "expectedPreviewFingerprint", "expectedRevision", "freshnessPolicy", "offset", "source"],
+                ["cursor", "deckId", "expectedRevision", "freshnessPolicy", "pageSize", "source"],
             ["local_deck_create"] = ["request", "returnDeck"],
-            ["local_deck_delete"] = ["deckId", "expectedRevision"],
+            ["local_deck_delete"] = ["confirmation", "deckId", "expectedRevision"],
             ["local_deck_duplicates_preview"] = ["deckId", "exempt", "expectedRevision", "keepPriority", "matchBy"],
-            ["local_deck_export_bundle"] = ["artifact", "deckId", "formatId", "offset", "options"],
+            ["local_deck_export_bundle"] = ["artifact", "cursor", "deckId", "formatId", "options", "pageSize"],
             ["local_deck_get"] =
                 ["cardNames", "categoryNames", "cursor", "deckId", "fields", "include", "pageSize", "responseFormat", "zones"],
             ["local_deck_identity_reconcile_apply"] =
                 ["allowPartial", "applyToken", "deckId", "expectedRevision", "previewFingerprint", "returnDeck"],
             ["local_deck_identity_reconcile_preview"] =
-                ["deckId", "entryIds", "expectedPreviewFingerprint", "expectedRevision", "freshnessPolicy", "offset"],
-            ["local_deck_import_create"] = ["content", "expectedFingerprint", "formatId", "options", "returnDeck"],
-            ["local_deck_import_preview"] = ["content", "expectedPreviewFingerprint", "formatId", "offset", "options"],
+                ["cursor", "deckId", "entryIds", "expectedRevision", "freshnessPolicy", "pageSize"],
+            ["local_deck_import_create"] = ["content", "formatId", "options", "previewFingerprint", "returnDeck"],
+            ["local_deck_import_preview"] = ["content", "cursor", "formatId", "options", "pageSize"],
             ["local_deck_interchange_formats"] = [],
             ["local_deck_list"] = ["cursor", "pageSize"],
             ["local_deck_validate"] = ["deckId", "rules"],

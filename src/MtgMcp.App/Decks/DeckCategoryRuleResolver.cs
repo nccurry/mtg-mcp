@@ -41,14 +41,15 @@ internal sealed class DeckCategoryRuleResolver
     {
         if (source is null)
         {
-            return new OperationInvalidInput("invalid-category-rule-source", "A category rule source is required.");
+            return new OperationInvalidInput("invalid-category-rule-source", "A category rule source is required.", "source");
         }
 
         if (freshnessPolicy is not ("default" or "cache-only" or "refresh"))
         {
             return new OperationInvalidInput(
                 "invalid-freshness-policy",
-                "Freshness policy must be default, cache-only, or refresh.");
+                "Freshness policy must be default, cache-only, or refresh.",
+                "freshnessPolicy");
         }
 
         if (source is not InlineCategoryRuleSource inline)
@@ -109,11 +110,18 @@ internal sealed class DeckCategoryRuleResolver
     private static OperationInvalidInput? ValidateCategoryOwnership(CategoryRuleSet rules, DeckDocument deck)
     {
         HashSet<Guid> categories = deck.Categories.Select(category => category.CategoryId).ToHashSet();
-        return rules.Rules.Any(rule => !categories.Contains(rule.CategoryId))
-            ? new OperationInvalidInput(
-                "invalid-category-rule-category",
-                "Every category rule must name an existing local deck category.")
-            : null;
+        for (int index = 0; index < rules.Rules.Count; index++)
+        {
+            if (!categories.Contains(rules.Rules[index].CategoryId))
+            {
+                return new OperationInvalidInput(
+                    "invalid-category-rule-category",
+                    "Every category rule must name an existing local deck category.",
+                    $"source.ruleSet.rules[{index}].categoryId");
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

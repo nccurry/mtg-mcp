@@ -43,7 +43,7 @@ internal sealed record DeckIdentityReconciliationRow(
 /// </summary>
 internal sealed record DeckIdentityReconciliationPreview(
     [property: JsonPropertyName("deckId")] Guid DeckId,
-    [property: JsonPropertyName("deckRevision")] long DeckRevision,
+    [property: JsonPropertyName("revision")] long DeckRevision,
     [property: JsonPropertyName("rows")] IReadOnlyList<DeckIdentityReconciliationRow> Rows,
     [property: JsonPropertyName("isComplete")] bool IsComplete,
     [property: JsonPropertyName("proposedChangeCount")] int ProposedChangeCount,
@@ -239,12 +239,12 @@ internal sealed class DeckIdentityReconciliationCoordinator
         if (expectedRevision <= 0 || deck.Revision != expectedRevision)
         {
             return new OperationConflict(
-                "deck-revision-conflict",
+                SharedReasonCodes.StaleDeckRevision,
                 "The local deck revision changed before identity reconciliation.",
                 new ConflictState(Revision: deck.Revision));
         }
 
-        OperationResult<IReadOnlyList<DeckEntry>> selection = SelectEntries(deck, entryIds);
+        OperationResult<IReadOnlyList<DeckEntry>> selection = SelectEntries(deck, entryIds, "entryIds");
         if (selection is not OperationSuccess<IReadOnlyList<DeckEntry>> selected)
         {
             return OperationFailure.Forward<IReadOnlyList<DeckEntry>, DeckIdentityReconciliationPreview>(selection);
@@ -292,7 +292,8 @@ internal sealed class DeckIdentityReconciliationCoordinator
         {
             return new OperationInvalidInput(
                 "invalid-identity-apply-token",
-                "The identity reconciliation apply token does not match this request.");
+                "The identity reconciliation apply token does not match this request.",
+                "applyToken");
         }
 
         OperationResult<DeckDocument> deckResult = await deckStore.GetAsync(deckId, cancellationToken)
@@ -306,12 +307,12 @@ internal sealed class DeckIdentityReconciliationCoordinator
         if (deck.Revision != expectedRevision)
         {
             return new OperationConflict(
-                "deck-revision-conflict",
+                SharedReasonCodes.StaleDeckRevision,
                 "The local deck revision changed after identity preview.",
                 new ConflictState(Revision: deck.Revision));
         }
 
-        OperationResult<IReadOnlyList<DeckEntry>> selection = SelectEntries(deck, token.EntryIds);
+        OperationResult<IReadOnlyList<DeckEntry>> selection = SelectEntries(deck, token.EntryIds, "applyToken");
         if (selection is not OperationSuccess<IReadOnlyList<DeckEntry>> selected)
         {
             return OperationFailure.Forward<IReadOnlyList<DeckEntry>, DeckWriteResult>(selection);
@@ -337,22 +338,25 @@ internal sealed class DeckIdentityReconciliationCoordinator
         {
             return new OperationInvalidInput(
                 "invalid-identity-apply-token",
-                "The identity reconciliation evidence does not match the selected entries.");
+                "The identity reconciliation evidence does not match the selected entries.",
+                "applyToken");
         }
 
         DeckIdentityReconciliationPreview preview = BuildPreview(deck, entries, plans, evidence);
         if (!string.Equals(preview.PreviewFingerprint, previewFingerprint, StringComparison.Ordinal))
         {
-            return new OperationInvalidInput(
-                "identity-preview-mismatch",
-                "The retained evidence no longer reproduces the accepted identity preview.");
+            return new OperationConflict(
+                SharedReasonCodes.PreviewChanged,
+                "The retained evidence no longer reproduces the accepted identity preview.",
+                new ConflictState(deck.Revision, PreviewFingerprint: preview.PreviewFingerprint));
         }
 
         if (!preview.IsComplete && !allowPartial)
         {
             return new OperationInvalidInput(
                 "partial-identity-reconciliation-not-allowed",
-                "The identity preview is incomplete; set allowPartial to apply only resolved rows.");
+                "The identity preview is incomplete; set allowPartial to apply only resolved rows.",
+                "allowPartial");
         }
 
         Dictionary<Guid, DeckEntry> entriesById = deck.Entries.ToDictionary(value => value.EntryId);
@@ -409,12 +413,13 @@ internal sealed class DeckIdentityReconciliationCoordinator
     /// </summary>
     private static OperationResult<IReadOnlyList<DeckEntry>> SelectEntries(
         DeckDocument deck,
-        IReadOnlyList<Guid>? entryIds)
+        IReadOnlyList<Guid>? entryIds,
+        string path)
     {
         if (entryIds is null)
         {
             return deck.Entries.Count is < 1 or > 150
-                ? InvalidSelection()
+                ? InvalidSelection(path)
                 : new OperationSuccess<IReadOnlyList<DeckEntry>>(deck.Entries);
         }
 
@@ -422,24 +427,25 @@ internal sealed class DeckIdentityReconciliationCoordinator
             entryIds.Any(value => value == Guid.Empty) ||
             entryIds.Distinct().Count() != entryIds.Count)
         {
-            return InvalidSelection();
+            return InvalidSelection(path);
         }
 
         HashSet<Guid> requested = [.. entryIds];
         DeckEntry[] selected = deck.Entries.Where(value => requested.Contains(value.EntryId)).ToArray();
         return selected.Length != requested.Count
-            ? InvalidSelection()
+            ? InvalidSelection(path)
             : new OperationSuccess<IReadOnlyList<DeckEntry>>(selected);
     }
 
     /// <summary>
-    /// Creates the bounded selection failure shared by every invalid entry-ID set.
+    /// Creates the bounded selection failure shared by every invalid entry-ID set, naming the argument that held it.
     /// </summary>
-    private static OperationInvalidInput InvalidSelection()
+    private static OperationInvalidInput InvalidSelection(string path)
     {
         return new OperationInvalidInput(
             "invalid-identity-entry-selection",
-            "Identity reconciliation requires 1 through 150 unique existing entry IDs.");
+            "Identity reconciliation requires 1 through 150 unique existing entry IDs.",
+            path);
     }
 
     /// <summary>
@@ -744,9 +750,10 @@ internal sealed class DeckIdentityReconciliationReadTools
         UseStructuredContent = true)]
     [Description(
         "Local deck store: previews exact Scryfall-backed identity normalization without fuzzy matching, legality " +
-        "checks, or deck mutation. Rows come in pages that fit the size limit; the fingerprint and apply token " +
-        "cover the whole preview, so apply needs no page. When truncated is true, call again with offset set to " +
-        "nextOffset and expectedPreviewFingerprint set to the previewFingerprint of the first page.")]
+        "checks, or deck mutation. Rows come in pages that fit the size limit; the previewFingerprint and apply " +
+        "token cover the whole preview, so apply needs no page. When nextCursor is not null, call again with the " +
+        "same arguments and cursor set to nextCursor. A preview that changed between pages returns cursor-stale " +
+        "with the current previewFingerprint.")]
     internal async Task<OperationResult<DeckIdentityReconciliationPreviewView>> PreviewAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
@@ -754,9 +761,10 @@ internal sealed class DeckIdentityReconciliationReadTools
         IReadOnlyList<Guid>? entryIds = null,
         [Description("Scryfall evidence policy: default, cache-only, or refresh."), FreshnessPolicyValues]
         string freshnessPolicy = "default",
-        [Description("Number of rows to skip; use nextOffset from the previous page. Default 0.")]
-        int offset = 0,
-        [Description(ResultPage.FingerprintHelp)] string? expectedPreviewFingerprint = null,
+        [Description("Opaque nextCursor of the previous page, with the same other arguments. Omit for the first page.")]
+        string? cursor = null,
+        [Description("Number of rows per page, from 1 through 100; default 100. A page also stops at the result size limit.")]
+        int pageSize = DeckPreviewPaging.MaximumPageSize,
         CancellationToken cancellationToken = default)
     {
         OperationResult<DeckIdentityReconciliationPreview> preview = await coordinator.PreviewAsync(
@@ -766,7 +774,7 @@ internal sealed class DeckIdentityReconciliationReadTools
             freshnessPolicy,
             cancellationToken).ConfigureAwait(false);
         return preview is OperationSuccess<DeckIdentityReconciliationPreview> success
-            ? DeckPreviewPaging.PageIdentity(success.Data, offset, expectedPreviewFingerprint)
+            ? DeckPreviewPaging.PageIdentity(success.Data, cursor, pageSize)
             : OperationFailure.Forward<DeckIdentityReconciliationPreview, DeckIdentityReconciliationPreviewView>(
                 preview);
     }
@@ -812,7 +820,9 @@ internal sealed class DeckIdentityReconciliationWriteTools
     [Description(
         "Local deck store: applies an unchanged exact identity preview in one revision; all non-identity deck fields " +
         "are preserved. The result is a summary (new revision, counts, IDs of changed entries, rows left out as " +
-        "issues); pass returnDeck true to also get the whole deck.")]
+        "issues); pass returnDeck true to also get the whole deck. A deck changed since the preview returns " +
+        "stale-deck-revision; evidence that no longer reproduces the preview returns preview-changed with the " +
+        "current previewFingerprint.")]
     internal Task<OperationResult<DeckWriteResult>> ApplyAsync(
         [Description("Stable local deck UUID used for preview.")] Guid deckId,
         [Description("Deck revision used for preview.")] long expectedRevision,

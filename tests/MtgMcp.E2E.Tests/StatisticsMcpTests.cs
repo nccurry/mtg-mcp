@@ -566,7 +566,7 @@ public sealed class StatisticsMcpTests
         _ = await CallSuccessAsync(
             session,
             "local_deck_delete",
-            new { deckId, expectedRevision = revision }).ConfigureAwait(false);
+            new { deckId, expectedRevision = revision, confirmation = $"delete deck {deckId}" }).ConfigureAwait(false);
     }
 
     /// <summary>

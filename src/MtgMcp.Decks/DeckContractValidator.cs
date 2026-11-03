@@ -184,10 +184,14 @@ internal sealed class DeckInputException : Exception
     /// <summary>
     /// Creates a bounded validation failure safe for conversion to structured invalid input.
     /// </summary>
-    internal DeckInputException(string message, string reasonCode = DeckReasonCodes.InvalidDeckInput)
+    internal DeckInputException(
+        string message,
+        string reasonCode = DeckReasonCodes.InvalidDeckInput,
+        string? path = null)
         : base(message)
     {
         ReasonCode = reasonCode;
+        Path = path;
     }
 
     /// <summary>
@@ -203,6 +207,11 @@ internal sealed class DeckInputException : Exception
     /// Gets the lowercase reason code projected to the public result union.
     /// </summary>
     internal string ReasonCode { get; }
+
+    /// <summary>
+    /// Gets the argument path of the rejected value, or null when the failing operation names it.
+    /// </summary>
+    internal string? Path { get; }
 }
 
 /// <summary>

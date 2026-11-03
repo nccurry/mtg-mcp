@@ -32,6 +32,8 @@ public sealed class ToolAllowedValuesTests
                     "freshnessPolicy" => typeof(FreshnessPolicyValuesAttribute),
                     "formatId" => typeof(InterchangeFormatValuesAttribute),
                     "tagType" => typeof(TagKindValuesAttribute),
+                    "responseFormat" when parameter.GetCustomAttribute<DeckResponseFormatValuesAttribute>() is not null =>
+                        typeof(DeckResponseFormatValuesAttribute),
                     "responseFormat" => typeof(ResponseFormatValuesAttribute),
                     _ => null,
                 };

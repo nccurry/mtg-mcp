@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.Data.Sqlite;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
@@ -67,26 +66,22 @@ public sealed class SqliteDeckStore : IDisposable
     public DeckBackupStore Backups { get; }
 
     /// <summary>
-    /// Lists one stable page of canonically ordered decks without creating absent storage.
+    /// Lists one page of canonically ordered decks, from a row offset, without creating absent storage. The slice
+    /// says whether decks follow it.
     /// </summary>
-    public async Task<OperationResult<DeckPage>> ListAsync(
-        string? cursor,
+    public async Task<OperationResult<DeckListSlice>> ListAsync(
+        int offset,
         int pageSize,
         CancellationToken cancellationToken)
     {
         if (pageSize is < 1 or > 100)
         {
-            return Invalid<DeckPage>("Page size must be between 1 and 100.");
-        }
-
-        if (!TryParseCursor(cursor, out int offset))
-        {
-            return Invalid<DeckPage>("The deck cursor is invalid.");
+            return Invalid<DeckListSlice>("Page size must be between 1 and 100.", "pageSize");
         }
 
         if (!database.Exists)
         {
-            return new OperationSuccess<DeckPage>(new DeckPage([], null));
+            return new OperationSuccess<DeckListSlice>(new DeckListSlice([], false));
         }
 
         try
@@ -100,15 +95,37 @@ public sealed class SqliteDeckStore : IDisposable
                 pageSize + 1,
                 cancellationToken).ConfigureAwait(false);
             bool hasMore = rows.Count > pageSize;
-            IReadOnlyList<DeckSummary> items = hasMore ? rows.Take(pageSize).ToArray() : rows;
-            string? nextCursor = hasMore
-                ? (offset + pageSize).ToString(CultureInfo.InvariantCulture)
-                : null;
-            return new OperationSuccess<DeckPage>(new DeckPage(items, nextCursor));
+            return new OperationSuccess<DeckListSlice>(
+                new DeckListSlice(hasMore ? rows.Take(pageSize).ToArray() : rows, hasMore));
         }
         catch (Exception exception) when (IsExpectedStorageFailure(exception))
         {
-            return MapFailure<DeckPage>(exception);
+            return MapFailure<DeckListSlice>(exception, "pageSize");
+        }
+    }
+
+    /// <summary>
+    /// Fingerprints the deck list: it changes when any deck is created, deleted, renamed, or edited, so a cursor over
+    /// the list can tell that its pages no longer line up.
+    /// </summary>
+    public async Task<OperationResult<string>> GetListFingerprintAsync(CancellationToken cancellationToken)
+    {
+        if (!database.Exists)
+        {
+            return new OperationSuccess<string>(DeckSql.ListFingerprint([]));
+        }
+
+        try
+        {
+            await using SqliteConnection connection = await database.OpenConnectionAsync(
+                writable: false,
+                cancellationToken).ConfigureAwait(false);
+            return new OperationSuccess<string>(DeckSql.ListFingerprint(
+                await DeckSql.ListRevisionsAsync(connection, cancellationToken).ConfigureAwait(false)));
+        }
+        catch (Exception exception) when (IsExpectedStorageFailure(exception))
+        {
+            return MapFailure<string>(exception, "cursor");
         }
     }
 
@@ -121,7 +138,7 @@ public sealed class SqliteDeckStore : IDisposable
     {
         if (deckId == Guid.Empty)
         {
-            return Invalid<DeckDocument>("The deck ID is invalid.");
+            return Invalid<DeckDocument>("The deck ID is invalid.", "deckId");
         }
 
         if (!database.Exists)
@@ -145,7 +162,7 @@ public sealed class SqliteDeckStore : IDisposable
         }
         catch (Exception exception) when (IsExpectedStorageFailure(exception))
         {
-            return MapFailure<DeckDocument>(exception);
+            return MapFailure<DeckDocument>(exception, "deckId");
         }
     }
 
@@ -188,7 +205,7 @@ public sealed class SqliteDeckStore : IDisposable
         }
         catch (Exception exception) when (IsExpectedStorageFailure(exception))
         {
-            return MapFailure<DeckDocument>(exception);
+            return MapFailure<DeckDocument>(exception, "request");
         }
         finally
         {
@@ -216,7 +233,7 @@ public sealed class SqliteDeckStore : IDisposable
             ValidateInitialRelationships(deck);
             if (!deck.ProviderBindings.Any(value => value.BindingId == baseline.BindingId))
             {
-                return Invalid<DeckDocument>("The synchronization baseline has no matching provider binding.");
+                return Invalid<DeckDocument>("The synchronization baseline has no matching provider binding.", "localDeckId");
             }
 
             string canonicalBaseline = DeckContractValidator.Required(
@@ -248,7 +265,7 @@ public sealed class SqliteDeckStore : IDisposable
         }
         catch (Exception exception) when (IsExpectedStorageFailure(exception))
         {
-            return MapFailure<DeckDocument>(exception);
+            return MapFailure<DeckDocument>(exception, "request");
         }
         finally
         {
@@ -266,7 +283,7 @@ public sealed class SqliteDeckStore : IDisposable
     {
         if (deckId == Guid.Empty || bindingId == Guid.Empty)
         {
-            return Invalid<DeckSyncBaseline>("Valid deck and binding IDs are required.");
+            return Invalid<DeckSyncBaseline>("Valid deck and binding IDs are required.", "localDeckId");
         }
 
         if (!database.Exists)
@@ -293,7 +310,7 @@ public sealed class SqliteDeckStore : IDisposable
         }
         catch (Exception exception) when (IsExpectedStorageFailure(exception))
         {
-            return MapFailure<DeckSyncBaseline>(exception);
+            return MapFailure<DeckSyncBaseline>(exception, "localDeckId");
         }
     }
 
@@ -306,7 +323,7 @@ public sealed class SqliteDeckStore : IDisposable
     {
         if (deckId == Guid.Empty)
         {
-            return Invalid<DeckInterchangeSnapshot>("The deck ID is invalid.");
+            return Invalid<DeckInterchangeSnapshot>("The deck ID is invalid.", "deckId");
         }
 
         if (!database.Exists)
@@ -341,7 +358,7 @@ public sealed class SqliteDeckStore : IDisposable
         }
         catch (Exception exception) when (IsExpectedStorageFailure(exception))
         {
-            return MapFailure<DeckInterchangeSnapshot>(exception);
+            return MapFailure<DeckInterchangeSnapshot>(exception, "deckId");
         }
     }
 
@@ -391,7 +408,7 @@ public sealed class SqliteDeckStore : IDisposable
         }
         catch (Exception exception) when (IsExpectedStorageFailure(exception))
         {
-            return MapFailure<DeckDocument>(exception);
+            return MapFailure<DeckDocument>(exception, "content");
         }
         finally
         {
@@ -407,9 +424,14 @@ public sealed class SqliteDeckStore : IDisposable
         long expectedRevision,
         CancellationToken cancellationToken)
     {
-        if (deckId == Guid.Empty || expectedRevision <= 0)
+        if (deckId == Guid.Empty)
         {
-            return Invalid<DeckDeleteResult>("A valid deck ID and positive expected revision are required.");
+            return Invalid<DeckDeleteResult>("The deck ID is invalid.", "deckId");
+        }
+
+        if (expectedRevision <= 0)
+        {
+            return Invalid<DeckDeleteResult>("The expected revision must be positive.", "expectedRevision");
         }
 
         if (!database.Exists)
@@ -452,7 +474,7 @@ public sealed class SqliteDeckStore : IDisposable
         }
         catch (Exception exception) when (IsExpectedStorageFailure(exception))
         {
-            return MapFailure<DeckDeleteResult>(exception);
+            return MapFailure<DeckDeleteResult>(exception, "deckId");
         }
         finally
         {
@@ -469,14 +491,19 @@ public sealed class SqliteDeckStore : IDisposable
         IReadOnlyList<DeckChange> changes,
         CancellationToken cancellationToken)
     {
-        if (deckId == Guid.Empty || expectedRevision <= 0)
+        if (deckId == Guid.Empty)
         {
-            return Invalid<DeckDocument>("A valid deck ID and positive expected revision are required.");
+            return Invalid<DeckDocument>("The deck ID is invalid.", "deckId");
+        }
+
+        if (expectedRevision <= 0)
+        {
+            return Invalid<DeckDocument>("The expected revision must be positive.", "expectedRevision");
         }
 
         if (changes is null || changes.Count == 0)
         {
-            return Invalid<DeckDocument>("At least one deck change is required.");
+            return Invalid<DeckDocument>("At least one deck change is required.", "changes");
         }
 
         if (!database.Exists)
@@ -542,7 +569,7 @@ public sealed class SqliteDeckStore : IDisposable
         }
         catch (Exception exception) when (IsExpectedStorageFailure(exception))
         {
-            return MapFailure<DeckDocument>(exception);
+            return MapFailure<DeckDocument>(exception, "changes");
         }
         finally
         {
@@ -919,21 +946,6 @@ public sealed class SqliteDeckStore : IDisposable
     }
 
     /// <summary>
-    /// Parses an opaque offset cursor without accepting negative or decorated values.
-    /// </summary>
-    private static bool TryParseCursor(string? value, out int offset)
-    {
-        if (value is null)
-        {
-            offset = 0;
-            return true;
-        }
-
-        return int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out offset) &&
-            offset >= 0;
-    }
-
-    /// <summary>
     /// Identifies storage and caller-input exceptions that map to structured outcomes.
     /// </summary>
     private static bool IsExpectedStorageFailure(Exception exception)
@@ -947,13 +959,14 @@ public sealed class SqliteDeckStore : IDisposable
     }
 
     /// <summary>
-    /// Maps bounded persistence failures without including paths or rejected values.
+    /// Maps bounded persistence failures without including filesystem paths or rejected values. An invalid-input
+    /// failure names the exception's own argument path, or <paramref name="path"/> when the exception names none.
     /// </summary>
-    private static OperationResult<T> MapFailure<T>(Exception exception)
+    private static OperationResult<T> MapFailure<T>(Exception exception, string path)
     {
         return exception switch
         {
-            DeckInputException value => new OperationInvalidInput(value.ReasonCode, value.Message),
+            DeckInputException value => new OperationInvalidInput(value.ReasonCode, value.Message, value.Path ?? path),
             DeckEntityNotFoundException value => new OperationNotFound(
                 value.ReasonCode,
                 value.Message),
@@ -963,7 +976,7 @@ public sealed class SqliteDeckStore : IDisposable
             SqliteException { SqliteErrorCode: 5 or 6 } => new OperationUnavailable(
                 "deck-database-busy",
                 "The local deck database is busy."),
-            SqliteException { SqliteErrorCode: 19 } constraint => Invalid<T>(DescribeConstraint(constraint)),
+            SqliteException { SqliteErrorCode: 19 } constraint => Invalid<T>(DescribeConstraint(constraint), path),
             SqliteException => new OperationUnavailable(
                 "deck-database-unavailable",
                 "The local deck database is unavailable."),
@@ -1010,9 +1023,9 @@ public sealed class SqliteDeckStore : IDisposable
     /// <summary>
     /// Creates a stable invalid-input outcome.
     /// </summary>
-    private static OperationResult<T> Invalid<T>(string message)
+    private static OperationResult<T> Invalid<T>(string message, string path)
     {
-        return new OperationInvalidInput(DeckReasonCodes.InvalidDeckInput, message);
+        return new OperationInvalidInput(DeckReasonCodes.InvalidDeckInput, message, path);
     }
 
     /// <summary>

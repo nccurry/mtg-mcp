@@ -128,7 +128,7 @@ public sealed class DeckCategorizationTests
             TestContext.Current.CancellationToken);
 
         OperationConflict conflict = Assert.IsType<OperationConflict>(result.Value);
-        Assert.Equal("deck-revision-conflict", conflict.ReasonCode);
+        Assert.Equal("stale-deck-revision", conflict.ReasonCode);
         Assert.Equal(new ConflictState(Revision: deck.Revision), conflict.Current);
     }
 

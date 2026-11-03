@@ -32,7 +32,7 @@ public sealed class DeckInterchangeToolsTests
         DeckImportCreateView created = RequireSuccess(await writes.CreateAsync(
             "generic-text-v1",
             "[commander]\n1 Commander",
-            preview.Fingerprint!,
+            preview.PreviewFingerprint!,
             new DeckImportOptions(DeckName: "Wrapper"),
             cancellationToken: TestContext.Current.CancellationToken));
         DeckExportBundleView exported = RequireSuccess(await reads.ExportAsync(

@@ -137,18 +137,17 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
                     ["formatId"] = format,
                     ["artifact"] = info.GetProperty("fileName").GetString(),
                 },
-                "chunk.nextOffset",
-                "offset");
+                "nextCursor",
+                "cursor");
         }
 
-        JsonElement chunk = first.Data.GetProperty("chunk");
-        if (chunk.TryGetProperty("nextOffset", out JsonElement next) && next.ValueKind == JsonValueKind.Number)
+        if (first.Data.TryGetProperty("nextCursor", out JsonElement next) && next.ValueKind == JsonValueKind.String)
         {
             await PageAsync(
                 "local_deck_export_bundle",
-                new JsonObject { ["deckId"] = deckId.ToString(), ["formatId"] = format, ["offset"] = next.GetInt32() },
-                "chunk.nextOffset",
-                "offset");
+                new JsonObject { ["deckId"] = deckId.ToString(), ["formatId"] = format, ["cursor"] = next.GetString() },
+                "nextCursor",
+                "cursor");
         }
     }
 
@@ -501,8 +500,8 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
         await PageAsync(
             "local_deck_import_preview",
             new JsonObject { ["formatId"] = format, ["content"] = content },
-            "nextOffset",
-            "offset",
+            "nextCursor",
+            "cursor",
             PageTarget);
     }
 
@@ -526,14 +525,13 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
         while (true)
         {
             ToolBudgetWorld.ToolOutcome chunk = await CallAsync("local_deck_export_bundle", arguments);
-            JsonElement data = chunk.Data.GetProperty("chunk");
-            content.Append(data.GetProperty("content").GetString());
-            if (!TryReadOffset(data, "nextOffset", out int next))
+            content.Append(chunk.Data.GetProperty("chunk").GetProperty("content").GetString());
+            if (!chunk.Data.TryGetProperty("nextCursor", out JsonElement next) || next.ValueKind != JsonValueKind.String)
             {
                 break;
             }
 
-            arguments["offset"] = next;
+            arguments["cursor"] = next.GetString();
         }
 
         await PreviewImportAsync("mtg-mcp-json-v1", content.ToString());
@@ -549,8 +547,8 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
         ToolBudgetWorld.ToolOutcome importPreview = await PageAsync(
             "local_deck_import_preview",
             import,
-            "nextOffset",
-            "offset");
+            "nextCursor",
+            "cursor");
         string[] names = [.. world.Cards.Take(300).Select(card => card["name"]!.GetValue<string>())];
         await PreviewImportAsync(
             "archidekt-text-v1",
@@ -566,7 +564,7 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
             {
                 ["formatId"] = "generic-text-v1",
                 ["content"] = text,
-                ["expectedFingerprint"] = importPreview.Data.GetProperty("fingerprint").GetString(),
+                ["previewFingerprint"] = importPreview.Data.GetProperty("previewFingerprint").GetString(),
             });
 
         ToolBudgetWorld.ToolOutcome reconcile = await PageAsync(
@@ -577,8 +575,8 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
                 ["expectedRevision"] = unresolved.Revision,
                 ["entryIds"] = Strings(unresolved.Entries.Take(150).Select(value => value.EntryId.ToString())),
             },
-            "nextOffset",
-            "offset");
+            "nextCursor",
+            "cursor");
         _ = await CallAsync(
             "local_deck_identity_reconcile_apply",
             new JsonObject
@@ -614,15 +612,15 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
                 ["source"] = source.DeepClone(),
                 ["freshnessPolicy"] = "cache-only",
             },
-            "nextOffset",
-            "offset");
+            "nextCursor",
+            "cursor");
         _ = await CallAsync(
             "local_deck_category_rules_apply",
             new JsonObject
             {
                 ["deckId"] = main.DeckId.ToString(),
                 ["expectedRevision"] = main.Revision,
-                ["expectedCorpusGeneration"] = rules.Data.GetProperty("corpusGenerationId").GetString(),
+                ["expectedActiveGeneration"] = rules.Data.GetProperty("corpusGenerationId").GetString(),
                 ["source"] = source.DeepClone(),
                 ["freshnessPolicy"] = "cache-only",
                 ["previewFingerprint"] = rules.Data.GetProperty("previewFingerprint").GetString(),
@@ -673,6 +671,7 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
             {
                 ["deckId"] = createdId.ToString(),
                 ["expectedRevision"] = edited.Data.GetProperty("revision").GetInt64(),
+                ["confirmation"] = $"delete deck {createdId:D}",
             });
     }
 
@@ -725,10 +724,15 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
             {
                 ["backupId"] = backupId,
                 ["expectedDatabaseFingerprint"] = list.Data.GetProperty("currentDatabaseFingerprint").GetString(),
+                ["confirmation"] = $"restore backup {backupId}",
             });
         _ = await CallAsync(
             "local_deck_backup_delete",
-            new JsonObject { ["backupId"] = restored.Data.GetProperty("rollbackBackupId").GetString() });
+            new JsonObject
+            {
+                ["backupId"] = restored.Data.GetProperty("rollbackBackupId").GetString(),
+                ["confirmation"] = $"delete backup {restored.Data.GetProperty("rollbackBackupId").GetString()}",
+            });
         _ = await CallAsync(
             "scryfall_card_data_delete",
             ScryfallDeleteArguments(await CallAsync("scryfall_card_data_status", [])));

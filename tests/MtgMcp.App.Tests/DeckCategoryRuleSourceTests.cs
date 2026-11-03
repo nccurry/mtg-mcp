@@ -12,6 +12,39 @@ namespace MtgMcp.App.Tests;
 public sealed class DeckCategoryRuleSourceTests
 {
     /// <summary>
+    /// Verifies the preview of a deck with no entries and tag selectors succeeds with no decisions, instead of
+    /// refusing for missing card lookups.
+    /// </summary>
+    [Fact]
+    public async Task Preview_OfAnEmptyDeckWithTagSelectors_HasNoDecisions()
+    {
+        using TemporaryDirectory temporary = new();
+        DeckCategorizationSourceFixture.DeckCategorizationSourceHandler handler =
+            DeckCategorizationSourceFixture.CreateHandler();
+        using ScryfallService scryfall = DeckCategorizationSourceFixture.CreateService(temporary.Path, handler);
+        ScryfallCorpusSyncResult sync = await InstallAsync(scryfall);
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        DeckCategorizationCoordinator coordinator = new(store, scryfall);
+        Guid rampCategory = Guid.CreateVersion7();
+        DeckDocument deck = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest("Empty", Categories: [new DeckCategoryDraft("Ramp", CategoryId: rampCategory)]),
+            TestContext.Current.CancellationToken));
+
+        DeckCategoryRulesPreview preview = RequireSuccess(await coordinator.PreviewAsync(
+            deck.DeckId,
+            deck.Revision,
+            new InlineCategoryRuleSource(new CategoryRuleSet(
+                "add-only",
+                [new CategoryRule(rampCategory, [SourceSelector(DeckCategorizationSourceFixture.RampTagId)], [], [])])),
+            "cache-only",
+            TestContext.Current.CancellationToken));
+
+        Assert.Empty(preview.Decisions);
+        Assert.True(preview.IsComplete);
+        Assert.Equal(sync.GenerationId, preview.CorpusGenerationId);
+    }
+
+    /// <summary>
     /// Resolves parent selectors to exact source IDs, and inline rules for the four common roles resolve to the
     /// reviewed tags.
     /// </summary>
@@ -202,7 +235,7 @@ public sealed class DeckCategoryRuleSourceTests
             new DeckCategoryAssignment(entryId, categoryId, false),
             Assert.Single(applied.CategoryAssignments));
         Assert.Equal(applied.Revision + 1, edited.Revision);
-        Assert.Equal("deck-revision-conflict", Assert.IsType<OperationConflict>(stale.Value).ReasonCode);
+        Assert.Equal("stale-deck-revision", Assert.IsType<OperationConflict>(stale.Value).ReasonCode);
     }
 
     /// <summary>

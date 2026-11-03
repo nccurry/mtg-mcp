@@ -27,22 +27,22 @@ public sealed class DeckImportPreviewPagingTests
     {
         DeckImportPreview preview = HeavyPreview();
         List<DeckImportPreviewView> pages = [];
-        int offset = 0;
+        string? cursor = null;
 
         while (true)
         {
-            OperationResult<DeckImportPreviewView> result = DeckPreviewPaging.PageImport(preview, offset, null);
+            OperationResult<DeckImportPreviewView> result = DeckPreviewPaging.PageImport(preview, cursor, 100);
             DeckImportPreviewView page = Assert.IsType<OperationSuccess<DeckImportPreviewView>>(result.Value).Data;
             Assert.True(
                 ResultSize.Measure(result) < ResultSizeTarget,
-                $"page at {offset} takes {ResultSize.Measure(result)} bytes");
+                $"page {pages.Count} takes {ResultSize.Measure(result)} bytes");
             pages.Add(page);
-            if (page.NextOffset is not int next)
+            if (page.NextCursor is null)
             {
                 break;
             }
 
-            offset = next;
+            cursor = page.NextCursor;
         }
 
         DeckImportPreviewView first = pages[0];
@@ -91,10 +91,10 @@ public sealed class DeckImportPreviewPagingTests
             []);
 
         DeckImportPreviewView page = Assert.IsType<OperationSuccess<DeckImportPreviewView>>(
-            DeckPreviewPaging.PageImport(preview, 0, null).Value).Data;
+            DeckPreviewPaging.PageImport(preview, null, 100).Value).Data;
 
         Assert.Null(page.Truncated);
-        Assert.Null(page.NextOffset);
+        Assert.Null(page.NextCursor);
         Assert.Null(page.HeaderListsCut);
         Assert.Single(page.Proposal!.Entries);
         Assert.Single(page.Proposal.Categories);

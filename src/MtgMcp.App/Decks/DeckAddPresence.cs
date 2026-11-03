@@ -4,12 +4,13 @@ namespace MtgMcp.App.Decks;
 
 /// <summary>
 /// Holds a batch after its adds were checked against the cards already in the deck, the issues found, and a reason
-/// the whole batch must be refused, or null when it may go on.
+/// the whole batch must be refused, or null when it may go on, with the position of the caller's change it names.
 /// </summary>
 internal sealed record DeckAddPresenceResult(
     IReadOnlyList<DeckChange> Changes,
     IReadOnlyList<DeckWriteIssue> Issues,
-    string? Refusal);
+    string? Refusal,
+    int RefusalIndex = 0);
 
 /// <summary>
 /// Checks each entry a batch adds against the entries the deck already holds and the entries added earlier in the
@@ -60,7 +61,7 @@ internal static class DeckAddPresence
             {
                 if (skippedById.TryGetValue(referenced, out Skipped? gone))
                 {
-                    return new DeckAddPresenceResult(changes, [], Refusal(callerIndexes[index] + 1, gone));
+                    return new DeckAddPresenceResult(changes, [], Refusal(callerIndexes[index] + 1, gone), callerIndexes[index]);
                 }
             }
 
@@ -93,7 +94,7 @@ internal static class DeckAddPresence
                 string? refusal = LeaveOut(present, skippedById, issues, callerIndexes[index] + 1, draft, sameZone);
                 if (refusal is not null)
                 {
-                    return new DeckAddPresenceResult(changes, [], refusal);
+                    return new DeckAddPresenceResult(changes, [], refusal, callerIndexes[index]);
                 }
 
                 continue;

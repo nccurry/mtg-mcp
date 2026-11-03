@@ -158,6 +158,7 @@ public sealed class ManualInterchangeAcceptanceTests
         _ = await CallSuccessAsync(session, "local_deck_delete", new Dictionary<string, object?>
         {
             ["deckId"] = deckId,
+            ["confirmation"] = $"delete deck {deckId}",
             ["expectedRevision"] = revision,
         }).ConfigureAwait(false);
     }
