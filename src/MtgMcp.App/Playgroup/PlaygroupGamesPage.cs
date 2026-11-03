@@ -46,9 +46,18 @@ internal static class PlaygroupGamesPaging
             return PageCursor.Invalid();
         }
 
-        return position.RowsShown == 0
-            ? PageCursor.Decode(cursor, request, PageCursorShape.ProviderPage)
-            : peeked;
+        if (position.RowsShown == 0)
+        {
+            return PageCursor.Decode(cursor, request, PageCursorShape.ProviderPage);
+        }
+
+        // A cursor inside a page names the page checksum, which is known only after the provider answers. A stale
+        // result against this placeholder means the request part matched; the real checksum is checked by Continue.
+        OperationResult<PageCursorPosition> bound = PageCursor.Decode(
+            cursor,
+            request.And(PageCursorBinding.ForSource("unread")),
+            PageCursorShape.ProviderPage);
+        return bound is OperationInvalidInput ? bound : peeked;
     }
 
     /// <summary>

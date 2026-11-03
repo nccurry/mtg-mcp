@@ -43,6 +43,8 @@ public sealed class PreviewGuardScenarioTests
         string[] allowed = [.. SharedGuardArguments, .. CarriedGuardArguments];
         string[] stray = [.. used.Where(IsGuardName).Where(name => !allowed.Contains(name)).Order(StringComparer.Ordinal)];
         Assert.True(stray.Length == 0, "Guard arguments outside the shared names: " + string.Join(", ", stray));
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -69,6 +71,8 @@ public sealed class PreviewGuardScenarioTests
 
         AssertConflict(stale, SharedReasonCodes.CursorStale);
         AssertConflict(create, SharedReasonCodes.PreviewChanged);
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -94,6 +98,8 @@ public sealed class PreviewGuardScenarioTests
 
         AssertConflict(stale, SharedReasonCodes.CursorStale);
         AssertConflict(applied, SharedReasonCodes.StaleDeckRevision);
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -121,6 +127,8 @@ public sealed class PreviewGuardScenarioTests
         Assert.True(local.Revision > revision);
         AssertConflict(stale, SharedReasonCodes.CursorStale);
         AssertConflict(applied, SharedReasonCodes.StaleDeckRevision);
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>

@@ -85,6 +85,8 @@ public sealed class ArchidektToolContractTests
         Assert.Equal("confirmation", outcome.Structured.GetProperty("path").GetString());
         Assert.Contains(phrase, outcome.Structured.GetProperty("message").GetString(), StringComparison.Ordinal);
         Assert.Equal(0, world.Fake.Mutations);
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -127,5 +129,7 @@ public sealed class ArchidektToolContractTests
         Assert.Equal([50, 50, 20], pageSizes);
         Assert.Equal(120, ids.Count);
         Assert.Equal("pageSize", tooBig.Structured.GetProperty("path").GetString());
+
+        world.AssertNoPathlessRefusals();
     }
 }

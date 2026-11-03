@@ -238,8 +238,8 @@ Special cases:
   text and never splits a surrogate pair. The cursor is tied to the artifact and its checksum, so a deck edited between
   chunks gives `cursor-stale`. The chunks joined in order are the exact file.
 - **Scryfall collection.** `scryfall_cards_get` continues a later page from local data and makes no provider call. If a
-  card-data sync or a deleted request snapshot changed the result between pages, the cursor is `cursor-stale`. Send
-  the same `freshnessPolicy` on every page of one read.
+  card-data sync or a deleted request snapshot changed the result between pages, the cursor is `cursor-stale`. A
+  later page with a different `freshnessPolicy` than the first is another request, so its cursor is `invalid-cursor`.
 
 Accepted deviations from the one form (recorded in the surface-consistency plan):
 

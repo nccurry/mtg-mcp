@@ -324,6 +324,32 @@ public sealed class TurnManaInverseTests
     }
 
     /// <summary>
+    /// Verifies a refused target or count range names the field at fault.
+    /// </summary>
+    [Theory]
+    [InlineData("bad", "2", 0, 1, "request.targetNumerator")]
+    [InlineData("3", "2", 0, 1, "request.targetNumerator")]
+    [InlineData("1", "bad", 0, 1, "request.targetDenominator")]
+    [InlineData("1", "0", 0, 1, "request.targetDenominator")]
+    [InlineData("1", "2", -1, 1, "request.minimumCount")]
+    [InlineData("1", "2", 3, 2, "request.maximumCount")]
+    [InlineData("1", "2", 0, 11, "request.maximumCount")]
+    public void CalculateMinimumCount_RefusedTargetOrRange_NamesTheFieldAtFault(
+        string numerator,
+        string denominator,
+        int minimum,
+        int maximum,
+        string expectedPath)
+    {
+        ExactStatisticsCalculator calculator = new("test-version");
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(calculator.CalculateMinimumCount(
+            MinimumRequest(new MinimumHypergeometricCountEvent(10, 3, 1), numerator, denominator, minimum, maximum)).Value);
+
+        Assert.Equal(expectedPath, invalid.Path);
+    }
+
+    /// <summary>
     /// Supplies malformed inverse count requests.
     /// </summary>
     public static TheoryData<MinimumCountRequest> InvalidMinimumRequests => new()

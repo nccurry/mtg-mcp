@@ -118,6 +118,34 @@ public sealed class DeckSummaryTests
     }
 
     /// <summary>
+    /// Verifies a refused deck identity or entry list names the field at fault.
+    /// </summary>
+    [Fact]
+    public void CalculateDeckSummary_RefusedDeckOrEntries_NamesTheFieldAtFault()
+    {
+        DeckSummaryRequest valid = CreateRequest();
+        ExactStatisticsCalculator calculator = new("test-version");
+        (string Expected, DeckSummaryRequest Request)[] cases =
+        [
+            ("request.deckId", valid with { DeckId = Guid.Empty }),
+            ("request.revision", valid with { Revision = 0 }),
+            ("request.selectedEntries", valid with { SelectedEntries = null! }),
+            ("request.excludedEntries", valid with { ExcludedEntries = null! }),
+            ("request.selectedEntries", valid with { SelectedEntries = [null!] }),
+            (
+                "request.excludedEntries",
+                valid with { ExcludedEntries = [new StatisticsEntryEvidence(FirstEntryId, 1)] }),
+        ];
+
+        foreach ((string expected, DeckSummaryRequest request) in cases)
+        {
+            Assert.Equal(
+                expected,
+                Assert.IsType<OperationInvalidInput>(calculator.CalculateDeckSummary(request).Value).Path);
+        }
+    }
+
+    /// <summary>
     /// Supplies malformed deck summary requests.
     /// </summary>
     public static TheoryData<DeckSummaryRequest> InvalidRequests

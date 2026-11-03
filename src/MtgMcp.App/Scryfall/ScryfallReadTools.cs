@@ -149,8 +149,8 @@ internal sealed class ScryfallReadTools
             "quantities normally require only one lookup row.")]
         IReadOnlyList<ScryfallCardLookup> lookups,
         [Description(
-            "Cache policy for the first page: default, cache-only, or refresh; " +
-            "a cursor always replays bound evidence."),
+            "Cache policy: default, cache-only, or refresh; send the same value on every page. " +
+            "A cursor always replays bound evidence."),
          FreshnessPolicyValues]
         string freshnessPolicy = "default",
         [Description("Opaque continuation cursor bound to the complete ordered request and exact evidence.")]

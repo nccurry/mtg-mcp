@@ -44,6 +44,8 @@ public sealed class ArchidektPagingToolTests
         Assert.True(outcome.IsError);
         Assert.Equal("invalid-input", outcome.Kind);
         Assert.Equal(path, outcome.Structured.GetProperty("path").GetString());
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -75,6 +77,8 @@ public sealed class ArchidektPagingToolTests
 
         Assert.Equal(7, entries);
         Assert.Equal(3, pages);
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -113,6 +117,8 @@ public sealed class ArchidektPagingToolTests
         Assert.Equal(
             JsonValueKind.String,
             stale.Structured.GetProperty("current").GetProperty("remoteFingerprint").ValueKind);
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -146,6 +152,8 @@ public sealed class ArchidektPagingToolTests
         Assert.Equal(0, page.Data.GetProperty("differenceCount").GetInt32());
         Assert.False(page.Data.TryGetProperty("nextCursor", out JsonElement next) &&
             next.ValueKind == JsonValueKind.String);
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -177,6 +185,8 @@ public sealed class ArchidektPagingToolTests
 
         AssertRefused(other, "invalid-input", "invalid-cursor");
         AssertRefused(stale, "conflict", "cursor-stale");
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -203,6 +213,8 @@ public sealed class ArchidektPagingToolTests
         ToolBudgetWorld.ToolOutcome stale = await world.CallAsync("archidekt_pull_preview", arguments, token);
 
         AssertRefused(stale, "conflict", "cursor-stale");
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -221,6 +233,8 @@ public sealed class ArchidektPagingToolTests
         ToolBudgetWorld.ToolOutcome stale = await world.CallAsync("archidekt_folders_get", arguments, token);
 
         AssertRefused(stale, "conflict", "cursor-stale");
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -245,6 +259,8 @@ public sealed class ArchidektPagingToolTests
         ToolBudgetWorld.ToolOutcome stale = await world.CallAsync("archidekt_snapshots_get", arguments, token);
 
         AssertRefused(stale, "conflict", "cursor-stale");
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -269,6 +285,8 @@ public sealed class ArchidektPagingToolTests
             token);
 
         AssertRefused(other, "invalid-input", "invalid-cursor");
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -375,5 +393,7 @@ public sealed class ArchidektPagingToolTests
         Assert.NotEmpty(decks);
         Assert.All(decks, deck => Assert.True(deck.TryGetProperty("remoteDeckId", out _)));
         Assert.All(decks, deck => Assert.False(deck.TryGetProperty("remoteId", out _)));
+
+        world.AssertNoPathlessRefusals();
     }
 }

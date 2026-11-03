@@ -147,8 +147,7 @@ public sealed class PlaygroupGamesPagingTests
     }
 
     /// <summary>
-    /// Verifies a cursor inside a provider page is stale when a game was added or removed since it was issued, and
-    /// still continues when the page is unchanged.
+    /// Verifies a cursor inside a provider page is stale when a game was added or removed since it was issued.
     /// </summary>
     [Fact]
     public async Task ListGames_PageChangedUnderACutCursor_IsCursorStale()
@@ -166,6 +165,52 @@ public sealed class PlaygroupGamesPagingTests
             cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(SharedReasonCodes.CursorStale, Assert.IsType<OperationConflict>(second.Value).ReasonCode);
+    }
+
+    /// <summary>
+    /// Verifies a cursor inside a provider page continues with the rows left out when the page is unchanged.
+    /// </summary>
+    [Fact]
+    public async Task ListGames_PageUnchangedUnderACutCursor_ContinuesWithTheRest()
+    {
+        using PlaygroupWorld world = new(GamesJson(20, rowBytes: 5_000));
+        PlaygroupGamesPage first = RequireSuccess(await world.Tools.ListPlaygroupGamesAsync(
+            5,
+            pageSize: 20,
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        PlaygroupGamesPage second = RequireSuccess(await world.Tools.ListPlaygroupGamesAsync(
+            5,
+            pageSize: 20,
+            cursor: first.NextCursor,
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            "g" + first.Source.Data.GetArrayLength(),
+            second.Source.Data[0].GetProperty("id").GetString());
+    }
+
+    /// <summary>
+    /// Verifies a cursor inside a provider page that was issued for another playgroup is refused before any provider
+    /// request.
+    /// </summary>
+    [Fact]
+    public async Task ListGames_CutCursorOfAnotherPlaygroup_IsInvalidWithoutAProviderRequest()
+    {
+        using PlaygroupWorld world = new(GamesJson(20, rowBytes: 5_000));
+        PlaygroupGamesPage first = RequireSuccess(await world.Tools.ListPlaygroupGamesAsync(
+            5,
+            pageSize: 20,
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>((await world.Tools.ListPlaygroupGamesAsync(
+            6,
+            pageSize: 20,
+            cursor: first.NextCursor,
+            cancellationToken: TestContext.Current.CancellationToken)).Value);
+
+        Assert.Equal(SharedReasonCodes.InvalidCursor, invalid.ReasonCode);
+        Assert.Single(world.Requests);
     }
 
     /// <summary>

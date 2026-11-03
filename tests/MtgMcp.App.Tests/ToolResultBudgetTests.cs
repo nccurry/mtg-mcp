@@ -68,6 +68,8 @@ public sealed class ToolResultBudgetTests
         Assert.True(
             outcomes.Max(value => value.Characters) > 5_000,
             "The fixtures never produced a large result, so the test proves nothing.");
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>

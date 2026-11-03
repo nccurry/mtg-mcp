@@ -205,8 +205,8 @@ A wrong phrase is `confirmation-required` with `path` `confirmation` and the mes
   page says `truncated` and its `nextCursor` continues where it stopped. A Spellbook combos page cut to the limit is the
   one exception (see Output shape).
 - `scryfall_cards_get` continues a later page from local data and makes no provider call. A card-data sync or a deleted
-  request snapshot between pages gives `cursor-stale`, and later pages must send the same `freshnessPolicy` as the
-  first.
+  request snapshot between pages gives `cursor-stale`, and a later page that sends a different `freshnessPolicy` than the
+  first is refused as `invalid-cursor`.
 - `local_deck_import_preview` still takes `content` on every call, because the server stores no import. The cursor
   replaces only the offset and the fingerprint.
 - Tool descriptions use the new names. The docs state the one form for each rule in

@@ -63,6 +63,8 @@ public sealed class DeckEditWorkflowScenarioTests
             world.CalledTools);
         Assert.All(maybeboard.Concat(added), name => Assert.Equal(["Sideboard"], world.Fake.CategoriesOf(name)));
         Assert.All(added, name => Assert.Equal(1, world.Fake.QuantityOf(name)));
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -92,6 +94,8 @@ public sealed class DeckEditWorkflowScenarioTests
             ["local_deck_apply_changes", "archidekt_push_preview", "archidekt_push_apply"],
             world.CalledTools);
         Assert.All(added, name => Assert.Equal(["Sideboard"], world.Fake.CategoriesOf(name)));
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>

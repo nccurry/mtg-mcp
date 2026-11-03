@@ -107,6 +107,8 @@ public sealed class AddByNameScenarioTests
         Assert.Equal(0, pushAfter.GetProperty("summary").GetProperty("operationCount").GetInt32());
         Assert.Equal(0, pushAfter.GetProperty("summary").GetProperty("differenceCount").GetInt32());
         Assert.Equal(0, pullAfter.GetProperty("summary").GetProperty("differenceCount").GetInt32());
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -212,5 +214,7 @@ public sealed class AddByNameScenarioTests
         Assert.DoesNotContain(
             world.CalledTools,
             tool => tool.StartsWith("local_deck_identity_reconcile", StringComparison.Ordinal));
+
+        world.AssertNoPathlessRefusals();
     }
 }

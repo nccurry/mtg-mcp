@@ -195,6 +195,7 @@ internal static class DeckPreviewPaging
         }
 
         OperationResult<PageCursorPosition> start = ReadStart(
+            "local_deck_identity_reconcile_preview",
             cursor,
             preview.PreviewFingerprint,
             preview.DeckId,
@@ -222,7 +223,12 @@ internal static class DeckPreviewPaging
         {
             Rows = slice.Rows(preview.Rows),
             Truncated = slice.More ? true : null,
-            NextCursor = NextCursor(slice, preview.PreviewFingerprint, preview.DeckId, preview.DeckRevision),
+            NextCursor = NextCursor(
+                "local_deck_identity_reconcile_preview",
+                slice,
+                preview.PreviewFingerprint,
+                preview.DeckId,
+                preview.DeckRevision),
             Narrow = slice.More
                 ? Narrow("Rows", offset, slice, "local_deck_identity_reconcile_preview")
                 : null,
@@ -246,6 +252,7 @@ internal static class DeckPreviewPaging
 
         IReadOnlyList<DeckEntry> entries = preview.Proposal?.Entries ?? [];
         OperationResult<PageCursorPosition> start = ReadStart(
+            "local_deck_import_preview",
             cursor,
             preview.PreviewFingerprint ?? "none",
             null,
@@ -332,7 +339,7 @@ internal static class DeckPreviewPaging
                     CategoryAssignments = [.. shown.SelectMany(row => row.Assignments)],
                 },
             Truncated = slice.More ? true : null,
-            NextCursor = NextCursor(slice, preview.PreviewFingerprint ?? "none", null, null),
+            NextCursor = NextCursor("local_deck_import_preview", slice, preview.PreviewFingerprint ?? "none", null, null),
             Narrow = slice.More
                 ? Narrow("Entries", offset, slice, "local_deck_import_preview")
                 : null,
@@ -355,6 +362,7 @@ internal static class DeckPreviewPaging
         }
 
         OperationResult<PageCursorPosition> start = ReadStart(
+            "local_deck_category_rules_preview",
             cursor,
             preview.PreviewFingerprint,
             preview.DeckId,
@@ -383,7 +391,12 @@ internal static class DeckPreviewPaging
         {
             Decisions = slice.Rows(preview.Decisions),
             Truncated = slice.More ? true : null,
-            NextCursor = NextCursor(slice, preview.PreviewFingerprint, preview.DeckId, preview.DeckRevision),
+            NextCursor = NextCursor(
+                "local_deck_category_rules_preview",
+                slice,
+                preview.PreviewFingerprint,
+                preview.DeckId,
+                preview.DeckRevision),
             Narrow = slice.More
                 ? Narrow("Decisions", offset, slice, "local_deck_category_rules_preview")
                 : null,
@@ -423,11 +436,12 @@ internal static class DeckPreviewPaging
     internal const int MaximumPageSize = 100;
 
     /// <summary>
-    /// Builds the binding of a preview cursor: the preview fingerprint, and the deck when the preview belongs to one.
+    /// Builds the binding of a preview cursor: the tool that issued it, the preview fingerprint, and the deck when the preview belongs to one.
     /// </summary>
-    private static PageCursorBinding Bind(string previewFingerprint, Guid? deckId, long? revision)
+    private static PageCursorBinding Bind(string tool, string previewFingerprint, Guid? deckId, long? revision)
     {
-        PageCursorBinding binding = PageCursorBinding.ForPreview(previewFingerprint);
+        PageCursorBinding binding = PageCursorBinding.ForRequest(RequestHash.Of((tool, typeof(string))))
+            .And(PageCursorBinding.ForPreview(previewFingerprint));
         return deckId is Guid id && revision is long value
             ? binding.And(PageCursorBinding.ForDeck(id, value))
             : binding;
@@ -438,6 +452,7 @@ internal static class DeckPreviewPaging
     /// the preview fingerprint as it is now; a position past the <paramref name="total"/> rows is invalid.
     /// </summary>
     private static OperationResult<PageCursorPosition> ReadStart(
+        string tool,
         string? cursor,
         string previewFingerprint,
         Guid? deckId,
@@ -446,7 +461,7 @@ internal static class DeckPreviewPaging
     {
         OperationResult<PageCursorPosition> start = PageCursor.Decode(
             cursor,
-            Bind(previewFingerprint, deckId, revision),
+            Bind(tool, previewFingerprint, deckId, revision),
             current: new ConflictState(revision, PreviewFingerprint: previewFingerprint));
         return start is OperationSuccess<PageCursorPosition> position && position.Data.Offset > total
             ? PageCursor.Invalid()
@@ -457,13 +472,14 @@ internal static class DeckPreviewPaging
     /// Writes the cursor of the page after a slice, or null when the slice reaches the end of the list.
     /// </summary>
     private static string? NextCursor(
+        string tool,
         ResultPageSlice slice,
         string previewFingerprint,
         Guid? deckId,
         long? revision)
     {
         return slice.More
-            ? PageCursor.Encode(PageCursorPosition.AtOffset(slice.Next), Bind(previewFingerprint, deckId, revision))
+            ? PageCursor.Encode(PageCursorPosition.AtOffset(slice.Next), Bind(tool, previewFingerprint, deckId, revision))
             : null;
     }
 

@@ -93,7 +93,7 @@ internal sealed class SpellbookReadTools
         [Description("Exact Commander Spellbook variant identifier.")] string variantId,
         CancellationToken cancellationToken = default)
     {
-        return service.GetVariantAsync(variantId, cancellationToken);
+        return InvalidInputPath.DefaultAsync(service.GetVariantAsync(variantId, cancellationToken), "variantId");
     }
 
     /// <summary>
@@ -142,7 +142,7 @@ internal sealed class SpellbookReadTools
                     sourceQuery,
                     new SpellbookPageOptions(pageSize, start.Data, groupByCombo)),
                 cancellationToken).ConfigureAwait(false),
-            "sourceQuery");
+            sourceQuery is null ? "deckId" : "sourceQuery");
         if (source is not OperationSuccess<SpellbookEvidence> success)
         {
             return OperationFailure.Forward<SpellbookEvidence, SpellbookDeckComboEvidence>(source);

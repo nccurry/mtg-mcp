@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 using MtgMcp.Core.Evidence;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.Scryfall.Tests;
@@ -1078,7 +1079,6 @@ public sealed class ScryfallServiceTests
         {
             ScryfallCollectionResult next = RequireSuccess(await service.ReadCollectionAsync(
                 lookups,
-                freshnessPolicy: "refresh",
                 cursor: cursor,
                 pageSize: 100,
                 cancellationToken: TestContext.Current.CancellationToken));
@@ -1131,7 +1131,6 @@ public sealed class ScryfallServiceTests
         int requestCount = handler.Requests.Count;
         ScryfallCollectionResult second = RequireSuccess(await service.ReadCollectionAsync(
             lookups,
-            freshnessPolicy: "refresh",
             cursor: first.Page.NextCursor,
             pageSize: 25,
             cancellationToken: TestContext.Current.CancellationToken));
@@ -1410,6 +1409,7 @@ public sealed class ScryfallServiceTests
 
         ScryfallCollectionResult second = RequireSuccess(await service.ReadCollectionAsync(
             lookups,
+            freshnessPolicy: "cache-only",
             cursor: cursor,
             pageSize: 10,
             cancellationToken: TestContext.Current.CancellationToken));
@@ -1420,6 +1420,7 @@ public sealed class ScryfallServiceTests
         _ = await SyncRevisionAsync(temporary.Path, 2, "Renewed Knight");
         OperationConflict stale = Assert.IsType<OperationConflict>((await service.ReadCollectionAsync(
             lookups,
+            freshnessPolicy: "cache-only",
             cursor: cursor,
             pageSize: 10,
             cancellationToken: TestContext.Current.CancellationToken)).Value);
@@ -1445,8 +1446,9 @@ public sealed class ScryfallServiceTests
             cancellationToken: TestContext.Current.CancellationToken));
         string cursor = first.Page.NextCursor!;
 
-        OperationInvalidInput otherCard = Assert.IsType<OperationInvalidInput>((await service.GetPrintsAsync(
+        OperationInvalidInput otherCard = Assert.IsType<OperationInvalidInput>((await service.GetRulingsAsync(
             ScryfallTestFixture.RedOracleId,
+            null,
             "cache-only",
             cursor,
             1,
@@ -1463,6 +1465,37 @@ public sealed class ScryfallServiceTests
             1,
             cancellationToken: TestContext.Current.CancellationToken)).Value);
         Assert.Equal("cursor-stale", stale.ReasonCode);
+    }
+
+    /// <summary>
+    /// Verifies an installed-data ruling cursor is stale, not invalid, when the installed card data is
+    /// deleted before the next page and the read falls to the provider path.
+    /// </summary>
+    [Fact]
+    public async Task InstalledRulingCursor_IsStaleWhenTheCardDataIsDeletedBetweenPages()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        ScryfallCorpusSyncResult installed = await SyncRevisionAsync(temporary.Path, 1, "Venerable Knight");
+        RecordingHandler handler = ScryfallTestFixture.Provider();
+        using ScryfallService service = CreateService(temporary.Path, handler);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        string rulingsCursor = RequireSuccess(await service.GetRulingsAsync(
+            ScryfallTestFixture.WhiteOracleId, null, "cache-only", null, 1, cancellationToken: token)).Page.NextCursor!;
+        _ = RequireSuccess(await service.DeleteCorpusAsync(
+            installed.GenerationId,
+            $"delete card-data {installed.GenerationId:D}",
+            token));
+
+        OperationConflict rulings = Assert.IsType<OperationConflict>((await service.GetRulingsAsync(
+            ScryfallTestFixture.WhiteOracleId,
+            ScryfallTestFixture.WhiteCardId,
+            "default",
+            rulingsCursor,
+            1,
+            cancellationToken: token)).Value);
+
+        Assert.Equal("cursor-stale", rulings.ReasonCode);
+        Assert.Empty(handler.Requests);
     }
 
     /// <summary>
@@ -1727,6 +1760,60 @@ public sealed class ScryfallServiceTests
             "refresh",
             null,
             TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// Verifies a tag search with a long non-ASCII query still writes a cursor within the cursor length cap and
+    /// continues with it.
+    /// </summary>
+    [Fact]
+    public async Task SearchTags_LongNonAsciiQuery_PagesWithACursorWithinTheCap()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        string query = new('é', 300);
+        string[] suffixes = ["one", "two"];
+        string[] tags =
+        [
+            .. suffixes.Select((suffix, index) => JsonSerializer.Serialize(new
+            {
+                @object = "tag",
+                id = Guid.Parse($"bbbbbbbb-bbbb-4bbb-8bbb-{index:D12}"),
+                label = query + suffix,
+                slug = $"long-{suffix}",
+                type = "oracle",
+                description = "Long label fixture.",
+                parent_ids = Array.Empty<Guid>(),
+                child_ids = Array.Empty<Guid>(),
+                aliases = Array.Empty<string>(),
+                taggings = Array.Empty<object>(),
+            })),
+        ];
+        byte[] longTags = ScryfallTestFixture.GzipLines(tags);
+        RecordingHandler handler = ScryfallTestFixture.Provider(
+            1,
+            "Venerable Knight",
+            request => request.RequestUri!.AbsolutePath == "/download/oracle_tags.jsonl.gz"
+                ? ScryfallTestFixture.Bytes(longTags)
+                : null);
+        using ScryfallService service = CreateService(temporary.Path, handler);
+        _ = RequireSuccess(await service.SyncCorpusAsync("refresh", null, TestContext.Current.CancellationToken));
+
+        ScryfallPage<ScryfallTag> first = RequireSuccess(await service.SearchTagsAsync(
+            query,
+            "oracle",
+            pageSize: 1,
+            cancellationToken: TestContext.Current.CancellationToken));
+        ScryfallPage<ScryfallTag> second = RequireSuccess(await service.SearchTagsAsync(
+            query,
+            "oracle",
+            first.NextCursor,
+            1,
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.InRange(first.NextCursor!.Length, 1, PageCursor.MaximumLength);
+        Assert.Equal(["long-one"], first.Items.Select(value => value.Slug));
+        Assert.Equal(["long-two"], second.Items.Select(value => value.Slug));
+        Assert.Null(second.NextCursor);
     }
 
     /// <summary>

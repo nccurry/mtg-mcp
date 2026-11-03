@@ -82,6 +82,8 @@ public sealed class ToolPagingTests
         Assert.True(
             anyPaged || format != "mtg-mcp-json-v1",
             "The JSON export of 300 entries should take several chunks.");
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -126,6 +128,8 @@ public sealed class ToolPagingTests
         Assert.Equal("artifact", unknown.Structured.GetProperty("path").GetString());
         Assert.Equal("cursor", edited.Structured.GetProperty("path").GetString());
         Assert.Equal("pageSize", large.Structured.GetProperty("path").GetString());
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -183,6 +187,8 @@ public sealed class ToolPagingTests
         DeckDocument after = Assert.IsType<OperationSuccess<DeckDocument>>(
             (await world.Store.GetAsync(deck.DeckId, token)).Value).Data;
         Assert.Equal(150, after.Entries.Count(entry => entry.OracleId is not null));
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -275,6 +281,8 @@ public sealed class ToolPagingTests
             (await world.Store.GetAsync(deck.DeckId, token)).Value).Data;
         int tagged = after.CategoryAssignments.Count(value => value.CategoryId == category);
         Assert.True(tagged >= 100, $"{tagged} assignments were added in the category.");
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -304,6 +312,8 @@ public sealed class ToolPagingTests
             entries.Select(entry => entry.GetProperty("cardName").GetString()));
         Assert.All(pages, page => Assert.Equal(300, page.Data.GetProperty("entryCount").GetInt32()));
         Assert.Single(pages.Select(page => page.Data.GetProperty("previewFingerprint").GetString()).Distinct());
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -341,6 +351,8 @@ public sealed class ToolPagingTests
         Assert.Equal(175, ids.Distinct().Count());
         Assert.Equal(175, ids.Count);
         Assert.True(sawTruncated);
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -402,6 +414,8 @@ public sealed class ToolPagingTests
                 Assert.Equal(reason, refused.Structured.GetProperty("reasonCode").GetString());
             }
         }
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>

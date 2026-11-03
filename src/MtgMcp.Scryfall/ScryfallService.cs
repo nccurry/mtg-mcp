@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using MtgMcp.Core.Evidence;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.Scryfall;
@@ -328,7 +329,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             }
         }
 
-        string requestHash = CollectionRequestHash(lookups);
+        string requestHash = CollectionRequestHash(lookups, policy.Data);
         Guid? cardDataGenerationId = policy.Data == ScryfallFreshnessPolicy.Refresh
             ? null
             : await CardDataStore.GetActiveGenerationIdAsync(cancellationToken).ConfigureAwait(false);
@@ -899,6 +900,11 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             }
         }
 
+        if (ScryfallPaging.IsCursorOfScope(cursor, CorpusScope("cards", oracleId)))
+        {
+            return PageCursor.Stale();
+        }
+
         SortedDictionary<string, object?> request = Request(
             ("operation", ScryfallOperationNames.CardPrints),
             ("oracleId", oracleId));
@@ -975,6 +981,11 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                     _ => OperationFailure.Forward<ScryfallPage<ScryfallRuling>, ScryfallRulingsResult>(cardDataPage),
                 };
             }
+        }
+
+        if (ScryfallPaging.IsCursorOfScope(cursor, CorpusScope("rulings", oracleId)))
+        {
+            return PageCursor.Stale();
         }
 
         if (scryfallCardId is null)
@@ -1563,6 +1574,14 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     }
 
     /// <summary>
+    /// Names the cursor scope of an installed card-data collection for one Oracle identity.
+    /// </summary>
+    private static string CorpusScope(string collection, Guid oracleId)
+    {
+        return $"corpus-{collection}:{oracleId:D}";
+    }
+
+    /// <summary>
     /// Maps an installed card-data printing page and its generation-bound cursor.
     /// </summary>
     private OperationResult<ScryfallPage<ScryfallCard>> MapStoredCardPage(
@@ -1572,7 +1591,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         int pageSize,
         bool includeRaw)
     {
-        string scope = $"corpus-cards:{oracleId:D}";
+        string scope = CorpusScope("cards", oracleId);
         string checksum = ScryfallHash.Compute($"{stored.GenerationId:D}|" + string.Join('|', stored.Items));
         OperationResult<int> read = ScryfallPaging.ReadOffset(cursor, scope, checksum, stored.Items.Count);
         if (read is not OperationSuccess<int> start)
@@ -1610,7 +1629,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         int pageSize,
         bool includeRaw)
     {
-        string scope = $"corpus-rulings:{oracleId:D}";
+        string scope = CorpusScope("rulings", oracleId);
         string checksum = ScryfallHash.Compute($"{stored.GenerationId:D}|" + string.Join('|', stored.Items));
         OperationResult<int> read = ScryfallPaging.ReadOffset(cursor, scope, checksum, stored.Items.Count);
         if (read is not OperationSuccess<int> start)
@@ -1926,11 +1945,14 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     }
 
     /// <summary>
-    /// Fingerprints the complete ordered lookup list independently of page size and raw-data detail.
+    /// Fingerprints the complete ordered lookup list and the freshness policy independently of page size and
+    /// raw-data detail.
     /// </summary>
-    private static string CollectionRequestHash(IReadOnlyList<ScryfallCardLookup> lookups)
+    private static string CollectionRequestHash(
+        IReadOnlyList<ScryfallCardLookup> lookups,
+        ScryfallFreshnessPolicy policy)
     {
-        return ScryfallHash.Compute(string.Join('\n', lookups.Select(CollectionKey)));
+        return ScryfallHash.Compute(policy + "\n" + string.Join('\n', lookups.Select(CollectionKey)));
     }
 
     /// <summary>
