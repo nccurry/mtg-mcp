@@ -50,10 +50,25 @@ internal sealed class PlaygroupRemoteWriteTools
         "the session." +
         UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> CreateLiveSessionAsync(
-        [Description("Complete caller-supplied live-session creation request sent exactly once.")]
-        PlaygroupLiveSessionCreateRequest request,
+        [Description("Maximum number of players at the table, from 1 through 6; omitted uses 4.")] int? playerAmount = null,
+        [Description("Starting life total for each player, above 0; omitted uses 40.")] int? lifeAmount = null,
+        [Description("Commander bracket, from 1 (Exhibition) through 5 (cEDH); omit for none.")] int? bracket = null,
+        [Description("Playgroup the session belongs to, which makes it private to that playgroup; omit for a public session.")] int? playgroupId = null,
+        [Description("League within the playgroup to attribute the session to; needs playgroupId.")] int? leagueId = null,
+        [Description("True lists the session in the public lobby and cannot be combined with playgroupId; omitted uses false.")] bool? discoverable = null,
+        [Description("Up to 64 distinct positive Playgroup language IDs spoken at the table.")] IReadOnlyList<int>? languageIds = null,
+        [Description("Optional label for the client that created the session, such as an integration name.")] string? clientIdentifier = null,
         CancellationToken cancellationToken = default)
     {
+        PlaygroupLiveSessionCreateRequest request = new(
+            playerAmount ?? 4,
+            lifeAmount ?? 40,
+            bracket,
+            playgroupId,
+            leagueId,
+            discoverable ?? false,
+            languageIds,
+            clientIdentifier);
         return ExecuteAsync(() => service.CreateLiveSessionAsync(request, cancellationToken));
     }
 

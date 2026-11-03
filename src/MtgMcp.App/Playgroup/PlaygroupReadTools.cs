@@ -81,11 +81,11 @@ internal sealed class PlaygroupReadTools
     [Description("Playgroup: gets one deck by provider identifier with an explicit archived-deck option." +
         UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> GetDeckAsync(
-        [Description("Exact Playgroup deck identifier.")] int deckId,
+        [Description("Exact Playgroup deck identifier.")] int playgroupDeckId,
         [Description("Whether an archived deck may be returned.")] bool includeArchived = false,
         CancellationToken cancellationToken = default)
     {
-        return service.GetDeckAsync(deckId, includeArchived, cancellationToken);
+        return service.GetDeckAsync(playgroupDeckId, includeArchived, cancellationToken);
     }
 
     /// <summary>Gets provider-computed deck ELO history.</summary>
@@ -95,14 +95,14 @@ internal sealed class PlaygroupReadTools
         "not rank deck quality locally." +
         UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> GetDeckEloHistoryAsync(
-        [Description("Exact Playgroup deck identifier.")] int deckId,
+        [Description("Exact Playgroup deck identifier.")] int playgroupDeckId,
         [Description("Optional exact playgroup scope for the provider-computed history.")] int? playgroupId = null,
         [Description("Optional exact league scope for the provider-computed history.")] int? leagueId = null,
         [Description("Whether an archived deck may be used.")] bool includeArchived = false,
         CancellationToken cancellationToken = default)
     {
         return service.GetDeckEloHistoryAsync(
-            deckId,
+            playgroupDeckId,
             playgroupId,
             leagueId,
             includeArchived,
@@ -170,17 +170,38 @@ internal sealed class PlaygroupReadTools
     /// <summary>Lists one bounded page of playgroup games.</summary>
     [McpServerTool(Name = "playgroup_playgroup_games_list", Title = "List Playgroup Games", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
     [Description(
-        "Playgroup: lists one page of games for a playgroup. You choose the page, the page size, and whether " +
-        "events are included." +
+        "Playgroup: lists one page of games for a playgroup. You choose the page size and whether events are " +
+        "included. The result has no total: nextCursor follows every full page, so when the game count is an exact " +
+        "multiple of pageSize the last page is empty, and nextCursor is null on any shorter page. A page cut to the " +
+        "result size limit says truncated true and its nextCursor continues with the games left out." +
         UntrustedTextNotes.Playgroup)]
-    internal Task<OperationResult<PlaygroupEvidence>> ListPlaygroupGamesAsync(
+    internal async Task<OperationResult<PlaygroupGamesPage>> ListPlaygroupGamesAsync(
         [Description("Exact playgroup identifier visible to the authenticated key.")] int playgroupId,
-        [Description("One-based provider page number.")] int page = 1,
-        [Description("Provider page size from 1 through 100.")] int limit = 10,
+        [Description("Provider page size from 1 through 100.")] int pageSize = 10,
+        [Description("The nextCursor of the previous page; omitted starts at the first page.")] string? cursor = null,
         [Description("Whether each returned game should include provider event records.")] bool includeEvents = false,
         CancellationToken cancellationToken = default)
     {
-        return service.ListPlaygroupGamesAsync(playgroupId, page, limit, includeEvents, cancellationToken);
+        PageCursorBinding binding = PageCursorBinding.ForRequest(PageCursor.RequestHash(
+            (playgroupId, typeof(int)),
+            (pageSize, typeof(int)),
+            (includeEvents, typeof(bool))));
+        OperationResult<PageCursorPosition> position = PlaygroupGamesPaging.Position(cursor, binding);
+        if (position is not OperationSuccess<PageCursorPosition> start)
+        {
+            return OperationFailure.Forward<PageCursorPosition, PlaygroupGamesPage>(position);
+        }
+
+        OperationResult<PlaygroupEvidence> page = await service.ListPlaygroupGamesAsync(
+            playgroupId,
+            start.Data.First + 1,
+            pageSize,
+            includeEvents,
+            cancellationToken).ConfigureAwait(false);
+        return page is OperationSuccess<PlaygroupEvidence> success
+            ? new OperationSuccess<PlaygroupGamesPage>(
+                PlaygroupGamesPaging.Shape(success.Data, start.Data, pageSize, binding))
+            : OperationFailure.Forward<PlaygroupEvidence, PlaygroupGamesPage>(page);
     }
 
     /// <summary>Gets one game with optional event records.</summary>

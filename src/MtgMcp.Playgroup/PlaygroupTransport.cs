@@ -214,8 +214,7 @@ internal sealed class PlaygroupTransport : IDisposable
     {
         return statusCode switch
         {
-            HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity => new PlaygroupProviderException(
-                PlaygroupFailureKind.InvalidInput,
+            HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity => Unavailable(
                 "provider-request-rejected",
                 "Playgroup rejected the request as invalid."),
             HttpStatusCode.Unauthorized => Unavailable(
