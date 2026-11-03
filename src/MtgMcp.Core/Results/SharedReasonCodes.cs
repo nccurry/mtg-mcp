@@ -25,4 +25,10 @@ public static class SharedReasonCodes
     /// Names the invalid-input reason reported when a cursor is malformed, edited, or belongs to another request.
     /// </summary>
     public const string InvalidCursor = "invalid-cursor";
+
+    /// <summary>
+    /// Names the invalid-input reason reported when an operation that destroys or replaces data lacks its exact
+    /// confirmation phrase.
+    /// </summary>
+    public const string ConfirmationRequired = "confirmation-required";
 }

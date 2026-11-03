@@ -113,7 +113,8 @@ public sealed partial class ToolNamingRuleTests
 
     /// <summary>
     /// Verifies every property of every input and result type, as the server serializes it, is camelCase, and that
-    /// every union discriminator property is camelCase with kebab-case values.
+    /// every union discriminator property is camelCase with kebab-case values. Archidekt results name their deck
+    /// identifiers localDeckId and remoteDeckId, never remoteId or deckId.
     /// </summary>
     [Fact]
     public void SerializedTypes_UseCamelCasePropertiesAndKebabCaseDiscriminators()
@@ -295,6 +296,12 @@ public sealed partial class ToolNamingRuleTests
                     if (!CamelCase().IsMatch(property.Name) && !ProviderPropertyNames.Contains(property.Name))
                     {
                         offenders.Add($"{tool}: {type.Name}.{property.Name} is not camelCase.");
+                    }
+
+                    if (tool.StartsWith("archidekt_", StringComparison.Ordinal) &&
+                        property.Name is "remoteId" or "deckId")
+                    {
+                        offenders.Add($"{tool}: {type.Name}.{property.Name} must be localDeckId or remoteDeckId.");
                     }
 
                     CheckType(tool, property.PropertyType, visited, offenders);

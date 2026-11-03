@@ -105,7 +105,7 @@ tasks:
     desc: Run all non-live tests
     deps: [build]
     cmds:
-      - '{{.DOTNET}} test --solution {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-build -- --filter-not-trait "Category=Live" "Category=Benchmark" "Category=SurfaceConsistencyTarget"'
+      - '{{.DOTNET}} test --solution {{.SOLUTION}} --configuration {{.CONFIGURATION}} --no-build -- --filter-not-trait "Category=Live" "Category=Benchmark"'
 
   test:unit:
     desc: Run application, Core, Statistics, and Simulation unit tests
@@ -114,19 +114,19 @@ tasks:
       - >
         {{.DOTNET}} test --project tests/MtgMcp.App.Tests/MtgMcp.App.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter-not-trait "Category=Live" "Category=Benchmark" "Category=SurfaceConsistencyTarget"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Core.Tests/MtgMcp.Core.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter-not-trait "Category=Live" "Category=Benchmark" "Category=SurfaceConsistencyTarget"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Statistics.Tests/MtgMcp.Statistics.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter-not-trait "Category=Live" "Category=Benchmark" "Category=SurfaceConsistencyTarget"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Simulation.Tests/MtgMcp.Simulation.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter-not-trait "Category=Live" "Category=Benchmark" "Category=SurfaceConsistencyTarget"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
 
   test:integration:
     desc: Run architecture and local deck integration tests
@@ -135,27 +135,27 @@ tasks:
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter-not-trait "Category=Live" "Category=Benchmark" "Category=SurfaceConsistencyTarget"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Decks.Tests/MtgMcp.Decks.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter-not-trait "Category=Live" "Category=Benchmark" "Category=SurfaceConsistencyTarget"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter-not-trait "Category=Live" "Category=Benchmark" "Category=SurfaceConsistencyTarget"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Spellbook.Tests/MtgMcp.Spellbook.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter-not-trait "Category=Live" "Category=Benchmark" "Category=SurfaceConsistencyTarget"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Archidekt.Tests/MtgMcp.Archidekt.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter-not-trait "Category=Live" "Category=Benchmark" "Category=SurfaceConsistencyTarget"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
       - >
         {{.DOTNET}} test --project tests/MtgMcp.Playgroup.Tests/MtgMcp.Playgroup.Tests.csproj
         --configuration {{.CONFIGURATION}}
-        -- --filter-not-trait "Category=Live" "Category=Benchmark" "Category=SurfaceConsistencyTarget"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
 
   test:e2e:
     desc: Run foundation process end-to-end tests
@@ -177,13 +177,6 @@ tasks:
       - '{{.DOTNET}} test --project tests/MtgMcp.Scryfall.Tests/MtgMcp.Scryfall.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
       - '{{.DOTNET}} test --project tests/MtgMcp.Spellbook.Tests/MtgMcp.Spellbook.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
       - '{{.DOTNET}} test --project tests/MtgMcp.E2E.Tests/MtgMcp.E2E.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=Live"'
-
-  test:surface-target:
-    desc: Run the surface-consistency end-state tests, which fail until every tool family is converted
-    deps: [restore]
-    cmds:
-      - '{{.DOTNET}} test --project tests/MtgMcp.App.Tests/MtgMcp.App.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=SurfaceConsistencyTarget"'
-      - '{{.DOTNET}} test --project tests/MtgMcp.Architecture.Tests/MtgMcp.Architecture.Tests.csproj --configuration {{.CONFIGURATION}} -- --filter-trait "Category=SurfaceConsistencyTarget"'
 
   test:live:methods:
     desc: Install the package and run explicitly enabled method-by-method live acceptance
@@ -226,7 +219,7 @@ tasks:
         dotnet test --solution {{.SOLUTION}}
         --configuration {{.CONFIGURATION}}
         --no-build
-        -- --filter-not-trait "Category=Live" "Category=Benchmark" "Category=SurfaceConsistencyTarget"
+        -- --filter-not-trait "Category=Live" "Category=Benchmark"
 
   coverage:gates:
     desc: Enforce 90 percent line coverage for every production assembly

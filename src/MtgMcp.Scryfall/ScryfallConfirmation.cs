@@ -9,11 +9,6 @@ namespace MtgMcp.Scryfall;
 internal static class ScryfallConfirmation
 {
     /// <summary>
-    /// Names the reason reported when the phrase is missing or wrong.
-    /// </summary>
-    internal const string ReasonCode = "confirmation-required";
-
-    /// <summary>
     /// Builds the phrase for an action on one target, such as <c>delete card-data</c> and the generation id.
     /// </summary>
     internal static string Phrase(string action, Guid target)
@@ -29,7 +24,7 @@ internal static class ScryfallConfirmation
         return string.Equals(confirmation, phrase, StringComparison.Ordinal)
             ? null
             : new OperationInvalidInput(
-                ReasonCode,
+                SharedReasonCodes.ConfirmationRequired,
                 $"confirmation must be exactly \"{phrase}\".",
                 "confirmation");
     }

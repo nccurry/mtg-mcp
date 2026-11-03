@@ -2,8 +2,7 @@ namespace MtgMcp.Architecture.Tests;
 
 /// <summary>
 /// Guards the end state of the surface-consistency work: the change and cursor reason codes that were replaced by the
-/// shared codes no longer appear in production source. The test carries the <c>SurfaceConsistencyTarget</c> category,
-/// so <c>task test</c> skips it until every tool family is converted.
+/// shared codes no longer appear in production source.
 /// </summary>
 public sealed class RemovedReasonCodeTests
 {
@@ -22,7 +21,6 @@ public sealed class RemovedReasonCodeTests
     /// Verifies no production source file contains a removed reason code.
     /// </summary>
     [Fact]
-    [Trait("Category", "SurfaceConsistencyTarget")]
     public void ProductionSource_ContainsNoRemovedReasonCode()
     {
         string source = Path.Combine(FindRepositoryRoot(), "src");

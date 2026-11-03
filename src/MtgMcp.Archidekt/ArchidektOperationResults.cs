@@ -94,7 +94,7 @@ internal static class ArchidektOperationResults
         {
             throw new ArchidektProviderException(
                 ArchidektFailureKind.InvalidInput,
-                "confirmation-required",
+                SharedReasonCodes.ConfirmationRequired,
                 $"Pass confirmation exactly as: {expected}")
             {
                 Path = "confirmation",
