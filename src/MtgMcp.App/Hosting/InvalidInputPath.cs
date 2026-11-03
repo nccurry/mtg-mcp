@@ -18,4 +18,12 @@ internal static class InvalidInputPath
             ? new OperationInvalidInput(rejected.ReasonCode, rejected.Message, path)
             : result;
     }
+
+    /// <summary>
+    /// Awaits the result and names <paramref name="path"/> on an invalid-input failure that has no argument path.
+    /// </summary>
+    internal static async Task<OperationResult<T>> DefaultAsync<T>(Task<OperationResult<T>> result, string path)
+    {
+        return Default(await result.ConfigureAwait(false), path);
+    }
 }

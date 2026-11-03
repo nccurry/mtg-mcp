@@ -250,6 +250,43 @@ public sealed class SpellbookPagingToolTests
     }
 
     /// <summary>
+    /// Verifies a source 400 on a deck combo search without a source query is invalid input at the deck.
+    /// </summary>
+    [Fact]
+    public async Task FindDeckCombos_SourceRejectsTheRequestWithoutAQuery_IsInvalidAtDeckId()
+    {
+        using TemporaryDirectory temporary = new();
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        DeckDocument deck = await CreateDeckAsync(store);
+        using SpellbookWorld world = new(temporary, store, "{}") { Status = HttpStatusCode.BadRequest };
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>((await world.Tools.FindDeckCombosAsync(
+            deck.DeckId,
+            deck.Revision,
+            cancellationToken: TestContext.Current.CancellationToken)).Value);
+
+        Assert.Equal("source-request-rejected", invalid.ReasonCode);
+        Assert.Equal("deckId", invalid.Path);
+    }
+
+    /// <summary>
+    /// Verifies a source 400 on a variant lookup is invalid input at the variant identifier.
+    /// </summary>
+    [Fact]
+    public async Task GetVariant_SourceRejectsTheRequest_IsInvalidAtVariantId()
+    {
+        using TemporaryDirectory temporary = new();
+        using SpellbookWorld world = new(temporary, "{}") { Status = HttpStatusCode.BadRequest };
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>((await world.Tools.GetVariantAsync(
+            "1-2",
+            TestContext.Current.CancellationToken)).Value);
+
+        Assert.Equal("source-request-rejected", invalid.ReasonCode);
+        Assert.Equal("variantId", invalid.Path);
+    }
+
+    /// <summary>
     /// Verifies a well-formed cursor that passes the source offset cap is refused at the cursor, before any source
     /// request.
     /// </summary>

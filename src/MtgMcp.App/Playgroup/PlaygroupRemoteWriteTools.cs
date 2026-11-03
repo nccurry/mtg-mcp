@@ -81,7 +81,52 @@ internal sealed class PlaygroupRemoteWriteTools
             clientIdentifier);
         return ExecuteAsync(async () => InvalidInputPath.Default(
             await service.CreateLiveSessionAsync(request, cancellationToken).ConfigureAwait(false),
-            "playgroupId"));
+            SentArgument(playerAmount, lifeAmount, bracket, playgroupId, leagueId, discoverable, languageIds)));
+    }
+
+    /// <summary>
+    /// Names the first live session argument the caller sent, or the player amount when none was sent.
+    /// </summary>
+    private static string SentArgument(
+        int? playerAmount,
+        int? lifeAmount,
+        int? bracket,
+        int? playgroupId,
+        int? leagueId,
+        bool? discoverable,
+        IReadOnlyList<int>? languageIds)
+    {
+        if (playerAmount is not null)
+        {
+            return "playerAmount";
+        }
+
+        if (lifeAmount is not null)
+        {
+            return "lifeAmount";
+        }
+
+        if (bracket is not null)
+        {
+            return "bracket";
+        }
+
+        if (playgroupId is not null)
+        {
+            return "playgroupId";
+        }
+
+        if (leagueId is not null)
+        {
+            return "leagueId";
+        }
+
+        if (discoverable is not null)
+        {
+            return "discoverable";
+        }
+
+        return languageIds is not null ? "languageIds" : "playerAmount";
     }
 
     /// <summary>Enforces remote-write authority at invocation time.</summary>
