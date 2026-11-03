@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using MtgMcp.App.CardLists;
 using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 using MtgMcp.Scryfall;
 
@@ -434,7 +435,9 @@ public sealed class CardListCompareTests
             right,
             "union",
             cursor: first.Page.NextCursor![..^2] + "AA"));
-        string past = CardListCursors.Encode(first.Fingerprint, 99, first.Sources);
+        string past = PageCursor.Encode(
+            PageCursorPosition.AtOffset(99),
+            CardListCursors.Binding(first.Fingerprint, first.Sources));
         OperationInvalidInput beyond = Failure(await Compare(world, left, right, "union", cursor: past));
 
         Assert.All([otherOperation, garbage, edited, beyond], failure => Assert.Equal("invalid-cursor",

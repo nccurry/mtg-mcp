@@ -110,7 +110,7 @@ internal sealed class CardListCoordinator
             return invalid;
         }
 
-        string fingerprint = CardListCursors.Fingerprint(
+        string fingerprint = RequestHash.Of(
             (left, typeof(CardListSourceInput)),
             (right, typeof(CardListSourceInput)),
             (setOperation.ToString(), typeof(string)),
@@ -186,7 +186,9 @@ internal sealed class CardListCoordinator
         (int keep, int averageBytes) = CountFitting([.. shaped.Data.Views.Select(view => (object)view)], header);
         int next = position.Data + keep;
         string? nextCursor = next < combined.Entries.Count
-            ? CardListCursors.Encode(fingerprint, next, combined.Sources)
+            ? PageCursor.Encode(
+                PageCursorPosition.AtOffset(next),
+                CardListCursors.Binding(fingerprint, combined.Sources))
             : null;
         bool truncated = keep < shaped.Data.Views.Count;
         return new OperationSuccess<CardListsCompareResult>(header with
@@ -243,7 +245,7 @@ internal sealed class CardListCoordinator
             return invalid;
         }
 
-        string fingerprint = CardListCursors.Fingerprint(
+        string fingerprint = RequestHash.Of(
             (source, typeof(CardListSourceInput)),
             (where, typeof(IReadOnlyList<CardListFilterInput>)),
             (groupBy, typeof(IReadOnlyList<string>)),
@@ -365,7 +367,11 @@ internal sealed class CardListCoordinator
             int keptRows = ResultSizeLimit.CountFitting(rowSizes, fixedBytes);
             truncated |= keptRows < read.Items.Count;
             int next = position + keptRows;
-            nextCursor = next < read.TotalRows ? CardListCursors.Encode(fingerprint, next, list.Sources) : null;
+            nextCursor = next < read.TotalRows
+                ? PageCursor.Encode(
+                    PageCursorPosition.AtOffset(next),
+                    CardListCursors.Binding(fingerprint, list.Sources))
+                : null;
             rows = new CardListRowsPage([.. read.Items.Take(keptRows)], read.TotalRows);
         }
 

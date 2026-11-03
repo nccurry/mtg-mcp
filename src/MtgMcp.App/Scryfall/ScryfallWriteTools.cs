@@ -52,7 +52,8 @@ internal sealed class ScryfallWriteTools
         [Description("Optional active generation guard checked before synchronization.")] Guid? expectedActiveGeneration = null,
         CancellationToken cancellationToken = default)
     {
-        return ExecuteAsync(() => service.SyncCorpusAsync(freshnessPolicy, expectedActiveGeneration, cancellationToken));
+        return ExecuteAsync(
+            () => service.SyncCorpusAsync(freshnessPolicy, expectedActiveGeneration, cancellationToken));
     }
 
     /// <summary>
@@ -93,9 +94,9 @@ internal sealed class ScryfallWriteTools
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Installed Scryfall card data: deletes every installed card-data generation, active and previous, only with the " +
-        "current active generation. A new sync reinstalls them. confirmation must be exactly \"delete card-data \" " +
-        "followed by expectedActiveGeneration.")]
+        "Installed Scryfall card data: deletes every installed card-data generation, active and previous, only " +
+        "with the current active generation. A new sync reinstalls them. confirmation must be exactly " +
+        "\"delete card-data \" followed by expectedActiveGeneration.")]
     internal Task<OperationResult<ScryfallCorpusMutationResult>> DeleteCorpusAsync(
         [Description("Current active card-data generation UUID used as a stale-write guard.")] Guid expectedActiveGeneration,
         [Description("Exact text \"delete card-data \" followed by expectedActiveGeneration.")]

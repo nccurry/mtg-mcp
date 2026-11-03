@@ -329,18 +329,6 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         }
 
         string requestHash = CollectionRequestHash(lookups);
-        if (cursor is not null)
-        {
-            return await ContinueCollectionAsync(
-                lookups,
-                requestHash,
-                cursor,
-                pageSize,
-                includeRaw,
-                countItems,
-                cancellationToken).ConfigureAwait(false);
-        }
-
         Guid? cardDataGenerationId = policy.Data == ScryfallFreshnessPolicy.Refresh
             ? null
             : await CardDataStore.GetActiveGenerationIdAsync(cancellationToken).ConfigureAwait(false);
@@ -380,7 +368,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             OperationResult<AcquiredSnapshot> acquisition = await AcquireAsync(
                 ScryfallOperationNames.CardCollection,
                 request,
-                freshnessPolicy,
+                cursor is null ? freshnessPolicy : "cache-only",
                 token => AcquireCollectionBatchesAsync(identifiers, token),
                 ValidateCardMembers,
                 cancellationToken).ConfigureAwait(false);
@@ -388,7 +376,8 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             {
                 acquired = success.Data;
             }
-            else if (acquisition is OperationNotCached && policy.Data == ScryfallFreshnessPolicy.CacheOnly)
+            else if (acquisition is OperationNotCached &&
+                     (policy.Data == ScryfallFreshnessPolicy.CacheOnly || cursor is not null))
             {
                 missStatus = "not-cached";
             }
@@ -405,18 +394,17 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             missStatus,
             includeRaw,
             cancellationToken).ConfigureAwait(false);
-        ScryfallCollectionCursorState state = new(
-            0,
-            requestHash,
-            cardDataGenerationId,
-            acquired?.Stored.Header.SnapshotId,
-            acquired?.Stored.Header.Checksum,
-            resolution.Checksum,
-            missStatus,
-            0);
+        OperationResult<int> read = ScryfallPaging.ReadOffset(
+            cursor, requestHash, resolution.Checksum, resolution.Rows.Count);
+        if (read is not OperationSuccess<int> start)
+        {
+            return OperationFailure.Forward<int, ScryfallCollectionResult>(read);
+        }
+
         return await CollectionPageAsync(
-            resolution.Rows,
-            state,
+            resolution,
+            requestHash,
+            start.Data,
             pageSize,
             acquired is null ? null : SnapshotReference(acquired),
             cardDataGenerationId,
@@ -752,83 +740,6 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     }
 
     /// <summary>
-    /// Replays one collection continuation from its exact retained card data and provider evidence.
-    /// </summary>
-    private async Task<OperationResult<ScryfallCollectionResult>> ContinueCollectionAsync(
-        IReadOnlyList<ScryfallCardLookup> lookups,
-        string requestHash,
-        string cursor,
-        int pageSize,
-        bool includeRaw,
-        ScryfallPageItemCounter? countItems,
-        CancellationToken cancellationToken)
-    {
-        if (!ScryfallCursor.TryDecodeCollection(cursor, requestHash, out ScryfallCollectionCursorState? state) ||
-            state is null ||
-            state.Offset > lookups.Count)
-        {
-            return ScryfallCursor.Invalid();
-        }
-
-        if (state.CorpusGenerationId is Guid generationId &&
-            !await CardDataStore.ContainsCompleteGenerationAsync(generationId, cancellationToken).ConfigureAwait(false))
-        {
-            return new OperationUnavailable(
-                "collection-cursor-evidence-unavailable",
-                "The corpus generation required by this collection cursor is no longer retained.");
-        }
-
-        StoredSnapshot? snapshot = null;
-        if (state.SnapshotId is Guid snapshotId)
-        {
-            snapshot = await SnapshotStore.FindByIdAsync(snapshotId, cancellationToken).ConfigureAwait(false);
-            if (snapshot is null)
-            {
-                return new OperationUnavailable(
-                    "collection-cursor-evidence-unavailable",
-                    "The provider snapshot required by this collection cursor is no longer retained.");
-            }
-
-            if (snapshot.Header.Operation != ScryfallOperationNames.CardCollection ||
-                !string.Equals(snapshot.Header.Checksum, state.SnapshotChecksum, StringComparison.Ordinal))
-            {
-                return ScryfallCursor.Stale();
-            }
-        }
-
-        List<StoredCardDataObject?> cardDataMatches = await LoadCollectionCardDataMatchesAsync(
-            lookups,
-            state.CorpusGenerationId,
-            cancellationToken).ConfigureAwait(false);
-        CollectionResolution resolution = await BuildCollectionResolutionAsync(
-            lookups,
-            cardDataMatches,
-            snapshot,
-            state.MissStatus,
-            includeRaw,
-            cancellationToken).ConfigureAwait(false);
-        if (!string.Equals(resolution.Checksum, state.ResultChecksum, StringComparison.Ordinal))
-        {
-            return ScryfallCursor.Stale();
-        }
-
-        ScryfallSnapshotReference? snapshotReference = snapshot is null
-            ? null
-            : SnapshotReference(new AcquiredSnapshot(
-                snapshot,
-                IsStale(snapshot.Header.RetrievedAtUtc) ? "stale" : "fresh",
-                []));
-        return await CollectionPageAsync(
-            resolution.Rows,
-            state,
-            pageSize,
-            snapshotReference,
-            state.CorpusGenerationId,
-            countItems,
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
     /// Executes the provider collection contract in deterministic batches without publishing partial evidence.
     /// </summary>
     private async Task<ProviderAcquisition> AcquireCollectionBatchesAsync(
@@ -850,26 +761,6 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         }
 
         return new ProviderAcquisition(pages, members, warnings);
-    }
-
-    /// <summary>
-    /// Loads collection candidates from one exact retained generation without consulting current state.
-    /// </summary>
-    private async Task<List<StoredCardDataObject?>> LoadCollectionCardDataMatchesAsync(
-        IReadOnlyList<ScryfallCardLookup> lookups,
-        Guid? cardDataGenerationId,
-        CancellationToken cancellationToken)
-    {
-        List<StoredCardDataObject?> matches = [];
-        foreach (ScryfallCardLookup lookup in lookups)
-        {
-            StoredCardDataObject? stored = cardDataGenerationId is Guid generationId
-                ? await CardDataStore.FindCardInGenerationAsync(lookup, generationId, cancellationToken).ConfigureAwait(false)
-                : null;
-            matches.Add(stored);
-        }
-
-        return matches;
     }
 
     /// <summary>
@@ -930,23 +821,19 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
 
     /// <summary>
     /// Projects one bounded collection page, cut to the size budget when a fit is given, and creates the next
-    /// evidence-bound cursor when needed.
+    /// cursor bound to the request and the resolved evidence when needed.
     /// </summary>
     private static async Task<OperationResult<ScryfallCollectionResult>> CollectionPageAsync(
-        IReadOnlyList<ScryfallCollectionRow> rows,
-        ScryfallCollectionCursorState state,
+        CollectionResolution resolution,
+        string requestHash,
+        int offset,
         int pageSize,
         ScryfallSnapshotReference? snapshot,
         Guid? cardDataGenerationId,
         ScryfallPageItemCounter? countItems,
         CancellationToken cancellationToken)
     {
-        if (state.Offset > rows.Count)
-        {
-            return ScryfallCursor.Invalid();
-        }
-
-        ScryfallCollectionRow[] items = rows.Skip(state.Offset).Take(pageSize).ToArray();
+        ScryfallCollectionRow[] items = resolution.Rows.Skip(offset).Take(pageSize).ToArray();
         ScryfallFormattedCards? formatted = null;
         if (countItems is not null)
         {
@@ -955,16 +842,15 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                 items.Select(row => (object?)(row with { Card = null })).ToArray(),
                 cardDataGenerationId,
                 cancellationToken).ConfigureAwait(false);
-            formatted = formatted with { PageStart = state.Offset };
+            formatted = formatted with { PageStart = offset };
             items = items[..formatted.Views.Count];
         }
 
-        string? next = state.Offset + items.Length < rows.Count
-            ? ScryfallCursor.EncodeCollection(state with { Offset = state.Offset + items.Length })
-            : null;
+        string? next = ScryfallPaging.NextCursor(
+            requestHash, resolution.Checksum, offset + items.Length, resolution.Rows.Count);
         return new OperationSuccess<ScryfallCollectionResult>(
             new ScryfallCollectionResult(
-                new ScryfallPage<ScryfallCollectionRow>(items, rows.Count, next) { Formatted = formatted },
+                new ScryfallPage<ScryfallCollectionRow>(items, resolution.Rows.Count, next) { Formatted = formatted },
                 snapshot,
                 cardDataGenerationId));
     }
@@ -998,6 +884,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             if (stored is not null && stored.Items.Count > 0)
             {
                 OperationResult<ScryfallPage<ScryfallCard>> cardDataPage = MapStoredCardPage(
+                    oracleId,
                     stored,
                     cursor,
                     pageSize,
@@ -1075,6 +962,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             if (stored is not null && stored.Items.Count > 0)
             {
                 OperationResult<ScryfallPage<ScryfallRuling>> cardDataPage = MapStoredRulingPage(
+                    oracleId,
                     stored,
                     cursor,
                     pageSize,
@@ -1093,7 +981,8 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         {
             return policy.Data == ScryfallFreshnessPolicy.CacheOnly
                 ? new OperationNotCached("scryfall-rulings-not-cached", "Rulings are not present in the installed corpus.")
-                : new OperationUnsupported("scryfall-card-id-required", "Provider ruling refresh requires a Scryfall card ID.");
+                : new OperationUnsupported(
+                    "scryfall-card-id-required", "Provider ruling refresh requires a Scryfall card ID.");
         }
 
         SortedDictionary<string, object?> request = Request(
@@ -1324,7 +1213,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         string? cursor = null,
         int pageSize = 25,
         bool includeRaw = false,
-        Func<IReadOnlyList<ScryfallTag>, int>? countFitting = null,
+        ScryfallRowFit<ScryfallTag>? countFitting = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(query))
@@ -1398,11 +1287,16 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         ScryfallTag tag = ScryfallMapper.Tag(tagDocument.RootElement, success.Data.GenerationId, includeRaw);
         string scope = $"tag-cards:{tag.Id:D}:{includeDescendants}:{minimumWeight}";
         string checksum = ScryfallHash.Compute(
-            $"{success.Data.GenerationId:D}|" + string.Join('|', success.Data.Assignments.Select(value => value.CardJson)));
-        if (!ScryfallCursor.TryRead(cursor, scope, checksum, null, out int offset, out OperationResult<ScryfallCardsByTagResult> cursorFailure))
+            $"{success.Data.GenerationId:D}|" +
+            string.Join('|', success.Data.Assignments.Select(value => value.CardJson)));
+        OperationResult<int> read = ScryfallPaging.ReadOffset(
+            cursor, scope, checksum, success.Data.Assignments.Count);
+        if (read is not OperationSuccess<int> start)
         {
-            return cursorFailure;
+            return OperationFailure.Forward<int, ScryfallCardsByTagResult>(read);
         }
+
+        int offset = start.Data;
 
         List<ScryfallCard> cards = [];
         List<ScryfallTagEvidence> assignments = [];
@@ -1447,9 +1341,8 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             assignments = assignments.GetRange(0, formatted.Views.Count);
         }
 
-        string? next = offset + cards.Count < success.Data.Assignments.Count
-            ? ScryfallCursor.Encode(scope, checksum, offset + cards.Count)
-            : null;
+        string? next = ScryfallPaging.NextCursor(
+            scope, checksum, offset + cards.Count, success.Data.Assignments.Count);
         return new OperationSuccess<ScryfallCardsByTagResult>(
             new ScryfallCardsByTagResult(
                 tag,
@@ -1638,10 +1531,13 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         cancellationToken.ThrowIfCancellationRequested();
         StoredSnapshotHeader header = acquired.Stored.Header;
         string scope = SnapshotRequestScope(header);
-        if (!ScryfallCursor.TryRead(cursor, scope, header.Checksum, header.TotalCount, out int offset, out OperationResult<ScryfallPage<ScryfallCard>> cursorFailure))
+        OperationResult<int> read = ScryfallPaging.ReadOffset(cursor, scope, header.Checksum, header.TotalCount);
+        if (read is not OperationSuccess<int> start)
         {
-            return cursorFailure;
+            return OperationFailure.Forward<int, ScryfallPage<ScryfallCard>>(read);
         }
+
+        int offset = start.Data;
 
         List<ScryfallCard> items = [];
         foreach (string raw in acquired.Stored.Members.Skip(offset).Take(pageSize))
@@ -1661,9 +1557,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             items = items.GetRange(0, formatted.Views.Count);
         }
 
-        string? next = offset + items.Count < header.TotalCount
-            ? ScryfallCursor.Encode(scope, header.Checksum, offset + items.Count)
-            : null;
+        string? next = ScryfallPaging.NextCursor(scope, header.Checksum, offset + items.Count, header.TotalCount);
         return new OperationSuccess<ScryfallPage<ScryfallCard>>(
             new ScryfallPage<ScryfallCard>(items, header.TotalCount, next) { Formatted = formatted });
     }
@@ -1672,17 +1566,21 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     /// Maps an installed card-data printing page and its generation-bound cursor.
     /// </summary>
     private OperationResult<ScryfallPage<ScryfallCard>> MapStoredCardPage(
+        Guid oracleId,
         StoredCardDataCollection stored,
         string? cursor,
         int pageSize,
         bool includeRaw)
     {
-        string scope = $"corpus-cards:{stored.GenerationId:D}";
-        string checksum = ScryfallHash.Compute(string.Join('|', stored.Items));
-        if (!ScryfallCursor.TryRead(cursor, scope, checksum, null, out int offset, out OperationResult<ScryfallPage<ScryfallCard>> cursorFailure))
+        string scope = $"corpus-cards:{oracleId:D}";
+        string checksum = ScryfallHash.Compute($"{stored.GenerationId:D}|" + string.Join('|', stored.Items));
+        OperationResult<int> read = ScryfallPaging.ReadOffset(cursor, scope, checksum, stored.Items.Count);
+        if (read is not OperationSuccess<int> start)
         {
-            return cursorFailure;
+            return OperationFailure.Forward<int, ScryfallPage<ScryfallCard>>(read);
         }
+
+        int offset = start.Data;
 
         List<ScryfallCard> cards = [];
         foreach (string raw in stored.Items.Skip(offset).Take(pageSize))
@@ -1697,9 +1595,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                 includeRaw: includeRaw));
         }
 
-        string? next = offset + cards.Count < stored.Items.Count
-            ? ScryfallCursor.Encode(scope, checksum, offset + cards.Count)
-            : null;
+        string? next = ScryfallPaging.NextCursor(scope, checksum, offset + cards.Count, stored.Items.Count);
         return new OperationSuccess<ScryfallPage<ScryfallCard>>(
             new ScryfallPage<ScryfallCard>(cards, stored.Items.Count, next));
     }
@@ -1708,17 +1604,21 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     /// Maps an installed card-data ruling page and its generation-bound cursor.
     /// </summary>
     private static OperationResult<ScryfallPage<ScryfallRuling>> MapStoredRulingPage(
+        Guid oracleId,
         StoredCardDataCollection stored,
         string? cursor,
         int pageSize,
         bool includeRaw)
     {
-        string scope = $"corpus-rulings:{stored.GenerationId:D}";
-        string checksum = ScryfallHash.Compute(string.Join('|', stored.Items));
-        if (!ScryfallCursor.TryRead(cursor, scope, checksum, null, out int offset, out OperationResult<ScryfallPage<ScryfallRuling>> cursorFailure))
+        string scope = $"corpus-rulings:{oracleId:D}";
+        string checksum = ScryfallHash.Compute($"{stored.GenerationId:D}|" + string.Join('|', stored.Items));
+        OperationResult<int> read = ScryfallPaging.ReadOffset(cursor, scope, checksum, stored.Items.Count);
+        if (read is not OperationSuccess<int> start)
         {
-            return cursorFailure;
+            return OperationFailure.Forward<int, ScryfallPage<ScryfallRuling>>(read);
         }
+
+        int offset = start.Data;
 
         List<ScryfallRuling> rulings = [];
         foreach (string raw in stored.Items.Skip(offset).Take(pageSize))
@@ -1731,9 +1631,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                 includeRaw));
         }
 
-        string? next = offset + rulings.Count < stored.Items.Count
-            ? ScryfallCursor.Encode(scope, checksum, offset + rulings.Count)
-            : null;
+        string? next = ScryfallPaging.NextCursor(scope, checksum, offset + rulings.Count, stored.Items.Count);
         return new OperationSuccess<ScryfallPage<ScryfallRuling>>(
             new ScryfallPage<ScryfallRuling>(rulings, stored.Items.Count, next));
     }
@@ -1749,10 +1647,13 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     {
         StoredSnapshotHeader header = acquired.Stored.Header;
         string scope = SnapshotRequestScope(header);
-        if (!ScryfallCursor.TryRead(cursor, scope, header.Checksum, header.TotalCount, out int offset, out OperationResult<ScryfallPage<ScryfallRuling>> cursorFailure))
+        OperationResult<int> read = ScryfallPaging.ReadOffset(cursor, scope, header.Checksum, header.TotalCount);
+        if (read is not OperationSuccess<int> start)
         {
-            return cursorFailure;
+            return OperationFailure.Forward<int, ScryfallPage<ScryfallRuling>>(read);
         }
+
+        int offset = start.Data;
 
         List<ScryfallRuling> items = [];
         foreach (string raw in acquired.Stored.Members.Skip(offset).Take(pageSize))
@@ -1765,9 +1666,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                 includeRaw));
         }
 
-        string? next = offset + items.Count < header.TotalCount
-            ? ScryfallCursor.Encode(scope, header.Checksum, offset + items.Count)
-            : null;
+        string? next = ScryfallPaging.NextCursor(scope, header.Checksum, offset + items.Count, header.TotalCount);
         return new OperationSuccess<ScryfallPage<ScryfallRuling>>(
             new ScryfallPage<ScryfallRuling>(items, header.TotalCount, next));
     }
@@ -1783,10 +1682,13 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     {
         StoredSnapshotHeader header = acquired.Stored.Header;
         string scope = SnapshotRequestScope(header);
-        if (!ScryfallCursor.TryRead(cursor, scope, header.Checksum, header.TotalCount, out int offset, out OperationResult<ScryfallPage<ScryfallSet>> cursorFailure))
+        OperationResult<int> read = ScryfallPaging.ReadOffset(cursor, scope, header.Checksum, header.TotalCount);
+        if (read is not OperationSuccess<int> start)
         {
-            return cursorFailure;
+            return OperationFailure.Forward<int, ScryfallPage<ScryfallSet>>(read);
         }
+
+        int offset = start.Data;
 
         List<ScryfallSet> items = [];
         foreach (string raw in acquired.Stored.Members.Skip(offset).Take(pageSize))
@@ -1799,9 +1701,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
                 includeRaw));
         }
 
-        string? next = offset + items.Count < header.TotalCount
-            ? ScryfallCursor.Encode(scope, header.Checksum, offset + items.Count)
-            : null;
+        string? next = ScryfallPaging.NextCursor(scope, header.Checksum, offset + items.Count, header.TotalCount);
         return new OperationSuccess<ScryfallPage<ScryfallSet>>(
             new ScryfallPage<ScryfallSet>(items, header.TotalCount, next));
     }
@@ -1816,10 +1716,13 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
     {
         StoredSnapshotHeader header = acquired.Stored.Header;
         string scope = SnapshotRequestScope(header);
-        if (!ScryfallCursor.TryRead(cursor, scope, header.Checksum, header.TotalCount, out int offset, out OperationResult<ScryfallPage<string>> cursorFailure))
+        OperationResult<int> read = ScryfallPaging.ReadOffset(cursor, scope, header.Checksum, header.TotalCount);
+        if (read is not OperationSuccess<int> start)
         {
-            return cursorFailure;
+            return OperationFailure.Forward<int, ScryfallPage<string>>(read);
         }
+
+        int offset = start.Data;
 
         List<string> items = [];
         foreach (string raw in acquired.Stored.Members.Skip(offset).Take(pageSize))
@@ -1831,9 +1734,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
             }
         }
 
-        string? next = offset + items.Count < header.TotalCount
-            ? ScryfallCursor.Encode(scope, header.Checksum, offset + items.Count)
-            : null;
+        string? next = ScryfallPaging.NextCursor(scope, header.Checksum, offset + items.Count, header.TotalCount);
         return new OperationSuccess<ScryfallPage<string>>(
             new ScryfallPage<string>(items, header.TotalCount, next));
     }

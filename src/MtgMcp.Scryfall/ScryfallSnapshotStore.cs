@@ -207,11 +207,6 @@ internal sealed class ScryfallSnapshotStore
             retrievedBeforeUtc,
             cancellationToken)
             .ConfigureAwait(false);
-        if (!ScryfallCursor.TryRead(cursor, scope, checksum, null, out int offset, out OperationResult<ScryfallPage<ScryfallSnapshotSummary>> cursorFailure))
-        {
-            return cursorFailure;
-        }
-
         await using SqliteCommand count = connection.CreateCommand();
         count.CommandText =
             "SELECT COUNT(*) FROM request_snapshots WHERE ($operation IS NULL OR operation = $operation) " +
@@ -219,6 +214,14 @@ internal sealed class ScryfallSnapshotStore
             "AND ($before IS NULL OR retrieved_at_utc <= $before);";
         AddSnapshotFilters(count, operation, retrievedAfterUtc, retrievedBeforeUtc);
         int total = Convert.ToInt32(await count.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+        OperationResult<int> read = ScryfallPaging.ReadOffset(cursor, scope, checksum, total);
+        if (read is not OperationSuccess<int> start)
+        {
+            return OperationFailure.Forward<int, ScryfallPage<ScryfallSnapshotSummary>>(read);
+        }
+
+        int offset = start.Data;
+
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText =
             "SELECT snapshot_id, operation, request_json, retrieved_at_utc, checksum, total_count, predecessor_id " +
@@ -237,9 +240,7 @@ internal sealed class ScryfallSnapshotStore
             summaries.Add(ToSummary(header));
         }
 
-        string? next = offset + summaries.Count < total
-            ? ScryfallCursor.Encode(scope, checksum, offset + summaries.Count)
-            : null;
+        string? next = ScryfallPaging.NextCursor(scope, checksum, offset + summaries.Count, total);
         return new OperationSuccess<ScryfallPage<ScryfallSnapshotSummary>>(
             new ScryfallPage<ScryfallSnapshotSummary>(summaries, total, next));
     }
@@ -252,7 +253,7 @@ internal sealed class ScryfallSnapshotStore
         string? cursor,
         int pageSize,
         bool includeRaw,
-        Func<IReadOnlyList<ScryfallSnapshotMember>, int>? countFitting,
+        ScryfallRowFit<ScryfallSnapshotMember>? countFitting,
         CancellationToken cancellationToken)
     {
         await using SqliteConnection? connection = await database.OpenReadAsync(cancellationToken).ConfigureAwait(false);
@@ -269,10 +270,13 @@ internal sealed class ScryfallSnapshotStore
         }
 
         string scope = $"snapshot:{snapshotId:D}";
-        if (!ScryfallCursor.TryRead(cursor, scope, header.Checksum, header.TotalCount, out int offset, out OperationResult<ScryfallSnapshotPage> cursorFailure))
+        OperationResult<int> read = ScryfallPaging.ReadOffset(cursor, scope, header.Checksum, header.TotalCount);
+        if (read is not OperationSuccess<int> start)
         {
-            return cursorFailure;
+            return OperationFailure.Forward<int, ScryfallSnapshotPage>(read);
         }
+
+        int offset = start.Data;
 
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText =
@@ -305,9 +309,7 @@ internal sealed class ScryfallSnapshotStore
             items.RemoveRange(fitting, items.Count - fitting);
         }
 
-        string? next = offset + items.Count < header.TotalCount
-            ? ScryfallCursor.Encode(scope, header.Checksum, offset + items.Count)
-            : null;
+        string? next = ScryfallPaging.NextCursor(scope, header.Checksum, offset + items.Count, header.TotalCount);
         using JsonDocument requestDocument = JsonDocument.Parse(header.RequestJson);
         return new OperationSuccess<ScryfallSnapshotPage>(
             new ScryfallSnapshotPage(ToSummary(header), requestDocument.RootElement.Clone(), items, next)

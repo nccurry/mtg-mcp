@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using MtgMcp.App.Hosting;
 using MtgMcp.Core.Results;
+using MtgMcp.Scryfall;
 
 namespace MtgMcp.App.Scryfall;
 
@@ -19,7 +20,7 @@ internal static class ScryfallToolExecution
     /// Builds the measure that tells a library how many leading rows fit under the result size limit, for pages whose
     /// rows are unbounded raw provider objects.
     /// </summary>
-    internal static Func<IReadOnlyList<T>, int> CountFitting<T>()
+    internal static ScryfallRowFit<T> CountFitting<T>()
     {
         return rows => ResultSizeLimit.CountFitting([.. rows.Select(row => ResultSize.Measure(row) + 1)], HeaderBytes);
     }
@@ -35,7 +36,8 @@ internal static class ScryfallToolExecution
             return await operation().ConfigureAwait(false);
         }
         catch (Exception exception) when (
-            exception is InvalidDataException or JsonException or IOException or UnauthorizedAccessException or SqliteException)
+            exception is InvalidDataException or JsonException or IOException or UnauthorizedAccessException
+                or SqliteException)
         {
             return new OperationUnavailable(
                 "scryfall-storage-unavailable",

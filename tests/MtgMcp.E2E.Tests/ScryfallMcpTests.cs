@@ -245,7 +245,7 @@ public sealed class ScryfallMcpTests
                 new Dictionary<string, object?>
                 {
                     ["lookups"] = commanderLookups,
-                    ["freshnessPolicy"] = "refresh",
+                    ["freshnessPolicy"] = "cache-only",
                     ["cursor"] = commanderCursor,
                     ["pageSize"] = 100,
                 }).ConfigureAwait(false);

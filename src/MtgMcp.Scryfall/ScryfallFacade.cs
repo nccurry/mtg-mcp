@@ -193,7 +193,7 @@ public sealed class ScryfallService : IDisposable
         string? cursor = null,
         int pageSize = 25,
         bool includeRaw = false,
-        Func<IReadOnlyList<ScryfallTag>, int>? countFitting = null,
+        ScryfallRowFit<ScryfallTag>? countFitting = null,
         CancellationToken cancellationToken = default)
     {
         return cards.SearchTagsAsync(query, tagType, cursor, pageSize, includeRaw, countFitting, cancellationToken);
@@ -457,7 +457,7 @@ public sealed class ScryfallService : IDisposable
         string? cursor = null,
         int pageSize = 25,
         bool includeRaw = false,
-        Func<IReadOnlyList<ScryfallSnapshotMember>, int>? countFitting = null,
+        ScryfallRowFit<ScryfallSnapshotMember>? countFitting = null,
         CancellationToken cancellationToken = default)
     {
         return snapshots.GetAsync(snapshotId, cursor, pageSize, includeRaw, countFitting, cancellationToken);
@@ -787,7 +787,7 @@ internal sealed class ScryfallSnapshotOperations
         string? cursor,
         int pageSize,
         bool includeRaw,
-        Func<IReadOnlyList<ScryfallSnapshotMember>, int>? countFitting,
+        ScryfallRowFit<ScryfallSnapshotMember>? countFitting,
         CancellationToken cancellationToken)
     {
         OperationInvalidInput? failure = ValidatePageSize(pageSize, includeRaw);
