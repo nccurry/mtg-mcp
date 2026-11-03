@@ -84,7 +84,7 @@ internal sealed class ArchidektFolderOperations
                 RemoteFolderTree before = await folderTransport.ListAsync(
                     budget,
                     cancellationToken).ConfigureAwait(false);
-                string parentFolderId = ResolveProviderParent(before, request.ParentFolderId);
+                string parentFolderId = ResolveProviderParent(before, request.ParentFolderId, "parentFolderId");
                 string createdFolderId = await folderTransport.CreateAsync(
                     request with { ParentFolderId = parentFolderId },
                     budget,
@@ -124,7 +124,7 @@ internal sealed class ArchidektFolderOperations
                 string? requestedParent = null;
                 if (request.UpdateParent)
                 {
-                    requestedParent = ResolveProviderParent(before, request.ParentFolderId);
+                    requestedParent = ResolveProviderParent(before, request.ParentFolderId, "parentFolderId");
                     PreventFolderCycle(before, request.FolderId, requestedParent);
                 }
 
@@ -186,7 +186,10 @@ internal sealed class ArchidektFolderOperations
                     before.TreeFingerprint,
                     "folder-tree-changed",
                     before.TreeFingerprint);
-                string destinationFolderId = ResolveProviderParent(before, request.DestinationFolderId);
+                string destinationFolderId = ResolveProviderParent(
+                    before,
+                    request.DestinationFolderId,
+                    "destinationFolderId");
                 ArchidektFolderMoveItem[] items = DeduplicateMoveItems(request.Items);
                 int deckCount = items.Count(value => value.Kind == "deck");
                 budget.EnsureRequestBound(budget.RequestCount + (deckCount * 2) + 2);
@@ -337,18 +340,8 @@ internal sealed class ArchidektFolderOperations
         CancellationToken cancellationToken)
     {
         List<RemoteDeckSummary> deckSummaries = [];
-        string? cursor = null;
-        do
-        {
-            RemoteDeckPage page = await deckTransport.ListAsync(
-                cursor,
-                100,
-                budget,
-                cancellationToken).ConfigureAwait(false);
-            deckSummaries.AddRange(page.Items);
-            cursor = page.NextCursor;
-        }
-        while (cursor is not null);
+        RemoteDeckPage page = await deckTransport.ListAsync(budget, cancellationToken).ConfigureAwait(false);
+        deckSummaries.AddRange(page.Items);
 
         string? rootFolderId = tree.Items.Count(value => value.ParentFolderId is null) == 1
             ? tree.Items.Single(value => value.ParentFolderId is null).FolderId
@@ -394,7 +387,7 @@ internal sealed class ArchidektFolderOperations
     /// <summary>
     /// Requires an exact destination folder when one was supplied.
     /// </summary>
-    private static void RequireFolderParent(RemoteFolderTree tree, string? parentFolderId)
+    private static void RequireFolderParent(RemoteFolderTree tree, string? parentFolderId, string argument)
     {
         if (parentFolderId is not null && !tree.Items.Any(value =>
             string.Equals(value.FolderId, parentFolderId, StringComparison.Ordinal)))
@@ -402,18 +395,24 @@ internal sealed class ArchidektFolderOperations
             throw new ArchidektProviderException(
                 ArchidektFailureKind.InvalidInput,
                 "folder-not-found",
-                "The requested Archidekt folder was not found.");
+                "The requested Archidekt folder was not found.")
+            {
+                Path = argument,
+            };
         }
     }
 
     /// <summary>
     /// Resolves an omitted logical parent to the account's one explicit provider root folder.
     /// </summary>
-    private static string ResolveProviderParent(RemoteFolderTree tree, string? parentFolderId)
+    private static string ResolveProviderParent(
+        RemoteFolderTree tree,
+        string? parentFolderId,
+        string argument)
     {
         if (parentFolderId is not null)
         {
-            RequireFolderParent(tree, parentFolderId);
+            RequireFolderParent(tree, parentFolderId, argument);
             return parentFolderId;
         }
 
@@ -476,22 +475,29 @@ internal sealed class ArchidektFolderOperations
             throw new ArchidektProviderException(
                 ArchidektFailureKind.InvalidInput,
                 "move-items-required",
-                "At least one folder move item is required.");
+                "At least one folder move item is required.")
+            {
+                Path = "items",
+            };
         }
 
         Dictionary<string, ArchidektFolderMoveItem> unique = new(StringComparer.Ordinal);
-        foreach (ArchidektFolderMoveItem item in items)
+        for (int index = 0; index < items.Count; index++)
         {
+            ArchidektFolderMoveItem item = items[index];
             string kind = item.Kind.ToLowerInvariant();
             if (kind is not ("deck" or "folder"))
             {
                 throw new ArchidektProviderException(
                     ArchidektFailureKind.InvalidInput,
                     "invalid-folder-item-kind",
-                    "Folder move item kind must be deck or folder.");
+                    "Folder move item kind must be deck or folder.")
+                {
+                    Path = $"items[{index}].kind",
+                };
             }
 
-            string id = ArchidektContract.Required(item.Id, nameof(item.Id));
+            string id = ArchidektContract.Required(item.Id, $"items[{index}].id");
             string key = $"{kind}:{id}";
             ArchidektFolderMoveItem normalized = item with { Kind = kind, Id = id };
             if (unique.TryGetValue(key, out ArchidektFolderMoveItem? existing) &&
@@ -500,7 +506,10 @@ internal sealed class ArchidektFolderOperations
                 throw new ArchidektProviderException(
                     ArchidektFailureKind.InvalidInput,
                     "conflicting-folder-items",
-                    "Duplicate folder move items disagree about their current parent.");
+                    "Duplicate folder move items disagree about their current parent.")
+                {
+                    Path = "items",
+                };
             }
 
             unique[key] = normalized;
@@ -538,14 +547,17 @@ internal sealed class ArchidektFolderOperations
     /// </summary>
     internal static string NormalizeVisibility(string value)
     {
-        return ArchidektContract.Required(value, nameof(value)).ToLowerInvariant() switch
+        return ArchidektContract.Required(value, "visibility").ToLowerInvariant() switch
         {
             "private" => "private",
             "public" => "public",
             _ => throw new ArchidektProviderException(
                 ArchidektFailureKind.InvalidInput,
                 "invalid-folder-visibility",
-                "Folder visibility must be private or public."),
+                "Folder visibility must be private or public.")
+            {
+                Path = "visibility",
+            },
         };
     }
 
@@ -576,7 +588,7 @@ internal sealed class ArchidektFolderOperations
         return new ArchidektApplyResult(
             "applied",
             LocalDeckId: null,
-            LocalRevision: null,
+            Revision: null,
             remoteId,
             finalFingerprint,
             [Status(operation, "applied", "Provider absence was verified.")]);
@@ -593,7 +605,7 @@ internal sealed class ArchidektFolderOperations
         return new ArchidektApplyResult(
             "partial",
             LocalDeckId: null,
-            LocalRevision: null,
+            Revision: null,
             remoteId,
             FinalRemoteFingerprint: null,
             [Status(operation, "unknown", message)]);

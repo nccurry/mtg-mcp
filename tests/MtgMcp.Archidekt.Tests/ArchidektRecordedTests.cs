@@ -134,7 +134,7 @@ public sealed class ArchidektRecordedTests
         RemoteNamedSnapshotPage page = ArchidektSnapshotContractMapper.MapSnapshotPage(root, "22959335", entry.ReadText(), DateTimeOffset.UnixEpoch, entry.Route);
 
         Assert.Equal(root.GetArrayLength(), page.Items.Count);
-        Assert.All(page.Items, item => Assert.Equal("22959335", item.DeckId));
+        Assert.All(page.Items, item => Assert.Equal("22959335", item.RemoteDeckId));
         Assert.All(page.Items, item => Assert.NotNull(item.CreatedAtUtc));
     }
 

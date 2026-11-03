@@ -36,7 +36,14 @@ public sealed record RemoteDeckSummary(
     string? ParentFolderPath,
     int? CardCount,
     DateTimeOffset? UpdatedAtUtc,
-    string Fingerprint);
+    string Fingerprint)
+{
+    /// <summary>
+    /// Gets true when <c>Description</c> was cut to keep a page of summaries under the size limit.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? DescriptionTruncated { get; init; }
+}
 
 /// <summary>
 /// Preserves one provider category and the flags that influence board membership.
@@ -203,7 +210,7 @@ public sealed record RemoteFolderTree(
 /// </summary>
 public sealed record RemoteNamedSnapshotSummary(
     string SnapshotId,
-    string DeckId,
+    string RemoteDeckId,
     string Name,
     string? Description,
     DateTimeOffset? CreatedAtUtc,
@@ -412,7 +419,7 @@ public sealed record ArchidektConciseDifference(
 /// </summary>
 public sealed record ArchidektSyncDiff(
     Guid LocalDeckId,
-    long LocalRevision,
+    long Revision,
     string RemoteDeckId,
     string RemoteFingerprint,
     string? BaselineRemoteFingerprint,
@@ -432,7 +439,7 @@ public sealed record ArchidektSyncDiff(
 public sealed record ArchidektSyncPreview(
     string Direction,
     Guid? LocalDeckId,
-    long? LocalRevision,
+    long? Revision,
     string RemoteDeckId,
     string RemoteFingerprint,
     string ContentFingerprint,
@@ -517,7 +524,7 @@ public sealed record ArchidektOperationStatus(
 public sealed record ArchidektApplyResult(
     string Outcome,
     Guid? LocalDeckId,
-    long? LocalRevision,
+    long? Revision,
     string RemoteDeckId,
     string? FinalRemoteFingerprint,
     IReadOnlyList<ArchidektOperationStatus> Operations)
@@ -591,7 +598,7 @@ public sealed record ArchidektFolderMoveResult(
 /// Carries a guarded snapshot restore preview.
 /// </summary>
 public sealed record ArchidektSnapshotRestorePreview(
-    string DeckId,
+    string RemoteDeckId,
     string SnapshotId,
     string SnapshotChecksum,
     string SnapshotContentFingerprint,
