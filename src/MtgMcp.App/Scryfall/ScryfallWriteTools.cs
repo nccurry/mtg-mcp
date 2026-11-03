@@ -47,7 +47,7 @@ internal sealed class ScryfallWriteTools
         "complete generation, and atomically activates it. freshnessPolicy default reuses cached bulk metadata; " +
         "refresh checks Scryfall again.")]
     internal Task<OperationResult<ScryfallCorpusSyncResult>> SyncCorpusAsync(
-        [Description("Bulk metadata cache policy: default or refresh."), AllowedValues("default", "refresh")]
+        [Description("Bulk metadata cache policy: default or refresh."), SyncFreshnessPolicyValues]
         string freshnessPolicy = "default",
         [Description("Optional active generation guard checked before synchronization.")] Guid? expectedActiveGeneration = null,
         CancellationToken cancellationToken = default)
@@ -147,3 +147,11 @@ internal sealed class ScryfallWriteTools
         return ScryfallToolExecution.RunAsync(operation);
     }
 }
+
+/// <summary>
+/// Publishes the bulk metadata cache policies a card-data sync accepts as a schema enum. A sync has no cache-only
+/// value because it cannot install anything without the network.
+/// </summary>
+[AttributeUsage(AttributeTargets.Parameter | AttributeTargets.Property)]
+internal sealed class SyncFreshnessPolicyValuesAttribute()
+    : AllowedValuesAttribute("default", "refresh");
