@@ -107,7 +107,7 @@ public sealed partial class ExactStatisticsCalculator
     {
         if (request.Costs is null || request.Costs.Count == 0)
         {
-            return Invalid<CastabilityResult>("request.costs must contain at least one cost.");
+            return Invalid<CastabilityResult>("request.costs must contain at least one cost.", "request.costs");
         }
 
         if (!TryPrepareManaSources(
@@ -118,7 +118,7 @@ public sealed partial class ExactStatisticsCalculator
                 out ManaCapability[] capabilities,
                 out string? sourceError))
         {
-            return Invalid<CastabilityResult>(sourceError!);
+            return Invalid<CastabilityResult>(sourceError!, "request.sources");
         }
 
         long work = (long)request.Costs.Count * Math.Max(1, groups.Length);
@@ -127,14 +127,16 @@ public sealed partial class ExactStatisticsCalculator
             return Invalid<CastabilityResult>(
                 $"The request has {request.Costs.Count} costs and {groups.Length} source groups, which is " +
                 $"{work} units of work. The limit is {MaximumCastabilityWork} (costs times source groups). " +
-                "Check fewer cards or use fewer source groups.");
+                "Check fewer cards or use fewer source groups.",
+                "request.costs");
         }
 
         if (MembershipBucketEngine.Project(population, groups).Any(
             bucket => BitOperations.PopCount((uint)bucket.MembershipMask) > 1))
         {
             return Invalid<CastabilityResult>(
-                "request.sources must not select the same population bucket through multiple source groups.");
+                "request.sources must not select the same population bucket through multiple source groups.",
+                "request.sources");
         }
 
         List<CastabilityRow> rows = [];
@@ -195,19 +197,21 @@ public sealed partial class ExactStatisticsCalculator
             cost.Turn > MaximumCastabilityTurn)
         {
             return Invalid<CastabilityResult>(
-                $"Every cost needs a key and a turn from 1 to {MaximumCastabilityTurn}.");
+                $"Every cost needs a key and a turn from 1 to {MaximumCastabilityTurn}.",
+                "request.costs");
         }
 
         if (!TryPrepareManaRequirement(cost.Requirement, out PreparedManaRequirement? requirement, out string? error))
         {
-            return Invalid<CastabilityResult>(error!);
+            return Invalid<CastabilityResult>(error!, "request.costs");
         }
 
         int seen = OpeningHand + cost.Turn - (request.OnThePlay ? 1 : 0);
         if (seen > population.TotalCount)
         {
             return Invalid<CastabilityResult>(
-                $"The deck has {population.TotalCount} cards, fewer than the {seen} cards seen by turn {cost.Turn}.");
+                $"The deck has {population.TotalCount} cards, fewer than the {seen} cards seen by turn {cost.Turn}.",
+                "request.costs");
         }
 
         int turn = cost.Turn;

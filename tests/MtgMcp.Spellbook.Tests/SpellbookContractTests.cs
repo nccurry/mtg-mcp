@@ -84,7 +84,7 @@ public sealed class SpellbookContractTests
         Assert.Equal("pageSize", size.Path);
         SpellbookProviderException offset = Assert.Throws<SpellbookProviderException>(
             () => SpellbookContract.Page(new SpellbookPageOptions(Offset: 1_001)));
-        Assert.Equal("invalid-page-offset", offset.ReasonCode);
+        Assert.Equal("invalid-cursor", offset.ReasonCode);
         Assert.Equal("cursor", offset.Path);
         Assert.Equal("sourceQuery", Assert.Throws<SpellbookProviderException>(
             () => SpellbookContract.RequiredSourceQuery(" ", "query")).Path);

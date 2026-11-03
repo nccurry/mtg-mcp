@@ -23,7 +23,7 @@ public sealed partial class ExactStatisticsCalculator
                 out int totalQuantity,
                 out string? entryError))
         {
-            return Invalid<DeckSummaryResult>(entryError!);
+            return Invalid<DeckSummaryResult>(entryError!, "request");
         }
 
         StatisticsDeckSelectionEvidence evidence = new(
@@ -61,7 +61,7 @@ public sealed partial class ExactStatisticsCalculator
 
         if (!TryPreparePercentiles(request.Percentiles, out int[] percentiles, out string? percentileError))
         {
-            return Invalid<DeckSummaryResult>(percentileError!);
+            return Invalid<DeckSummaryResult>(percentileError!, "request.percentiles");
         }
 
         if (!TrySummarizeNumericSeries(
@@ -82,7 +82,7 @@ public sealed partial class ExactStatisticsCalculator
                     "Reduce selected entries, numeric series, or percentiles.");
             }
 
-            return Invalid<DeckSummaryResult>(numericError);
+            return Invalid<DeckSummaryResult>(numericError, "request.numericSeries");
         }
 
         if (!TryBuildZonePartition(
@@ -92,7 +92,7 @@ public sealed partial class ExactStatisticsCalculator
                 out DeckZonePartitionResult? partition,
                 out string? partitionError))
         {
-            return Invalid<DeckSummaryResult>(partitionError!);
+            return Invalid<DeckSummaryResult>(partitionError!, "request.zonePartition");
         }
 
         DeckSummaryResult result = new(

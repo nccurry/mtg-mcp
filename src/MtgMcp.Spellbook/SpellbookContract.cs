@@ -75,11 +75,6 @@ internal static class SpellbookContract
     internal const int MaximumLimit = 25;
 
     /// <summary>
-    /// Caps source offsets so one tool call stays bounded.
-    /// </summary>
-    internal const int MaximumOffset = 1_000;
-
-    /// <summary>
     /// Names the tool argument that selects the local deck a deck request is built from.
     /// </summary>
     private const string DeckPath = "deckId";
@@ -104,7 +99,8 @@ internal static class SpellbookContract
         {
             throw Invalid(
                 "invalid-source-query",
-                $"{parameterName} must contain 1 through {MaximumSourceQueryLength.ToString(CultureInfo.InvariantCulture)} characters.",
+                $"{parameterName} must contain 1 through " +
+                    $"{MaximumSourceQueryLength.ToString(CultureInfo.InvariantCulture)} characters.",
                 "sourceQuery");
         }
 
@@ -128,7 +124,8 @@ internal static class SpellbookContract
         {
             throw Invalid(
                 "invalid-variant-id",
-                $"{parameterName} must contain 1 through {MaximumVariantIdLength.ToString(CultureInfo.InvariantCulture)} characters.",
+                $"{parameterName} must contain 1 through " +
+                    $"{MaximumVariantIdLength.ToString(CultureInfo.InvariantCulture)} characters.",
                 "variantId");
         }
 
@@ -151,11 +148,12 @@ internal static class SpellbookContract
                 "pageSize");
         }
 
-        if (offset is < 0 or > MaximumOffset)
+        if (offset is < 0 or > SpellbookPageOptions.MaximumOffset)
         {
             throw Invalid(
-                "invalid-page-offset",
-                $"The cursor offset must be 0 through {MaximumOffset.ToString(CultureInfo.InvariantCulture)}.",
+                SharedReasonCodes.InvalidCursor,
+                "The cursor is not valid for this request. Pass nextCursor unchanged with the same arguments, or " +
+                "start again without a cursor.",
                 "cursor");
         }
 
@@ -179,7 +177,10 @@ internal static class SpellbookContract
         IReadOnlyList<SpellbookDeckEntry> main = NormalizeZone(value.Main, "deck.main", MaximumMainEntries);
         if (commanders.Count == 0 && main.Count == 0)
         {
-            throw Invalid("empty-deck-request", "deck must contain at least one commander or main-deck entry.", DeckPath);
+            throw Invalid(
+                "empty-deck-request",
+                "deck must contain at least one commander or main-deck entry.",
+                DeckPath);
         }
 
         return new SpellbookDeckRequest(commanders, main);
@@ -231,7 +232,9 @@ internal static class SpellbookContract
             {
                 throw Invalid(
                     "invalid-deck-entry",
-                    $"{parameterName}[{index.ToString(CultureInfo.InvariantCulture)}] must have a nonblank card name no longer than {MaximumCardNameLength.ToString(CultureInfo.InvariantCulture)} characters and a positive quantity.",
+                    $"{parameterName}[{index.ToString(CultureInfo.InvariantCulture)}] must have a nonblank card " +
+                    $"name no longer than {MaximumCardNameLength.ToString(CultureInfo.InvariantCulture)} " +
+                    "characters and a positive quantity.",
                     DeckPath);
             }
 
@@ -255,7 +258,8 @@ internal static class SpellbookContract
         {
             throw Invalid(
                 "too-many-deck-entries",
-                $"{parameterName} cannot contain more than {maximumEntries.ToString(CultureInfo.InvariantCulture)} source entries.",
+                $"{parameterName} cannot contain more than " +
+                    $"{maximumEntries.ToString(CultureInfo.InvariantCulture)} source entries.",
                 DeckPath);
         }
 

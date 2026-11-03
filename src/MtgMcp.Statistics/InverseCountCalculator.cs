@@ -23,7 +23,8 @@ public sealed partial class ExactStatisticsCalculator
                 out ExactFraction target))
         {
             return Invalid<MinimumCountResult>(
-                "request target must be a base-10 rational probability with a positive denominator.");
+                "request target must be a base-10 rational probability with a positive denominator.",
+                "request");
         }
 
         PreparedMinimumCountEvent preparation = PrepareMinimumEvent(request.Event);
@@ -61,7 +62,7 @@ public sealed partial class ExactStatisticsCalculator
                 prepared.PopulationSize,
                 out string? rangeError))
         {
-            return Invalid<MinimumCountResult>(rangeError!);
+            return Invalid<MinimumCountResult>(rangeError!, "request");
         }
 
         HypergeometricEventSnapshot eventSnapshot = new(
@@ -156,7 +157,7 @@ public sealed partial class ExactStatisticsCalculator
                 prepared.PopulationSize,
                 out string? rangeError))
         {
-            return Invalid<MinimumCountResult>(rangeError!);
+            return Invalid<MinimumCountResult>(rangeError!, "request");
         }
 
         ExactFraction? previous = null;

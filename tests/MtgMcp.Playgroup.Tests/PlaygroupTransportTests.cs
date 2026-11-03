@@ -31,7 +31,7 @@ public sealed class PlaygroupTransportTests
 
     /// <summary>Verifies every expected terminal status maps to a sanitized shared result.</summary>
     [Theory]
-    [InlineData(400, "unavailable", "provider-request-rejected")]
+    [InlineData(400, "invalid-input", "provider-request-rejected")]
     [InlineData(401, "unavailable", "provider-unauthorized")]
     [InlineData(403, "unavailable", "provider-forbidden")]
     [InlineData(404, "not-found", "provider-entity-not-found")]

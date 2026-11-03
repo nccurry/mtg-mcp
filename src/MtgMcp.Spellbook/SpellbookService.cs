@@ -369,7 +369,10 @@ public sealed class SpellbookService : IDisposable
         {
             return exception.Kind switch
             {
-                SpellbookFailureKind.InvalidInput => new OperationInvalidInput(exception.ReasonCode, exception.Message, exception.Path),
+                SpellbookFailureKind.InvalidInput => new OperationInvalidInput(
+                    exception.ReasonCode,
+                    exception.Message,
+                    exception.Path),
                 SpellbookFailureKind.NotFound => new OperationNotFound(exception.ReasonCode, exception.Message),
                 SpellbookFailureKind.Unsupported => new OperationUnsupported(exception.ReasonCode, exception.Message),
                 SpellbookFailureKind.Unavailable or SpellbookFailureKind.RateLimited => new OperationUnavailable(

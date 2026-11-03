@@ -114,6 +114,26 @@ public static class PageCursor
     }
 
     /// <summary>
+    /// Reads the position a cursor names without checking its binding, for a reader that must acquire the state the
+    /// binding names before it can build that binding. The reader must still call <see cref="Decode"/> with the
+    /// binding before it trusts the cursor. A missing cursor starts at the first row, and a cursor that is malformed,
+    /// edited, too long, or of another version or shape is invalid input at <c>cursor</c>.
+    /// </summary>
+    /// <param name="cursor">The cursor the caller passed, or null for the first page.</param>
+    /// <param name="shape">The shape of position this result pages with.</param>
+    public static OperationResult<PageCursorPosition> Peek(string? cursor, PageCursorShape shape)
+    {
+        if (cursor is null)
+        {
+            return new OperationSuccess<PageCursorPosition>(PageCursorPosition.Start(shape));
+        }
+
+        return TryRead(cursor, out PageCursorPosition position, out _) && position.Shape == shape
+            ? new OperationSuccess<PageCursorPosition>(position)
+            : Invalid();
+    }
+
+    /// <summary>
     /// Builds the failure for a cursor that cannot be used with this request.
     /// </summary>
     public static OperationInvalidInput Invalid()
