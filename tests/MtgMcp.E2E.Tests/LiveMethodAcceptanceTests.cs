@@ -755,7 +755,7 @@ public sealed class LiveMethodAcceptanceTests
                     ["pageSize"] = 2,
                 },
                 token).ConfigureAwait(false);
-            Assert.NotEmpty(prints.GetProperty("prints").GetProperty("page").GetProperty("items").EnumerateArray());
+            Assert.NotEmpty(prints.GetProperty("prints").GetProperty("items").EnumerateArray());
 
             JsonElement rulings = await CallSuccessAsync(
                 environment,
@@ -859,7 +859,7 @@ public sealed class LiveMethodAcceptanceTests
                 },
                 token).ConfigureAwait(false);
             Assert.NotEmpty(searchRest.GetProperty("page").GetProperty("items").EnumerateArray());
-            Guid searchSnapshotId = searchFirst.GetProperty("snapshot").GetProperty("snapshotId").GetGuid();
+            Guid searchSnapshotId = searchFirst.GetProperty("snapshot").GetProperty("requestSnapshotId").GetGuid();
             string searchSnapshotChecksum = searchFirst.GetProperty("snapshot").GetProperty("checksum").GetString()!;
 
             JsonElement tags = await CallSuccessAsync(
@@ -899,7 +899,7 @@ public sealed class LiveMethodAcceptanceTests
                 token).ConfigureAwait(false);
             Assert.Contains(
                 snapshots.GetProperty("snapshots").GetProperty("items").EnumerateArray(),
-                value => value.GetProperty("snapshotId").GetGuid() == searchSnapshotId);
+                value => value.GetProperty("requestSnapshotId").GetGuid() == searchSnapshotId);
             JsonElement replay = await CallSuccessAsync(
                 environment,
                 session,
@@ -907,13 +907,13 @@ public sealed class LiveMethodAcceptanceTests
                 new Dictionary<string, object?>
                 {
                     ["kind"] = "get",
-                    ["snapshotId"] = searchSnapshotId,
+                    ["requestSnapshotId"] = searchSnapshotId,
                     ["includeRaw"] = true,
                     ["pageSize"] = 25,
                 },
                 token).ConfigureAwait(false);
             JsonElement replayPage = replay.GetProperty("snapshot");
-            Assert.Equal(searchSnapshotId, replayPage.GetProperty("summary").GetProperty("snapshotId").GetGuid());
+            Assert.Equal(searchSnapshotId, replayPage.GetProperty("summary").GetProperty("requestSnapshotId").GetGuid());
             Assert.NotEmpty(replayPage.GetProperty("items").EnumerateArray());
 
             _ = await CallSuccessAsync(
@@ -922,15 +922,15 @@ public sealed class LiveMethodAcceptanceTests
                 "scryfall_request_snapshot_delete",
                 new Dictionary<string, object?>
                 {
-                    ["snapshotId"] = searchSnapshotId,
+                    ["requestSnapshotId"] = searchSnapshotId,
                     ["expectedChecksum"] = searchSnapshotChecksum,
-                    ["acknowledgeDataLoss"] = true,
+                    ["confirmation"] = "delete request-snapshot " + searchSnapshotId.ToString("D"),
                 },
                 token).ConfigureAwait(false);
             JsonElement deleted = await CallResultAsync(
                 session,
                 "scryfall_request_snapshots_get",
-                new Dictionary<string, object?> { ["kind"] = "get", ["snapshotId"] = searchSnapshotId },
+                new Dictionary<string, object?> { ["kind"] = "get", ["requestSnapshotId"] = searchSnapshotId },
                 token).ConfigureAwait(false);
             Assert.Equal("not-found", deleted.GetProperty("kind").GetString());
         }
@@ -977,7 +977,7 @@ public sealed class LiveMethodAcceptanceTests
             "scryfall_card_data_sync",
             new Dictionary<string, object?>
             {
-                ["metadataPolicy"] = "refresh",
+                ["freshnessPolicy"] = "refresh",
                 ["expectedActiveGeneration"] = expectedActive,
             },
             token).ConfigureAwait(false);
@@ -1003,7 +1003,7 @@ public sealed class LiveMethodAcceptanceTests
             {
                 ["expectedActiveGeneration"] = activeGeneration,
                 ["expectedPreviousGeneration"] = previousGeneration,
-                ["acknowledgeActivationChange"] = true,
+                ["confirmation"] = "rollback card-data " + previousGeneration.ToString("D"),
             },
             token).ConfigureAwait(false);
         JsonElement restored = await CallSuccessAsync(
@@ -1014,7 +1014,8 @@ public sealed class LiveMethodAcceptanceTests
             {
                 ["expectedActiveGeneration"] = rolledBack.GetProperty("activeGenerationId").GetGuid(),
                 ["expectedPreviousGeneration"] = rolledBack.GetProperty("previousGenerationId").GetGuid(),
-                ["acknowledgeActivationChange"] = true,
+                ["confirmation"] = "rollback card-data " + rolledBack.GetProperty("previousGenerationId").GetGuid()
+                    .ToString("D"),
             },
             token).ConfigureAwait(false);
         Assert.Equal(activeGeneration, restored.GetProperty("activeGenerationId").GetGuid());
@@ -1026,7 +1027,7 @@ public sealed class LiveMethodAcceptanceTests
             new Dictionary<string, object?>
             {
                 ["expectedActiveGeneration"] = activeGeneration,
-                ["acknowledgeDataLoss"] = true,
+                ["confirmation"] = "delete card-data " + activeGeneration.ToString("D"),
             },
             token).ConfigureAwait(false);
         JsonElement after = await CallSuccessAsync(

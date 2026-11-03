@@ -39,7 +39,7 @@ public sealed class CardListCompareTests
             result.Unmatched.Select(entry => (entry.Reason, entry.Name)).Order());
         Assert.Equal(["left", "right"], result.Sources.Select(source => source.Side));
         Assert.Equal(deck.Revision, result.Sources[1].Revision);
-        Assert.Equal(snapshot.ToString("D"), result.Sources[0].SnapshotId);
+        Assert.Equal(snapshot.ToString("D"), result.Sources[0].RequestSnapshotId);
         Assert.Null(result.Page.NextCursor);
         Assert.Equal("concise", result.ResponseFormat);
     }
@@ -321,7 +321,7 @@ public sealed class CardListCompareTests
             one,
             "union"));
 
-        Assert.Equal("deck-revision-conflict", conflict.ReasonCode);
+        Assert.Equal(SharedReasonCodes.StaleDeckRevision, conflict.ReasonCode);
         Assert.Equal(deck.Revision, conflict.Current!.Revision);
         Assert.Equal(deck.Revision, current.Sources[0].Revision);
     }
@@ -402,7 +402,7 @@ public sealed class CardListCompareTests
             pageSize: 2);
 
         OperationConflict conflict = Assert.IsType<OperationConflict>(second.Value);
-        Assert.Equal("source-changed-between-pages", conflict.ReasonCode);
+        Assert.Equal(SharedReasonCodes.CursorStale, conflict.ReasonCode);
         Assert.False(string.IsNullOrEmpty(conflict.Current!.RemoteFingerprint));
         Assert.NotEqual(first.Sources[0].StateMarker, conflict.Current.RemoteFingerprint);
     }
@@ -434,7 +434,7 @@ public sealed class CardListCompareTests
             right,
             "union",
             cursor: first.Page.NextCursor![..^2] + "AA"));
-        string past = CardListCursors.Encode(first.Fingerprint, 99, [.. first.Sources.Select(source => source.Marker)]);
+        string past = CardListCursors.Encode(first.Fingerprint, 99, first.Sources);
         OperationInvalidInput beyond = Failure(await Compare(world, left, right, "union", cursor: past));
 
         Assert.All([otherOperation, garbage, edited, beyond], failure => Assert.Equal("invalid-cursor",
@@ -500,7 +500,7 @@ public sealed class CardListCompareTests
         Assert.Equal("left.matchBy", Failure(await Compare(world, badMatch, one, "union")).Path);
         Assert.IsType<OperationNotFound>((await Compare(world, missing, one, "union")).Value);
         Assert.Equal(
-            "archidektDeckId cannot be blank.",
+            "remoteDeckId cannot be blank.",
             Failure(await Compare(world, new ArchidektDeckSourceInput(" "), one, "union")).Message);
         Assert.Equal(
             "invalid-source",
@@ -527,7 +527,7 @@ public sealed class CardListCompareTests
             one,
             "union"));
 
-        Assert.Equal(("snapshot-has-no-cards", "snapshotId"), (invalid.ReasonCode, invalid.Path));
+        Assert.Equal(("snapshot-has-no-cards", "left.requestSnapshotId"), (invalid.ReasonCode, invalid.Path));
         Assert.Contains("scryfall_search", invalid.Message, StringComparison.Ordinal);
     }
 
@@ -580,7 +580,7 @@ public sealed class CardListCompareTests
             maximumCards: 2,
             TestContext.Current.CancellationToken));
 
-        Assert.Equal(("list-too-large", "snapshotId"), (invalid.ReasonCode, invalid.Path));
+        Assert.Equal(("list-too-large", "requestSnapshotId"), (invalid.ReasonCode, invalid.Path));
     }
 
     /// <summary>

@@ -18,7 +18,7 @@ public sealed partial class ToolNamingRuleTests
     [
         "archidekt_deck_delete", "archidekt_folder_delete", "archidekt_snapshot_delete",
         "archidekt_snapshot_restore_apply", "scryfall_card_data_delete", "scryfall_request_snapshot_delete",
-        "scryfall_card_data_sync",
+        "scryfall_card_data_rollback",
     ];
 
     /// <summary>

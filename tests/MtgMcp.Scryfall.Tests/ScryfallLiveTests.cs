@@ -123,12 +123,12 @@ public sealed class ScryfallLiveTests
             ScryfallCorpusMutationResult rolledBack = RequireSuccess(await writer.RollbackCorpusAsync(
                 sync.GenerationId,
                 previous,
-                acknowledgeActivationChange: true,
+                confirmation: $"rollback card-data {previous:D}",
                 TestContext.Current.CancellationToken));
             ScryfallCorpusMutationResult restored = RequireSuccess(await writer.RollbackCorpusAsync(
                 rolledBack.ActiveGenerationId!.Value,
                 rolledBack.PreviousGenerationId!.Value,
-                acknowledgeActivationChange: true,
+                confirmation: $"rollback card-data {rolledBack.PreviousGenerationId!.Value:D}",
                 TestContext.Current.CancellationToken));
             Assert.Equal(sync.GenerationId, restored.ActiveGenerationId);
             rollbackExercised = true;

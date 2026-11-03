@@ -207,9 +207,9 @@ internal sealed class ScryfallSnapshotStore
             retrievedBeforeUtc,
             cancellationToken)
             .ConfigureAwait(false);
-        if (!ScryfallCursor.TryDecode(cursor, scope, checksum, out int offset))
+        if (!ScryfallCursor.TryRead(cursor, scope, checksum, null, out int offset, out OperationResult<ScryfallPage<ScryfallSnapshotSummary>> cursorFailure))
         {
-            return new OperationInvalidInput("invalid-cursor", "The snapshot cursor is invalid for this request.");
+            return cursorFailure;
         }
 
         await using SqliteCommand count = connection.CreateCommand();
@@ -252,6 +252,7 @@ internal sealed class ScryfallSnapshotStore
         string? cursor,
         int pageSize,
         bool includeRaw,
+        Func<IReadOnlyList<ScryfallSnapshotMember>, int>? countFitting,
         CancellationToken cancellationToken)
     {
         await using SqliteConnection? connection = await database.OpenReadAsync(cancellationToken).ConfigureAwait(false);
@@ -268,9 +269,9 @@ internal sealed class ScryfallSnapshotStore
         }
 
         string scope = $"snapshot:{snapshotId:D}";
-        if (!ScryfallCursor.TryDecode(cursor, scope, header.Checksum, out int offset) || offset > header.TotalCount)
+        if (!ScryfallCursor.TryRead(cursor, scope, header.Checksum, header.TotalCount, out int offset, out OperationResult<ScryfallSnapshotPage> cursorFailure))
         {
-            return new OperationInvalidInput("invalid-cursor", "The snapshot cursor is invalid for this request.");
+            return cursorFailure;
         }
 
         await using SqliteCommand command = connection.CreateCommand();
@@ -297,26 +298,38 @@ internal sealed class ScryfallSnapshotStore
             }
         }
 
+        int fitting = countFitting?.Invoke(items) ?? items.Count;
+        bool cut = fitting < items.Count;
+        if (cut)
+        {
+            items.RemoveRange(fitting, items.Count - fitting);
+        }
+
         string? next = offset + items.Count < header.TotalCount
             ? ScryfallCursor.Encode(scope, header.Checksum, offset + items.Count)
             : null;
         using JsonDocument requestDocument = JsonDocument.Parse(header.RequestJson);
         return new OperationSuccess<ScryfallSnapshotPage>(
-            new ScryfallSnapshotPage(ToSummary(header), requestDocument.RootElement.Clone(), items, next));
+            new ScryfallSnapshotPage(ToSummary(header), requestDocument.RootElement.Clone(), items, next)
+            {
+                Truncated = cut ? true : null,
+            });
     }
 
     /// <summary>
-    /// Deletes one snapshot only when its checksum and explicit acknowledgement match.
+    /// Deletes one snapshot only when its checksum and confirmation phrase match.
     /// </summary>
     internal async Task<OperationResult<ScryfallSnapshotDeleteResult>> DeleteAsync(
         Guid snapshotId,
         string expectedChecksum,
-        bool acknowledgeDataLoss,
+        string? confirmation,
         CancellationToken cancellationToken)
     {
-        if (!acknowledgeDataLoss)
+        OperationInvalidInput? unconfirmed = ScryfallConfirmation.Require(
+            confirmation, ScryfallConfirmation.Phrase("delete request-snapshot", snapshotId));
+        if (unconfirmed is not null)
         {
-            return new OperationInvalidInput("evidence-loss-not-acknowledged", "Snapshot deletion requires explicit acknowledgement.");
+            return unconfirmed;
         }
 
         await using SqliteConnection connection = await database.OpenWriteAsync(cancellationToken).ConfigureAwait(false);

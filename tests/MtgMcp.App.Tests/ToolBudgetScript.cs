@@ -652,29 +652,30 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
             "scryfall_request_snapshots_get",
             new JsonObject { ["kind"] = "list" });
         JsonElement first = list.Data.GetProperty("snapshots").GetProperty("items")[0];
-        string snapshotId = first.GetProperty("snapshotId").GetString()!;
+        string snapshotId = first.GetProperty("requestSnapshotId").GetString()!;
         _ = await CallAsync(
             "scryfall_request_snapshots_get",
-            new JsonObject { ["kind"] = "get", ["snapshotId"] = snapshotId });
+            new JsonObject { ["kind"] = "get", ["requestSnapshotId"] = snapshotId });
         _ = await CallAsync(
             "scryfall_request_snapshot_delete",
             new JsonObject
             {
-                ["snapshotId"] = snapshotId,
+                ["requestSnapshotId"] = snapshotId,
                 ["expectedChecksum"] = first.GetProperty("checksum").GetString(),
-                ["acknowledgeDataLoss"] = true,
+                ["confirmation"] = "delete request-snapshot " + snapshotId,
             });
         world.PublishNewerCardData();
-        _ = await CallAsync("scryfall_card_data_sync", new JsonObject { ["metadataPolicy"] = "refresh" });
+        _ = await CallAsync("scryfall_card_data_sync", new JsonObject { ["freshnessPolicy"] = "refresh" });
         ToolBudgetWorld.ToolOutcome after = await CallAsync("scryfall_card_data_status", []);
         JsonElement active = after.Data;
+        string previous = active.GetProperty("previous").GetProperty("generationId").GetString()!;
         _ = await CallAsync(
             "scryfall_card_data_rollback",
             new JsonObject
             {
                 ["expectedActiveGeneration"] = active.GetProperty("active").GetProperty("generationId").GetString(),
-                ["expectedPreviousGeneration"] = active.GetProperty("previous").GetProperty("generationId").GetString(),
-                ["acknowledgeActivationChange"] = true,
+                ["expectedPreviousGeneration"] = previous,
+                ["confirmation"] = "rollback card-data " + previous,
             });
     }
 
@@ -710,10 +711,11 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
     /// </summary>
     private static JsonObject ScryfallDeleteArguments(ToolBudgetWorld.ToolOutcome status)
     {
+        string active = status.Data.GetProperty("active").GetProperty("generationId").GetString()!;
         return new JsonObject
         {
-            ["expectedActiveGeneration"] = status.Data.GetProperty("active").GetProperty("generationId").GetString(),
-            ["acknowledgeDataLoss"] = true,
+            ["expectedActiveGeneration"] = active,
+            ["confirmation"] = "delete card-data " + active,
         };
     }
 

@@ -119,12 +119,6 @@ internal sealed class CardListCoordinator
             (match.ToString(), typeof(string)),
             (parsed.Data.Name, typeof(string)),
             (fields, typeof(IReadOnlyList<string>)));
-        OperationResult<CardListCursor> read = CardListCursors.Read(cursor, fingerprint);
-        if (read is not OperationSuccess<CardListCursor> position)
-        {
-            return OperationFailure.Forward<CardListCursor, CardListsCompareResult>(read);
-        }
-
         CardListReadOptions options = new(
             parsed.Data.IncludeRaw,
             IncludeFacts: false,
@@ -150,18 +144,19 @@ internal sealed class CardListCoordinator
             rightResolved.Data,
             setOperation,
             match);
-        if (CardListCursors.FindChange(position.Data, combined.Sources) is { } changed)
+        OperationResult<int> read = CardListCursors.Read(cursor, fingerprint, combined.Sources);
+        if (read is not OperationSuccess<int> position)
         {
-            return changed;
+            return OperationFailure.Forward<int, CardListsCompareResult>(read);
         }
 
-        if (position.Data.Offset > combined.Entries.Count)
+        if (position.Data > combined.Entries.Count)
         {
-            return new OperationInvalidInput("invalid-cursor", "The cursor is past the end of the result.", "cursor");
+            return PageCursor.Invalid();
         }
 
         List<ScryfallCard> window = [.. combined.Entries
-            .Skip(position.Data.Offset)
+            .Skip(position.Data)
             .Take(pageSize)
             .Select(entry => entry.Card.Card)];
         OperationResult<ScryfallFormattedList> formatted = await ScryfallToolExecution.RunAsync(() =>
@@ -191,9 +186,9 @@ internal sealed class CardListCoordinator
                 : null,
         };
         (int keep, int averageBytes) = CountFitting([.. shaped.Data.Views.Select(view => (object)view)], header);
-        int next = position.Data.Offset + keep;
+        int next = position.Data + keep;
         string? nextCursor = next < combined.Entries.Count
-            ? CardListCursors.Encode(fingerprint, next, [.. combined.Sources.Select(source => source.Marker)])
+            ? CardListCursors.Encode(fingerprint, next, combined.Sources)
             : null;
         bool truncated = keep < shaped.Data.Views.Count;
         return new OperationSuccess<CardListsCompareResult>(header with
@@ -205,7 +200,7 @@ internal sealed class CardListCoordinator
                 ? ScryfallCutPageHint.Build(
                     keep,
                     shaped.Data.Views.Count,
-                    position.Data.Offset,
+                    position.Data,
                     combined.Entries.Count,
                     averageBytes)
                 : null,
@@ -225,23 +220,25 @@ internal sealed class CardListCoordinator
         IReadOnlyList<string>? metrics,
         CardListRowsInput? rows,
         string? cursor,
+        int? pageSize,
         CancellationToken cancellationToken)
     {
-        int rowSize = rows?.PageSize ?? DefaultPageSize;
+        int rowSize = pageSize ?? DefaultPageSize;
         if (rowSize < 1 || rowSize > MaximumPageSize)
         {
             return new OperationInvalidInput(
                 "invalid-page-size",
-                $"rows.pageSize must be from 1 through {MaximumPageSize}.",
-                "rows.pageSize");
+                $"pageSize must be from 1 through {MaximumPageSize}.",
+                "pageSize");
         }
 
-        if (cursor is not null && rows is null)
+        if (rows is null && (cursor is not null || pageSize is not null))
         {
+            string name = cursor is not null ? "cursor" : "pageSize";
             return new OperationInvalidInput(
                 "cursor-requires-rows",
-                "A cursor pages the rows, so it needs the rows object of the first request.",
-                "cursor");
+                $"{name} pages the rows, so it needs the rows object of the first request.",
+                name);
         }
 
         int idCount = 0;
@@ -258,12 +255,6 @@ internal sealed class CardListCoordinator
             (metrics, typeof(IReadOnlyList<string>)),
             (rows?.Fields, typeof(IReadOnlyList<string>)),
             (rows?.SortBy, typeof(IReadOnlyList<CardListSortInput>)));
-        OperationResult<CardListCursor> read = CardListCursors.Read(cursor, fingerprint);
-        if (read is not OperationSuccess<CardListCursor> position)
-        {
-            return OperationFailure.Forward<CardListCursor, CardListQueryResult>(read);
-        }
-
         OperationResult<ResolvedCardList> resolved = await resolver.ResolveAsync(
             source,
             "source",
@@ -277,9 +268,10 @@ internal sealed class CardListCoordinator
             return OperationFailure.Forward<ResolvedCardList, CardListQueryResult>(resolved);
         }
 
-        if (CardListCursors.FindChange(position.Data, list.Data.Sources) is { } changed)
+        OperationResult<int> read = CardListCursors.Read(cursor, fingerprint, list.Data.Sources);
+        if (read is not OperationSuccess<int> position)
         {
-            return changed;
+            return OperationFailure.Forward<int, CardListQueryResult>(read);
         }
 
         if (list.Data.HasDeckFields && !IsLocalDeck(list.Data.Sources) &&
@@ -301,7 +293,7 @@ internal sealed class CardListCoordinator
                 : new ScryfallListRowOptions(
                     rows.Fields ?? [],
                     [.. (rows.SortBy ?? []).Select(sort => new ScryfallListSort(sort.Field, sort.Direction))],
-                    position.Data.Offset,
+                    position.Data,
                     rowSize),
             list.Data.HasDeckFields);
         List<ScryfallListEntry> entries =
@@ -316,15 +308,20 @@ internal sealed class CardListCoordinator
                 entry.EntryId)),
         ];
         OperationResult<ScryfallListQueryResult> run = ScryfallListQuery.Run(entries, request);
+        if (run is OperationInvalidInput { Path: null } unplaced)
+        {
+            return new OperationInvalidInput(unplaced.ReasonCode, unplaced.Message, "source");
+        }
+
         if (run is not OperationSuccess<ScryfallListQueryResult> answer)
         {
             return OperationFailure.Forward<ScryfallListQueryResult, CardListQueryResult>(run);
         }
 
         // A cursor past the end of the rows is refused here exactly as card_lists_compare refuses it.
-        if (answer.Data.Rows is { } rowsRead && position.Data.Offset > rowsRead.TotalRows)
+        if (answer.Data.Rows is { } rowsRead && position.Data > rowsRead.TotalRows)
         {
-            return new OperationInvalidInput("invalid-cursor", "The cursor is past the end of the result.", "cursor");
+            return PageCursor.Invalid();
         }
 
         return new OperationSuccess<CardListQueryResult>(Build(list.Data, answer.Data, fingerprint, position.Data));
@@ -337,7 +334,7 @@ internal sealed class CardListCoordinator
         ResolvedCardList list,
         ScryfallListQueryResult answer,
         string fingerprint,
-        CardListCursor position)
+        int position)
     {
         List<CardListUnmatched> unmatched = [.. list.Unmatched.Take(MaximumUnmatchedListed)];
         List<string> limits = [.. answer.Limits];
@@ -365,26 +362,26 @@ internal sealed class CardListCoordinator
         List<ScryfallOrderedObject> groups = [.. answer.Groups.Take(keptGroups)];
         bool truncated = keptGroups < answer.Groups.Count;
         CardListRowsPage? rows = null;
+        string? nextCursor = null;
         if (answer.Rows is { } read)
         {
             int fixedBytes = headerBytes + groupSizes.Take(keptGroups).Sum();
             List<int> rowSizes = [.. read.Items.Select(item => ResultSize.Measure(item) + 1)];
             int keptRows = ResultSizeLimit.CountFitting(rowSizes, fixedBytes);
             truncated |= keptRows < read.Items.Count;
-            int next = position.Offset + keptRows;
-            string? nextCursor = next < read.TotalRows
-                ? CardListCursors.Encode(fingerprint, next, [.. list.Sources.Select(source => source.Marker)])
-                : null;
-            rows = new CardListRowsPage([.. read.Items.Take(keptRows)], read.TotalRows, nextCursor);
+            int next = position + keptRows;
+            nextCursor = next < read.TotalRows ? CardListCursors.Encode(fingerprint, next, list.Sources) : null;
+            rows = new CardListRowsPage([.. read.Items.Take(keptRows)], read.TotalRows);
         }
 
         return header with
         {
             Groups = groups,
             Rows = rows,
+            NextCursor = nextCursor,
             Truncated = truncated ? true : null,
             Narrow = truncated
-                ? rows is { NextCursor: not null } && keptGroups == answer.Groups.Count
+                ? nextCursor is not null && keptGroups == answer.Groups.Count
                     ? ScryfallFormattedResponse.NarrowHint
                     : GroupNarrowHint
                 : null,

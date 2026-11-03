@@ -293,7 +293,7 @@ public sealed class ScryfallServiceTests
             null,
             1,
             true,
-            TestContext.Current.CancellationToken));
+            cancellationToken: TestContext.Current.CancellationToken));
         ScryfallSnapshotMember rawMember = Assert.Single(replay.Items);
         Assert.Equal(0, rawMember.Ordinal);
         Assert.NotEmpty(rawMember.Checksum);
@@ -304,7 +304,7 @@ public sealed class ScryfallServiceTests
             null,
             1,
             false,
-            TestContext.Current.CancellationToken));
+            cancellationToken: TestContext.Current.CancellationToken));
         ScryfallSnapshotMember compactMember = Assert.Single(compactReplay.Items);
         Assert.Equal(rawMember.Ordinal, compactMember.Ordinal);
         Assert.Equal(rawMember.Checksum, compactMember.Checksum);
@@ -316,17 +316,17 @@ public sealed class ScryfallServiceTests
         Assert.IsType<OperationInvalidInput>((await service.DeleteSnapshotAsync(
             summary.SnapshotId,
             summary.Checksum,
-            false,
+            null,
             TestContext.Current.CancellationToken)).Value);
         Assert.IsType<OperationConflict>((await service.DeleteSnapshotAsync(
             summary.SnapshotId,
             "wrong",
-            true,
+            $"delete request-snapshot {summary.SnapshotId:D}",
             TestContext.Current.CancellationToken)).Value);
         ScryfallSnapshotDeleteResult deleted = RequireSuccess(await service.DeleteSnapshotAsync(
             summary.SnapshotId,
             summary.Checksum,
-            true,
+            $"delete request-snapshot {summary.SnapshotId:D}",
             TestContext.Current.CancellationToken));
         Assert.Equal(summary.SnapshotId, deleted.SnapshotId);
         Assert.Empty(RequireSuccess(await service.ListSnapshotsAsync(
@@ -478,7 +478,7 @@ public sealed class ScryfallServiceTests
         _ = RequireSuccess(await service.DeleteSnapshotAsync(
             original.Snapshot.SnapshotId,
             original.Snapshot.Checksum,
-            true,
+            $"delete request-snapshot {original.Snapshot.SnapshotId:D}",
             TestContext.Current.CancellationToken));
         ScryfallSnapshotSummary retained = Assert.Single(RequireSuccess(await service.ListSnapshotsAsync(
             "search",
@@ -520,32 +520,32 @@ public sealed class ScryfallServiceTests
         Assert.IsType<OperationInvalidInput>((await service.RollbackCorpusAsync(
             third.GenerationId,
             second.GenerationId,
-            false,
+            null,
             TestContext.Current.CancellationToken)).Value);
         Assert.IsType<OperationConflict>((await service.RollbackCorpusAsync(
             Guid.NewGuid(),
             second.GenerationId,
-            true,
+            $"rollback card-data {second.GenerationId:D}",
             TestContext.Current.CancellationToken)).Value);
         ScryfallCorpusMutationResult rollback = RequireSuccess(await service.RollbackCorpusAsync(
             third.GenerationId,
             second.GenerationId,
-            true,
+            $"rollback card-data {second.GenerationId:D}",
             TestContext.Current.CancellationToken));
         Assert.Equal(second.GenerationId, rollback.ActiveGenerationId);
         Assert.Equal(third.GenerationId, rollback.PreviousGenerationId);
 
         Assert.IsType<OperationInvalidInput>((await service.DeleteCorpusAsync(
             second.GenerationId,
-            false,
+            null,
             TestContext.Current.CancellationToken)).Value);
         Assert.IsType<OperationConflict>((await service.DeleteCorpusAsync(
             third.GenerationId,
-            true,
+            $"delete card-data {third.GenerationId:D}",
             TestContext.Current.CancellationToken)).Value);
         ScryfallCorpusMutationResult deleted = RequireSuccess(await service.DeleteCorpusAsync(
             second.GenerationId,
-            true,
+            $"delete card-data {second.GenerationId:D}",
             TestContext.Current.CancellationToken));
         Assert.Null(deleted.ActiveGenerationId);
         Assert.Null(deleted.PreviousGenerationId);
@@ -1176,7 +1176,7 @@ public sealed class ScryfallServiceTests
         _ = RequireSuccess(await service.DeleteSnapshotAsync(
             first.Snapshot!.SnapshotId,
             first.Snapshot.Checksum,
-            true,
+            $"delete request-snapshot {first.Snapshot!.SnapshotId:D}",
             TestContext.Current.CancellationToken));
         OperationUnavailable deletedEvidence = Assert.IsType<OperationUnavailable>((await service.ReadCollectionAsync(
             lookups,
@@ -1238,7 +1238,7 @@ public sealed class ScryfallServiceTests
         _ = RequireSuccess(await service.DeleteSnapshotAsync(
             first.Binding.Snapshot!.SnapshotId,
             first.Binding.Snapshot.Checksum,
-            true,
+            $"delete request-snapshot {first.Binding.Snapshot!.SnapshotId:D}",
             TestContext.Current.CancellationToken));
         OperationUnavailable pruned = Assert.IsType<OperationUnavailable>((await service.ReplayExactCollectionAsync(
             lookups,

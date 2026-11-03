@@ -29,7 +29,7 @@ internal static class CardListToolExamples
     /// Compares a saved search with a deck: the search results that are not in the deck.
     /// </summary>
     internal const string CompareMinimal =
-        "{\"left\":{\"kind\":\"scryfall-snapshot\",\"snapshotId\":\"" + PlaceholderSnapshotId + "\"}," +
+        "{\"left\":{\"kind\":\"scryfall-snapshot\",\"requestSnapshotId\":\"" + PlaceholderSnapshotId + "\"}," +
         "\"right\":{\"kind\":\"deck\",\"deckId\":\"" + DeckToolExamples.PlaceholderDeckId + "\"}," +
         "\"operation\":\"difference\"}";
 
@@ -38,7 +38,7 @@ internal static class CardListToolExamples
     /// </summary>
     internal const string CompareNested =
         "{\"left\":{\"kind\":\"compare\"," +
-        "\"left\":{\"kind\":\"scryfall-snapshot\",\"snapshotId\":\"" + PlaceholderSnapshotId + "\"}," +
+        "\"left\":{\"kind\":\"scryfall-snapshot\",\"requestSnapshotId\":\"" + PlaceholderSnapshotId + "\"}," +
         "\"right\":{\"kind\":\"cards\",\"ids\":[\"" + PlaceholderCardId + "\"]}," +
         "\"operation\":\"union\"}," +
         "\"right\":{\"kind\":\"deck\",\"deckId\":\"" + DeckToolExamples.PlaceholderDeckId + "\"}," +
@@ -48,7 +48,7 @@ internal static class CardListToolExamples
     /// Uses every option of the comparison.
     /// </summary>
     internal const string CompareFull =
-        "{\"left\":{\"kind\":\"scryfall-snapshot\",\"snapshotId\":\"" + PlaceholderSnapshotId + "\"}," +
+        "{\"left\":{\"kind\":\"scryfall-snapshot\",\"requestSnapshotId\":\"" + PlaceholderSnapshotId + "\"}," +
         "\"right\":{\"kind\":\"deck\",\"deckId\":\"" + DeckToolExamples.PlaceholderDeckId +
         "\",\"expectedRevision\":" + DeckToolExamples.PlaceholderRevision + ",\"zones\":[\"main\",\"commander\"]}," +
         "\"operation\":\"difference\",\"matchBy\":\"oracle\",\"responseFormat\":\"concise\"," +
@@ -79,7 +79,7 @@ internal static class CardListToolExamples
         "\"groupBy\":[\"manaValue\"]," +
         "\"metrics\":[\"quantity\",\"cards\",\"sum:priceUsd\",\"pips\"]," +
         "\"rows\":{\"fields\":[\"name\",\"manaValue\",\"priceUsd\"]," +
-        "\"sortBy\":[{\"field\":\"priceUsd\",\"direction\":\"desc\"}],\"pageSize\":25}}";
+        "\"sortBy\":[{\"field\":\"priceUsd\",\"direction\":\"desc\"}]},\"pageSize\":25}";
 }
 
 /// <summary>
@@ -204,7 +204,7 @@ internal sealed class CardListTools
         "includes each color; whether a land enters tapped is not modeled). Sums are exact decimal strings and " +
         "cards with no value are counted in missingValues. A group whose key is JSON null holds the cards with no " +
         "value for the group field; it is not the same as a real value written none. rows adds a sorted, paged " +
-        "table of cards. Fields: name, manaValue, " +
+        "table of cards, paged with pageSize, cursor, and nextCursor. Fields: name, manaValue, " +
         "typeLine, cardTypes, subtypes, supertypes, colors, colorIdentity, keywords, tags, rarity, set, power, " +
         "toughness, loyalty, priceUsd and other price columns, cheapestPriceUsd, edhrecRank (" +
         ScryfallReadTools.EdhrecRankMeaning + "), gameChanger, " +
@@ -228,10 +228,14 @@ internal sealed class CardListTools
         IReadOnlyList<string>? metrics = null,
         [Description("Optional per-card rows with chosen fields, sorting, and paging.")]
         CardListRowsInput? rows = null,
-        [Description("Opaque cursor from rows.nextCursor of a previous call with the same request.")]
+        [Description("Opaque cursor from nextCursor of a previous call with the same request.")]
         string? cursor = null,
+        [Description(
+            "Only with rows: most rows per page, from 1 through 100; default 25. A page may hold fewer when it " +
+            "reaches the result size limit.")]
+        int? pageSize = null,
         CancellationToken cancellationToken = default)
     {
-        return coordinator.QueryAsync(source, where, groupBy, metrics, rows, cursor, cancellationToken);
+        return coordinator.QueryAsync(source, where, groupBy, metrics, rows, cursor, pageSize, cancellationToken);
     }
 }

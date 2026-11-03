@@ -54,9 +54,7 @@ internal sealed record CardListRowsInput(
     IReadOnlyList<string>? Fields = null,
     [property: Description("Sort keys, applied in order. Default: name, then Oracle ID. Cards with no value come " +
         "last.")]
-    IReadOnlyList<CardListSortInput>? SortBy = null,
-    [property: Description("Rows per page, from 1 through 100. The default is 25.")]
-    int? PageSize = null);
+    IReadOnlyList<CardListSortInput>? SortBy = null);
 
 /// <summary>
 /// Counts the distinct cards on each side and in the result of a comparison.
@@ -92,8 +90,7 @@ internal sealed record CardListsCompareResult(
 /// </summary>
 internal sealed record CardListRowsPage(
     [property: JsonPropertyName("items")] IReadOnlyList<ScryfallOrderedObject> Items,
-    [property: JsonPropertyName("totalRows")] int TotalRows,
-    [property: JsonPropertyName("nextCursor")] string? NextCursor);
+    [property: JsonPropertyName("totalRows")] int TotalRows);
 
 /// <summary>
 /// Returns the answer of one list query: grouped totals, optional rows, and what the numbers do not cover.
@@ -115,6 +112,12 @@ internal sealed record CardListQueryResult(
     [JsonPropertyName("unmatchedOmitted")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? UnmatchedOmitted { get; init; }
+
+    /// <summary>
+    /// Gets the cursor of the next page of rows, or null on the last page and when no rows were asked for.
+    /// </summary>
+    [JsonPropertyName("nextCursor")]
+    public string? NextCursor { get; init; }
 
     /// <summary>
     /// Gets true when groups were left out to keep the result under the size limit.

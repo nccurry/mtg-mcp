@@ -291,7 +291,7 @@ public sealed class CardListAndRuleToolsMcpTests
             "card_lists_compare",
             new Dictionary<string, object?>
             {
-                ["left"] = new { kind = "archidekt-deck", archidektDeckId = "42" },
+                ["left"] = new { kind = "archidekt-deck", remoteDeckId = "42" },
                 ["right"] = cards,
                 ["operation"] = "union",
             }).ConfigureAwait(false);

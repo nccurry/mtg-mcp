@@ -40,7 +40,7 @@ public sealed record SourceFactDescriptor
     /// <summary>
     /// Gets the optional immutable snapshot identifier.
     /// </summary>
-    [JsonPropertyName("snapshotId")]
+    [JsonPropertyName("requestSnapshotId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SnapshotId { get; }
 }
@@ -94,7 +94,7 @@ public sealed record SourceEvidenceDescriptor
     /// <summary>
     /// Gets the optional immutable snapshot identifier.
     /// </summary>
-    [JsonPropertyName("snapshotId")]
+    [JsonPropertyName("requestSnapshotId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SnapshotId { get; }
 }

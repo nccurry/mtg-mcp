@@ -22,8 +22,8 @@ internal abstract record CardListSourceInput;
 /// Reads every card of one saved Scryfall search.
 /// </summary>
 internal sealed record ScryfallSnapshotSourceInput(
-    [property: Description("The snapshotId that scryfall_search returned for the saved search.")]
-    Guid SnapshotId)
+    [property: Description("The requestSnapshotId that scryfall_search returned for the saved search.")]
+    Guid RequestSnapshotId)
     : CardListSourceInput;
 
 /// <summary>
@@ -66,7 +66,7 @@ internal sealed record DeckBackupSourceInput(
 /// </summary>
 internal sealed record ArchidektDeckSourceInput(
     [property: Description("Exact Archidekt deck identifier, as text.")]
-    string ArchidektDeckId,
+    string RemoteDeckId,
     [property: Description("Optional zone names to read. Omit to read every zone.")]
     IReadOnlyList<string>? Zones = null)
     : CardListSourceInput;
@@ -76,7 +76,7 @@ internal sealed record ArchidektDeckSourceInput(
 /// </summary>
 internal sealed record ArchidektSnapshotSourceInput(
     [property: Description("Exact Archidekt deck identifier, as text.")]
-    string ArchidektDeckId,
+    string RemoteDeckId,
     [property: Description("Exact Archidekt snapshot identifier, as text.")]
     string SnapshotId,
     [property: Description("Optional zone names to read. Omit to read every zone.")]

@@ -30,6 +30,8 @@ public sealed class ToolAllowedValuesTests
             {
                 Type? expected = parameter.Name switch
                 {
+                    "freshnessPolicy" when toolName == "scryfall_card_data_sync" =>
+                        typeof(SyncFreshnessPolicyValuesAttribute),
                     "freshnessPolicy" => typeof(FreshnessPolicyValuesAttribute),
                     "formatId" => typeof(InterchangeFormatValuesAttribute),
                     "tagType" => typeof(TagKindValuesAttribute),
@@ -126,11 +128,12 @@ public sealed class ToolAllowedValuesTests
 
         OperationInvalidInput control = Assert.IsType<OperationInvalidInput>(
             (await SearchAsync(service, "cards", "bogus", "auto", "cache-only", token)).Value);
-        Assert.Equal("invalid-scryfall-search-options", control.ReasonCode);
+        Assert.Equal("invalid-scryfall-order", control.ReasonCode);
+        Assert.Equal("order", control.Path);
     }
 
     /// <summary>
-    /// Verifies the corpus sync accepts every published metadata policy.
+    /// Verifies the corpus sync accepts every published freshness policy.
     /// </summary>
     [Fact]
     public async Task ScryfallCorpusSync_EveryPublishedMetadataPolicy_IsNotRejected()
@@ -138,7 +141,7 @@ public sealed class ToolAllowedValuesTests
         using TemporaryDirectory temporary = new();
         using ScryfallService service = CreateService(temporary, allowLocalWrites: true);
 
-        foreach (string policy in Published(typeof(ScryfallWriteTools), "SyncCorpusAsync", "metadataPolicy"))
+        foreach (string policy in Published(typeof(ScryfallWriteTools), "SyncCorpusAsync", "freshnessPolicy"))
         {
             AssertNotRejected(await service.SyncCorpusAsync(policy, null, TestContext.Current.CancellationToken));
         }
@@ -188,7 +191,9 @@ public sealed class ToolAllowedValuesTests
     /// <summary>
     /// Names the failures that mean a supplied choice itself was invalid.
     /// </summary>
-    private static readonly string[] RejectionCodes = ["invalid-scryfall-search-options", "invalid-freshness-policy"];
+    private static readonly string[] RejectionCodes =
+    ["invalid-scryfall-unique", "invalid-scryfall-order", "invalid-scryfall-direction", "invalid-freshness-policy",
+    ];
 
     /// <summary>
     /// Runs one search with the given choices and no other options.
