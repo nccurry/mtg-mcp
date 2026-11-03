@@ -41,27 +41,13 @@ internal static partial class ToolCallPolicy
     internal static JsonSerializerOptions SerializerOptions { get; } = CreateSerializerOptions();
 
     /// <summary>
-    /// Wraps the tool call pipeline so failures carry the MCP error flag and binding failures name their path.
+    /// Wraps the tool call pipeline: checks the arguments before the call, diagnoses binding failures after it, and
+    /// marks failed results with the MCP error flag.
     /// </summary>
     internal static McpRequestHandler<CallToolRequestParams, CallToolResult> Filter(
         McpRequestHandler<CallToolRequestParams, CallToolResult> next)
     {
         ArgumentNullException.ThrowIfNull(next);
-        McpRequestHandler<CallToolRequestParams, CallToolResult> bound = BindAndMark(next);
-        return async (context, cancellationToken) =>
-        {
-            CallToolResult result = await bound(context, cancellationToken).ConfigureAwait(false);
-            context.Services?.GetService<InvalidInputPathAudit>()?.Observe(context.Params?.Name ?? string.Empty, result);
-            return result;
-        };
-    }
-
-    /// <summary>
-    /// Checks the arguments before the call, diagnoses binding failures after it, and marks failed results.
-    /// </summary>
-    private static McpRequestHandler<CallToolRequestParams, CallToolResult> BindAndMark(
-        McpRequestHandler<CallToolRequestParams, CallToolResult> next)
-    {
         return async (context, cancellationToken) =>
         {
             // JSON Schema "integer" admits 328.0; the serializer does not, so write whole numbers as integers first.

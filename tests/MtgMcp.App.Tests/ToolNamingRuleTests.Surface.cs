@@ -16,14 +16,15 @@ public sealed partial class ToolNamingRuleTests
     private static readonly string[] ConfirmedOperations =
     [
         "archidekt_deck_delete", "archidekt_folder_delete", "archidekt_snapshot_delete",
-        "archidekt_snapshot_restore_apply", "scryfall_card_data_delete", "scryfall_request_snapshot_delete",
+        "archidekt_snapshot_restore_apply", "archidekt_pull_apply", "local_deck_delete", "local_deck_backup_delete",
+        "local_deck_backup_restore", "scryfall_card_data_delete", "scryfall_request_snapshot_delete",
         "scryfall_card_data_rollback",
     ];
 
     /// <summary>
-    /// Names the one document-shaped argument each write tool may keep as an object or a list of objects, by tool. The import options and the
-    /// category rule source are documents the apply repeats from its preview.
-    /// Every statistics tool takes request objects and no write tool of that family exists.
+    /// Names the one document-shaped argument each write tool may keep as an object or a list of objects, by tool.
+    /// The import <c>options</c> and the category rule <c>source</c> are documents the apply repeats from its
+    /// preview. Statistics tools take request objects and are skipped, since no write tool of that family exists.
     /// </summary>
     private static readonly Dictionary<string, string> KeptObjectArguments = new(StringComparer.Ordinal)
     {
@@ -36,8 +37,9 @@ public sealed partial class ToolNamingRuleTests
 
     /// <summary>
     /// Verifies a write tool takes no object argument except the deck graph of <c>local_deck_create</c>, the
-    /// <c>changes</c> of <c>local_deck_apply_changes</c>, the <c>items</c> of <c>archidekt_folder_move_items</c>, the
-    /// <c>events</c> of the Playgroup event batch, and statistics requests.
+    /// <c>changes</c> of <c>local_deck_apply_changes</c>, the import <c>options</c>, the category rule
+    /// <c>source</c>, the <c>items</c> of <c>archidekt_folder_move_items</c>, the <c>events</c> of the Playgroup event
+    /// batch, and statistics requests.
     /// </summary>
     [Fact]
     public void WriteTools_TakeNoObjectArgumentOutsideTheAllowlist()
@@ -47,14 +49,16 @@ public sealed partial class ToolNamingRuleTests
         foreach (ModelContextProtocol.Server.McpServerTool tool in registered.Tools)
         {
             string name = tool.ProtocolTool.Name;
-            if (tool.ProtocolTool.Annotations?.ReadOnlyHint != false || name.StartsWith("stats_", StringComparison.Ordinal))
+            if (tool.ProtocolTool.Annotations?.ReadOnlyHint != false ||
+                name.StartsWith("stats_", StringComparison.Ordinal))
             {
                 continue;
             }
 
             MethodInfo method = registered.Catalog.Methods[name];
             int graphs = 0;
-            foreach (ParameterInfo parameter in ArgumentParameters(method).Where(value => IsObject(value.ParameterType)))
+            foreach (ParameterInfo parameter in ArgumentParameters(method)
+                .Where(value => IsObject(value.ParameterType)))
             {
                 graphs++;
                 bool kept = name == "local_deck_create" ||
@@ -189,6 +193,62 @@ public sealed partial class ToolNamingRuleTests
         }
 
         Assert.True(offenders.Count == 0, "Fingerprint arguments not named previewFingerprint:\n" +
+            string.Join("\n", offenders));
+    }
+
+    /// <summary>
+    /// Names the result fields that hold a fingerprint of something other than a preview, so each keeps a name that
+    /// says what it fingerprints.
+    /// </summary>
+    private static readonly string[] NonPreviewFingerprintFields =
+    [
+        "previewFingerprint", "remoteFingerprint", "treeFingerprint", "snapshotContentFingerprint",
+        "databaseFingerprint", "contentFingerprint", "finalRemoteFingerprint", "finalTreeFingerprint",
+        "baselineRemoteFingerprint", "baselineFingerprint", "currentDatabaseFingerprint",
+    ];
+
+    /// <summary>
+    /// Names the tools whose result may hold a bare <c>fingerprint</c>, with what it fingerprints. None of them is a
+    /// preview fingerprint.
+    /// </summary>
+    private static readonly Dictionary<string, string> BareFingerprintTools = new(StringComparer.Ordinal)
+    {
+        ["card_list_query"] = "identifies the analyzed card list",
+        ["card_lists_compare"] = "identifies the analyzed card lists",
+        ["archidekt_deck_list"] = "fingerprints the remote deck list that was read",
+        ["archidekt_folders_get"] = "fingerprints the remote folder tree that was read",
+        ["archidekt_folder_create"] = "fingerprints the remote folder tree after the change",
+        ["archidekt_folder_update"] = "fingerprints the remote folder tree after the change",
+        ["local_deck_backup_create"] = "fingerprints the backed-up database file",
+        ["local_deck_backup_list"] = "fingerprints the backup database files",
+        ["stats_simulate"] = "fingerprints the sampled request and result",
+    };
+
+    /// <summary>
+    /// Verifies a result field that holds a fingerprint is named <c>previewFingerprint</c> or one of the named guards
+    /// of other state, except the bare <c>fingerprint</c> of the tools named with their reason.
+    /// </summary>
+    [Fact]
+    public void FingerprintResultFields_AreNamedByWhatTheyFingerprint()
+    {
+        using RegisteredToolSet registered = new(OperationMode.Remote);
+        List<string> offenders = [];
+        bool sawPreviewFingerprint = false;
+        foreach ((string tool, MethodInfo method) in SurfaceConsistencyTests.Ordered(registered))
+        {
+            HashSet<string> names = [];
+            SurfaceConsistencyTests.CollectNames(SurfaceConsistencyTests.DataType(method), [], names);
+            sawPreviewFingerprint |= names.Contains("previewFingerprint");
+            offenders.AddRange(names
+                .Where(name => name.Contains("ingerprint", StringComparison.OrdinalIgnoreCase) &&
+                    !NonPreviewFingerprintFields.Contains(name) &&
+                    !(name == "fingerprint" && BareFingerprintTools.ContainsKey(tool)))
+                .Order(StringComparer.Ordinal)
+                .Select(name => $"{tool}: {name}"));
+        }
+
+        Assert.True(sawPreviewFingerprint, "No result named previewFingerprint was found.");
+        Assert.True(offenders.Count == 0, "Result fingerprint fields with an unexpected name:\n" +
             string.Join("\n", offenders));
     }
 
