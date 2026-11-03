@@ -39,10 +39,10 @@ public sealed class ArchidektDeckReadTests
 
     /// <summary>
     /// Verifies the commander and main zones of the deck fit one concise page, whose entries hold only the concise
-    /// fields, and that the default is concise.
+    /// fields.
     /// </summary>
     [Fact]
-    public async Task ConciseDefault_CommanderAndMain_FitOnePage()
+    public async Task Concise_CommanderAndMain_FitOnePage()
     {
         using ReadWorld world = new(CreateRealisticDeck());
         CancellationToken token = TestContext.Current.CancellationToken;
@@ -50,35 +50,36 @@ public sealed class ArchidektDeckReadTests
         OperationResult<ArchidektDeckView> result = await world.Tools.GetDeckAsync(
             "42",
             zones: ["commander", "main"],
+            responseFormat: "concise",
             cancellationToken: token);
 
         ArchidektDeckView page = Success(result);
-        Assert.Null(page.NextOffset);
+        Assert.Null(page.NextCursor);
         Assert.Null(page.Truncated);
         Assert.Equal(100, page.ShownEntryCount);
         Assert.Equal(100, page.Entries.Sum(value => value.Quantity));
-        Assert.DoesNotContain(page.Entries, value => value is ArchidektFullDeckEntryView);
+        Assert.DoesNotContain(page.Entries, value => value is ArchidektStandardDeckEntryView);
         Assert.All(page.Entries, value => Assert.True(value.InDeck));
         Assert.True(JsonLength(result) < MaximumResultCharacters);
         Assert.Equal(ConciseFields, FieldNames(result, "entries"));
     }
 
     /// <summary>
-    /// Verifies the full and standard formats hold every 0.13.0 entry field plus inDeck, the concise format holds the
-    /// concise fields, and an unknown format is refused.
+    /// Verifies the standard format, which is the default, holds every entry field plus inDeck, and the concise
+    /// format holds the concise fields.
     /// </summary>
     [Theory]
-    [InlineData("full", true)]
+    [InlineData(null, true)]
     [InlineData("standard", true)]
     [InlineData("concise", false)]
-    public async Task ResponseFormat_ChoosesTheEntryFields(string format, bool every)
+    public async Task ResponseFormat_ChoosesTheEntryFields(string? format, bool every)
     {
         using ReadWorld world = new(CreateRealisticDeck());
 
         OperationResult<ArchidektDeckView> result = await world.Tools.GetDeckAsync(
             "42",
             zones: ["commander"],
-            responseFormat: format,
+            responseFormat: format ?? "standard",
             cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(
@@ -87,7 +88,7 @@ public sealed class ArchidektDeckReadTests
     }
 
     /// <summary>
-    /// Verifies an unknown response format and an unknown zone are refused with the argument that is wrong.
+    /// Verifies an unknown response format, including full, which Archidekt does not offer, and an unknown zone are refused with the argument that is wrong.
     /// </summary>
     [Fact]
     public async Task UnknownFormatOrZone_IsRefusedWithTheArgument()
@@ -99,21 +100,26 @@ public sealed class ArchidektDeckReadTests
             "42",
             responseFormat: "tiny",
             cancellationToken: token);
+        OperationResult<ArchidektDeckView> full = await world.Tools.GetDeckAsync(
+            "42",
+            responseFormat: "full",
+            cancellationToken: token);
         OperationResult<ArchidektDeckView> zone = await world.Tools.GetDeckAsync(
             "42",
             zones: ["main", "graveyard"],
             cancellationToken: token);
 
         Assert.Equal("responseFormat", Assert.IsType<OperationInvalidInput>(format.Value).Path);
+        Assert.Equal("responseFormat", Assert.IsType<OperationInvalidInput>(full.Value).Path);
         Assert.Equal("zones[1]", Assert.IsType<OperationInvalidInput>(zone.Value).Path);
     }
 
     /// <summary>
-    /// Verifies the zone filter shows only the chosen zones, offsets count the filtered entries, an offset past them
-    /// is refused with the filtered count, and the summary still covers the whole deck.
+    /// Verifies the zone filter shows only the chosen zones, the cursor counts the filtered entries, the last
+    /// page has no next cursor, and the summary still covers the whole deck.
     /// </summary>
     [Fact]
-    public async Task ZonesFilter_ShowsTheChosenZones_AndOffsetsCountTheFilteredList()
+    public async Task ZonesFilter_ShowsTheChosenZones_AndCursorsCountTheFilteredList()
     {
         using ReadWorld world = new(CreateRealisticDeck());
         CancellationToken token = TestContext.Current.CancellationToken;
@@ -122,28 +128,27 @@ public sealed class ArchidektDeckReadTests
             "42",
             zones: ["sideboard"],
             cancellationToken: token));
-        ArchidektDeckView atEnd = Success(await world.Tools.GetDeckAsync(
+        ArchidektDeckView firstPage = Success(await world.Tools.GetDeckAsync(
             "42",
-            offset: 21,
+            pageSize: 20,
             zones: ["sideboard"],
             cancellationToken: token));
-        OperationResult<ArchidektDeckView> past = await world.Tools.GetDeckAsync(
+        ArchidektDeckView lastPage = Success(await world.Tools.GetDeckAsync(
             "42",
-            offset: 22,
+            firstPage.NextCursor,
+            pageSize: 20,
             zones: ["sideboard"],
-            cancellationToken: token);
+            cancellationToken: token));
 
         Assert.Equal(21, sideboard.ShownEntryCount);
         Assert.Equal(21, sideboard.Entries.Count);
         Assert.All(sideboard.Entries, value => Assert.Equal("sideboard", value.Zone));
         Assert.Equal(471, sideboard.Summary.EntryCount);
-        Assert.Equal(21, atEnd.ShownEntryCount);
-        Assert.Empty(atEnd.Entries);
-        OperationInvalidInput refused = Assert.IsType<OperationInvalidInput>(past.Value);
-        Assert.Equal("invalid-offset", refused.ReasonCode);
-        Assert.Equal("offset", refused.Path);
-        Assert.Contains("21", refused.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("471", refused.Message, StringComparison.Ordinal);
+        Assert.Equal(20, firstPage.Entries.Count);
+        Assert.NotNull(firstPage.NextCursor);
+        Assert.Equal(21, lastPage.ShownEntryCount);
+        Assert.Single(lastPage.Entries);
+        Assert.Null(lastPage.NextCursor);
     }
 
     /// <summary>
@@ -162,15 +167,19 @@ public sealed class ArchidektDeckReadTests
                 ["commander", "main", "sideboard", "maybeboard"],
                 properties.GetProperty("zones").GetProperty("items").GetProperty("enum").EnumerateArray()
                     .Select(value => value.GetString()));
-            Assert.Equal("concise", properties.GetProperty("responseFormat").GetProperty("default").GetString());
+            Assert.Equal("standard", properties.GetProperty("responseFormat").GetProperty("default").GetString());
+            Assert.Equal(
+                ["concise", "standard"],
+                properties.GetProperty("responseFormat").GetProperty("enum").EnumerateArray()
+                    .Select(value => value.GetString()));
         }
     }
 
     /// <summary>
-    /// Verifies the description opens with the way to the full format and the zones, and the cut page says the same.
+    /// Verifies the description names the concise format and the zones, and the cut page says the same.
     /// </summary>
     [Fact]
-    public async Task DescriptionAndNarrow_NameResponseFormatFullAndZones()
+    public async Task DescriptionAndNarrow_NameResponseFormatConciseAndZones()
     {
         using RegisteredToolSet registered = new(OperationMode.Remote);
         string description = registered.Tools.Single(value => value.ProtocolTool.Name == "archidekt_deck_get")
@@ -181,12 +190,12 @@ public sealed class ArchidektDeckReadTests
             "42",
             cancellationToken: TestContext.Current.CancellationToken));
 
-        Assert.Contains("responseFormat \"full\"", description[..400], StringComparison.Ordinal);
-        Assert.Contains("zones", description[..400], StringComparison.Ordinal);
+        Assert.Contains("responseFormat \"concise\"", description, StringComparison.Ordinal);
+        Assert.Contains("zones", description, StringComparison.Ordinal);
         Assert.True(page.Truncated);
-        Assert.Contains("responseFormat \"full\"", page.Narrow, StringComparison.Ordinal);
+        Assert.Contains("responseFormat \"concise\"", page.Narrow, StringComparison.Ordinal);
         Assert.Contains("zones", page.Narrow, StringComparison.Ordinal);
-        Assert.Contains("offset", page.Narrow, StringComparison.Ordinal);
+        Assert.Contains("nextCursor", page.Narrow, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -199,8 +208,8 @@ public sealed class ArchidektDeckReadTests
         using ReadWorld world = new(CreateRealisticDeck());
         CancellationToken token = TestContext.Current.CancellationToken;
 
-        List<ArchidektFullDeckEntryView> first = await ReadEveryEntryAsync(world, token);
-        List<ArchidektFullDeckEntryView> second = await ReadEveryEntryAsync(world, token);
+        List<ArchidektStandardDeckEntryView> first = await ReadEveryEntryAsync(world, token);
+        List<ArchidektStandardDeckEntryView> second = await ReadEveryEntryAsync(world, token);
 
         Assert.Equal(471, first.Count);
         Assert.Equal(471, first.Select(value => value.ProviderRelationId).Distinct(StringComparer.Ordinal).Count());
@@ -379,18 +388,18 @@ public sealed class ArchidektDeckReadTests
         using ReadWorld world = new(CreateRealisticDeck());
         CancellationToken token = TestContext.Current.CancellationToken;
 
-        OperationResult<ArchidektSnapshotsResult> byDefault = await world.Tools.GetSnapshotsAsync(
+        OperationResult<ArchidektSnapshotsResult> conciseRead = await world.Tools.GetSnapshotsAsync(
             "get",
             "42",
             "77",
             zones: ["commander", "main"],
+            responseFormat: "concise",
             cancellationToken: token);
-        OperationResult<ArchidektSnapshotsResult> full = await world.Tools.GetSnapshotsAsync(
+        OperationResult<ArchidektSnapshotsResult> byDefault = await world.Tools.GetSnapshotsAsync(
             "get",
             "42",
             "77",
             zones: ["sideboard"],
-            responseFormat: "full",
             cancellationToken: token);
         OperationResult<ArchidektSnapshotsResult> bad = await world.Tools.GetSnapshotsAsync(
             "get",
@@ -399,12 +408,12 @@ public sealed class ArchidektDeckReadTests
             zones: ["attic"],
             cancellationToken: token);
 
-        ArchidektDeckView concise = Assert.IsType<ArchidektSnapshotGetResult>(Success(byDefault)).Snapshot.Deck;
-        ArchidektDeckView everything = Assert.IsType<ArchidektSnapshotGetResult>(Success(full)).Snapshot.Deck;
+        ArchidektDeckView concise = Assert.IsType<ArchidektSnapshotGetResult>(Success(conciseRead)).Snapshot.Deck;
+        ArchidektDeckView everything = Assert.IsType<ArchidektSnapshotGetResult>(Success(byDefault)).Snapshot.Deck;
         Assert.Equal(100, concise.ShownEntryCount);
-        Assert.DoesNotContain(concise.Entries, value => value is ArchidektFullDeckEntryView);
+        Assert.DoesNotContain(concise.Entries, value => value is ArchidektStandardDeckEntryView);
         Assert.Equal(21, everything.ShownEntryCount);
-        Assert.All(everything.Entries, value => Assert.IsType<ArchidektFullDeckEntryView>(value));
+        Assert.All(everything.Entries, value => Assert.IsType<ArchidektStandardDeckEntryView>(value));
         Assert.Equal("zones[0]", Assert.IsType<OperationInvalidInput>(bad.Value).Path);
     }
 
@@ -473,26 +482,25 @@ public sealed class ArchidektDeckReadTests
     /// <summary>
     /// Reads every page of the deck in the full format and returns its entries.
     /// </summary>
-    private static async Task<List<ArchidektFullDeckEntryView>> ReadEveryEntryAsync(
+    private static async Task<List<ArchidektStandardDeckEntryView>> ReadEveryEntryAsync(
         ReadWorld world,
         CancellationToken token)
     {
-        List<ArchidektFullDeckEntryView> entries = [];
-        int offset = 0;
+        List<ArchidektStandardDeckEntryView> entries = [];
+        string? cursor = null;
         while (true)
         {
             ArchidektDeckView page = Success(await world.Tools.GetDeckAsync(
                 "42",
-                offset,
-                responseFormat: "full",
+                cursor,
                 cancellationToken: token));
-            entries.AddRange(page.Entries.Cast<ArchidektFullDeckEntryView>());
-            if (page.NextOffset is not int next)
+            entries.AddRange(page.Entries.Cast<ArchidektStandardDeckEntryView>());
+            if (page.NextCursor is null)
             {
                 return entries;
             }
 
-            offset = next;
+            cursor = page.NextCursor;
         }
     }
 

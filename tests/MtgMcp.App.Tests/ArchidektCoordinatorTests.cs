@@ -79,7 +79,7 @@ public sealed class ArchidektCoordinatorTests
                 new ArchidektPullApplyRequest(
                     "42",
                     LocalDeckId: null,
-                    ExpectedLocalRevision: null,
+                    ExpectedRevision: null,
                     pull.RemoteFingerprint,
                     pull.PreviewFingerprint),
                 TestContext.Current.CancellationToken));
@@ -108,7 +108,7 @@ public sealed class ArchidektCoordinatorTests
                     push.PreviewFingerprint),
                 TestContext.Current.CancellationToken));
             Assert.Equal("applied", pushed.Outcome);
-            Assert.True(pushed.LocalRevision > local.Revision);
+            Assert.True(pushed.Revision > local.Revision);
             Assert.Null(pushed.UnlinkedLocalIds);
             using JsonDocument pushedJson = JsonDocument.Parse(
                 JsonSerializer.Serialize(pushed, MtgMcp.App.Hosting.ToolCallPolicy.SerializerOptions));
@@ -130,8 +130,10 @@ public sealed class ArchidektCoordinatorTests
                     "wrong-preview"),
                 TestContext.Current.CancellationToken);
             OperationConflict staleConflict = Assert.IsType<OperationConflict>(stalePull.Value);
-            Assert.Equal("pull-preview-changed", staleConflict.ReasonCode);
-            Assert.Equal(new ConflictState(afterPush.Revision, replace.RemoteFingerprint), staleConflict.Current);
+            Assert.Equal("preview-changed", staleConflict.ReasonCode);
+            Assert.Equal(
+                new ConflictState(afterPush.Revision, replace.RemoteFingerprint, replace.PreviewFingerprint),
+                staleConflict.Current);
 
             ArchidektApplyResult replaced = Success(await coordinator.ApplyPullAsync(
                 new ArchidektPullApplyRequest(
@@ -142,7 +144,7 @@ public sealed class ArchidektCoordinatorTests
                     replace.PreviewFingerprint),
                 TestContext.Current.CancellationToken));
             Assert.Equal("applied", replaced.Outcome);
-            Assert.True(replaced.LocalRevision > afterPush.Revision);
+            Assert.True(replaced.Revision > afterPush.Revision);
 
             DeckDocument unbound = Success(await store.CreateAsync(
                 new DeckCreateRequest("Unbound", Format: "commander"),
@@ -622,7 +624,7 @@ public sealed class ArchidektCoordinatorTests
                     TestContext.Current.CancellationToken));
 
                 Assert.Equal("verification-mismatch", result.Outcome);
-                Assert.True(result.LocalRevision > edited.Revision);
+                Assert.True(result.Revision > edited.Revision);
                 Assert.True(pull.HasConflicts);
                 Assert.Contains(pull.Differences, value => value.State == "local-changed");
                 Assert.DoesNotContain(again.Operations, value => value.Kind == "entry-add");
@@ -1597,7 +1599,7 @@ public sealed class ArchidektCoordinatorTests
         return Success(await coordinator.ApplyPushAsync(
             new ArchidektPushApplyRequest(
                 localDeckId,
-                preview.LocalRevision!.Value,
+                preview.Revision!.Value,
                 preview.RemoteFingerprint,
                 preview.PreviewFingerprint),
             TestContext.Current.CancellationToken));
@@ -1761,7 +1763,7 @@ public sealed class ArchidektCoordinatorTests
                 new ArchidektPullApplyRequest(
                     "42",
                     LocalDeckId: null,
-                    ExpectedLocalRevision: null,
+                    ExpectedRevision: null,
                     preview.RemoteFingerprint,
                     preview.PreviewFingerprint),
                 TestContext.Current.CancellationToken);
@@ -1815,7 +1817,7 @@ public sealed class ArchidektCoordinatorTests
     /// Verifies a push apply with a stale preview fingerprint reports the current revision and remote state.
     /// </summary>
     [Fact]
-    public async Task ApplyPush_StalePreview_ReturnsPushPreviewChangedWithCurrentState()
+    public async Task ApplyPush_StalePreview_ReturnsPreviewChangedWithCurrentState()
     {
         string root = Path.Combine(Path.GetTempPath(), $"mtg-mcp-arch-app-{Guid.NewGuid():N}");
         try
@@ -1833,8 +1835,10 @@ public sealed class ArchidektCoordinatorTests
                 TestContext.Current.CancellationToken);
 
             OperationConflict conflict = Assert.IsType<OperationConflict>(result.Value);
-            Assert.Equal("push-preview-changed", conflict.ReasonCode);
-            Assert.Equal(new ConflictState(bound.Revision, remote.RemoteFingerprint), conflict.Current);
+            Assert.Equal("preview-changed", conflict.ReasonCode);
+            Assert.Equal(bound.Revision, conflict.Current?.Revision);
+            Assert.Equal(remote.RemoteFingerprint, conflict.Current?.RemoteFingerprint);
+            Assert.NotNull(conflict.Current?.PreviewFingerprint);
         }
         finally
         {
@@ -1885,7 +1889,7 @@ public sealed class ArchidektCoordinatorTests
         ArchidektApplyResult result = new(
             "applied",
             LocalDeckId: null,
-            LocalRevision: null,
+            Revision: null,
             "42",
             "fingerprint",
             [])
@@ -1933,7 +1937,7 @@ public sealed class ArchidektCoordinatorTests
             Assert.Equal("binding-missing", Assert.IsType<OperationConflict>(diff.Value).ReasonCode);
             Assert.IsType<OperationNotFound>(missing.Value);
             OperationConflict staleCreateConflict = Assert.IsType<OperationConflict>(staleCreate.Value);
-            Assert.Equal("local-deck-changed", staleCreateConflict.ReasonCode);
+            Assert.Equal("stale-deck-revision", staleCreateConflict.ReasonCode);
             Assert.Equal(new ConflictState(Revision: local.Revision), staleCreateConflict.Current);
             Assert.Empty(handler.Requests);
 
@@ -2094,7 +2098,7 @@ public sealed class ArchidektCoordinatorTests
     {
         CancellationToken token = TestContext.Current.CancellationToken;
         Assert.IsType<OperationUnsupported>((await tools.CreateDeckAsync(new("x", "commander"), cancellationToken: token)).Value);
-        Assert.IsType<OperationUnsupported>((await tools.DeleteDeckAsync(new("1", "f", "delete 1"), token)).Value);
+        Assert.IsType<OperationUnsupported>((await tools.DeleteDeckAsync(new("1", "f", "delete deck 1"), token)).Value);
         Assert.IsType<OperationUnsupported>((await tools.ApplyPushAsync(new(Guid.NewGuid(), 1, "f", "p"), token)).Value);
         Assert.IsType<OperationUnsupported>((await tools.CreateFolderAsync(new("x", "private"), token)).Value);
         Assert.IsType<OperationUnsupported>((await tools.UpdateFolderAsync(new("1", "f"), token)).Value);

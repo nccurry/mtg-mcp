@@ -1174,7 +1174,7 @@ public sealed class LiveMethodAcceptanceTests
                     {
                         remoteDeckId = ArchidektDeckId,
                         localDeckId = (Guid?)null,
-                        expectedLocalRevision = (long?)null,
+                        expectedRevision = (long?)null,
                         expectedRemoteFingerprint = pullPreview.GetProperty("remoteFingerprint").GetString(),
                         previewFingerprint = pullPreview.GetProperty("previewFingerprint").GetString(),
                     },
@@ -1332,7 +1332,7 @@ public sealed class LiveMethodAcceptanceTests
                     ["request"] = new
                     {
                         localDeckId,
-                        expectedLocalRevision = localRevision,
+                        expectedRevision = localRevision,
                         expectedRemoteFingerprint = new string('0', 64),
                         previewFingerprint = pushPreview.GetProperty("previewFingerprint").GetString(),
                     },
@@ -1349,7 +1349,7 @@ public sealed class LiveMethodAcceptanceTests
                     ["request"] = new
                     {
                         localDeckId,
-                        expectedLocalRevision = localRevision,
+                        expectedRevision = localRevision,
                         expectedRemoteFingerprint = pushPreview.GetProperty("remoteFingerprint").GetString(),
                         previewFingerprint = pushPreview.GetProperty("previewFingerprint").GetString(),
                     },

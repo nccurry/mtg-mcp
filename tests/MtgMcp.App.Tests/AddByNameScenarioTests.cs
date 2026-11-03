@@ -81,7 +81,7 @@ public sealed class AddByNameScenarioTests
                 ["request"] = new JsonObject
                 {
                     ["localDeckId"] = localDeckId,
-                    ["expectedLocalRevision"] = summary.GetProperty("revision").GetInt64(),
+                    ["expectedRevision"] = summary.GetProperty("revision").GetInt64(),
                     ["expectedRemoteFingerprint"] = push.GetProperty("remoteFingerprint").GetString(),
                     ["previewFingerprint"] = push.GetProperty("previewFingerprint").GetString(),
                 },
@@ -129,7 +129,7 @@ public sealed class AddByNameScenarioTests
                 {
                     ["remoteDeckId"] = "42",
                     ["localDeckId"] = null,
-                    ["expectedLocalRevision"] = null,
+                    ["expectedRevision"] = null,
                     ["expectedRemoteFingerprint"] = pull.GetProperty("remoteFingerprint").GetString(),
                     ["previewFingerprint"] = pull.GetProperty("previewFingerprint").GetString(),
                 },
@@ -173,7 +173,7 @@ public sealed class AddByNameScenarioTests
                 {
                     ["remoteDeckId"] = "42",
                     ["localDeckId"] = null,
-                    ["expectedLocalRevision"] = null,
+                    ["expectedRevision"] = null,
                     ["expectedRemoteFingerprint"] = pull.GetProperty("remoteFingerprint").GetString(),
                     ["previewFingerprint"] = pull.GetProperty("previewFingerprint").GetString(),
                 },

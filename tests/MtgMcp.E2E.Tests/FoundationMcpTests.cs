@@ -573,7 +573,7 @@ public sealed class FoundationMcpTests
         Dictionary<string, string[]> expectedProperties = new(StringComparer.Ordinal)
         {
             ["archidekt_auth_status"] = [],
-            ["archidekt_deck_create"] = ["expectedLocalRevision", "localDeckId", "request"],
+            ["archidekt_deck_create"] = ["expectedRevision", "localDeckId", "request"],
             ["archidekt_deck_delete"] = ["request"],
             ["archidekt_deck_get"] = ["deckId", "offset", "responseFormat", "zones"],
             ["archidekt_deck_list"] = ["cursor", "pageSize"],

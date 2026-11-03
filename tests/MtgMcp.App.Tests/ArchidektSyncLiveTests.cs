@@ -212,23 +212,9 @@ public sealed class ArchidektSyncLiveTests
         string deckName,
         CancellationToken cancellationToken)
     {
-        string? cursor = null;
-        do
-        {
-            RemoteDeckPage page = Success(await service.ListDecksAsync(cursor, 100, cancellationToken)
-                .ConfigureAwait(false));
-            RemoteDeckSummary? match = page.Items.FirstOrDefault(value =>
-                string.Equals(value.Name, deckName, StringComparison.Ordinal));
-            if (match is not null)
-            {
-                return match.RemoteId;
-            }
-
-            cursor = page.NextCursor;
-        }
-        while (cursor is not null);
-
-        return null;
+        RemoteDeckPage page = Success(await service.ListDecksAsync(cancellationToken).ConfigureAwait(false));
+        return page.Items
+            .FirstOrDefault(value => string.Equals(value.Name, deckName, StringComparison.Ordinal))?.RemoteId;
     }
 
     /// <summary>
@@ -251,7 +237,7 @@ public sealed class ArchidektSyncLiveTests
             new ArchidektDeckDeleteRequest(
                 remoteId,
                 exact.RemoteFingerprint,
-                $"delete {remoteId}"),
+                $"delete deck {remoteId}"),
             cancellationToken).ConfigureAwait(false));
         Assert.Equal("applied", deleted.Outcome);
     }

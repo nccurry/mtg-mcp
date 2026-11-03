@@ -105,7 +105,7 @@ public sealed partial class ArchidektWorkflowTests
             [.. local.Entries.Select(value => new UpdateDeckEntryChange(value with { Quantity = value.Quantity + 1 }))],
             token));
 
-        List<ArchidektSyncPreviewView> fullPages = await ReadEveryPreviewPageAsync(world, localDeckId, "full", token);
+        List<ArchidektSyncPreviewView> fullPages = await ReadEveryPreviewPageAsync(world, localDeckId, "standard", token);
         List<ArchidektSyncPreviewView> concisePages = await ReadEveryPreviewPageAsync(
             world,
             localDeckId,
@@ -254,7 +254,7 @@ public sealed partial class ArchidektWorkflowTests
         Assert.Equal("pull-discard-option-mismatch", invalid.ReasonCode);
         Assert.Contains("preview used discardLocalChanges false", invalid.Message, StringComparison.Ordinal);
         Assert.Contains("Pass discardLocalChanges: false", invalid.Message, StringComparison.Ordinal);
-        Assert.Equal("pull-preview-changed", Assert.IsType<OperationConflict>(unrelated.Value).ReasonCode);
+        Assert.Equal("preview-changed", Assert.IsType<OperationConflict>(unrelated.Value).ReasonCode);
     }
 
     /// <summary>
@@ -441,7 +441,7 @@ public sealed partial class ArchidektWorkflowTests
                 preview.PreviewFingerprint),
             token);
 
-        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(refused.Value);
+        OperationUnsupported invalid = Assert.IsType<OperationUnsupported>(refused.Value);
         Assert.Equal("request-limit-exceeded", invalid.ReasonCode);
         Assert.Contains(
             "over the 60-request limit for one archidekt_push_apply call",
@@ -507,7 +507,7 @@ public sealed partial class ArchidektWorkflowTests
             [.. local.Entries.Select(value => new UpdateDeckEntryChange(value with { Quantity = value.Quantity + 1 }))],
             token));
 
-        List<ArchidektSyncDiffView> fullPages = await ReadEveryDiffPageAsync(world, localDeckId, "full", token);
+        List<ArchidektSyncDiffView> fullPages = await ReadEveryDiffPageAsync(world, localDeckId, "standard", token);
         List<ArchidektSyncDiffView> concisePages = await ReadEveryDiffPageAsync(world, localDeckId, "concise", token);
 
         Assert.True(concisePages.Count < fullPages.Count);
@@ -527,17 +527,16 @@ public sealed partial class ArchidektWorkflowTests
     }
 
     /// <summary>
-    /// Verifies the standard alias gives the full rows, concise is read without regard to case or surrounding space,
-    /// and an omitted format is full, on the diff and both previews.
+    /// Verifies the standard format gives the whole rows, concise is read without regard to case or surrounding space,
+    /// and an omitted format is standard, on the diff and both previews.
     /// </summary>
     [Theory]
     [InlineData("standard", false)]
     [InlineData("STANDARD", false)]
-    [InlineData("Full", false)]
     [InlineData("Concise", true)]
     [InlineData(" concise ", true)]
     [InlineData(null, false)]
-    public async Task ResponseFormat_OfTheDifferenceTools_ReadsTheAliasAndIgnoresCase(string? format, bool concise)
+    public async Task ResponseFormat_OfTheDifferenceTools_IgnoresCaseAndDefaultsToStandard(string? format, bool concise)
     {
         using World world = new(OperationMode.Remote, CreateDeckForRemoteEdits());
         CancellationToken token = TestContext.Current.CancellationToken;
@@ -571,8 +570,8 @@ public sealed partial class ArchidektWorkflowTests
 
     /// <summary>
     /// Verifies a pull apply that passes the wrong discardLocalChanges after the local deck changed again is not told
-    /// it passed the wrong option, because neither value gives the preview's fingerprint any more: it is refused as a
-    /// pull conflict, since the local edits are ones a pull cannot keep, and nothing is written.
+    /// it passed the wrong option: the stale local revision is refused first, with the current revision, and nothing
+    /// is written.
     /// </summary>
     [Fact]
     public async Task PullApply_WithTheWrongDiscardAndAStaleLocalRevision_IsRefusedWithoutNamingTheOption()
@@ -608,7 +607,8 @@ public sealed partial class ArchidektWorkflowTests
             token);
 
         OperationConflict conflict = Assert.IsType<OperationConflict>(refused.Value);
-        Assert.Equal("pull-conflict", conflict.ReasonCode);
+        Assert.Equal("stale-deck-revision", conflict.ReasonCode);
+        Assert.Equal(editedAgain.Revision, conflict.Current?.Revision);
         Assert.DoesNotContain("discardLocalChanges true", conflict.Message, StringComparison.Ordinal);
         Assert.Equal(editedAgain.Revision, Success(await world.Store.GetAsync(localDeckId, token)).Revision);
     }
@@ -623,21 +623,21 @@ public sealed partial class ArchidektWorkflowTests
         CancellationToken token)
     {
         List<ArchidektSyncDiffView> pages = [];
-        int differenceOffset = 0;
+        string? cursor = null;
         while (true)
         {
             ArchidektSyncDiffView page = Success(await world.Reads.DiffAsync(
                 localDeckId,
-                differenceOffset,
-                responseFormat,
-                token));
+                cursor,
+                responseFormat: responseFormat,
+                cancellationToken: token));
             pages.Add(page);
-            if (page.Truncated is null)
+            if (page.NextCursor is null)
             {
                 return pages;
             }
 
-            differenceOffset = Assert.NotNull(page.NextDifferenceOffset);
+            cursor = page.NextCursor;
         }
     }
     /// <summary>
@@ -695,24 +695,21 @@ public sealed partial class ArchidektWorkflowTests
         CancellationToken token)
     {
         List<ArchidektSyncPreviewView> pages = [];
-        int operationOffset = 0;
-        int differenceOffset = 0;
+        string? cursor = null;
         while (true)
         {
             ArchidektSyncPreviewView page = Success(await world.Reads.PreviewPushAsync(
                 localDeckId,
-                operationOffset,
-                differenceOffset,
+                cursor: cursor,
                 responseFormat: responseFormat,
                 cancellationToken: token));
             pages.Add(page);
-            if (page.Truncated is null)
+            if (page.NextCursor is null)
             {
                 return pages;
             }
 
-            operationOffset = Assert.NotNull(page.NextOperationOffset);
-            differenceOffset = Assert.NotNull(page.NextDifferenceOffset);
+            cursor = page.NextCursor;
         }
     }
 }

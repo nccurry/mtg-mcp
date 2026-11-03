@@ -191,7 +191,7 @@ public sealed class DeckEditWorkflowScenarioTests
                 ["request"] = new JsonObject
                 {
                     ["localDeckId"] = localDeckId,
-                    ["expectedLocalRevision"] = summary.GetProperty("revision").GetInt64(),
+                    ["expectedRevision"] = summary.GetProperty("revision").GetInt64(),
                     ["expectedRemoteFingerprint"] = preview.GetProperty("remoteFingerprint").GetString(),
                     ["previewFingerprint"] = preview.GetProperty("previewFingerprint").GetString(),
                 },

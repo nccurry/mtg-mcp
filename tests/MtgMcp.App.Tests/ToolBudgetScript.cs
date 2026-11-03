@@ -448,7 +448,7 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
                 {
                     ["remoteDeckId"] = "42",
                     ["localDeckId"] = null,
-                    ["expectedLocalRevision"] = null,
+                    ["expectedRevision"] = null,
                     ["expectedRemoteFingerprint"] = pulled.GetProperty("remoteFingerprint").GetString(),
                     ["previewFingerprint"] = pulled.GetProperty("previewFingerprint").GetString(),
                 },
@@ -486,7 +486,7 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
                 ["request"] = new JsonObject
                 {
                     ["localDeckId"] = localId.ToString(),
-                    ["expectedLocalRevision"] = edited.Revision,
+                    ["expectedRevision"] = edited.Revision,
                     ["expectedRemoteFingerprint"] = preview.GetProperty("remoteFingerprint").GetString(),
                     ["previewFingerprint"] = preview.GetProperty("previewFingerprint").GetString(),
                 },
