@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.App.Decks;
@@ -94,12 +95,9 @@ internal static class DeckExportPaging
                 "artifact");
         }
 
-        if (pageSize is < 1 or > MaximumChunkBytes)
+        if (ResultPage.CheckPageSize(pageSize, MaximumChunkBytes, "UTF-16 code units") is { } badSize)
         {
-            return new OperationInvalidInput(
-                "invalid-page-size",
-                $"pageSize must be from 1 through {MaximumChunkBytes} UTF-16 code units.",
-                "pageSize");
+            return badSize;
         }
 
         PageCursorBinding binding = PageCursorBinding.ForArtifact(chosen.FileName, chosen.Sha256)
@@ -114,7 +112,7 @@ internal static class DeckExportPaging
         }
 
         string content = chosen.Content;
-        int offset = position.Data.First;
+        int offset = position.Data.Offset;
         if (offset > content.Length || (offset > 0 && offset < content.Length && char.IsLowSurrogate(content[offset])))
         {
             return PageCursor.Invalid();
@@ -129,8 +127,8 @@ internal static class DeckExportPaging
             Narrow = more
                 ? $"UTF-16 code units {offset} to {next - 1} of {content.Length} of {chosen.FileName} are shown to " +
                     $"stay under the size limit. Call again with artifact \"{chosen.FileName}\" and " +
-                    $"cursor set to nextCursor for the rest; the chunks joined in order are the whole file, and sha256 is the checksum " +
-                    "of the whole file."
+                    $"cursor set to nextCursor for the rest; the chunks joined in order are the whole file, " +
+                    $"and sha256 is the checksum of the whole file."
                 : null,
         };
         return new OperationSuccess<DeckExportBundleView>(new DeckExportBundleView(
@@ -149,13 +147,13 @@ internal static class DeckExportPaging
             chunk,
             offset == 0 ? bundle.Preservation : [])
         {
-            NextCursor = more ? PageCursor.Encode(new PageCursorPosition(next), binding) : null,
+            NextCursor = more ? PageCursor.Encode(PageCursorPosition.AtOffset(next), binding) : null,
         });
     }
 
     /// <summary>
-    /// Finds how many characters from <paramref name="offset"/>, at most <paramref name="pageSize"/>, fit the chunk limit once the server writes them as
-    /// JSON text, never ending a chunk inside a surrogate pair.
+    /// Finds how many characters from <paramref name="offset"/>, at most <paramref name="pageSize"/>, fit the
+    /// chunk limit once the server writes them as JSON text, never ending a chunk inside a surrogate pair.
     /// </summary>
     private static int FitLength(string content, int offset, int pageSize)
     {

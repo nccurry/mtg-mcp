@@ -7,55 +7,57 @@ namespace MtgMcp.Architecture.Tests;
 public sealed class RemovedReasonCodeTests
 {
     /// <summary>
-    /// Lists the reason codes the shared codes replaced.
-    /// </summary>
-    private static readonly string[] RemovedCodes =
-    [
-        "deck-revision-conflict", "local-deck-changed", "pull-preview-changed", "push-preview-changed",
-        "restore-preview-changed", "import-preview-changed", "category-preview-mismatch",
-        "identity-preview-mismatch", "source-changed-between-pages", "deck-changed-between-pages",
-        "deck-list-changed", "category-corpus-conflict",
-    ];
-
-    /// <summary>
-    /// Verifies no production source file contains a removed reason code.
+    /// Verifies no production source file contains a removed reason code, and that the scan reads source files.
     /// </summary>
     [Fact]
     public void ProductionSource_ContainsNoRemovedReasonCode()
     {
-        string source = Path.Combine(FindRepositoryRoot(), "src");
-        string separator = Path.DirectorySeparatorChar.ToString();
-        List<string> found = [];
-        foreach (string file in Directory.EnumerateFiles(source, "*.cs", SearchOption.AllDirectories)
-            .Where(path => !path.Contains($"{separator}obj{separator}") && !path.Contains($"{separator}bin{separator}"))
-            .Order(StringComparer.Ordinal))
-        {
-            string text = File.ReadAllText(file);
-            foreach (string code in RemovedCodes.Where(code => text.Contains(code, StringComparison.Ordinal)))
-            {
-                found.Add($"{Path.GetRelativePath(source, file)}: {code}");
-            }
-        }
+        string source = Path.Combine(RemovedSurfaceNames.FindRepositoryRoot(), "src");
+        IReadOnlyList<string> files = RemovedSurfaceNames.Files(source, "*.cs");
 
+        Assert.NotEmpty(files);
+        IReadOnlyList<string> found = FindCodes(source, files);
         Assert.True(found.Count == 0, "Removed reason codes still in src:\n" + string.Join("\n", found));
     }
 
     /// <summary>
-    /// Finds the repository root by its solution file.
+    /// Verifies the scan reports a removed reason code when a source file holds one.
     /// </summary>
-    private static string FindRepositoryRoot()
+    [Fact]
+    public void Scan_AFileWithARemovedCode_IsReported()
     {
-        DirectoryInfo? directory = new(AppContext.BaseDirectory);
-        while (directory is not null)
+        string folder = Path.Combine(Path.GetTempPath(), "removed-code-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
         {
-            if (File.Exists(Path.Combine(directory.FullName, "mtg-mcp.slnx")))
-            {
-                return directory.FullName;
-            }
+            File.WriteAllText(Path.Combine(folder, "Sample.cs"), "return new Conflict(\"deck-revision-conflict\");");
 
-            directory = directory.Parent;
+            IReadOnlyList<string> found = FindCodes(folder, RemovedSurfaceNames.Files(folder, "*.cs"));
+
+            Assert.Equal(["Sample.cs: deck-revision-conflict"], found);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Lists each removed reason code found in each file, as the file path under the root and the code.
+    /// </summary>
+    private static IReadOnlyList<string> FindCodes(string root, IReadOnlyList<string> files)
+    {
+        List<string> found = [];
+        foreach (string file in files)
+        {
+            string text = File.ReadAllText(file);
+            foreach (string code in RemovedSurfaceNames.ReasonCodes
+                .Where(code => text.Contains(code, StringComparison.Ordinal)))
+            {
+                found.Add($"{Path.GetRelativePath(root, file)}: {code}");
+            }
         }
 
-        throw new DirectoryNotFoundException("Could not locate the mtg-mcp repository root.");
+        return found;
     }
 }

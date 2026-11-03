@@ -325,8 +325,8 @@ internal sealed class ScryfallSnapshotStore
         string? confirmation,
         CancellationToken cancellationToken)
     {
-        OperationInvalidInput? unconfirmed = ScryfallConfirmation.Require(
-            confirmation, ScryfallConfirmation.Phrase("delete request-snapshot", snapshotId));
+        OperationInvalidInput? unconfirmed = Confirmation.Check(
+            confirmation, Confirmation.Phrase("delete", "request-snapshot", snapshotId));
         if (unconfirmed is not null)
         {
             return unconfirmed;

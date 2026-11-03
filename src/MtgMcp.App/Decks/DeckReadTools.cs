@@ -141,7 +141,7 @@ internal sealed class DeckReadTools
             "concise (entryId, cardName, quantity, zone, and categoryNames only, with no assignment rows). " +
             "With include, concise still adds cardData, card, and tags. Pass the same responseFormat with a " +
             "cursor."),
-         DeckResponseFormatValues]
+         ConciseResponseFormatValues]
         string responseFormat = "standard",
         CancellationToken cancellationToken = default)
     {

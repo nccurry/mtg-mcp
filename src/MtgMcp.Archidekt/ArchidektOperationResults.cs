@@ -88,16 +88,16 @@ internal static class ArchidektOperationResults
     /// <summary>
     /// Requires an exact non-case-folded confirmation phrase, and refuses with the phrase to pass when it differs.
     /// </summary>
-    internal static void RequireConfirmation(string actual, string expected)
+    internal static void RequireConfirmation(string actual, string action, string targetKind, string id)
     {
-        if (!string.Equals(actual, expected, StringComparison.Ordinal))
+        if (Confirmation.Check(actual, Confirmation.Phrase(action, targetKind, id)) is { } refused)
         {
             throw new ArchidektProviderException(
                 ArchidektFailureKind.InvalidInput,
-                SharedReasonCodes.ConfirmationRequired,
-                $"Pass confirmation exactly as: {expected}")
+                refused.ReasonCode,
+                refused.Message)
             {
-                Path = "confirmation",
+                Path = refused.Path,
             };
         }
     }

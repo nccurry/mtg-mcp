@@ -3,6 +3,7 @@ using System.Text;
 using MtgMcp.App.Hosting;
 using MtgMcp.App.Scryfall;
 using MtgMcp.Core.Decks;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
 using MtgMcp.Scryfall;
@@ -120,7 +121,8 @@ internal sealed class DeckCardViewCoordinator
         bool concise = IsConcise(responseFormat);
         CardSelection selection = CardSelection.Of(deck, cardNames, zones, categoryNames);
         PageCursorBinding binding = PageCursorBinding.ForDeck(deck.DeckId, deck.Revision)
-            .And(PageCursorBinding.ForRequest(Fingerprint(include ?? [], fields, cardNames, zones, categoryNames, concise)));
+            .And(PageCursorBinding.ForRequest(
+                Fingerprint(include ?? [], fields, cardNames, zones, categoryNames, concise)));
         if (include is null)
         {
             return GetStored(deck, selection, concise, binding, cursor, pageSize);
@@ -401,12 +403,7 @@ internal sealed class DeckCardViewCoordinator
     /// </summary>
     private static OperationInvalidInput? ValidatePageSize(int? pageSize)
     {
-        return pageSize is >= 1 and <= MaximumPageSize or null
-            ? null
-            : new OperationInvalidInput(
-                "invalid-page-size",
-                $"Page size must be from 1 through {MaximumPageSize}.",
-                "pageSize");
+        return ResultPage.CheckPageSize(pageSize, MaximumPageSize);
     }
 
     /// <summary>
@@ -462,7 +459,7 @@ internal sealed class DeckCardViewCoordinator
             current: new ConflictState(deck.Revision));
         return start switch
         {
-            OperationSuccess<PageCursorPosition> { Data.First: var offset } when offset <= total =>
+            OperationSuccess<PageCursorPosition> { Data.Offset: var offset } when offset <= total =>
                 new OperationSuccess<int>(offset),
             OperationSuccess<PageCursorPosition> => PageCursor.Invalid(),
             _ => OperationFailure.Forward<PageCursorPosition, int>(start),
@@ -507,7 +504,7 @@ internal sealed class DeckCardViewCoordinator
             Entries = kept,
             CategoryAssignments = assignments,
             TotalEntries = total,
-            NextCursor = next < total ? PageCursor.Encode(new PageCursorPosition(next), binding) : null,
+            NextCursor = next < total ? PageCursor.Encode(PageCursorPosition.AtOffset(next), binding) : null,
             Limits = limits,
             Truncated = truncated ? true : null,
             Narrow = truncated ? NarrowText(selection, kept.Count, total, narrowHint) : null,

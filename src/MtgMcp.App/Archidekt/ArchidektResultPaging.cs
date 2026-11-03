@@ -1,5 +1,6 @@
 using MtgMcp.App.Hosting;
 using MtgMcp.Archidekt;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.App.Archidekt;
@@ -19,19 +20,6 @@ internal static class ArchidektResultPaging
     /// Sets the most UTF-8 bytes of a deck description a page of the deck list shows.
     /// </summary>
     private const int MaximumListedDescriptionBytes = 500;
-
-    /// <summary>
-    /// Refuses a page size outside 1 through <paramref name="maximum"/>.
-    /// </summary>
-    internal static OperationInvalidInput? CheckPageSize(int pageSize, int maximum)
-    {
-        return pageSize < 1 || pageSize > maximum
-            ? new OperationInvalidInput(
-                "invalid-page-size",
-                $"pageSize must be from 1 through {maximum}.",
-                "pageSize")
-            : null;
-    }
 
     /// <summary>
     /// Builds one page of a deck: a summary of the whole deck, then the entries of the chosen zones from the cursor
@@ -75,14 +63,13 @@ internal static class ArchidektResultPaging
         OperationResult<PageCursorPosition> decoded = PageCursor.Decode(
             cursor,
             binding,
-            twoLists: false,
-            new ConflictState(RemoteFingerprint: deck.RemoteFingerprint));
+            current: new ConflictState(RemoteFingerprint: deck.RemoteFingerprint));
         if (decoded is not OperationSuccess<PageCursorPosition> start)
         {
             return OperationFailure.Forward<PageCursorPosition, ArchidektDeckView>(decoded);
         }
 
-        int offset = start.Data.First;
+        int offset = start.Data.Offset;
         if (offset > chosen.Count)
         {
             return PageCursor.Invalid();
@@ -124,12 +111,12 @@ internal static class ArchidektResultPaging
                 ? ArchidektStandardDeckEntryView.StandardFrom(value, deck.IsInDeck(value))
                 : ArchidektDeckEntryView.From(value, deck.IsInDeck(value))),
         ];
-        ResultPageSlice slice = Limit(ResultPage.Take(ordered, offset, ResultSize.Measure(header)), pageSize);
+        ResultPageSlice slice = ResultPage.Take(ordered, offset, ResultSize.Measure(header)).Limit(pageSize);
         return new OperationSuccess<ArchidektDeckView>(header with
         {
             Entries = slice.Rows(ordered),
             Truncated = slice.More ? true : null,
-            NextCursor = slice.More ? PageCursor.Encode(new PageCursorPosition(slice.Next), binding) : null,
+            NextCursor = slice.More ? PageCursor.Encode(PageCursorPosition.AtOffset(slice.Next), binding) : null,
             Narrow = slice.More ? DeckNarrow(options, offset, slice, callAgain) : null,
         });
     }
@@ -168,7 +155,7 @@ internal static class ArchidektResultPaging
             return OperationFailure.Forward<PageCursorPosition, RemoteDeckPage>(decoded);
         }
 
-        int offset = start.Data.First;
+        int offset = start.Data.Offset;
         if (offset > list.Items.Count)
         {
             return PageCursor.Invalid();
@@ -176,11 +163,11 @@ internal static class ArchidektResultPaging
 
         List<RemoteDeckSummary> cut = [.. list.Items.Select(CutDescription)];
         RemoteDeckPage header = new([], null, list.Evidence);
-        ResultPageSlice slice = Limit(ResultPage.Take(cut, offset, ResultSize.Measure(header)), pageSize);
+        ResultPageSlice slice = ResultPage.Take(cut, offset, ResultSize.Measure(header)).Limit(pageSize);
         return new OperationSuccess<RemoteDeckPage>(header with
         {
             Items = slice.Rows(cut),
-            NextCursor = slice.More ? PageCursor.Encode(new PageCursorPosition(slice.Next), binding) : null,
+            NextCursor = slice.More ? PageCursor.Encode(PageCursorPosition.AtOffset(slice.Next), binding) : null,
         });
     }
 
@@ -217,15 +204,15 @@ internal static class ArchidektResultPaging
         OperationResult<PageCursorPosition> decoded = PageCursor.Decode(
             cursor,
             binding,
-            twoLists: true,
-            new ConflictState(preview.Revision, preview.RemoteFingerprint, preview.PreviewFingerprint));
+            PageCursorShape.TwoOffsets,
+            current: new ConflictState(preview.Revision, preview.RemoteFingerprint, preview.PreviewFingerprint));
         if (decoded is not OperationSuccess<PageCursorPosition> start)
         {
             return OperationFailure.Forward<PageCursorPosition, ArchidektSyncPreviewView>(decoded);
         }
 
         IReadOnlyList<ArchidektDifferenceRow> rows = DifferenceRows(preview.Differences, format);
-        if (start.Data.First > preview.Operations.Count || start.Data.Second > rows.Count)
+        if (start.Data.FirstOffset > preview.Operations.Count || start.Data.SecondOffset > rows.Count)
         {
             return PageCursor.Invalid();
         }
@@ -252,9 +239,9 @@ internal static class ArchidektResultPaging
         };
         (ResultPageSlice operations, ResultPageSlice differences) = TakeTwoWithin(
             preview.Operations,
-            start.Data.First,
+            start.Data.FirstOffset,
             rows,
-            start.Data.Second!.Value,
+            start.Data.SecondOffset,
             pageSize,
             ResultSize.Measure(header));
         bool more = operations.More || differences.More;
@@ -264,7 +251,7 @@ internal static class ArchidektResultPaging
             Differences = differences.Rows(rows),
             Truncated = more ? true : null,
             NextCursor = more
-                ? PageCursor.Encode(new PageCursorPosition(operations.Next, differences.Next), binding)
+                ? PageCursor.Encode(PageCursorPosition.AtOffsets(operations.Next, differences.Next), binding)
                 : null,
             Narrow = more ? TwoListNarrow("the summary and every guard", format) : null,
         });
@@ -309,26 +296,25 @@ internal static class ArchidektResultPaging
         OperationResult<PageCursorPosition> decoded = PageCursor.Decode(
             cursor,
             binding,
-            twoLists: false,
-            new ConflictState(RemoteFingerprint: tree.TreeFingerprint));
+            current: new ConflictState(RemoteFingerprint: tree.TreeFingerprint));
         if (decoded is not OperationSuccess<PageCursorPosition> start)
         {
             return OperationFailure.Forward<PageCursorPosition, ArchidektFolderTreeView>(decoded);
         }
 
-        int offset = start.Data.First;
+        int offset = start.Data.Offset;
         if (offset > tree.Items.Count)
         {
             return PageCursor.Invalid();
         }
 
         ArchidektFolderTreeView header = new(tree.Items.Count, [], tree.Evidence, tree.TreeFingerprint);
-        ResultPageSlice slice = Limit(ResultPage.Take(tree.Items, offset, ResultSize.Measure(header)), pageSize);
+        ResultPageSlice slice = ResultPage.Take(tree.Items, offset, ResultSize.Measure(header)).Limit(pageSize);
         return new OperationSuccess<ArchidektFolderTreeView>(header with
         {
             Items = slice.Rows(tree.Items),
             Truncated = slice.More ? true : null,
-            NextCursor = slice.More ? PageCursor.Encode(new PageCursorPosition(slice.Next), binding) : null,
+            NextCursor = slice.More ? PageCursor.Encode(PageCursorPosition.AtOffset(slice.Next), binding) : null,
             Narrow = slice.More
                 ? $"Folders {offset + 1} to {slice.Next} of {tree.Items.Count} are shown. Call archidekt_folders_get " +
                     "again with cursor set to nextCursor and the same other arguments for the rest."
@@ -355,14 +341,13 @@ internal static class ArchidektResultPaging
         OperationResult<PageCursorPosition> decoded = PageCursor.Decode(
             cursor,
             binding,
-            twoLists: false,
-            new ConflictState(diff.Revision, diff.RemoteFingerprint));
+            current: new ConflictState(diff.Revision, diff.RemoteFingerprint));
         if (decoded is not OperationSuccess<PageCursorPosition> start)
         {
             return OperationFailure.Forward<PageCursorPosition, ArchidektSyncDiffView>(decoded);
         }
 
-        int offset = start.Data.First;
+        int offset = start.Data.Offset;
         if (offset > diff.Differences.Count)
         {
             return PageCursor.Invalid();
@@ -378,12 +363,12 @@ internal static class ArchidektResultPaging
             diff.Differences.Count,
             []);
         IReadOnlyList<ArchidektDifferenceRow> rows = DifferenceRows(diff.Differences, format);
-        ResultPageSlice slice = Limit(ResultPage.Take(rows, offset, ResultSize.Measure(header)), pageSize);
+        ResultPageSlice slice = ResultPage.Take(rows, offset, ResultSize.Measure(header)).Limit(pageSize);
         return new OperationSuccess<ArchidektSyncDiffView>(header with
         {
             Differences = slice.Rows(rows),
             Truncated = slice.More ? true : null,
-            NextCursor = slice.More ? PageCursor.Encode(new PageCursorPosition(slice.Next), binding) : null,
+            NextCursor = slice.More ? PageCursor.Encode(PageCursorPosition.AtOffset(slice.Next), binding) : null,
             Narrow = slice.More
                 ? $"Differences {offset + 1} to {slice.Next} of {diff.Differences.Count} are shown. Call " +
                     "archidekt_sync_diff again with cursor set to nextCursor and the same other arguments" +
@@ -407,8 +392,8 @@ internal static class ArchidektResultPaging
         OperationResult<PageCursorPosition> decoded = PageCursor.Decode(
             cursor,
             binding,
-            twoLists: true,
-            new ConflictState(
+            PageCursorShape.TwoOffsets,
+            current: new ConflictState(
                 RemoteFingerprint: preview.RemoteFingerprint,
                 PreviewFingerprint: preview.PreviewFingerprint));
         if (decoded is not OperationSuccess<PageCursorPosition> start)
@@ -416,7 +401,7 @@ internal static class ArchidektResultPaging
             return OperationFailure.Forward<PageCursorPosition, ArchidektSnapshotRestorePreviewView>(decoded);
         }
 
-        if (start.Data.First > preview.Operations.Count || start.Data.Second > preview.Differences.Count)
+        if (start.Data.FirstOffset > preview.Operations.Count || start.Data.SecondOffset > preview.Differences.Count)
         {
             return PageCursor.Invalid();
         }
@@ -435,9 +420,9 @@ internal static class ArchidektResultPaging
             []);
         (ResultPageSlice operations, ResultPageSlice differences) = TakeTwoWithin(
             preview.Operations,
-            start.Data.First,
+            start.Data.FirstOffset,
             preview.Differences,
-            start.Data.Second!.Value,
+            start.Data.SecondOffset,
             pageSize,
             ResultSize.Measure(header));
         bool more = operations.More || differences.More;
@@ -447,18 +432,10 @@ internal static class ArchidektResultPaging
             Differences = differences.Rows(preview.Differences),
             Truncated = more ? true : null,
             NextCursor = more
-                ? PageCursor.Encode(new PageCursorPosition(operations.Next, differences.Next), binding)
+                ? PageCursor.Encode(PageCursorPosition.AtOffsets(operations.Next, differences.Next), binding)
                 : null,
             Narrow = more ? TwoListNarrow("the counts and every guard", ArchidektResponseFormat.Standard) : null,
         });
-    }
-
-    /// <summary>
-    /// Keeps at most <paramref name="pageSize"/> rows of a slice that already fits the size limit.
-    /// </summary>
-    private static ResultPageSlice Limit(ResultPageSlice slice, int pageSize)
-    {
-        return slice.Count > pageSize ? slice with { Count = pageSize } : slice;
     }
 
     /// <summary>

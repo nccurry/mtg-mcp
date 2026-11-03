@@ -734,7 +734,7 @@ internal sealed class ArchidektSynchronizationContext
     {
         return new OperationConflict(
             SharedReasonCodes.PreviewChanged,
-            "The deck changed after the preview, so its previewFingerprint no longer matches.",
+            "The deck changed after the preview. Run the preview again and pass its previewFingerprint.",
             new ConflictState(preview.Revision, preview.RemoteFingerprint, preview.PreviewFingerprint));
     }
 
@@ -928,7 +928,7 @@ internal sealed class ArchidektSynchronizationContext
         {
             return new OperationConflict(
                 SharedReasonCodes.PreviewChanged,
-                "The deck changed after the preview, so its previewFingerprint no longer matches.",
+                "The deck changed after the preview. Run the preview again and pass its previewFingerprint.",
                 new ConflictState(local.Data.Revision, current.Data.RemoteFingerprint, currentPreviewFingerprint));
         }
 

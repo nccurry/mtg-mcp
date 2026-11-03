@@ -2060,7 +2060,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         return pageSize is >= 1 && pageSize <= maximum
             ? null
             : new OperationInvalidInput(
-                "invalid-page-size",
+                SharedReasonCodes.InvalidPageSize,
                 $"Page size must be from 1 through {maximum}.",
                 "pageSize");
     }

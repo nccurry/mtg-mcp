@@ -234,6 +234,8 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
         {
             owned[index].Dispose();
         }
+
+        Assert.Empty(PathAudit.Findings);
     }
 
     /// <summary>
@@ -280,11 +282,12 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
         Pipe serverToClient = new();
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
         builder.Logging.ClearProviders();
-        builder.Services.AddSingleton(PathAudit);
         IMcpServerBuilder mcp = builder.Services
             .AddMcpServer()
             .WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream())
-            .WithRequestFilters(filters => filters.AddCallToolFilter(ToolCallPolicy.Filter));
+            .WithRequestFilters(filters => filters
+                .AddCallToolFilter(PathAudit.Filter)
+                .AddCallToolFilter(ToolCallPolicy.Filter));
         DeckToolsetManifest.Register(mcp, Store, scryfall, OperationMode.Remote);
         ScryfallToolsetManifest.Register(mcp, scryfall, OperationMode.Remote, new CardListAccess(Store, archidekt));
         StatisticsToolsetManifest.Register(mcp, Store, new ExactStatisticsCalculator("test"), scryfall);
@@ -333,7 +336,10 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
     private static JsonObject MakeCard(int index)
     {
         string[] types =
-            ["Creature — Elf Druid", "Instant", "Sorcery", "Artifact", "Enchantment", "Land", "Creature — Goblin Warrior"];
+            [
+                "Creature — Elf Druid", "Instant", "Sorcery", "Artifact", "Enchantment", "Land",
+                "Creature — Goblin Warrior",
+            ];
         string[] colors = ["G", "U", "B", "R", "W"];
         string color = colors[index % colors.Length];
         return CardJson.Make(

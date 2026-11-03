@@ -102,7 +102,7 @@ internal sealed class DeckWriteTools
         UseStructuredContent = true)]
     [Description(
         "Local deck store: deletes one local deck and dependent rows when expectedRevision is current. It cannot " +
-        "be undone except from a backup, so pass confirmation exactly as \"delete deck <deckId>\"; a wrong " +
+        "be undone except from a backup, so confirmation must be exactly \"delete deck <deckId>\"; a wrong " +
         "phrase is refused and shows the exact phrase.")]
     internal Task<OperationResult<DeckDeleteResult>> DeleteAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
@@ -113,7 +113,7 @@ internal sealed class DeckWriteTools
     {
         return ExecuteAsync(() => Confirmed(
             confirmation,
-            DeckConfirmation.Phrase("delete deck", deckId),
+            Confirmation.Phrase("delete", "deck", deckId),
             () => store.DeleteAsync(deckId, expectedRevision, cancellationToken)));
     }
 
@@ -149,8 +149,8 @@ internal sealed class DeckWriteTools
         UseStructuredContent = true)]
     [Description(
         "Local deck store: restores a verified backup only when the supplied current database " +
-        "fingerprint still matches. A rollback backup of the current decks is made first and returned. Pass " +
-        "confirmation exactly as \"restore backup <backupId>\"; a wrong phrase is refused and shows the phrase.")]
+        "fingerprint still matches. A rollback backup of the current decks is made first and returned. The " +
+        "confirmation must be exactly \"restore backup <backupId>\"; a wrong phrase is refused and shows the phrase.")]
     internal Task<OperationResult<DeckRestoreResult>> RestoreBackupAsync(
         [Description("Opaque backup UUID returned by local_deck_backup_list or local_deck_backup_create.")]
         Guid backupId,
@@ -162,7 +162,7 @@ internal sealed class DeckWriteTools
     {
         return ExecuteAsync(() => Confirmed(
             confirmation,
-            DeckConfirmation.Phrase("restore backup", backupId),
+            Confirmation.Phrase("restore", "backup", backupId),
             () => store.Backups.RestoreAsync(backupId, expectedDatabaseFingerprint, cancellationToken)));
     }
 
@@ -179,7 +179,7 @@ internal sealed class DeckWriteTools
         UseStructuredContent = true)]
     [Description(
         "Local deck store: deletes one local deck backup by opaque ID without accepting a filesystem path. " +
-        "Pass confirmation exactly as \"delete backup <backupId>\"; a wrong phrase is refused and shows the phrase.")]
+        "confirmation must be exactly \"delete backup <backupId>\"; a wrong phrase is refused and shows the phrase.")]
     internal Task<OperationResult<DeckDeleteResult>> DeleteBackupAsync(
         [Description("Opaque backup UUID returned by local_deck_backup_list or local_deck_backup_create.")]
         Guid backupId,
@@ -189,7 +189,7 @@ internal sealed class DeckWriteTools
     {
         return ExecuteAsync(() => Confirmed(
             confirmation,
-            DeckConfirmation.Phrase("delete backup", backupId),
+            Confirmation.Phrase("delete", "backup", backupId),
             () => store.Backups.DeleteAsync(backupId, cancellationToken)));
     }
 
@@ -201,7 +201,7 @@ internal sealed class DeckWriteTools
         string phrase,
         Func<Task<OperationResult<T>>> operation)
     {
-        return DeckConfirmation.Check(confirmation, phrase) is { } refused
+        return Confirmation.Check(confirmation, phrase) is { } refused
             ? Task.FromResult<OperationResult<T>>(refused)
             : operation();
     }

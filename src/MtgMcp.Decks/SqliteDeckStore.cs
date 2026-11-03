@@ -937,7 +937,7 @@ public sealed class SqliteDeckStore : IDisposable
         if (current.Value != expectedRevision)
         {
             return new OperationConflict(
-                "stale-deck-revision",
+                SharedReasonCodes.StaleDeckRevision,
                 "The deck changed after the supplied revision.",
                 new ConflictState(Revision: current.Value));
         }

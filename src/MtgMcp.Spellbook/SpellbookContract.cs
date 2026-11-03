@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using MtgMcp.Core.Results;
 
 namespace MtgMcp.Spellbook;
 
@@ -145,7 +146,7 @@ internal static class SpellbookContract
         if (limit is < 1 or > MaximumLimit)
         {
             throw Invalid(
-                "invalid-page-size",
+                SharedReasonCodes.InvalidPageSize,
                 $"pageSize must be 1 through {MaximumLimit.ToString(CultureInfo.InvariantCulture)}.",
                 "pageSize");
         }

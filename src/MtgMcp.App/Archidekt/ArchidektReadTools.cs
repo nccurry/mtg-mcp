@@ -4,6 +4,7 @@ using ModelContextProtocol.Server;
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Hosting;
 using MtgMcp.Archidekt;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.App.Archidekt;
@@ -14,9 +15,9 @@ namespace MtgMcp.App.Archidekt;
 internal sealed class ArchidektReadTools
 {
     /// <summary>
-    /// Sets the most deck summaries a page of the deck list may ask for.
+    /// Sets the most deck summaries, differences, or preview rows a page may ask for.
     /// </summary>
-    private const int MaximumDeckListPageSize = 100;
+    private const int MaximumRemotePageSize = 100;
 
     /// <summary>
     /// Sets the most deck entries, folder records, or rows a page of another read may ask for.
@@ -103,7 +104,7 @@ internal sealed class ArchidektReadTools
         [Description("Remote deck summaries to return, from 1 through 100; default 50.")] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
-        if (ArchidektResultPaging.CheckPageSize(pageSize, MaximumDeckListPageSize) is { } invalid)
+        if (ResultPage.CheckPageSize(pageSize, MaximumRemotePageSize) is { } invalid)
         {
             return invalid;
         }
@@ -139,10 +140,10 @@ internal sealed class ArchidektReadTools
         [Description(CursorDescription)] string? cursor = null,
         [Description("Entries to return, from 1 through 200; default 100.")] int pageSize = 100,
         [Description(ZonesDescription)] IReadOnlyList<string>? zones = null,
-        [Description(ResponseFormatDescription), ArchidektResponseFormatValues] string responseFormat = "standard",
+        [Description(ResponseFormatDescription), ConciseResponseFormatValues] string responseFormat = "standard",
         CancellationToken cancellationToken = default)
     {
-        if (ArchidektResultPaging.CheckPageSize(pageSize, MaximumPageSize) is { } invalid)
+        if (ResultPage.CheckPageSize(pageSize, MaximumPageSize) is { } invalid)
         {
             return invalid;
         }
@@ -181,11 +182,11 @@ internal sealed class ArchidektReadTools
         [Description("Stable local deck UUID with an Archidekt provider binding.")] Guid localDeckId,
         [Description(CursorDescription)] string? cursor = null,
         [Description("Differences to return, from 1 through 100; default 50.")] int pageSize = 50,
-        [Description(DifferenceFormatDescription), ArchidektResponseFormatValues]
+        [Description(DifferenceFormatDescription), ConciseResponseFormatValues]
         string responseFormat = "standard",
         CancellationToken cancellationToken = default)
     {
-        if (ArchidektResultPaging.CheckPageSize(pageSize, 100) is { } invalid)
+        if (ResultPage.CheckPageSize(pageSize, MaximumRemotePageSize) is { } invalid)
         {
             return invalid;
         }
@@ -203,7 +204,7 @@ internal sealed class ArchidektReadTools
                 success.Data,
                 cursor,
                 pageSize,
-                PageCursorBinding.ForRequest(PageCursor.RequestHash(
+                PageCursorBinding.ForRequest(RequestHash.Of(
                     ("archidekt_sync_diff", typeof(string)),
                     (chosen.Data.ToString(), typeof(string)))),
                 chosen.Data)
@@ -240,11 +241,11 @@ internal sealed class ArchidektReadTools
         [Description(CursorDescription)] string? cursor = null,
         [Description("Rows (operations and differences together) to return, from 1 through 100; default 50.")]
         int pageSize = 50,
-        [Description(DifferenceFormatDescription), ArchidektResponseFormatValues]
+        [Description(DifferenceFormatDescription), ConciseResponseFormatValues]
         string responseFormat = "standard",
         CancellationToken cancellationToken = default)
     {
-        if (ArchidektResultPaging.CheckPageSize(pageSize, 100) is { } invalid)
+        if (ResultPage.CheckPageSize(pageSize, MaximumRemotePageSize) is { } invalid)
         {
             return invalid;
         }
@@ -262,7 +263,7 @@ internal sealed class ArchidektReadTools
             preview,
             cursor,
             pageSize,
-            PageCursorBinding.ForRequest(PageCursor.RequestHash(
+            PageCursorBinding.ForRequest(RequestHash.Of(
                 ("archidekt_pull_preview", typeof(string)),
                 (remoteDeckId, typeof(string)),
                 (localDeckId, typeof(Guid?)),
@@ -301,11 +302,11 @@ internal sealed class ArchidektReadTools
         [Description(CursorDescription)] string? cursor = null,
         [Description("Rows (operations and differences together) to return, from 1 through 100; default 50.")]
         int pageSize = 50,
-        [Description(DifferenceFormatDescription), ArchidektResponseFormatValues]
+        [Description(DifferenceFormatDescription), ConciseResponseFormatValues]
         string responseFormat = "standard",
         CancellationToken cancellationToken = default)
     {
-        if (ArchidektResultPaging.CheckPageSize(pageSize, 100) is { } invalid)
+        if (ResultPage.CheckPageSize(pageSize, MaximumRemotePageSize) is { } invalid)
         {
             return invalid;
         }
@@ -322,7 +323,7 @@ internal sealed class ArchidektReadTools
             preview,
             cursor,
             pageSize,
-            PageCursorBinding.ForRequest(PageCursor.RequestHash(
+            PageCursorBinding.ForRequest(RequestHash.Of(
                 ("archidekt_push_preview", typeof(string)),
                 (confirmRemovals, typeof(int?)),
                 (chosen.Data.ToString(), typeof(string)))),
@@ -365,7 +366,7 @@ internal sealed class ArchidektReadTools
     /// </summary>
     private static PageCursorBinding Request(string tool, string remoteDeckId, ArchidektDeckReadOptions options)
     {
-        return PageCursorBinding.ForRequest(PageCursor.RequestHash(
+        return PageCursorBinding.ForRequest(RequestHash.Of(
             (tool, typeof(string)),
             (remoteDeckId, typeof(string)),
             (options.Zones, typeof(IReadOnlyList<string>)),
@@ -398,7 +399,7 @@ internal sealed class ArchidektReadTools
         int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
-        if (ArchidektResultPaging.CheckPageSize(pageSize, 100) is { } invalid)
+        if (ResultPage.CheckPageSize(pageSize, MaximumRemotePageSize) is { } invalid)
         {
             return invalid;
         }
@@ -410,7 +411,7 @@ internal sealed class ArchidektReadTools
                 success.Data,
                 cursor,
                 pageSize,
-                PageCursorBinding.ForRequest(PageCursor.RequestHash(
+                PageCursorBinding.ForRequest(RequestHash.Of(
                     ("archidekt_snapshot_restore_preview", typeof(string)),
                     (remoteDeckId, typeof(string)),
                     (snapshotId, typeof(string)))))
@@ -450,7 +451,7 @@ internal sealed class ArchidektReadTools
         OperationInvalidInput? invalid = KindFields.CheckKind(kind, "list", "get") ?? (kind == "list"
             ? KindFields.RejectGiven(kind, ("folderId", folderId is not null))
             : KindFields.RequireText(kind, "folderId", folderId)) ??
-            ArchidektResultPaging.CheckPageSize(pageSize, MaximumPageSize);
+            ResultPage.CheckPageSize(pageSize, MaximumPageSize);
         if (invalid is not null)
         {
             return invalid;
@@ -468,7 +469,7 @@ internal sealed class ArchidektReadTools
             success.Data,
             cursor,
             pageSize,
-            PageCursorBinding.ForRequest(PageCursor.RequestHash(
+            PageCursorBinding.ForRequest(RequestHash.Of(
                 ("archidekt_folders_get", typeof(string)),
                 (kind, typeof(string)),
                 (folderId, typeof(string)))));
@@ -515,14 +516,14 @@ internal sealed class ArchidektReadTools
         [Description("Only with kind get: saved deck entries to return, from 1 through 200; default 100.")]
         int pageSize = 100,
         [Description("Only with kind get: " + ZonesDescription)] IReadOnlyList<string>? zones = null,
-        [Description("Only with kind get: " + ResponseFormatDescription), ArchidektResponseFormatValues]
+        [Description("Only with kind get: " + ResponseFormatDescription), ConciseResponseFormatValues]
         string responseFormat = "standard",
         CancellationToken cancellationToken = default)
     {
         OperationInvalidInput? invalid = KindFields.CheckKind(kind, "list", "get") ?? (kind == "list"
             ? KindFields.RejectGiven(kind, ("snapshotId", snapshotId is not null))
             : KindFields.RequireText(kind, "snapshotId", snapshotId)) ??
-            ArchidektResultPaging.CheckPageSize(pageSize, MaximumPageSize);
+            ResultPage.CheckPageSize(pageSize, MaximumPageSize);
         if (invalid is not null)
         {
             return invalid;

@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Hosting;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 using MtgMcp.Scryfall;
 

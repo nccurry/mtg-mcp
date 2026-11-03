@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Hosting;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 using MtgMcp.Spellbook;
 
@@ -54,7 +55,7 @@ internal sealed class SpellbookReadTools
         [Description("Whether the source groups variants by combo; omitted uses true.")] bool? groupByCombo = null,
         CancellationToken cancellationToken = default)
     {
-        PageCursorBinding binding = PageCursorBinding.ForRequest(PageCursor.RequestHash(
+        PageCursorBinding binding = PageCursorBinding.ForRequest(RequestHash.Of(
             (sourceQuery, typeof(string)),
             (groupByCombo, typeof(bool?))));
         OperationResult<int> offset = SpellbookPaging.Offset(cursor, binding);
@@ -112,7 +113,7 @@ internal sealed class SpellbookReadTools
         [Description("Whether the source groups variants by combo; omitted uses true.")] bool? groupByCombo = null,
         CancellationToken cancellationToken = default)
     {
-        PageCursorBinding binding = PageCursorBinding.ForRequest(PageCursor.RequestHash(
+        PageCursorBinding binding = PageCursorBinding.ForRequest(RequestHash.Of(
                 (sourceQuery, typeof(string)),
                 (groupByCombo, typeof(bool?))))
             .And(PageCursorBinding.ForDeck(deckId, expectedRevision));

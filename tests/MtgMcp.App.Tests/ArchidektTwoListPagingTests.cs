@@ -1,6 +1,6 @@
 using MtgMcp.App.Archidekt;
-using MtgMcp.App.Hosting;
 using MtgMcp.Archidekt;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.App.Tests;

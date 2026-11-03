@@ -102,15 +102,16 @@ internal sealed class DeckCategorizationCoordinator
         {
             return new OperationConflict(
                 SharedReasonCodes.PreviewChanged,
-                "The category evidence no longer reproduces the preview.",
+                "The category tag data changed since the preview. " +
+                "Run the preview again and pass its previewFingerprint.",
                 new ConflictState(preview.Data.DeckRevision, PreviewFingerprint: preview.Data.PreviewFingerprint));
         }
 
         if (preview.Data.CorpusGenerationId != expectedActiveGeneration)
         {
             return new OperationConflict(
-                "stale-scryfall-generation",
-                "The Scryfall card-data generation changed after preview.");
+                SharedReasonCodes.StaleScryfallGeneration,
+                "The Scryfall card-data generation changed since the preview. Run the preview again.");
         }
 
         if (!preview.Data.IsComplete)

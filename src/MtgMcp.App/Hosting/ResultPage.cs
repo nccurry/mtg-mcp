@@ -19,6 +19,14 @@ internal readonly record struct ResultPageSlice(int Offset, int Count, int Total
     internal bool More => Next < Total;
 
     /// <summary>
+    /// Keeps at most <paramref name="pageSize"/> rows of a slice that the size limit already cut.
+    /// </summary>
+    internal ResultPageSlice Limit(int pageSize)
+    {
+        return Count > pageSize ? this with { Count = pageSize } : this;
+    }
+
+    /// <summary>
     /// Copies the rows this page shows out of the whole list.
     /// </summary>
     internal List<T> Rows<T>(IReadOnlyList<T> rows)
@@ -40,6 +48,20 @@ internal readonly record struct ResultPageSlice(int Offset, int Count, int Total
 internal static class ResultPage
 {
     /// <summary>
+    /// Refuses a page size outside 1 through <paramref name="maximum"/>, and accepts a missing one. The refusal names
+    /// the unit when the size counts something other than rows.
+    /// </summary>
+    internal static OperationInvalidInput? CheckPageSize(int? pageSize, int maximum, string? unit = null)
+    {
+        return pageSize is { } size && (size < 1 || size > maximum)
+            ? new OperationInvalidInput(
+                SharedReasonCodes.InvalidPageSize,
+                $"pageSize must be from 1 through {maximum}{(unit is null ? string.Empty : " " + unit)}.",
+                "pageSize")
+            : null;
+    }
+
+    /// <summary>
     /// Counts the rows of one list, from <paramref name="offset"/>, that fit the bytes the page has left. A page
     /// shows at least one row when the list has one left, so a caller that follows the next offset never loops on the
     /// same rows. A row is measured as it is, unless <paramref name="rowBytes"/> gives its serialized size without its
@@ -57,8 +79,9 @@ internal static class ResultPage
     }
 
     /// <summary>
-    /// Pages two lists of one result: the first list fills the page, and the second list takes what is left. A page
-    /// that fits no row still shows one, from the first list if it has rows left, or else from the second.
+    /// Pages two lists of one result: the first list fills the page, and the second list takes rows only after the
+    /// first list is exhausted on that page, so rows read in list order. A page that fits no row still shows one,
+    /// from the first list if it has rows left, or else from the second.
     /// </summary>
     internal static (ResultPageSlice First, ResultPageSlice Second) TakeTwo<TFirst, TSecond>(
         IReadOnlyList<TFirst> first,
@@ -71,7 +94,8 @@ internal static class ResultPage
         ArgumentNullException.ThrowIfNull(second);
         int budget = Budget(headerBytes);
         int firstKept = Fit(first, firstOffset, budget, null, out int used);
-        int secondKept = Fit(second, secondOffset, budget - used, null, out _);
+        bool firstDone = firstOffset + firstKept >= first.Count;
+        int secondKept = firstDone ? Fit(second, secondOffset, budget - used, null, out _) : 0;
         if (firstKept == 0 && secondKept == 0)
         {
             if (first.Count > firstOffset)

@@ -266,7 +266,9 @@ internal sealed class ArchidektFolderOperations
             {
                 ArchidektOperationResults.RequireConfirmation(
                     request.Confirmation,
-                    $"delete folder {request.FolderId}");
+                    "delete",
+                    "folder",
+                    request.FolderId);
                 RemoteFolderTree before = await folderTransport.ListAsync(
                     budget,
                     cancellationToken).ConfigureAwait(false);

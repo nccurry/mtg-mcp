@@ -92,7 +92,7 @@ public sealed class ToolResultBudgetTests
     }
 
     /// <summary>
-    /// Tells whether a result says it was cut: a next offset or cursor, or <c>truncated</c> set to true, in the result
+    /// Tells whether a result says it was cut: a next cursor, or <c>truncated</c> set to true, in the result
     /// or in a result object inside it.
     /// </summary>
     private static bool ShowsPaging(JsonElement node)
@@ -104,9 +104,7 @@ public sealed class ToolResultBudgetTests
 
         foreach (JsonProperty property in node.EnumerateObject())
         {
-            bool next =
-                property.Name is "nextOffset" or "nextCursor" or "nextOperationOffset" or "nextDifferenceOffset";
-            if ((next && property.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number) ||
+            if ((property.Name == "nextCursor" && property.Value.ValueKind == JsonValueKind.String) ||
                 (property.Name == "truncated" && property.Value.ValueKind == JsonValueKind.True) ||
                 ShowsPaging(property.Value))
             {

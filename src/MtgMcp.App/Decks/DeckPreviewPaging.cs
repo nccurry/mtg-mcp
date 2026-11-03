@@ -1,5 +1,6 @@
 using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 using MtgMcp.Scryfall;
 
@@ -188,7 +189,7 @@ internal static class DeckPreviewPaging
         int pageSize)
     {
         ArgumentNullException.ThrowIfNull(preview);
-        if (CheckPageSize(pageSize) is { } badSize)
+        if (ResultPage.CheckPageSize(pageSize, MaximumPageSize) is { } badSize)
         {
             return badSize;
         }
@@ -203,7 +204,7 @@ internal static class DeckPreviewPaging
             return OperationFailure.Forward<PageCursorPosition, DeckIdentityReconciliationPreviewView>(start);
         }
 
-        int offset = position.Data.First;
+        int offset = position.Data.Offset;
 
         DeckIdentityReconciliationPreviewView header = new(
             preview.DeckId,
@@ -215,7 +216,7 @@ internal static class DeckPreviewPaging
             preview.Evidence,
             preview.PreviewFingerprint,
             preview.ApplyToken);
-        ResultPageSlice slice = Limit(ResultPage.Take(preview.Rows, offset, ResultSize.Measure(header)), pageSize);
+        ResultPageSlice slice = ResultPage.Take(preview.Rows, offset, ResultSize.Measure(header)).Limit(pageSize);
         return new OperationSuccess<DeckIdentityReconciliationPreviewView>(header with
         {
             Rows = slice.Rows(preview.Rows),
@@ -237,7 +238,7 @@ internal static class DeckPreviewPaging
         int pageSize)
     {
         ArgumentNullException.ThrowIfNull(preview);
-        if (CheckPageSize(pageSize) is { } badSize)
+        if (ResultPage.CheckPageSize(pageSize, MaximumPageSize) is { } badSize)
         {
             return badSize;
         }
@@ -249,7 +250,7 @@ internal static class DeckPreviewPaging
             return OperationFailure.Forward<PageCursorPosition, DeckImportPreviewView>(start);
         }
 
-        int offset = position.Data.First;
+        int offset = position.Data.Offset;
 
         bool first = offset == 0;
         DeckImportProposal? proposal = preview.Proposal;
@@ -313,7 +314,7 @@ internal static class DeckPreviewPaging
             HeaderListsCut = cut ? true : null,
         };
         List<ImportRow> rows = ImportRows(proposal, entries);
-        ResultPageSlice slice = Limit(ResultPage.Take(rows, offset, ResultSize.Measure(header)), pageSize);
+        ResultPageSlice slice = ResultPage.Take(rows, offset, ResultSize.Measure(header)).Limit(pageSize);
         List<ImportRow> shown = slice.Rows(rows);
         return new OperationSuccess<DeckImportPreviewView>(header with
         {
@@ -342,7 +343,7 @@ internal static class DeckPreviewPaging
         int pageSize)
     {
         ArgumentNullException.ThrowIfNull(preview);
-        if (CheckPageSize(pageSize) is { } badSize)
+        if (ResultPage.CheckPageSize(pageSize, MaximumPageSize) is { } badSize)
         {
             return badSize;
         }
@@ -357,7 +358,7 @@ internal static class DeckPreviewPaging
             return OperationFailure.Forward<PageCursorPosition, DeckCategoryRulesPreviewView>(start);
         }
 
-        int offset = position.Data.First;
+        int offset = position.Data.Offset;
 
         DeckCategoryRulesPreviewView header = new(
             preview.DeckId,
@@ -370,7 +371,7 @@ internal static class DeckPreviewPaging
             preview.PreviewFingerprint,
             preview.ApplyToken,
             preview.CorpusGenerationId);
-        ResultPageSlice slice = Limit(ResultPage.Take(preview.Decisions, offset, ResultSize.Measure(header)), pageSize);
+        ResultPageSlice slice = ResultPage.Take(preview.Decisions, offset, ResultSize.Measure(header)).Limit(pageSize);
         return new OperationSuccess<DeckCategoryRulesPreviewView>(header with
         {
             Decisions = slice.Rows(preview.Decisions),
@@ -415,33 +416,14 @@ internal static class DeckPreviewPaging
     internal const int MaximumPageSize = 100;
 
     /// <summary>
-    /// Refuses a page size outside 1 through <see cref="MaximumPageSize"/>.
-    /// </summary>
-    private static OperationInvalidInput? CheckPageSize(int pageSize)
-    {
-        return pageSize is >= 1 and <= MaximumPageSize
-            ? null
-            : new OperationInvalidInput(
-                "invalid-page-size",
-                $"pageSize must be from 1 through {MaximumPageSize}.",
-                "pageSize");
-    }
-
-    /// <summary>
-    /// Keeps at most <paramref name="pageSize"/> rows of a page that the size limit already cut.
-    /// </summary>
-    private static ResultPageSlice Limit(ResultPageSlice slice, int pageSize)
-    {
-        return slice with { Count = Math.Min(slice.Count, pageSize) };
-    }
-
-    /// <summary>
     /// Builds the binding of a preview cursor: the preview fingerprint, and the deck when the preview belongs to one.
     /// </summary>
     private static PageCursorBinding Bind(string previewFingerprint, Guid? deckId, long? revision)
     {
         PageCursorBinding binding = PageCursorBinding.ForPreview(previewFingerprint);
-        return deckId is Guid id && revision is long value ? binding.And(PageCursorBinding.ForDeck(id, value)) : binding;
+        return deckId is Guid id && revision is long value
+            ? binding.And(PageCursorBinding.ForDeck(id, value))
+            : binding;
     }
 
     /// <summary>
@@ -470,7 +452,7 @@ internal static class DeckPreviewPaging
         long? revision)
     {
         return slice.More
-            ? PageCursor.Encode(new PageCursorPosition(slice.Next), Bind(previewFingerprint, deckId, revision))
+            ? PageCursor.Encode(PageCursorPosition.AtOffset(slice.Next), Bind(previewFingerprint, deckId, revision))
             : null;
     }
 

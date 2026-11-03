@@ -603,7 +603,7 @@ internal sealed class ScryfallCardDataLifecycleOperations
             statusSuccess.Data.Active?.GenerationId != expected)
         {
             return new OperationConflict(
-                "stale-scryfall-generation",
+                SharedReasonCodes.StaleScryfallGeneration,
                 "The active corpus generation changed before synchronization.");
         }
 
@@ -832,7 +832,7 @@ internal sealed class ScryfallSnapshotOperations
         return pageSize is >= 1 && pageSize <= maximum
             ? null
             : new OperationInvalidInput(
-                "invalid-page-size",
+                SharedReasonCodes.InvalidPageSize,
                 $"Page size must be from 1 through {maximum}.",
                 "pageSize");
     }

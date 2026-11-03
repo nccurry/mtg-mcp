@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Hosting;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 using MtgMcp.Playgroup;
 
@@ -182,7 +183,7 @@ internal sealed class PlaygroupReadTools
         [Description("Whether each returned game should include provider event records.")] bool includeEvents = false,
         CancellationToken cancellationToken = default)
     {
-        PageCursorBinding binding = PageCursorBinding.ForRequest(PageCursor.RequestHash(
+        PageCursorBinding binding = PageCursorBinding.ForRequest(RequestHash.Of(
             (playgroupId, typeof(int)),
             (pageSize, typeof(int)),
             (includeEvents, typeof(bool))));
@@ -194,7 +195,7 @@ internal sealed class PlaygroupReadTools
 
         OperationResult<PlaygroupEvidence> page = await service.ListPlaygroupGamesAsync(
             playgroupId,
-            start.Data.First + 1,
+            start.Data.Page + 1,
             pageSize,
             includeEvents,
             cancellationToken).ConfigureAwait(false);

@@ -31,4 +31,15 @@ public static class SharedReasonCodes
     /// confirmation phrase.
     /// </summary>
     public const string ConfirmationRequired = "confirmation-required";
+
+    /// <summary>
+    /// Names the invalid-input reason reported when a page size is outside the range a tool allows.
+    /// </summary>
+    public const string InvalidPageSize = "invalid-page-size";
+
+    /// <summary>
+    /// Names the conflict reported when an operation names a Scryfall card-data generation that is no longer the one
+    /// it needs.
+    /// </summary>
+    public const string StaleScryfallGeneration = "stale-scryfall-generation";
 }

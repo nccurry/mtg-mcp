@@ -173,7 +173,7 @@ public sealed class DeckInterchangeService
         {
             return new OperationConflict(
                 SharedReasonCodes.PreviewChanged,
-                "The import proposal does not match the supplied preview fingerprint.",
+                "The import proposal changed since the preview. Run the preview again and pass its previewFingerprint.",
                 new ConflictState(PreviewFingerprint: preview.PreviewFingerprint));
         }
 

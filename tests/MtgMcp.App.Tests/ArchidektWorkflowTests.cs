@@ -7,6 +7,7 @@ using MtgMcp.App.Decks;
 using MtgMcp.App.Hosting;
 using MtgMcp.Archidekt;
 using MtgMcp.Core.Decks;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 using MtgMcp.Core.Tests.Recorded;
 using MtgMcp.Decks;

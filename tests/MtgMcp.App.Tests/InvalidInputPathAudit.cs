@@ -1,13 +1,14 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 
-namespace MtgMcp.App.Hosting;
+namespace MtgMcp.App.Tests;
 
 /// <summary>
 /// Records every invalid-input result that names no argument path, so a test run can prove that each refusal of a
-/// caller's value says which value it refused. The server never registers it; a test adds it to the services of the
-/// server it runs, and <see cref="ToolCallPolicy.Filter"/> reports each result to it.
+/// caller's value says which value it refused. A test adds <see cref="Filter"/> to the call filters of the server it
+/// runs, ahead of the server's own filter, so the audit sees the final result.
 /// </summary>
 internal sealed class InvalidInputPathAudit
 {
@@ -33,6 +34,20 @@ internal sealed class InvalidInputPathAudit
     /// Gets the tool and reason code of each invalid-input result seen without a path.
     /// </summary>
     internal IReadOnlyList<string> Findings => [.. findings];
+
+    /// <summary>
+    /// Wraps the tool call pipeline so every result is observed after the inner pipeline made it.
+    /// </summary>
+    internal McpRequestHandler<CallToolRequestParams, CallToolResult> Filter(
+        McpRequestHandler<CallToolRequestParams, CallToolResult> next)
+    {
+        return async (context, cancellationToken) =>
+        {
+            CallToolResult result = await next(context, cancellationToken).ConfigureAwait(false);
+            Observe(context.Params?.Name ?? string.Empty, result);
+            return result;
+        };
+    }
 
     /// <summary>
     /// Records the result of one tool call when it is an invalid-input result with no path.

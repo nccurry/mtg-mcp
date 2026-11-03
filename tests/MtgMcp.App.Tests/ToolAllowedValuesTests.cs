@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Reflection;
-using MtgMcp.App.Archidekt;
 using MtgMcp.App.Decks;
 using MtgMcp.App.Hosting;
 using MtgMcp.App.Scryfall;
@@ -28,21 +27,18 @@ public sealed class ToolAllowedValuesTests
         {
             foreach (ParameterInfo parameter in method.GetParameters())
             {
-                Type? expected = parameter.Name switch
+                Type[] expected = parameter.Name switch
                 {
                     "freshnessPolicy" when toolName == "scryfall_card_data_sync" =>
-                        typeof(SyncFreshnessPolicyValuesAttribute),
-                    "freshnessPolicy" => typeof(FreshnessPolicyValuesAttribute),
-                    "formatId" => typeof(InterchangeFormatValuesAttribute),
-                    "tagType" => typeof(TagKindValuesAttribute),
-                    "responseFormat" when parameter.GetCustomAttribute<DeckResponseFormatValuesAttribute>() is not null =>
-                        typeof(DeckResponseFormatValuesAttribute),
-                    "responseFormat" when toolName.StartsWith("archidekt_", StringComparison.Ordinal) =>
-                        typeof(ArchidektResponseFormatValuesAttribute),
-                    "responseFormat" => typeof(ResponseFormatValuesAttribute),
-                    _ => null,
+                        [typeof(SyncFreshnessPolicyValuesAttribute)],
+                    "freshnessPolicy" => [typeof(FreshnessPolicyValuesAttribute)],
+                    "formatId" => [typeof(InterchangeFormatValuesAttribute)],
+                    "tagType" => [typeof(TagKindValuesAttribute)],
+                    "responseFormat" =>
+                        [typeof(ResponseFormatValuesAttribute), typeof(ConciseResponseFormatValuesAttribute)],
+                    _ => [],
                 };
-                if (expected is not null && parameter.GetCustomAttribute(expected) is null)
+                if (expected.Length > 0 && expected.All(type => parameter.GetCustomAttribute(type) is null))
                 {
                     offenders.Add($"{toolName}.{parameter.Name}");
                 }
