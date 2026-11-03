@@ -176,7 +176,7 @@ The `decks` toolset supports:
 - revisioned deck, entry, zone, category, and provider-binding changes, made
   through one atomic ordered batch tool, `local_deck_apply_changes` (a batch of
   one change is normal);
-- guarded backup, restore, and delete;
+- guarded backup, restore, and delete, each confirmed by an exact phrase;
 - native JSON and generic text import and export;
 - manual import and export files for Archidekt and Moxfield;
 - exact Scryfall identity reconciliation; and
@@ -214,7 +214,7 @@ come back, `cardNamesNotFound` lists the names with no match, and the totals sti
 OR and the filters combine with AND; `zonesNotFound` and `categoryNamesNotFound` list the values that match no entry of
 the deck, and no match is a normal result with no entries. The cursor covers every filter, so pass the same ones with
 `nextCursor`. `responseFormat: "concise"` returns only `entryId`, `cardName`, `quantity`, `zone`, and
-`categoryNames` for each entry, so a large deck fits in fewer pages; the default `full` is unchanged. The summary of every tool that writes a deck
+`categoryNames` for each entry, so a large deck fits in fewer pages; the default `standard` returns every stored entry field. The summary of every tool that writes a deck
 carries the same totals (`cardsByZone` with the entry count).
 
 To change many entries at once, send one `patch-entries` change in `local_deck_apply_changes`. It names 1 to 100
@@ -364,22 +364,23 @@ in the native companion file and are omitted from provider text.
 
 Results are cut to fit the client; see [Output control](docs/output-control.md). Claude Code saves a tool
 result of more than 50,000 characters to a file, so the server aims for 40,000 UTF-8 bytes.
-These tools page their rows, so read every page before you decide what a result holds. Each
-sets `truncated` and `narrow` when it left rows out, and names the argument that reads the next page:
-`local_deck_identity_reconcile_preview`, `local_deck_import_preview`, and
-`local_deck_category_rules_preview` take `offset` and return `nextOffset`; their fingerprints and apply
-tokens cover the whole preview, so the apply tool takes the guards of any page and still applies everything.
-On later pages pass `expectedPreviewFingerprint` (the `previewFingerprint`, or for the import preview the
-`fingerprint`, of the first page) to be refused if the preview changed in between. The first page of the
+Every paged tool takes `cursor` and `pageSize` and returns `nextCursor`, which is null on the last page; pass
+`nextCursor` back as `cursor` with the same other arguments. A cursor whose data changed since the first page is
+refused with `cursor-stale`, and a cursor that is malformed or belongs to another request with `invalid-cursor`. Read
+every page before you decide what a result holds. Each sets `truncated` and `narrow` when it left rows out.
+`local_deck_identity_reconcile_preview`, `local_deck_import_preview`, and `local_deck_category_rules_preview` return
+`previewFingerprint` and, for the identity and category previews, an apply token; both cover the whole preview, so the
+apply tool takes the guards of any page and still applies everything. The cursor binds the preview, so a preview that
+changed in between is refused with `cursor-stale` and the current `previewFingerprint`. The first page of the
 import preview also carries the diagnostics, unresolved identities, categories, and provider bindings, each cut to
 fit with its exact count beside it; the saved synchronization snapshots of a native file are counted, not returned.
 A paged deck cuts its name to 1,000 UTF-8 bytes (`nameTruncated`) and its description to 8,000 on the first page only
 (`descriptionTruncated`, `descriptionLength`). A deck write summary cuts the name the same way.
 `local_deck_export_bundle` lists every artifact (file name, media type, total length in UTF-16 code units, and the
 SHA-256 of the whole content) and returns one chunk of one artifact's content of at most 30,000 UTF-8 bytes of
-JSON text; pass `artifact` and `offset` (the previous `chunk.nextOffset`, a count of UTF-16 code units) to read on.
-The chunks joined in order are the exact file. The field-preservation report comes only with the chunk at
-offset 0. `local_deck_get` takes `zones`, `categoryNames`, and `cardNames` filters, and the Archidekt diff and
+JSON text; pass `artifact` and `cursor` (the previous `nextCursor`) to read on. `pageSize` there counts UTF-16
+code units of the artifact, and a chunk never splits a surrogate pair. The chunks joined in order are the exact
+file. The field-preservation report comes only with the first chunk. `local_deck_get` takes `zones`, `categoryNames`, and `cardNames` filters, and the Archidekt diff and
 preview tools take `responseFormat: "concise"`, to read less of a large deck or push. The Scryfall card tools cut a page of cards, in any `responseFormat`, to the size limit and return
 `nextCursor` for the rest; they also report `returnedCount`, `requestedCount`, and `cutReason` (see
 [Query Scryfall](#query-scryfall)).
@@ -468,6 +469,11 @@ infer card roles, or recommend a combo or card change. The cache lasts 15
 minutes by default; configure it with a whole number from 1 through 1,440
 minutes.
 
+`spellbook_variant_search` and `spellbook_deck_combos_find` page with `pageSize` (1 through 25, default 20) and
+`cursor`, and return `{ source, nextCursor, truncated }` (combos also return `deck`). The cursor ends at the source's
+offset cap of 1,000. A combos page cut to the result size limit has no `nextCursor`; repeat the call with a smaller
+`pageSize`.
+
 ## Work with card lists and deck rule facts
 
 These tools return facts only. They never say a deck is legal or illegal.
@@ -501,13 +507,13 @@ request below to the real tool schema, so these requests cannot drift from the
 tool schemas.
 
 **Search results that are not in my deck.** Run `scryfall_search` first. It
-saves the request as a snapshot and returns `snapshot.snapshotId`. Then ask for
+saves the request as a snapshot and returns `snapshot.requestSnapshotId`. Then ask for
 the left list minus the right list:
 
 <!-- example: card_lists_compare -->
 ```json
 {
-  "left": { "kind": "scryfall-snapshot", "snapshotId": "0193e97a-ef95-7700-8000-0000000000a1" },
+  "left": { "kind": "scryfall-snapshot", "requestSnapshotId": "0193e97a-ef95-7700-8000-0000000000a1" },
   "right": { "kind": "deck", "deckId": "0193e97a-ef95-7700-8000-000000000001" },
   "operation": "difference",
   "responseFormat": "concise"
@@ -737,28 +743,25 @@ estimate of how many of its operations fit. Apply part of the local changes firs
 
 Results are cut to fit the client. Claude Code saves a tool result longer than
 50,000 characters to a file and shows the agent only the path, so these tools aim
-for 40,000 UTF-8 bytes and page their rows. `archidekt_deck_get` leads with a summary (see below) and
-pages entries with `offset` and `nextOffset`;
-`archidekt_push_preview` and `archidekt_pull_preview` lead with a summary (operations by kind,
-differences, conflicts) and page with `operationOffset` and `differenceOffset`; the guards and the
-preview fingerprint cover the whole preview, so the apply tool needs no page.
-`archidekt_sync_diff` (`differenceOffset`), `archidekt_snapshot_restore_preview`
-(`operationOffset`, `differenceOffset`), `archidekt_folders_get` (`offset`), and
-`archidekt_snapshots_get` with `kind` `get` (`offset`, over the saved deck) page
-the same way. When `truncated` is true, call again with the next offset in
-`narrow`. A preview with two lists (operations and differences) has one offset for each; give
-the later pages `expectedPreviewFingerprint`, the `previewFingerprint` of the first page, so a
-preview that changed in between is refused instead of paged out of line.
+for 40,000 UTF-8 bytes and page their rows. Every Archidekt read pages with `cursor`, `pageSize`, and
+`nextCursor`. `archidekt_deck_get` leads with a summary (see below) and pages entries (`pageSize` up to 200, default
+100); `archidekt_push_preview` and `archidekt_pull_preview` lead with a summary (operations by kind, differences,
+conflicts) and page their operations and then their differences (`pageSize` up to 100, default 50); the guards and
+the preview fingerprint cover the whole preview, so the apply tool needs no page. `archidekt_sync_diff`,
+`archidekt_snapshot_restore_preview`, `archidekt_folders_get`, `archidekt_deck_list`, and `archidekt_snapshots_get`
+with `kind` `get` (over the saved deck) page the same way. When `truncated` is true, call again with `nextCursor`
+and the same other arguments. The cursor binds the deck, the preview, or the folder tree it read, so a deck that
+changed in between is refused with `cursor-stale` instead of paged out of line.
 `archidekt_deck_get` leaves out unknown provider fields over 8,000 bytes and sets
 `extensionsOmitted`; they cannot be read through this tool.
 
-`archidekt_sync_diff`, `archidekt_pull_preview`, and `archidekt_push_preview` take `responseFormat`: `full` (the
-default; `standard` is the same) returns the whole baseline, local, and remote value of each difference row, and
+`archidekt_sync_diff`, `archidekt_pull_preview`, and `archidekt_push_preview` take `responseFormat`: `standard` (the
+default) returns the whole baseline, local, and remote value of each difference row, and
 `concise` returns `path`, `state`, and `fields`, each field with its `name` and `baseline`, `local`, and `remote`
 values, listing only the fields whose values differ. The preview fingerprint, guards, summary, operations, and
 `applyAvailable` are the same in both formats, and a page is cut by the size of the format returned, so a concise
 page holds more rows. Use `concise` to review an edit-sized push; an 18-edit push preview of a 347-entry deck fits
-in about 7,000 characters, against more than 36,000 in `full`. `archidekt_snapshot_restore_preview` does not take it. Each pull and push preview also returns
+in about 7,000 characters, against more than 36,000 in `standard`. `archidekt_snapshot_restore_preview` does not take it. Each pull and push preview also returns
 `applyOptions` when its apply call must repeat an option: `discardLocalChanges: true` for a pull, or `confirmRemovals`
 with the removal count for a push. A pull apply that passes the other `discardLocalChanges` value than its preview is
 refused with `pull-discard-option-mismatch`, naming the value the preview used.
@@ -766,12 +769,11 @@ refused with `pull-discard-option-mismatch`, naming the value the preview used.
 `archidekt_deck_get` and `archidekt_snapshots_get` (kind `get`) take:
 
 - `zones`: any of `commander`, `main`, `sideboard`, `maybeboard` (the names `card_list_query` uses). Omit it to read
-  every zone. `offset` and `nextOffset` count the chosen entries, and `shownEntryCount` is how many the zones hold; a
-  bad offset is refused with `invalid-offset` naming that count.
-- `responseFormat`: `concise` (the default) returns `cardName`, `quantity`, `zone`, `categoryNames`, `setCode`,
-  `collectorNumber`, `oracleId`, and `inDeck`. `full` (and `standard`, the same) returns every entry field (provider
-  IDs, `finish`, `language`, `sortOrder`, and the rest) plus `inDeck`. A cut page's `narrow` says to pass
-  `responseFormat: "full"` for every field.
+  every zone. `pageSize` and `nextCursor` count the chosen entries, and `shownEntryCount` is how many the zones hold.
+- `responseFormat`: `standard` (the default) returns every entry field (provider IDs, `finish`, `language`,
+  `sortOrder`, and the rest) plus `inDeck`. `concise` returns `cardName`, `quantity`, `zone`, `categoryNames`,
+  `setCode`, `collectorNumber`, `oracleId`, and `inDeck`. A cut page's `narrow` says to pass a smaller `pageSize` or
+  `responseFormat: "concise"` to fit more.
 
 Entries come ordered by zone (commander, main, sideboard, maybeboard), then card name, then relation ID, so pages of
 separate reads line up. `inDeck` is false when the entry's first category is not included in the deck on Archidekt
@@ -891,7 +893,7 @@ card, or when a kept card's categories would put it in another zone. Any other l
 removed, a category changed) still needs `discardLocalChanges`.
 
 To take the Archidekt state over every local change, call `archidekt_pull_preview` with `discardLocalChanges` set to
-true and `localDeckId`, then `archidekt_pull_apply` with the same flag in the request. The preview says what is
+true and `localDeckId`, then `archidekt_pull_apply` with the same flag and `confirmation` `discard local changes <localDeckId>`. The preview says what is
 thrown away: "N cards added, N changed, N removed (categories: N added, N changed, N removed)", and lists the rows
 with `local-*` states in `differences`. Without the flag nothing is discarded, and the flag needs an existing local
 deck (`discard-needs-local-deck`). If Archidekt changed too, a push is refused as well, so `discardLocalChanges` is the
@@ -943,6 +945,11 @@ Request starts are at least 250 milliseconds apart. Reads have bounded retry.
 Writes are single-attempt. Live acceptance does not invoke writes because the
 public API provides no cleanup operation.
 
+`playgroup_playgroup_games_list` pages with `pageSize` (1 through 100, default 10) and `cursor`, and returns
+`{ source, nextCursor, truncated }`. Playgroup reports no total, so `nextCursor` follows every full page: when the game
+count is an exact multiple of `pageSize`, the last page is empty. `playgroup_deck_get` and
+`playgroup_deck_elo_history_get` take `playgroupDeckId`, and `playgroup_live_session_create` takes flat arguments.
+
 ## Start a workflow with a prompt
 
 The server offers three MCP prompts. A prompt is a ready-made first message that
@@ -992,10 +999,16 @@ A call whose arguments cannot be read returns `kind: "invalid-input"`, reason
 `invalid-arguments`, and a top-level `path` to the rejected value, for example
 `changes[0].entryDraft.quantity`. The message names the expected type in plain words ("The value at
 'changes[3].entry.sortOrder' must be an integer."; "... must be a UUID"). A wrong confirmation phrase on a
-destructive Archidekt tool (`confirmation-required`) shows the exact phrase to pass. A union's `kind` property (such as a deck
+destructive tool (`confirmation-required`, `path` `confirmation`) shows the exact phrase to pass. The phrases are
+`delete deck <deckId>`, `restore backup <backupId>`, and `delete backup <backupId>` (local); `delete deck <remoteDeckId>`,
+`delete folder <folderId>`, `delete snapshot <snapshotId>`, `restore snapshot <snapshotId>`, and
+`discard local changes <localDeckId>` (Archidekt); and `delete card-data <expectedActiveGeneration>`,
+`rollback card-data <expectedPreviousGeneration>`, and `delete request-snapshot <requestSnapshotId>` (Scryfall).
+Every `invalid-input` result names the rejected argument in `path`. A union's `kind` property (such as a deck
 change's `add-entry`) may appear anywhere in its object. A `conflict` caused by
-stale state includes `current`, the current local revision, remote fingerprint,
-or both, to preview again against.
+stale state includes `current`, the current local `revision`, `remoteFingerprint`, `previewFingerprint`,
+or any of them, to preview again against. A deck whose revision moved is `stale-deck-revision`, a preview that no
+longer matches is `preview-changed`, and a page cursor whose data changed is `cursor-stale`.
 
 Every tool rejects an argument it does not declare, including a misspelled field
 inside a nested object such as an entry draft, with `invalid-input` and the

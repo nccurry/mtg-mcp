@@ -47,8 +47,9 @@ SQLite store (`decks.db`). App holds the tools (`src/MtgMcp.App/Decks/`).
   `categoryNames` (1 to 100 names, ignoring case and surrounding space, against primary and non-primary categories), and
   `cardNames`. Values inside one filter combine with OR; the filters combine with AND. The values that match no entry of
   the whole deck come back in `zonesNotFound`, `categoryNamesNotFound`, and `cardNamesNotFound`, and no match is a normal
-  result with no entries. Deck-wide totals ignore the filters. The cursor covers every filter
+  result with no entries. Deck-wide totals ignore the filters. The cursor covers every filter and the deck revision, so a deck edited between pages gives `cursor-stale`
   (`src/MtgMcp.App/Decks/DeckCardViewCoordinator.cs`; see [Output control](../output-control.md)).
+  Its `responseFormat` is `standard` (default) or `concise`.
 - `card_list_query` returns the stored entry ID as the row field `entryId` for local deck and deck backup sources, so a
   card-property query gives the IDs a patch or removal needs. Other sources refuse it as `invalid-field`
   (`src/MtgMcp.App/CardLists/CardListCoordinator.cs`). Writes stay keyed by explicit entry IDs; no change targets a
@@ -119,6 +120,9 @@ So a zone move on a deck bound to Archidekt is two settings that must agree: the
 Push sends card changes for one deck through `modifyCards/v2`, which takes a list of cards
 (`src/MtgMcp.Archidekt/ArchidektDeckTransport.cs`, `ArchidektDeckOperations.cs`):
 
+- `archidekt_push_apply` and `archidekt_pull_apply` check `expectedRevision` first. A local deck at another revision is
+  refused with `stale-deck-revision` and `current.revision`, then the remote fingerprint
+  (`remote-deck-changed`), then the rest of the preview (`preview-changed`).
 - A run of consecutive added entries goes out in one request of up to 25 cards (`ArchidektSyncPlanner.CardBatchSize`).
   Every other operation is one request. Each card of an accepted batch is matched to its returned relation by
   `patchId`.

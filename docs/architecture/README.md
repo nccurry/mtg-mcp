@@ -100,8 +100,9 @@ writes also require provider fingerprints or checksums where supported.
 
 The server refuses stale or tampered requests. It does not choose a conflict
 winner. A conflict caused by stale state includes a `current` object with the
-current local revision, remote fingerprint, or both, so the caller can preview
-again and retry.
+current local revision, remote fingerprint, preview fingerprint, or any of them, so the caller can preview
+again and retry. A moved deck revision is `stale-deck-revision`, a preview that no longer matches is
+`preview-changed`, and a changed page source is `cursor-stale`; see [MCP surface](mcp-surface.md).
 
 ## Non-goals
 
