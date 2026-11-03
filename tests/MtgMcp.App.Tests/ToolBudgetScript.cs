@@ -152,17 +152,6 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
     }
 
     /// <summary>
-    /// Reads a whole-number property that is present and not null.
-    /// </summary>
-    private static bool TryReadOffset(JsonElement data, string name, out int value)
-    {
-        value = 0;
-        return data.TryGetProperty(name, out JsonElement element) &&
-            element.ValueKind == JsonValueKind.Number &&
-            element.TryGetInt32(out value);
-    }
-
-    /// <summary>
     /// Reads the main deck every way: every include, every page, validation, export, duplicates, and rule previews.
     /// </summary>
     private async Task ReadLocalDeckAsync(DeckDocument main)
