@@ -9,7 +9,7 @@ and PLC packets under `docs/llms/`.
 
 ## Rules
 
-- Keep docs aligned with `README.md`, `CONTRIBUTING.md`, `SECURITY.md`,
+- Keep docs aligned with `README.md`, `docs/reference.md`, `CONTRIBUTING.md`, `SECURITY.md`,
   `Taskfile.yml`, `global.json`, project files, and current source.
 - Link to source files instead of copying SDK versions, package versions,
   command lists, or task details that change.

@@ -159,7 +159,7 @@ task ci                 # what CI runs, including coverage gates and smoke tests
 - Keep at least 90 percent line coverage for every production assembly
   (`task coverage:gates`) with behavior-focused tests, not unjustified
   exclusions.
-- Public MCP tool or API changes update `README.md`, `CHANGELOG.md`, and the
+- Public MCP tool or API changes update `docs/reference.md`, `CHANGELOG.md`, and the
   related tests. Follow `docs/versioning.md`.
 
 ## Planning

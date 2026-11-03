@@ -621,11 +621,11 @@ public sealed class StatisticsSimulateTests
     }
 
     /// <summary>
-    /// Verifies the README example: a 99-card deck with 40 land cards, one land a turn, and four mana on turn 4 gives
-    /// the numbers the README prints for the seed.
+    /// Verifies the reference example: a 99-card deck with 40 land cards, one land a turn, and four mana on turn 4 gives
+    /// the numbers the reference prints for the seed.
     /// </summary>
     [Fact]
-    public async Task Simulate_WithTheReadmeExample_GivesTheDocumentedCounts()
+    public async Task Simulate_WithTheReferenceExample_GivesTheDocumentedCounts()
     {
         using SimulateSetup setup = await CreateAsync();
         Guid land = Guid.Parse("0193e97a-ef95-7700-8000-000000000011");

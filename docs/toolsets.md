@@ -124,5 +124,5 @@ because registration is fixed for the session and a prompt costs no model
 context until a user runs it. Their text names only tools of the toolsets that
 need no credentials (`decks`, `scryfall`, `stats`, and `spellbook`). When the
 selection or mode hides a named tool, the prompt tells the agent to say which
-step it skipped and continue. See the README section "Start a workflow with a
+step it skipped and continue. See the reference section "Start a workflow with a
 prompt".

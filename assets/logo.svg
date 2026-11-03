@@ -1,52 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title desc" shape-rendering="geometricPrecision">
   <title id="title">mtg-mcp logo</title>
-  <desc id="desc">A rounded hexagon badge with a centered fan of cards connected by chip lines to five mana-color circles.</desc>
-  <g fill="none" stroke="#17252d" stroke-linecap="round" stroke-linejoin="round">
-    <path
-      d="M275 81 395 150Q414 161 414 183V321Q414 343 395 354L275 423Q256 434 237 423L117 354Q98 343 98 321V183Q98 161 117 150L237 81Q256 70 275 81Z"
-      fill="#ffffff"
-      stroke-width="16" />
+  <desc id="desc">A faceted pentagon gem in the five Magic colors, white, blue, black, red, and green, around a gold diamond.</desc>
 
-    <g transform="translate(256 278) scale(0.93) translate(-256 -278)">
-      <g stroke-width="7.8">
-        <path d="M256 306v36" />
+  <rect x="16" y="16" width="224" height="224" rx="48" fill="#0B0D12"/>
+  <rect x="16" y="16" width="224" height="224" rx="48" fill="none" stroke="#2B2F3A" stroke-width="4"/>
 
-        <path d="M134 240v15l31 31v36h34l30-36" />
-        <path d="M228 308l-31 37h-33l-19-19" />
+  <g stroke="#0B0D12" stroke-width="3" stroke-linejoin="round">
+    <path d="M128 134 L88.05 79.02 L128 50 Z" fill="#F8F6D8"/>
+    <path d="M128 134 L128 50 L167.95 79.02 Z" fill="#D9CC98"/>
 
-        <path d="M378 240v15l-31 31v36h-34l-30-36" />
-        <path d="M284 308l31 37h33l19-19" />
-      </g>
+    <path d="M128 134 L167.95 79.02 L207.89 108.04 Z" fill="#4C9BDA"/>
+    <path d="M128 134 L207.89 108.04 L192.63 155 Z" fill="#0E68AB"/>
 
-      <g transform="translate(248 224) scale(0.82) translate(-256 -224)">
-        <g transform="rotate(10 310 225)">
-          <rect x="248" y="139" width="124" height="172" rx="15" fill="#ffffff" stroke-width="8" />
-          <rect x="264" y="155" width="92" height="140" rx="7" fill="#17252d" stroke-width="0" />
-        </g>
+    <path d="M128 134 L192.63 155 L177.37 201.96 Z" fill="#8C7F8A"/>
+    <path d="M128 134 L177.37 201.96 L128 201.96 Z" fill="#4A3F48"/>
 
-        <g transform="rotate(5 288 222)">
-          <rect x="226" y="136" width="124" height="172" rx="15" fill="#ffffff" stroke-width="8" />
-          <rect x="242" y="152" width="92" height="140" rx="7" fill="#17252d" stroke-width="0" />
-        </g>
+    <path d="M128 134 L128 201.96 L78.63 201.96 Z" fill="#EE5B44"/>
+    <path d="M128 134 L78.63 201.96 L63.37 155 Z" fill="#D3202A"/>
 
-        <g transform="rotate(1 266 220)">
-          <rect x="204" y="134" width="124" height="172" rx="15" fill="#ffffff" stroke-width="8" />
-          <rect x="220" y="150" width="92" height="140" rx="7" fill="#17252d" stroke-width="0" />
-        </g>
-
-        <g transform="rotate(-7 226 220)">
-          <rect x="164" y="134" width="124" height="172" rx="15" fill="#ffffff" stroke-width="8" />
-          <rect x="180" y="150" width="92" height="140" rx="7" fill="#7a4726" stroke-width="0" />
-        </g>
-      </g>
-
-      <g stroke-width="0">
-        <circle cx="134" cy="207" r="21" fill="#00733e" />
-        <circle cx="378" cy="207" r="21" fill="#0e68ab" />
-        <circle cx="123" cy="302" r="21" fill="#d3202a" />
-        <circle cx="389" cy="302" r="21" fill="#150b00" />
-        <circle cx="256" cy="371" r="21" fill="#f8f6d8" />
-      </g>
-    </g>
+    <path d="M128 134 L63.37 155 L48.11 108.04 Z" fill="#3FAE6E"/>
+    <path d="M128 134 L48.11 108.04 L88.05 79.02 Z" fill="#00733E"/>
   </g>
+
+  <path d="M128 104 L156.53 124.73 L145.63 158.27 L110.37 158.27 L99.47 124.73 Z" fill="#11141B" stroke="#E2B95A" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M128 116 L128 152 L117 134 Z" fill="#F2CF7A"/>
+  <path d="M128 116 L139 134 L128 152 Z" fill="#B8862E"/>
 </svg>
