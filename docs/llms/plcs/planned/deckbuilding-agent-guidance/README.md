@@ -342,7 +342,7 @@ No tool is added or removed, and no tool annotation or operation-mode visibility
 | Instructions | Reworded first job line | Text only. |
 
 Surface tests that change: the concise field list, the `card_list_query` field list, the prompt list, and the
-instruction text snapshot. README line about concise fields (the `concise` row of the format table) gains
+instruction text snapshot. The `docs/reference.md` line about concise fields (the `concise` row of the format table) gains
 `createsTokens` as a `fields` choice.
 
 Examples:
@@ -379,7 +379,8 @@ in `limits`.
   value it used.
   - Rejected: a hand-written list (goes stale, cannot be checked); generating at install time (needs card data
     the user may not have installed).
-- **D-4, compact rows within the existing size limit.** `rows.pageSize` stays capped at 100 for other row fields.
+- **D-4, compact rows within the existing size limit.** `card_list_query`'s top-level `pageSize` (in `0.15.0` it
+  replaced `rows.pageSize`) stays capped at 100 for other row fields.
   For the compact field set it rises to 250, and the existing size cut still applies, so an oversized page is cut
   with `nextCursor` as today. The Core result size limit does not change.
   - Rejected: raising the Core limit, which changes every tool; a new compact encoding, which adds a second row
@@ -446,7 +447,7 @@ Tests:
 | 2 | Coverage, tag counts, compact rows (REQ-012 to REQ-014). | Unit and surface tests pass. |
 | 3 | Token facts (REQ-011). | Fixture tests pass; measured cost within the phase 0 budget. |
 | 4 | Write the REQ-019 scenarios and run the baselines first. Then build the plugin, skills, tag reference and slug list, prompts, instructions, and tests (REQ-001 to REQ-008, REQ-015, REQ-017, REQ-018). | Skill content, manifest, and validate checks pass; baselines recorded. |
-| 5 | README, CHANGELOG, and `docs/toolsets.md`; release workflow sets plugin versions; `task ci`; REQ-019 runs with the plugin; full audit; release; install through the plugin. | REQ-001, REQ-002, and REQ-019 results recorded; release installed. |
+| 5 | README, `docs/reference.md`, CHANGELOG, and `docs/toolsets.md`; release workflow sets plugin versions; `task ci`; REQ-019 runs with the plugin; full audit; release; install through the plugin. | REQ-001, REQ-002, and REQ-019 results recorded; release installed. |
 
 Phases 1 to 3 are independent of each other. Phase 4 writes skill text against the shapes from phases 1 to 3, so
 it starts after them. If phase 0 finds sync failures that `0.14.0` did not fix, they are listed here for the
