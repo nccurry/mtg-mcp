@@ -252,6 +252,7 @@ internal sealed class ScryfallSnapshotStore
         string? cursor,
         int pageSize,
         bool includeRaw,
+        Func<IReadOnlyList<ScryfallSnapshotMember>, int>? countFitting,
         CancellationToken cancellationToken)
     {
         await using SqliteConnection? connection = await database.OpenReadAsync(cancellationToken).ConfigureAwait(false);
@@ -297,12 +298,22 @@ internal sealed class ScryfallSnapshotStore
             }
         }
 
+        int fitting = countFitting?.Invoke(items) ?? items.Count;
+        bool cut = fitting < items.Count;
+        if (cut)
+        {
+            items.RemoveRange(fitting, items.Count - fitting);
+        }
+
         string? next = offset + items.Count < header.TotalCount
             ? ScryfallCursor.Encode(scope, header.Checksum, offset + items.Count)
             : null;
         using JsonDocument requestDocument = JsonDocument.Parse(header.RequestJson);
         return new OperationSuccess<ScryfallSnapshotPage>(
-            new ScryfallSnapshotPage(ToSummary(header), requestDocument.RootElement.Clone(), items, next));
+            new ScryfallSnapshotPage(ToSummary(header), requestDocument.RootElement.Clone(), items, next)
+            {
+                Truncated = cut ? true : null,
+            });
     }
 
     /// <summary>

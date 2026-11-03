@@ -186,8 +186,9 @@ internal sealed class ScryfallReferenceTools
         "Saved Scryfall requests: reads the local snapshots saved for every kind of Scryfall request (search, " +
         "card lookups, sets, catalogs, and more), with no network access. kind list pages snapshot metadata, with " +
         "optional operation (the request type) and time filters; kind get replays the ordered members of one " +
-        "snapshot (requestSnapshotId is required). The result has the same kind. Example: " +
-        "{\"kind\":\"list\",\"operation\":\"search\",\"pageSize\":10}.")]
+        "snapshot (requestSnapshotId is required). The result has the same kind. " +
+        "A page of members is cut to the result size limit; then truncated is true and nextCursor continues after " +
+        "the last member shown. Example: {\"kind\":\"list\",\"operation\":\"search\",\"pageSize\":10}.")]
     internal Task<OperationResult<ScryfallSnapshotsResult>> GetRequestSnapshotsAsync(
         [Description("What to read: list (snapshot metadata) or get (one snapshot's members)."),
          AllowedValues(KindList, KindGet)]
@@ -475,7 +476,12 @@ internal sealed class ScryfallReferenceTools
         }
 
         OperationResult<ScryfallSnapshotPage> get = await service.GetSnapshotAsync(
-            requestSnapshotId!.Value, cursor, pageSize, includeRaw, cancellationToken).ConfigureAwait(false);
+            requestSnapshotId!.Value,
+            cursor,
+            pageSize,
+            includeRaw,
+            ScryfallToolExecution.CountFitting<ScryfallSnapshotMember>(),
+            cancellationToken).ConfigureAwait(false);
         return get is OperationSuccess<ScryfallSnapshotPage> getSuccess
             ? new OperationSuccess<ScryfallSnapshotsResult>(new ScryfallSnapshotGetReference(getSuccess.Data))
             : OperationFailure.Forward<ScryfallSnapshotPage, ScryfallSnapshotsResult>(get);

@@ -244,6 +244,14 @@ public sealed record ScryfallPage<T>(
     /// </summary>
     [JsonIgnore]
     internal ScryfallFormattedCards? Formatted { get; init; }
+
+    /// <summary>
+    /// Gets true when the page was cut to stay under the result size limit, so nextCursor continues after the last
+    /// item shown; null when the page was not cut.
+    /// </summary>
+    [JsonPropertyName("truncated")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Truncated { get; init; }
 }
 
 /// <summary>
@@ -416,7 +424,16 @@ public sealed record ScryfallSnapshotPage(
     [property: JsonPropertyName("summary")] ScryfallSnapshotSummary Summary,
     [property: JsonPropertyName("request")] JsonElement Request,
     [property: JsonPropertyName("items")] IReadOnlyList<ScryfallSnapshotMember> Items,
-    [property: JsonPropertyName("nextCursor")] string? NextCursor);
+    [property: JsonPropertyName("nextCursor")] string? NextCursor)
+{
+    /// <summary>
+    /// Gets true when the page was cut to stay under the result size limit, so nextCursor continues after the last
+    /// item shown; null when the page was not cut.
+    /// </summary>
+    [JsonPropertyName("truncated")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Truncated { get; init; }
+}
 
 /// <summary>
 /// Describes a verified snapshot deletion.

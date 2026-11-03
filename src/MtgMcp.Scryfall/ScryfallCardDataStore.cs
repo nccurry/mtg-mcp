@@ -866,6 +866,7 @@ internal sealed class ScryfallCardDataStore
         bool includeRaw,
         string? cursor,
         int pageSize,
+        Func<IReadOnlyList<ScryfallTag>, int>? countFitting,
         CancellationToken cancellationToken)
     {
         await using SqliteConnection? connection = await database.OpenReadAsync(cancellationToken).ConfigureAwait(false);
@@ -909,10 +910,18 @@ internal sealed class ScryfallCardDataStore
             tags.Add(ScryfallMapper.Tag(document.RootElement, generationId.Value, includeRaw));
         }
 
+        int fitting = countFitting?.Invoke(tags) ?? tags.Count;
+        bool cut = fitting < tags.Count;
+        if (cut)
+        {
+            tags.RemoveRange(fitting, tags.Count - fitting);
+        }
+
         string? next = offset + tags.Count < total
             ? ScryfallCursor.Encode(scope, checksum, offset + tags.Count)
             : null;
-        return new OperationSuccess<ScryfallPage<ScryfallTag>>(new ScryfallPage<ScryfallTag>(tags, total, next));
+        return new OperationSuccess<ScryfallPage<ScryfallTag>>(
+            new ScryfallPage<ScryfallTag>(tags, total, next) { Truncated = cut ? true : null });
     }
 
     /// <summary>

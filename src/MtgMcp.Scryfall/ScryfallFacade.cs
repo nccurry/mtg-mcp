@@ -193,9 +193,10 @@ public sealed class ScryfallService : IDisposable
         string? cursor = null,
         int pageSize = 25,
         bool includeRaw = false,
+        Func<IReadOnlyList<ScryfallTag>, int>? countFitting = null,
         CancellationToken cancellationToken = default)
     {
-        return cards.SearchTagsAsync(query, tagType, cursor, pageSize, includeRaw, cancellationToken);
+        return cards.SearchTagsAsync(query, tagType, cursor, pageSize, includeRaw, countFitting, cancellationToken);
     }
 
     /// <summary>
@@ -456,9 +457,10 @@ public sealed class ScryfallService : IDisposable
         string? cursor = null,
         int pageSize = 25,
         bool includeRaw = false,
+        Func<IReadOnlyList<ScryfallSnapshotMember>, int>? countFitting = null,
         CancellationToken cancellationToken = default)
     {
-        return snapshots.GetAsync(snapshotId, cursor, pageSize, includeRaw, cancellationToken);
+        return snapshots.GetAsync(snapshotId, cursor, pageSize, includeRaw, countFitting, cancellationToken);
     }
 
     /// <inheritdoc cref="ScryfallSnapshotOperations.DeleteAsync"/>
@@ -781,11 +783,16 @@ internal sealed class ScryfallSnapshotOperations
 
     /// <summary>Replays one immutable snapshot page.</summary>
     internal Task<OperationResult<ScryfallSnapshotPage>> GetAsync(
-        Guid snapshotId, string? cursor, int pageSize, bool includeRaw, CancellationToken cancellationToken)
+        Guid snapshotId,
+        string? cursor,
+        int pageSize,
+        bool includeRaw,
+        Func<IReadOnlyList<ScryfallSnapshotMember>, int>? countFitting,
+        CancellationToken cancellationToken)
     {
         OperationInvalidInput? failure = ValidatePageSize(pageSize, includeRaw);
         return failure is null
-            ? cards.SnapshotStore.GetAsync(snapshotId, cursor, pageSize, includeRaw, cancellationToken)
+            ? cards.SnapshotStore.GetAsync(snapshotId, cursor, pageSize, includeRaw, countFitting, cancellationToken)
             : Task.FromResult<OperationResult<ScryfallSnapshotPage>>(failure);
     }
 

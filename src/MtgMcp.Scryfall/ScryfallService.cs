@@ -1324,6 +1324,7 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
         string? cursor = null,
         int pageSize = 25,
         bool includeRaw = false,
+        Func<IReadOnlyList<ScryfallTag>, int>? countFitting = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(query))
@@ -1340,7 +1341,8 @@ internal sealed class ScryfallCardEvidenceOperations : IDisposable
 
         OperationInvalidInput? failure = ValidatePageSize(pageSize, includeRaw);
         return failure is null
-            ? CardDataStore.SearchTagsAsync(query.Trim(), tagType, includeRaw, cursor, pageSize, cancellationToken)
+            ? CardDataStore.SearchTagsAsync(
+                query.Trim(), tagType, includeRaw, cursor, pageSize, countFitting, cancellationToken)
             : Task.FromResult<OperationResult<ScryfallPage<ScryfallTag>>>(failure);
     }
 

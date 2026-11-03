@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.App.Scryfall;
@@ -9,6 +10,20 @@ namespace MtgMcp.App.Scryfall;
 /// </summary>
 internal static class ScryfallToolExecution
 {
+    /// <summary>
+    /// Gives the bytes a page keeps for the parts of the result that are not rows.
+    /// </summary>
+    private const int HeaderBytes = 2_000;
+
+    /// <summary>
+    /// Builds the measure that tells a library how many leading rows fit under the result size limit, for pages whose
+    /// rows are unbounded raw provider objects.
+    /// </summary>
+    internal static Func<IReadOnlyList<T>, int> CountFitting<T>()
+    {
+        return rows => ResultSizeLimit.CountFitting([.. rows.Select(row => ResultSize.Measure(row) + 1)], HeaderBytes);
+    }
+
     /// <summary>
     /// Executes one adapter operation and maps recognized local persistence failures.
     /// </summary>
