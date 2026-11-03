@@ -882,7 +882,7 @@ internal sealed class ScryfallCardDataStore
             return new OperationNotCached("scryfall-corpus-missing", "Scryfall corpus data is not installed.");
         }
 
-        string scope = $"tags:{tagType ?? "all"}:{query}";
+        string scope = $"tags:{tagType ?? "all"}:{ScryfallHash.Compute(query)}";
         string checksum = ScryfallHash.Compute($"{generationId:D}|{scope}");
         await using SqliteCommand countCommand = connection.CreateCommand();
         ConfigureTagSearch(countCommand, generationId.Value, query, tagType);

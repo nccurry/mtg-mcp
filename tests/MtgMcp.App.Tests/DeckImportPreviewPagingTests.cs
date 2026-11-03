@@ -117,7 +117,7 @@ public sealed class DeckImportPreviewPagingTests
             [],
             0,
             []);
-        PageCursorBinding binding = PageCursorBinding.ForPreview("fingerprint");
+        PageCursorBinding binding = Binding("local_deck_import_preview", "fingerprint");
 
         OperationInvalidInput past = Assert.IsType<OperationInvalidInput>(DeckPreviewPaging.PageImport(
             preview,
@@ -140,8 +140,7 @@ public sealed class DeckImportPreviewPagingTests
     {
         Guid deckId = Guid.NewGuid();
         DeckIdentityReconciliationPreview preview = new(deckId, 3, [], true, 0, null, "fingerprint", "token");
-        PageCursorBinding binding = PageCursorBinding.ForPreview("fingerprint")
-            .And(PageCursorBinding.ForDeck(deckId, 3));
+        PageCursorBinding binding = Binding("local_deck_identity_reconcile_preview", "fingerprint", deckId, 3);
 
         OperationInvalidInput past = Assert.IsType<OperationInvalidInput>(DeckPreviewPaging.PageIdentity(
             preview,
@@ -150,6 +149,51 @@ public sealed class DeckImportPreviewPagingTests
 
         Assert.Equal(("invalid-cursor", "cursor"), (past.ReasonCode, past.Path));
     }
+
+    /// <summary>
+    /// Verifies a cursor issued by one preview tool is invalid on another preview tool even when the deck, revision,
+    /// and fingerprint match, while the tool that issued it accepts it.
+    /// </summary>
+    [Fact]
+    public void PageCategoryRules_WithACursorOfAnotherPreviewTool_IsAnInvalidCursor()
+    {
+        Guid deckId = Guid.NewGuid();
+        CategoryRuleSet rules = new("add-only", []);
+        DeckCategoryRulesPreview preview = new(
+            deckId,
+            3,
+            new InlineCategoryRuleSource(rules),
+            rules,
+            [],
+            true,
+            "fingerprint",
+            "token",
+            null);
+        string own = PageCursor.Encode(
+            PageCursorPosition.AtOffset(0),
+            Binding("local_deck_category_rules_preview", "fingerprint", deckId, 3));
+        string foreign = PageCursor.Encode(
+            PageCursorPosition.AtOffset(0),
+            Binding("local_deck_identity_reconcile_preview", "fingerprint", deckId, 3));
+
+        OperationInvalidInput other = Assert.IsType<OperationInvalidInput>(
+            DeckPreviewPaging.PageCategoryRules(preview, foreign, 100).Value);
+
+        Assert.Equal(("invalid-cursor", "cursor"), (other.ReasonCode, other.Path));
+        Assert.IsType<OperationSuccess<DeckCategoryRulesPreviewView>>(
+            DeckPreviewPaging.PageCategoryRules(preview, own, 100).Value);
+    }
+
+    /// <summary>
+    /// Builds the binding a preview tool gives its cursors.
+    /// </summary>
+    private static PageCursorBinding Binding(string tool, string fingerprint, Guid? deckId = null, long revision = 0)
+    {
+        PageCursorBinding binding = PageCursorBinding.ForRequest(RequestHash.Of((tool, typeof(string))))
+            .And(PageCursorBinding.ForPreview(fingerprint));
+        return deckId is Guid id ? binding.And(PageCursorBinding.ForDeck(id, revision)) : binding;
+    }
+
     /// <summary>
     /// Builds an import of 300 entries with 400 categories, a heavy synchronization snapshot, and full-length lists of
     /// diagnostics and unresolved identities.

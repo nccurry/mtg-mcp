@@ -62,6 +62,31 @@ public sealed class ScryfallPagingToolTests
     }
 
     /// <summary>
+    /// Verifies a collection cursor presented with another freshness policy belongs to another request.
+    /// </summary>
+    [Fact]
+    public async Task CardsGet_CursorWithAnotherFreshnessPolicy_IsInvalidAtCursor()
+    {
+        using ToolFixture fixture = new();
+        CancellationToken token = TestContext.Current.CancellationToken;
+        ScryfallCardLookup[] lookups = [new("exact-name", "Sol Ring"), new("exact-name", "Venerable Knight")];
+        ScryfallCollectionResponse first = Success(await fixture.Read.GetCardsAsync(
+            lookups, pageSize: 1, cancellationToken: token));
+
+        OperationInvalidInput other = Assert.IsType<OperationInvalidInput>((await fixture.Read.GetCardsAsync(
+            lookups,
+            freshnessPolicy: "cache-only",
+            cursor: first.Page.NextCursor,
+            pageSize: 1,
+            cancellationToken: token)).Value);
+        ScryfallCollectionResponse second = Success(await fixture.Read.GetCardsAsync(
+            lookups, cursor: first.Page.NextCursor, pageSize: 1, cancellationToken: token));
+
+        Assert.Equal(("invalid-cursor", "cursor"), (other.ReasonCode, other.Path));
+        Assert.Single(second.Page.Items);
+    }
+
+    /// <summary>
     /// Verifies the details tool continues every section with one cursor, leaves out a section that has no more items,
     /// and ends with a null cursor.
     /// </summary>

@@ -29,6 +29,16 @@ internal static class ScryfallPaging
     }
 
     /// <summary>
+    /// Reports whether a cursor was issued for <paramref name="scope"/>, whatever data it held, so a reader on another
+    /// source can tell a cursor whose source changed from one that belongs to another request.
+    /// </summary>
+    internal static bool IsCursorOfScope(string? cursor, string scope)
+    {
+        return cursor is not null &&
+            PageCursor.Decode(cursor, PageCursorBinding.ForScope(scope, "unread")) is OperationConflict;
+    }
+
+    /// <summary>
     /// Writes the cursor for the page that starts at <paramref name="next"/>, or null when no rows are left.
     /// </summary>
     internal static string? NextCursor(string scope, string checksum, int next, int total)
