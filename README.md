@@ -36,7 +36,7 @@ calls.
 
 ## Install
 
-Install the [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0) (preview), then:
+Install the [.NET SDK](https://dotnet.microsoft.com/download) (10 or newer), then:
 
 ```sh
 dotnet tool install -g Nccurry.MtgMcp
