@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.15.0 - Unreleased
+## 0.15.0 - 2026-11-03
 
 This release fixes eight inconsistencies in the MCP surface that an audit of `0.14.0` found: five ways to page, three
 meanings of `responseFormat`, three names for the preview fingerprint, two styles of apply arguments, several revision
