@@ -53,6 +53,21 @@ for that program only. Old names return an unknown-tool error, and the changelog
 lists every old name beside its replacement. Changes after this program follow
 the ordinary policy.
 
+### Approved `0.15.0` clean-break exception
+
+The approved surface-consistency program (see `docs/llms/plcs/in-progress/surface-consistency/`) gives every kind of
+thing in the MCP surface one form, without deprecation aliases: one paging form (`cursor`, `pageSize`, `nextCursor`),
+one `responseFormat` meaning with the default `standard`, one name for the preview fingerprint, flat write arguments,
+one revision code and two change codes, a `path` on every invalid-input result, and one name for each identifier,
+confirmation, policy, and generation guard. The owner decided on 2026-11-02 to take this as a clean break in a minor
+release and not to ship a deprecation release first. The tool names, tool count, annotations, and operation-mode
+visibility do not change.
+
+An old argument name is refused with `invalid-input`, `path` set to that name, and "Property is not accepted here." An
+old result field or reason code is never returned. The changelog lists every old name beside its replacement under
+"Breaking", and [MCP surface](architecture/mcp-surface.md) states the new rules. The owner approved this clean break for
+that program only. Changes after it follow the ordinary policy.
+
 ## Deprecating Tools or Parameters
 
 When a shipped tool, resource, prompt, parameter, or result field is being
