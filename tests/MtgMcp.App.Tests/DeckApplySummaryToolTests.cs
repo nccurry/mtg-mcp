@@ -79,6 +79,8 @@ public sealed class DeckApplySummaryToolTests
             token)).Data;
         Assert.Equal(100, fresh.GetProperty("entries").EnumerateArray().Count(
             entry => entry.TryGetProperty("oracleId", out JsonElement id) && id.ValueKind == JsonValueKind.String));
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -107,6 +109,8 @@ public sealed class DeckApplySummaryToolTests
         Assert.Equal(
             ToolBudgetWorld.DeckSize,
             withDeck.Data.GetProperty("deck").GetProperty("entries").GetArrayLength());
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>

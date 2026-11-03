@@ -1,5 +1,4 @@
 using System.Net;
-using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using MtgMcp.App.Decks;
@@ -239,10 +238,7 @@ public sealed class DeckIdentityReconciliationTests
             null,
             "default",
             TestContext.Current.CancellationToken));
-        DeckIdentityApplyToken tokens = Assert.IsType<DeckIdentityApplyToken>(
-            typeof(DeckIdentityReconciliationCoordinator)
-                .GetField("tokens", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .GetValue(coordinator));
+        DeckIdentityApplyToken tokens = coordinator.Tokens;
         Assert.True(tokens.TryDecode(preview.ApplyToken, out DeckIdentityApplyTokenPayload? payload));
         const string Other = "not-the-recomputed-fingerprint";
         string forged = tokens.Encode(payload! with { PreviewFingerprint = Other });

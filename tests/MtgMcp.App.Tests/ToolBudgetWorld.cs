@@ -157,6 +157,17 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
     }
 
     /// <summary>
+    /// Fails when the server returned an invalid-input result without an argument path. A test calls it as its last
+    /// step, so a failure earlier in the test is never replaced by the audit.
+    /// </summary>
+    internal void AssertNoPathlessRefusals()
+    {
+        Assert.True(
+            PathAudit.Findings.Count == 0,
+            "Invalid-input results without a path:\n" + string.Join("\n", PathAudit.Findings));
+    }
+
+    /// <summary>
     /// Makes the fake Scryfall provider announce newer card data, so the next sync installs a second generation.
     /// </summary>
     internal void PublishNewerCardData()
@@ -234,8 +245,6 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
         {
             owned[index].Dispose();
         }
-
-        Assert.Empty(PathAudit.Findings);
     }
 
     /// <summary>

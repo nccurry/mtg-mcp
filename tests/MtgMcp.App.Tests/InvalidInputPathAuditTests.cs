@@ -75,22 +75,8 @@ public sealed class InvalidInputPathAuditTests
     {
         InvalidInputPathAudit audit = new();
         CancellationToken token = TestContext.Current.CancellationToken;
-        Pipe clientToServer = new();
-        Pipe serverToClient = new();
-        HostApplicationBuilder builder = Host.CreateApplicationBuilder();
-        builder.Logging.ClearProviders();
-        builder.Services
-            .AddMcpServer()
-            .WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream())
-            .WithRequestFilters(filters => filters
-                .AddCallToolFilter(audit.Filter)
-                .AddCallToolFilter(ToolCallPolicy.Filter))
-            .WithRegisteredTools(ToolRegistration.Create(new RefusingTools()));
-        using IHost host = builder.Build();
-        await host.StartAsync(token);
-        await using McpClient client = await McpClient.CreateAsync(
-            new StreamClientTransport(clientToServer.Writer.AsStream(), serverToClient.Reader.AsStream()),
-            cancellationToken: token);
+        await using ServedTools served = await ServedTools.StartAsync(audit, null, token);
+        McpClient client = served.Client;
 
         _ = await client.CallToolAsync("local_deck_refuse_with_path", cancellationToken: token);
         Assert.Empty(audit.Findings);
@@ -99,7 +85,29 @@ public sealed class InvalidInputPathAuditTests
 
         Assert.True(refused.IsError);
         Assert.Equal(["local_deck_refuse_without_path: no-path-given"], audit.Findings);
-        await host.StopAsync(token);
+    }
+
+    /// <summary>
+    /// Verifies the audit runs outermost: a pathless refusal made by a filter registered after it, which never calls the
+    /// tool, is still caught.
+    /// </summary>
+    [Fact]
+    public async Task Pipeline_AFilterRegisteredAfterTheAuditRefusingWithoutAPath_IsCaught()
+    {
+        InvalidInputPathAudit audit = new();
+        CancellationToken token = TestContext.Current.CancellationToken;
+        await using ServedTools served = await ServedTools.StartAsync(
+            audit,
+            _ => (_, _) => ValueTask.FromResult(new CallToolResult
+            {
+                IsError = true,
+                StructuredContent = Body("invalid-input", null),
+            }),
+            token);
+
+        _ = await served.Client.CallToolAsync("local_deck_refuse_with_path", cancellationToken: token);
+
+        Assert.Equal(["local_deck_refuse_with_path: some-reason"], audit.Findings);
     }
 
     /// <summary>
@@ -128,6 +136,72 @@ public sealed class InvalidInputPathAuditTests
             (_, _) => ValueTask.FromResult(new CallToolResult { StructuredContent = body }));
 
         return await filter(context, TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Runs a server over in-memory pipes with the audit registered first, the server's own filter next, and an
+    /// optional filter last, and a client connected to it.
+    /// </summary>
+    private sealed class ServedTools : IAsyncDisposable
+    {
+        /// <summary>
+        /// Holds the running server host.
+        /// </summary>
+        private readonly IHost host;
+
+        /// <summary>
+        /// Wraps a started host and its connected client.
+        /// </summary>
+        private ServedTools(IHost host, McpClient client)
+        {
+            this.host = host;
+            Client = client;
+        }
+
+        /// <summary>
+        /// Gets the client connected to the server.
+        /// </summary>
+        internal McpClient Client { get; }
+
+        /// <summary>
+        /// Starts the server and connects the client.
+        /// </summary>
+        internal static async Task<ServedTools> StartAsync(
+            InvalidInputPathAudit audit,
+            Func<McpRequestHandler<CallToolRequestParams, CallToolResult>, McpRequestHandler<CallToolRequestParams, CallToolResult>>? lastFilter,
+            CancellationToken token)
+        {
+            Pipe clientToServer = new();
+            Pipe serverToClient = new();
+            HostApplicationBuilder builder = Host.CreateApplicationBuilder();
+            builder.Logging.ClearProviders();
+            builder.Services
+                .AddMcpServer()
+                .WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream())
+                .WithRequestFilters(filters =>
+                {
+                    filters.AddCallToolFilter(audit.Filter).AddCallToolFilter(ToolCallPolicy.Filter);
+                    if (lastFilter is not null)
+                    {
+                        filters.AddCallToolFilter(lastFilter.Invoke);
+                    }
+                })
+                .WithRegisteredTools(ToolRegistration.Create(new RefusingTools()));
+            IHost host = builder.Build();
+            await host.StartAsync(token);
+            McpClient client = await McpClient.CreateAsync(
+                new StreamClientTransport(clientToServer.Writer.AsStream(), serverToClient.Reader.AsStream()),
+                cancellationToken: token);
+            return new ServedTools(host, client);
+        }
+
+        /// <inheritdoc/>
+        public async ValueTask DisposeAsync()
+        {
+            await Client.DisposeAsync();
+            await host.StopAsync();
+            host.Dispose();
+        }
     }
 
     /// <summary>

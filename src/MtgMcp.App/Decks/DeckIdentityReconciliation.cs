@@ -193,11 +193,6 @@ internal sealed class DeckIdentityReconciliationCoordinator
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
-    /// Authenticates apply tokens for this server-owned reconciliation lifetime.
-    /// </summary>
-    private readonly DeckIdentityApplyToken tokens = new();
-
-    /// <summary>
     /// Stores the only boundary permitted to write deck state.
     /// </summary>
     private readonly SqliteDeckStore deckStore;
@@ -217,6 +212,11 @@ internal sealed class DeckIdentityReconciliationCoordinator
         this.deckStore = deckStore;
         this.scryfall = scryfall;
     }
+
+    /// <summary>
+    /// Gets the apply token codec for this server-owned reconciliation lifetime; tests use it to forge tokens.
+    /// </summary>
+    internal DeckIdentityApplyToken Tokens { get; } = new();
 
     /// <summary>
     /// Builds one exact, evidence-bound identity proposal without changing the deck.
@@ -284,7 +284,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
         bool returnDeck,
         CancellationToken cancellationToken)
     {
-        if (!tokens.TryDecode(applyToken, out DeckIdentityApplyTokenPayload? token) ||
+        if (!Tokens.TryDecode(applyToken, out DeckIdentityApplyTokenPayload? token) ||
             token is null ||
             token.DeckId != deckId ||
             token.DeckRevision != expectedRevision ||
@@ -590,7 +590,7 @@ internal sealed class DeckIdentityReconciliationCoordinator
                 evidence = evidence?.Binding,
             },
             SerializerOptions));
-        string token = tokens.Encode(new DeckIdentityApplyTokenPayload(
+        string token = Tokens.Encode(new DeckIdentityApplyTokenPayload(
             1,
             deck.DeckId,
             deck.Revision,

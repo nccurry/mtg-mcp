@@ -21,9 +21,10 @@ public sealed partial class ExactStatisticsCalculator
                 request,
                 out StatisticsDeckEntryInput[] entries,
                 out int totalQuantity,
-                out string? entryError))
+                out string? entryError,
+                out string entryPath))
         {
-            return Invalid<DeckSummaryResult>(entryError!, "request");
+            return Invalid<DeckSummaryResult>(entryError!, entryPath);
         }
 
         StatisticsDeckSelectionEvidence evidence = new(
@@ -124,19 +125,23 @@ public sealed partial class ExactStatisticsCalculator
         DeckSummaryRequest request,
         out StatisticsDeckEntryInput[] entries,
         out int totalQuantity,
-        out string? error)
+        out string? error,
+        out string errorPath)
     {
         entries = [];
         totalQuantity = 0;
         error = null;
+        errorPath = "request.selectedEntries";
         if (request.DeckId == Guid.Empty || request.Revision <= 0)
         {
+            errorPath = request.DeckId == Guid.Empty ? "request.deckId" : "request.revision";
             error = "request deckId and revision must identify one stored deck revision.";
             return false;
         }
 
         if (request.SelectedEntries is null || request.ExcludedEntries is null)
         {
+            errorPath = request.SelectedEntries is null ? "request.selectedEntries" : "request.excludedEntries";
             error = "request selectedEntries and excludedEntries are required.";
             return false;
         }
@@ -185,6 +190,7 @@ public sealed partial class ExactStatisticsCalculator
                 entryIds.Contains(excluded.EntryId) ||
                 !excludedIds.Add(excluded.EntryId))
             {
+                errorPath = "request.excludedEntries";
                 error = "request excludedEntries contain invalid or overlapping identifiers.";
                 return false;
             }
