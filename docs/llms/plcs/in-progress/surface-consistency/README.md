@@ -218,16 +218,16 @@ owner's approval.
 
 | Requirement | State | Evidence |
 | --- | --- | --- |
-| REQ-001 | planned | |
-| REQ-002 | planned | |
-| REQ-003 | planned | |
-| REQ-004 | planned | |
-| REQ-005 | planned | |
-| REQ-006 | planned | |
-| REQ-007 | planned | |
-| REQ-008 | planned | |
-| REQ-009 | planned | |
-| REQ-010 | planned | |
+| REQ-001 | implemented | Families `famdecks`, `famarchidekt`, `famscryfall`, `famother`; Core codec `src/MtgMcp.Core/Paging/` (repairs `69bab7d`, `2a1edbb`). `SurfaceConsistencyTests` checks an explicit set of 27 paged tools and the 86-tool count; per-tool next, last, stale, and invalid cursor tests; Spellbook cap, Playgroup exact multiple, export surrogate pair, two-list exactly-once theory. Deviations: see Audit Ledger. |
+| REQ-002 | implemented | Default `standard` on all 10 tools; `full` only on Scryfall reads and `card_lists_compare`. A per-tool `responseFormat` test (`1b26b95`); byte cuts on every paged tool. |
+| REQ-003 | implemented | Import `previewFingerprint`; the fingerprint-name test covers arguments and output schemas, with the card-list `fingerprint` exempt by reason. |
+| REQ-004 | implemented | The 12 Archidekt writes and `playgroup_live_session_create` are flat; the object-argument allowlist test; E2E schema lists. |
+| REQ-005 | implemented | `stale-deck-revision` at every former site; `expectedRevision` and `revision`; pull and push apply check the revision first. |
+| REQ-006 | implemented | `preview-changed` on import, identity, category, pull, push, and restore apply (identity test added in repairs); `cursor-stale` for stale pages; `RemovedReasonCodeTests` with a negative control. |
+| REQ-007 | implemented | Every Scryfall, deck, Archidekt, Spellbook, Playgroup, and statistics refusal names one argument; provider 400s name a sent argument (`a69a13c`). The path audit runs outermost in every `ToolBudgetWorld` test (`AssertNoPathlessRefusals`), with negative controls. |
+| REQ-008 | implemented | D-4 names in inputs and outputs (`remoteDeckId` through Archidekt views), `requestSnapshotId`, `playgroupDeckId`, `freshnessPolicy`, `expectedActiveGeneration`. D-5 phrases on all 11 operations, one refusal wording (`Confirmation` in Core), `invalid-id` for non-numeric Archidekt ids. |
+| REQ-009 | implemented | CHANGELOG 0.15.0 Breaking tables, the versioning exception, `mcp-surface.md`, README, `output-control.md`, `adapters.md`, `llms.txt`; `RemovedNamesInDocsTests`; README example tests. |
+| REQ-010 | implemented | `PreviewGuardScenarioTests`: import, category, identity, and Archidekt push workflows using only `cursor`, `pageSize`, `previewFingerprint`, and `expectedRevision` (plus the values a preview hands its apply), with `cursor-stale`, `preview-changed`, and `stale-deck-revision` cases. |
 
 The plan is complete when every requirement is verified on the merge and release commits, the audit is closed, and
 `0.15.0` is installed.
@@ -313,3 +313,28 @@ Accepted deviations, now recorded:
   top level.
 - **Cursor checksums detect accidental edits, not deliberate ones.** Every reader bounds positions again, so a forged
   cursor can only point inside the data the caller may read.
+
+Pass 1 repairs (merged `d33c37a`, `8ae0672`, `ece994d`, `9375203`, `210b971`, docs `1c92fbc`) fixed every accepted
+P1, P2, and P3 finding. Two changes went beyond the findings:
+
+- `scryfall_cards_get` later pages now continue from local data with no provider call.
+- Archidekt deck rows use view models.
+
+`task ci` passed on `210b971` (2,505 tests, 77 smoke tests).
+
+Pass 2 (a re-audit, because the repairs moved the cursor codec into Core and changed the Scryfall collection paging)
+reviewed `e547882..210b971` with correctness and test quality. No P0 or P1. It found:
+
+- **P2:** some provider 400 refusals had no path or named an argument the caller never sent.
+- **P3:** stale and invalid misclassifications, a Playgroup provider call before the cursor check, the tag-search
+  cursor size, generic statistics paths, and test weaknesses.
+
+All of these were repaired in `a69a13c`, `a672cb8`, and `ea5a18e` (merged `27dfdc4`). The repairs were checked by
+diff inspection and tests, not by a third pass, because none was serious.
+
+Known limits:
+
+- A Playgroup cursor at a provider page boundary is tied to the request only, so a game added at that moment can
+  repeat or be skipped without `cursor-stale`.
+- The provider 400 path names the most likely argument the caller sent; Playgroup and Spellbook do not say which
+  field failed.
