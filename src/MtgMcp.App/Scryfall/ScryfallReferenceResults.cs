@@ -12,10 +12,21 @@ internal sealed record ScryfallCardDetailsResult(
     [property: JsonPropertyName("scryfallId")] Guid ScryfallId,
     [property: JsonPropertyName("prints")]
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    ScryfallPrintsResult? Prints,
+    ScryfallDetailsSection<ScryfallCard>? Prints,
     [property: JsonPropertyName("rulings")]
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    ScryfallRulingsResult? Rulings);
+    ScryfallDetailsSection<ScryfallRuling>? Rulings,
+    [property: JsonPropertyName("nextCursor")] string? NextCursor);
+
+/// <summary>
+/// Holds one requested section of card details: its items on this page and where they came from. One cursor on the
+/// whole result continues every section, so a section carries none.
+/// </summary>
+internal sealed record ScryfallDetailsSection<T>(
+    [property: JsonPropertyName("items")] IReadOnlyList<T> Items,
+    [property: JsonPropertyName("totalCount")] int TotalCount,
+    [property: JsonPropertyName("snapshot")] ScryfallSnapshotReference? Snapshot,
+    [property: JsonPropertyName("corpusGenerationId")] Guid? CorpusGenerationId);
 
 /// <summary>
 /// Returns one reference result whose <c>kind</c> matches the requested <c>kind</c>: sets, catalog, or bulk.
