@@ -205,7 +205,6 @@ public sealed class PlaygroupServiceTests
     [InlineData("turn-damage-commander-id", "commanderId")]
     [InlineData("commander-name", "name")]
     [InlineData("elo-scope", "leagueId")]
-    [InlineData("game-page", "cursor")]
     [InlineData("game-limit", "pageSize")]
     [InlineData("playgroup-id", "playgroupId")]
     public async Task ReadValidation_RejectsInvalidInputBeforeHttp(string scenario, string path)
@@ -219,7 +218,6 @@ public sealed class PlaygroupServiceTests
             "turn-damage-commander-id" => await service.GetCommanderTurnDamageAsync(0, token),
             "commander-name" => await service.GetCommanderByNameAsync(" ", token),
             "elo-scope" => await service.GetDeckEloHistoryAsync(1, null, 2, false, token),
-            "game-page" => await service.ListPlaygroupGamesAsync(1, 0, 10, false, token),
             "game-limit" => await service.ListPlaygroupGamesAsync(1, 1, 101, false, token),
             "playgroup-id" => await service.GetUserPlaygroupAsync(1, -1, token),
             _ => throw new Xunit.Sdk.XunitException("Unknown validation scenario."),
@@ -237,20 +235,24 @@ public sealed class PlaygroupServiceTests
         using PlaygroupService service = PlaygroupTestFactory.CreateService(handler);
         CancellationToken token = TestContext.Current.CancellationToken;
 
-        Assert.Equal("events", Assert.IsType<OperationInvalidInput>((await service.CreateGameEventsBatchAsync(1, [], token)).Value).Path);
-        Assert.Equal("events", Assert.IsType<OperationInvalidInput>((await service.CreateGameEventsBatchAsync(1, null!, token)).Value).Path);
+        OperationResult<PlaygroupEvidence> empty = await service.CreateGameEventsBatchAsync(1, [], token);
+        OperationResult<PlaygroupEvidence> missing = await service.CreateGameEventsBatchAsync(1, null!, token);
+        Assert.Equal("events", Assert.IsType<OperationInvalidInput>(empty.Value).Path);
+        Assert.Equal("events", Assert.IsType<OperationInvalidInput>(missing.Value).Path);
         Assert.Equal("events[0].name", Assert.IsType<OperationInvalidInput>((await service.CreateGameEventsBatchAsync(
             1,
             [new PlaygroupEventImport(" ", "0")],
             token)).Value).Path);
-        Assert.Equal("events[0].sourcePlayerId", Assert.IsType<OperationInvalidInput>((await service.CreateGameEventsBatchAsync(
+        OperationResult<PlaygroupEvidence> badSource = await service.CreateGameEventsBatchAsync(
             1,
             [new PlaygroupEventImport("Damage", "6")],
-            token)).Value).Path);
-        Assert.Equal("events[0].targetPlayerId", Assert.IsType<OperationInvalidInput>((await service.CreateGameEventsBatchAsync(
+            token);
+        Assert.Equal("events[0].sourcePlayerId", Assert.IsType<OperationInvalidInput>(badSource.Value).Path);
+        OperationResult<PlaygroupEvidence> badTarget = await service.CreateGameEventsBatchAsync(
             1,
             [new PlaygroupEventImport("Damage", "0", TargetPlayerId: "bad")],
-            token)).Value).Path);
+            token);
+        Assert.Equal("events[0].targetPlayerId", Assert.IsType<OperationInvalidInput>(badTarget.Value).Path);
         Assert.Empty(handler.Requests);
     }
 

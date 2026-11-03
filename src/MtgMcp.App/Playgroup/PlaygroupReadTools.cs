@@ -183,11 +183,16 @@ internal sealed class PlaygroupReadTools
         [Description("Whether each returned game should include provider event records.")] bool includeEvents = false,
         CancellationToken cancellationToken = default)
     {
+        if (ResultPage.CheckPageSize(pageSize, 100) is { } invalidSize)
+        {
+            return invalidSize;
+        }
+
         PageCursorBinding binding = PageCursorBinding.ForRequest(RequestHash.Of(
             (playgroupId, typeof(int)),
             (pageSize, typeof(int)),
             (includeEvents, typeof(bool))));
-        OperationResult<PageCursorPosition> position = PlaygroupGamesPaging.Position(cursor, binding);
+        OperationResult<PageCursorPosition> position = PlaygroupGamesPaging.Position(cursor, binding, pageSize);
         if (position is not OperationSuccess<PageCursorPosition> start)
         {
             return OperationFailure.Forward<PageCursorPosition, PlaygroupGamesPage>(position);
@@ -199,10 +204,20 @@ internal sealed class PlaygroupReadTools
             pageSize,
             includeEvents,
             cancellationToken).ConfigureAwait(false);
-        return page is OperationSuccess<PlaygroupEvidence> success
+        if (page is not OperationSuccess<PlaygroupEvidence> success)
+        {
+            return OperationFailure.Forward<PlaygroupEvidence, PlaygroupGamesPage>(page);
+        }
+
+        OperationResult<PageCursorPosition> checkedPosition = PlaygroupGamesPaging.Continue(
+            cursor,
+            start.Data,
+            binding,
+            success.Data);
+        return checkedPosition is OperationSuccess<PageCursorPosition> continued
             ? new OperationSuccess<PlaygroupGamesPage>(
-                PlaygroupGamesPaging.Shape(success.Data, start.Data, pageSize, binding))
-            : OperationFailure.Forward<PlaygroupEvidence, PlaygroupGamesPage>(page);
+                PlaygroupGamesPaging.Shape(success.Data, continued.Data, pageSize, binding))
+            : OperationFailure.Forward<PageCursorPosition, PlaygroupGamesPage>(checkedPosition);
     }
 
     /// <summary>Gets one game with optional event records.</summary>

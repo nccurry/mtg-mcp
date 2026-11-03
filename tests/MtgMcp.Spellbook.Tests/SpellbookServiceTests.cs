@@ -157,7 +157,7 @@ public sealed class SpellbookServiceTests
     /// Verifies terminal source statuses map to safe typed results without exposing a provider body.
     /// </summary>
     [Theory]
-    [InlineData(HttpStatusCode.BadRequest, "unavailable")]
+    [InlineData(HttpStatusCode.BadRequest, "invalid-input")]
     [InlineData(HttpStatusCode.NotFound, "not-found")]
     [InlineData(HttpStatusCode.InternalServerError, "unavailable")]
     public async Task SourceStatus_MapsToSafeTypedResult(HttpStatusCode statusCode, string expectedKind)

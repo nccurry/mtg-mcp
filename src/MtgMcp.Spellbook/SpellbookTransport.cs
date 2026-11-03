@@ -162,7 +162,7 @@ internal sealed class SpellbookTransport : IDisposable
         return statusCode switch
         {
             HttpStatusCode.BadRequest => new SpellbookProviderException(
-                SpellbookFailureKind.Unavailable,
+                SpellbookFailureKind.InvalidInput,
                 "source-request-rejected",
                 "Commander Spellbook rejected the request as invalid."),
             HttpStatusCode.NotFound => new SpellbookProviderException(

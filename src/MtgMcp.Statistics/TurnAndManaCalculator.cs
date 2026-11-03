@@ -65,13 +65,15 @@ public sealed partial class ExactStatisticsCalculator
             !population.HasGroup(successGroup))
         {
             return Invalid<TurnTableResult>(
-                "request.successGroup must be one exact declared population group.");
+                "request.successGroup must be one exact declared population group.",
+                "request.successGroup");
         }
 
         if (request.OpeningHandSize < 0 || request.OpeningHandSize > population.TotalCount)
         {
             return Invalid<TurnTableResult>(
-                "request.openingHandSize must be between zero and the selected population size.");
+                "request.openingHandSize must be between zero and the selected population size.",
+                "request.openingHandSize");
         }
 
         if (!TryPrepareDrawSchedule(
@@ -81,7 +83,7 @@ public sealed partial class ExactStatisticsCalculator
                 out TurnDrawInput[] schedule,
                 out string? scheduleError))
         {
-            return Invalid<TurnTableResult>(scheduleError!);
+            return Invalid<TurnTableResult>(scheduleError!, "request.drawsByTurn");
         }
 
         int successCount = population.CountGroup(successGroup);
@@ -97,7 +99,7 @@ public sealed partial class ExactStatisticsCalculator
                     out HypergeometricEventSnapshot? eventSnapshot,
                     out string? eventError))
             {
-                return Invalid<TurnTableResult>(eventError!);
+                return Invalid<TurnTableResult>(eventError!, "request.event");
             }
 
             if (!TryCalculateHypergeometricFraction(
@@ -154,14 +156,16 @@ public sealed partial class ExactStatisticsCalculator
         if (request.DrawCount < 0 || request.DrawCount > population.TotalCount)
         {
             return Invalid<ManaAvailabilityResult>(
-                "request.drawCount must be between zero and the selected population size.");
+                "request.drawCount must be between zero and the selected population size.",
+                "request.drawCount");
         }
 
         if (request.MaximumUsableSources < 0 ||
             request.MaximumUsableSources > population.TotalCount)
         {
             return Invalid<ManaAvailabilityResult>(
-                "request.maximumUsableSources must be between zero and the selected population size.");
+                "request.maximumUsableSources must be between zero and the selected population size.",
+                "request.maximumUsableSources");
         }
 
         if (!TryPrepareManaSources(
@@ -172,7 +176,7 @@ public sealed partial class ExactStatisticsCalculator
                 out ManaCapability[] capabilities,
                 out string? sourceError))
         {
-            return Invalid<ManaAvailabilityResult>(sourceError!);
+            return Invalid<ManaAvailabilityResult>(sourceError!, "request.sources");
         }
 
         if (!TryPrepareManaRequirement(
@@ -180,14 +184,15 @@ public sealed partial class ExactStatisticsCalculator
                 out PreparedManaRequirement? requirement,
                 out string? requirementError))
         {
-            return Invalid<ManaAvailabilityResult>(requirementError!);
+            return Invalid<ManaAvailabilityResult>(requirementError!, "request.requirement");
         }
 
         ProjectedPopulationBucket[] projected = MembershipBucketEngine.Project(population, groups);
         if (projected.Any(bucket => BitOperations.PopCount((uint)bucket.MembershipMask) > 1))
         {
             return Invalid<ManaAvailabilityResult>(
-                "request.sources must not select the same population bucket through multiple source groups.");
+                "request.sources must not select the same population bucket through multiple source groups.",
+                "request.sources");
         }
 
         if (!TryCalculateManaFraction(

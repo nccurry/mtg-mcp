@@ -1,3 +1,4 @@
+using System.Net;
 using MtgMcp.App.Configuration;
 using MtgMcp.App.Playgroup;
 using MtgMcp.Core.Results;
@@ -34,5 +35,26 @@ public sealed class PlaygroupToolTests
         Assert.Equal(
             "operation-mode-denied",
             Assert.IsType<OperationUnsupported>(session.Value).ReasonCode);
+    }
+
+    /// <summary>Verifies a provider 400 on each remote write is invalid input that names the argument sent.</summary>
+    [Fact]
+    public async Task RemoteWriteTools_ProviderRejection_IsInvalidInputAtTheArgument()
+    {
+        using PlaygroupGamesPagingTests.PlaygroupWorld world = new("{}") { Status = HttpStatusCode.BadRequest };
+
+        OperationResult<PlaygroupEvidence> events = await world.WriteTools.CreateGameEventsBatchAsync(
+            1,
+            [new PlaygroupEventImport("Damage", "0")],
+            TestContext.Current.CancellationToken);
+        OperationResult<PlaygroupEvidence> session = await world.WriteTools.CreateLiveSessionAsync(
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        OperationInvalidInput rejectedEvents = Assert.IsType<OperationInvalidInput>(events.Value);
+        OperationInvalidInput rejectedSession = Assert.IsType<OperationInvalidInput>(session.Value);
+        Assert.Equal("provider-request-rejected", rejectedEvents.ReasonCode);
+        Assert.Equal("events", rejectedEvents.Path);
+        Assert.Equal("provider-request-rejected", rejectedSession.ReasonCode);
+        Assert.Equal("playgroupId", rejectedSession.Path);
     }
 }

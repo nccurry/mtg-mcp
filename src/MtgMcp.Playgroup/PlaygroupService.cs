@@ -87,7 +87,8 @@ public sealed class PlaygroupService : IDisposable
         CancellationToken cancellationToken)
     {
         return ExecuteAsync(() => GetCoreAsync(
-            $"decks/{PlaygroupContract.PositiveId(playgroupDeckId, nameof(playgroupDeckId))}?include_archived={Bool(includeArchived)}",
+            $"decks/{PlaygroupContract.PositiveId(playgroupDeckId, nameof(playgroupDeckId))}" +
+            $"?include_archived={Bool(includeArchived)}",
             "getDeckById",
             requiresAuthentication: false,
             cancellationToken));
@@ -115,7 +116,8 @@ public sealed class PlaygroupService : IDisposable
             AddOptionalId(query, "playgroup_id", playgroupId, nameof(playgroupId));
             AddOptionalId(query, "league_id", leagueId, nameof(leagueId));
             return GetCoreAsync(
-                $"decks/{PlaygroupContract.PositiveId(playgroupDeckId, nameof(playgroupDeckId))}/elo_history{Query(query)}",
+                $"decks/{PlaygroupContract.PositiveId(playgroupDeckId, nameof(playgroupDeckId))}" +
+                $"/elo_history{Query(query)}",
                 "getDeckEloHistory",
                 requiresAuthentication: false,
                 cancellationToken);
@@ -194,11 +196,6 @@ public sealed class PlaygroupService : IDisposable
     {
         return ExecuteAsync(() =>
         {
-            if (page <= 0)
-            {
-                throw Invalid("invalid-page", "The cursor page must be positive.", "cursor");
-            }
-
             if (limit is < 1 or > 100)
             {
                 throw Invalid(SharedReasonCodes.InvalidPageSize, "pageSize must be between 1 and 100.", "pageSize");

@@ -3,6 +3,7 @@ using System.Text;
 using MtgMcp.App.Hosting;
 using MtgMcp.App.Spellbook;
 using MtgMcp.Core.Decks;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
 using MtgMcp.Spellbook;
@@ -211,6 +212,70 @@ public sealed class SpellbookPagingToolTests
     }
 
     /// <summary>
+    /// Verifies a source 400 on a variant search is invalid input at the source query, not an outage.
+    /// </summary>
+    [Fact]
+    public async Task SearchVariants_SourceRejectsTheRequest_IsInvalidAtSourceQuery()
+    {
+        using TemporaryDirectory temporary = new();
+        using SpellbookWorld world = new(temporary, "{}") { Status = HttpStatusCode.BadRequest };
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>((await world.Tools.SearchVariantsAsync(
+            "type:(",
+            cancellationToken: TestContext.Current.CancellationToken)).Value);
+
+        Assert.Equal("source-request-rejected", invalid.ReasonCode);
+        Assert.Equal("sourceQuery", invalid.Path);
+    }
+
+    /// <summary>
+    /// Verifies a source 400 on a deck combo search is invalid input at the source query.
+    /// </summary>
+    [Fact]
+    public async Task FindDeckCombos_SourceRejectsTheRequest_IsInvalidAtSourceQuery()
+    {
+        using TemporaryDirectory temporary = new();
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        DeckDocument deck = await CreateDeckAsync(store);
+        using SpellbookWorld world = new(temporary, store, "{}") { Status = HttpStatusCode.BadRequest };
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>((await world.Tools.FindDeckCombosAsync(
+            deck.DeckId,
+            deck.Revision,
+            "type:(",
+            cancellationToken: TestContext.Current.CancellationToken)).Value);
+
+        Assert.Equal("source-request-rejected", invalid.ReasonCode);
+        Assert.Equal("sourceQuery", invalid.Path);
+    }
+
+    /// <summary>
+    /// Verifies a well-formed cursor that passes the source offset cap is refused at the cursor, before any source
+    /// request.
+    /// </summary>
+    [Fact]
+    public async Task SearchVariants_CursorPastTheOffsetCap_IsInvalidAtCursor()
+    {
+        using TemporaryDirectory temporary = new();
+        using SpellbookWorld world = new(temporary, PageJson(2, hasNext: false));
+        PageCursorBinding binding = PageCursorBinding.ForRequest(RequestHash.Of(
+            ("type:combo", typeof(string)),
+            ((bool?)null, typeof(bool?))));
+        string forged = PageCursor.Encode(
+            PageCursorPosition.AtOffset(SpellbookPageOptions.MaximumOffset + 1),
+            binding);
+
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>((await world.Tools.SearchVariantsAsync(
+            "type:combo",
+            cursor: forged,
+            cancellationToken: TestContext.Current.CancellationToken)).Value);
+
+        Assert.Equal(SharedReasonCodes.InvalidCursor, invalid.ReasonCode);
+        Assert.Equal("cursor", invalid.Path);
+        Assert.Empty(world.Requests);
+    }
+
+    /// <summary>
     /// Creates a one-entry deck that Commander Spellbook can be asked about.
     /// </summary>
     private static async Task<DeckDocument> CreateDeckAsync(SqliteDeckStore store)
@@ -271,6 +336,11 @@ public sealed class SpellbookPagingToolTests
         private readonly SqliteDeckStore? ownedStore;
 
         /// <summary>
+        /// Answers each source request.
+        /// </summary>
+        private readonly Handler handler;
+
+        /// <summary>
         /// Creates tools over an empty deck store and the queued responses.
         /// </summary>
         internal SpellbookWorld(TemporaryDirectory directory, params string[] responses)
@@ -285,7 +355,7 @@ public sealed class SpellbookPagingToolTests
         {
             ownedStore = store is null ? new SqliteDeckStore(Path.Combine(directory.Path, "decks"), "0.9.0-preview.1") : null;
             SqliteDeckStore deckStore = store ?? ownedStore!;
-            Handler handler = new(responses, Requests);
+            handler = new Handler(responses, Requests);
             string root = Path.Combine(directory.Path, "spellbook");
             Directory.CreateDirectory(root);
             service = new SpellbookService(
@@ -306,6 +376,14 @@ public sealed class SpellbookPagingToolTests
         /// </summary>
         internal List<string> Requests { get; } = [];
 
+        /// <summary>
+        /// Sets the status the source answers with from now on.
+        /// </summary>
+        internal HttpStatusCode Status
+        {
+            set => handler.Status = value;
+        }
+
         /// <inheritdoc/>
         public void Dispose()
         {
@@ -324,6 +402,11 @@ public sealed class SpellbookPagingToolTests
         /// </summary>
         private int served;
 
+        /// <summary>
+        /// Gets or sets the status each response carries.
+        /// </summary>
+        internal HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
+
         /// <inheritdoc/>
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
@@ -331,7 +414,7 @@ public sealed class SpellbookPagingToolTests
         {
             requests.Add(request.RequestUri!.ToString());
             string body = responses[Math.Min(served++, responses.Length - 1)];
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            return Task.FromResult(new HttpResponseMessage(Status)
             {
                 Content = new StringContent(body, Encoding.UTF8, "application/json"),
             });

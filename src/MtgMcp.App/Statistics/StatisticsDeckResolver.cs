@@ -45,7 +45,9 @@ internal sealed class StatisticsDeckResolver
 
         if (input is not DeckStatisticsPopulationInput deckInput)
         {
-            return Invalid<StatisticsPopulation>("The statistics population kind is unsupported.", PopulationPath + ".kind");
+            return Invalid<StatisticsPopulation>(
+                "The statistics population kind is unsupported.",
+                PopulationPath + ".kind");
         }
 
         OperationResult<ResolvedDeckSelection> selection = await ResolveDeckSelectionAsync(

@@ -63,7 +63,8 @@ public sealed partial class ExactStatisticsCalculator
         if (request.DrawCount < 0 || request.DrawCount > population.TotalCount)
         {
             return Invalid<MultivariateResult>(
-                "request.drawCount must be between zero and the selected population size.");
+                "request.drawCount must be between zero and the selected population size.",
+                "request.drawCount");
         }
 
         if (!TryPrepareConditions(
@@ -72,7 +73,7 @@ public sealed partial class ExactStatisticsCalculator
                 out StatisticsGroupConditionInput[] conditions,
                 out string? error))
         {
-            return Invalid<MultivariateResult>(error!);
+            return Invalid<MultivariateResult>(error!, "request.conditions");
         }
 
         string[] groups = conditions.Select(value => value.Group).ToArray();
@@ -122,7 +123,8 @@ public sealed partial class ExactStatisticsCalculator
         if (request.DrawCount < 0 || request.DrawCount > population.TotalCount)
         {
             return Invalid<PackageAssemblyResult>(
-                "request.drawCount must be between zero and the selected population size.");
+                "request.drawCount must be between zero and the selected population size.",
+                "request.drawCount");
         }
 
         if (!TryPrepareRequirements(
@@ -133,7 +135,7 @@ public sealed partial class ExactStatisticsCalculator
                 out PreparedPackageRequirement[] prepared,
                 out string? error))
         {
-            return Invalid<PackageAssemblyResult>(error!);
+            return Invalid<PackageAssemblyResult>(error!, "request.requirements");
         }
 
         MembershipEnumerationResult enumeration = MembershipBucketEngine.Evaluate(

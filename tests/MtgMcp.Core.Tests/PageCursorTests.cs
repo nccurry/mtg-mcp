@@ -245,6 +245,25 @@ public sealed class PageCursorTests
     }
 
     /// <summary>
+    /// Verifies peeking reads the position of a well-formed cursor of the expected shape whatever its binding, starts
+    /// at the first row without a cursor, and refuses damaged text and another shape.
+    /// </summary>
+    [Fact]
+    public void Peek_ReadsThePositionWithoutTheBindingAndRefusesWhatIsNotACursorOfTheShape()
+    {
+        string cursor = PageCursor.Encode(PageCursorPosition.AtProviderPage(2, 3), PageCursorBinding.ForSource("a"));
+
+        Assert.Equal(
+            PageCursorPosition.AtProviderPage(2, 3),
+            Position(PageCursor.Peek(cursor, PageCursorShape.ProviderPage)));
+        Assert.Equal(
+            PageCursorPosition.AtProviderPage(0, 0),
+            Position(PageCursor.Peek(null, PageCursorShape.ProviderPage)));
+        AssertInvalid(PageCursor.Peek(cursor, PageCursorShape.Offset));
+        AssertInvalid(PageCursor.Peek("damaged", PageCursorShape.ProviderPage));
+    }
+
+    /// <summary>
     /// Verifies a scope binding refuses another scope as another request and a changed checksum as stale.
     /// </summary>
     [Fact]
