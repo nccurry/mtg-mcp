@@ -59,9 +59,11 @@ Credentials and session tokens remain in memory and never appear in output.
 - GET requests retry transient failures at most twice.
 - A `429` retries once only with a bounded `Retry-After`.
 - Writes are single-attempt.
-- A provider `400` or `422` is an `unavailable` result with reason `provider-request-rejected`.
-- `playgroup_playgroup_games_list` pages with `cursor`; the cursor holds the provider page number. Playgroup reports
-  no total, so the last page can be empty.
+- A provider `400` or `422` is an `invalid-input` result with reason `provider-request-rejected` and the `path` of the
+  tool argument that carried the value.
+- `playgroup_playgroup_games_list` pages with `cursor`; the cursor records the provider page number and, inside a page
+  cut to the result size limit, how many rows were shown and a checksum of that page. Playgroup reports no total, so
+  the last page can be empty.
 - Missing public operations return unsupported results. The adapter does not
   probe private routes.
 
@@ -79,7 +81,8 @@ combo evidence. It has no account or write operation.
 - It sends the caller's source query unchanged apart from URL escaping.
 - It makes at most one upstream request per tool call and never follows a
   provider paging link. A tool `cursor` holds the source offset, which ends at the source cap of 1,000.
-- A provider `400` is an `unavailable` result with reason `source-request-rejected`.
+- A provider `400` is an `invalid-input` result with reason `source-request-rejected` and the `path` of the tool
+  argument that carried the value, such as `sourceQuery`.
 - Starts are at least one second apart across processes that share a data root.
 - It has no automatic retries. A `429` records a cooldown of at most 60 seconds
   for later calls.
