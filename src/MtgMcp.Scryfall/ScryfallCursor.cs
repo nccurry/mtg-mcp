@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using MtgMcp.Core.Results;
 
 namespace MtgMcp.Scryfall;
 
@@ -30,48 +31,93 @@ internal static class ScryfallCursor
     }
 
     /// <summary>
-    /// Decodes one cursor only when its scope and checksum match the requested evidence.
+    /// Reads the offset a cursor names. A missing cursor starts at the first row. A cursor that is malformed, for
+    /// another scope, or past <paramref name="total"/> is invalid input at <c>cursor</c>; a cursor for this scope
+    /// whose checksum no longer matches is a stale-cursor conflict.
     /// </summary>
-    internal static bool TryDecode(
+    internal static OperationResult<int> Decode(string? cursor, string scope, string checksum, int? total = null)
+    {
+        if (cursor is null)
+        {
+            return new OperationSuccess<int>(0);
+        }
+
+        CursorPayload? payload = Parse(cursor);
+        if (payload is null || payload.Offset < 0 || payload.Offset > (total ?? int.MaxValue) ||
+            !FixedTimeEquals(payload.Scope, scope))
+        {
+            return Invalid();
+        }
+
+        return FixedTimeEquals(payload.Checksum, checksum)
+            ? new OperationSuccess<int>(payload.Offset)
+            : Stale();
+    }
+
+    /// <summary>
+    /// Reads the offset like <see cref="Decode"/>, and on failure supplies the refusal as a result of the caller's
+    /// type.
+    /// </summary>
+    internal static bool TryRead<T>(
         string? cursor,
         string scope,
         string checksum,
-        out int offset)
+        int? total,
+        out int offset,
+        out OperationResult<T> failure)
     {
-        offset = 0;
-        if (cursor is null)
+        OperationResult<int> decoded = Decode(cursor, scope, checksum, total);
+        if (decoded is OperationSuccess<int> position)
         {
+            offset = position.Data;
+            failure = default;
             return true;
         }
 
+        offset = 0;
+        failure = OperationFailure.Forward<int, T>(decoded);
+        return false;
+    }
+
+    /// <summary>
+    /// Builds the failure for a cursor that cannot be used with this request.
+    /// </summary>
+    internal static OperationInvalidInput Invalid()
+    {
+        return new OperationInvalidInput(
+            SharedReasonCodes.InvalidCursor,
+            "The cursor is not valid for this request. Pass nextCursor unchanged with the same arguments, or start " +
+            "again without a cursor.",
+            "cursor");
+    }
+
+    /// <summary>
+    /// Builds the conflict for a cursor whose data changed since the first page.
+    /// </summary>
+    internal static OperationConflict Stale()
+    {
+        return new OperationConflict(
+            SharedReasonCodes.CursorStale,
+            "The data behind this cursor changed since the first page. Start again without a cursor.",
+            null);
+    }
+
+    /// <summary>
+    /// Reads the payload of an opaque cursor, or null when it is not one this class wrote.
+    /// </summary>
+    private static CursorPayload? Parse(string cursor)
+    {
         try
         {
             string padded = cursor.Replace('-', '+').Replace('_', '/');
             padded = padded.PadRight((padded.Length + 3) / 4 * 4, '=');
             CursorPayload? payload = JsonSerializer.Deserialize<CursorPayload>(Convert.FromBase64String(padded));
-            if (payload is null || payload.Offset < 0)
-            {
-                return false;
-            }
-
-            bool scopeMatches = CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(payload.Scope),
-                Encoding.UTF8.GetBytes(scope));
-            bool checksumMatches = CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(payload.Checksum),
-                Encoding.UTF8.GetBytes(checksum));
-            if (!scopeMatches || !checksumMatches)
-            {
-                return false;
-            }
-
-            offset = payload.Offset;
-            return true;
+            return payload is { Scope: not null, Checksum: not null } ? payload : null;
         }
         catch (Exception exception) when (
             exception is FormatException or JsonException or ArgumentException)
         {
-            return false;
+            return null;
         }
     }
 

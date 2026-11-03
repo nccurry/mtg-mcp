@@ -207,9 +207,9 @@ internal sealed class ScryfallSnapshotStore
             retrievedBeforeUtc,
             cancellationToken)
             .ConfigureAwait(false);
-        if (!ScryfallCursor.TryDecode(cursor, scope, checksum, out int offset))
+        if (!ScryfallCursor.TryRead(cursor, scope, checksum, null, out int offset, out OperationResult<ScryfallPage<ScryfallSnapshotSummary>> cursorFailure))
         {
-            return new OperationInvalidInput("invalid-cursor", "The snapshot cursor is invalid for this request.");
+            return cursorFailure;
         }
 
         await using SqliteCommand count = connection.CreateCommand();
@@ -268,9 +268,9 @@ internal sealed class ScryfallSnapshotStore
         }
 
         string scope = $"snapshot:{snapshotId:D}";
-        if (!ScryfallCursor.TryDecode(cursor, scope, header.Checksum, out int offset) || offset > header.TotalCount)
+        if (!ScryfallCursor.TryRead(cursor, scope, header.Checksum, header.TotalCount, out int offset, out OperationResult<ScryfallSnapshotPage> cursorFailure))
         {
-            return new OperationInvalidInput("invalid-cursor", "The snapshot cursor is invalid for this request.");
+            return cursorFailure;
         }
 
         await using SqliteCommand command = connection.CreateCommand();

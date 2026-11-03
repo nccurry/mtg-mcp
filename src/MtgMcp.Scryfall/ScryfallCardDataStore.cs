@@ -880,11 +880,11 @@ internal sealed class ScryfallCardDataStore
             return new OperationNotCached("scryfall-corpus-missing", "Scryfall corpus data is not installed.");
         }
 
-        string scope = $"tags:{generationId:D}:{tagType ?? "all"}:{query}";
-        string checksum = ScryfallHash.Compute(scope);
-        if (!ScryfallCursor.TryDecode(cursor, scope, checksum, out int offset))
+        string scope = $"tags:{tagType ?? "all"}:{query}";
+        string checksum = ScryfallHash.Compute($"{generationId:D}|{scope}");
+        if (!ScryfallCursor.TryRead(cursor, scope, checksum, null, out int offset, out OperationResult<ScryfallPage<ScryfallTag>> cursorFailure))
         {
-            return new OperationInvalidInput("invalid-cursor", "The tag cursor is invalid for this request.");
+            return cursorFailure;
         }
 
         await using SqliteCommand countCommand = connection.CreateCommand();
