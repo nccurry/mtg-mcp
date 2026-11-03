@@ -497,7 +497,13 @@ public sealed record ArchidektPushPlan(
 /// Says why a push cannot be sent, with its reason code: <c>push-printing-unresolved</c> when a card has no Archidekt
 /// printing, <c>request-limit-exceeded</c> when the lookups or the push would pass the request limit.
 /// </summary>
-public sealed record ArchidektPushBlock(string Notice, string ReasonCode);
+public sealed record ArchidektPushBlock(string Notice, string ReasonCode)
+{
+    /// <summary>
+    /// Gets true when the push is blocked by the request limit rather than by an argument.
+    /// </summary>
+    public bool IsRequestLimit => ReasonCode == ArchidektProviderException.RequestLimitReasonCode;
+}
 
 /// <summary>
 /// Describes one previewed primitive provider operation without exposing transport payloads.
