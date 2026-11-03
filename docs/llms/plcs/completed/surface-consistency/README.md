@@ -2,15 +2,22 @@
 
 ## Current Work
 
-- Status: In progress (phases 0 to 3 merged at `e547882`; audit pass 1 done, repairs running)
+- Status: Complete
 - Owner: mtg-mcp (owner session)
-- Last updated: 2026-11-02, branch `surface-consistency/integration` at `e547882`
+- Last updated: 2026-11-03, `main` at `12b7699` (release `0.15.0`)
 - Implementation authorized: Yes (owner, 2026-11-02: "Accept and implement"; D-1 to D-6 accepted as recommended)
 - Selected work and endpoint: phases 0 to 3, merged into `main`, audited, released as `0.15.0`, and installed.
-- State: all phases merged into integration and `task ci` passed on `e547882`. Audit pass 1 findings are being repaired: the shared foundation first, then the four families.
-- Next action: merge the repairs, update the docs and evidence, run `task ci`, then merge to `main` and release `0.15.0`.
-- Blocker: none.
-- Resume check: `git log surface-consistency/integration` contains `e547882`; worktrees under `../mtg-mcp-wt/surface-consistency/`.
+- State: delivered.
+  - Merged into `main` in `3b08a06`.
+  - Released as `0.15.0` (`12b7699`) on the release workflow's first run: NuGet, the GitHub Release, and the MCP
+    Registry (latest `0.15.0`).
+  - Before tagging, `task release:verify`, `task test:integration`, and `task test:e2e` passed on the release commit:
+    2,535 tests, 77 smoke tests, every assembly over 90 percent line coverage, and the package install smoke test.
+  - Installed globally as `0.15.0`. A stdio probe answered `io.github.nccurry/mtg-mcp 0.15.0` and listed 86 tools;
+    `archidekt_deck_get` takes `remoteDeckId`, `cursor`, `pageSize`, `zones`, and `responseFormat`.
+  - The audit closed after two passes (see Audit Ledger).
+- Next action: none.
+- Resume check: `git log --oneline origin/main` contains `12b7699`.
 
 ## Problem
 
