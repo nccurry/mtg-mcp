@@ -165,6 +165,14 @@ public sealed partial class ToolNamingRuleTests
     }
 
     /// <summary>
+    /// Names the guards of remote or stored state that are not preview fingerprints, so they keep their own names.
+    /// </summary>
+    private static readonly string[] NonPreviewFingerprintGuards =
+    [
+        "expectedRemoteFingerprint", "expectedTreeFingerprint", "expectedSnapshotContentFingerprint",
+    ];
+
+    /// <summary>
     /// Verifies the argument that guards a preview is always named <c>previewFingerprint</c>.
     /// </summary>
     [Fact]
@@ -176,7 +184,8 @@ public sealed partial class ToolNamingRuleTests
         foreach ((string tool, MethodInfo method) in SurfaceConsistencyTargetTests.Ordered(registered))
         {
             offenders.AddRange(SurfaceConsistencyTargetTests.ArgumentNames(method)
-                .Where(name => name.Contains("ingerprint", StringComparison.Ordinal) && name != "previewFingerprint")
+                .Where(name => name.Contains("ingerprint", StringComparison.Ordinal) && name != "previewFingerprint" &&
+                    !NonPreviewFingerprintGuards.Contains(name))
                 .Select(name => $"{tool}: {name}"));
         }
 
