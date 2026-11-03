@@ -163,7 +163,7 @@ public sealed class ScryfallReferenceToolTests
         Assert.False(rulingsOnly.TryGetProperty("prints", out _));
         Assert.Equal(
             "Provider ruling.",
-            rulingsOnly.GetProperty("rulings").GetProperty("page").GetProperty("items")[0]
+            rulingsOnly.GetProperty("rulings").GetProperty("items")[0]
                 .GetProperty("comment").GetString());
         Assert.True(both.TryGetProperty("prints", out _));
         Assert.True(both.TryGetProperty("rulings", out _));
@@ -188,18 +188,18 @@ public sealed class ScryfallReferenceToolTests
     }
 
     /// <summary>
-    /// Verifies bad include lists and sections' own fields are refused and named.
+    /// Verifies bad include lists and cursors are refused and named.
     /// </summary>
     [Theory]
-    [InlineData(new string[0], null, null, "include")]
-    [InlineData(new[] { "prints", "prints" }, null, null, "include")]
-    [InlineData(new[] { "reviews" }, null, null, "include")]
-    [InlineData(new[] { "prints" }, "x", null, "rulingsCursor")]
-    [InlineData(new[] { "rulings" }, null, "x", "printsCursor")]
-    public async Task CardDetails_InvalidIncludeOrMisplacedField_ReturnsInvalidInputNamingTheField(
+    [InlineData(new string[0], null, "include")]
+    [InlineData(new[] { "prints", "prints" }, null, "include")]
+    [InlineData(new[] { "reviews" }, null, "include")]
+    [InlineData(new[] { "prints" }, "x", "cursor")]
+    [InlineData(new[] { "prints" }, "a~b", "cursor")]
+    [InlineData(new[] { "rulings" }, "a~", "cursor")]
+    public async Task CardDetails_InvalidIncludeOrCursor_ReturnsInvalidInputNamingTheField(
         string[] include,
-        string? rulingsCursor,
-        string? printsCursor,
+        string? cursor,
         string expectedPath)
     {
         using ServiceFixture fixture = new();
@@ -207,8 +207,7 @@ public sealed class ScryfallReferenceToolTests
         OperationResult<ScryfallCardDetailsResult> result = await fixture.Tools.GetCardDetailsAsync(
             WhiteLookup,
             include,
-            printsCursor: printsCursor,
-            rulingsCursor: rulingsCursor,
+            cursor: cursor,
             cancellationToken: TestContext.Current.CancellationToken);
 
         OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(result.Value);
@@ -293,11 +292,11 @@ public sealed class ScryfallReferenceToolTests
         Assert.Equal("list", list.GetProperty("kind").GetString());
         Assert.Contains(
             list.GetProperty("snapshots").GetProperty("items").EnumerateArray(),
-            item => item.GetProperty("snapshotId").GetGuid() == snapshotId);
+            item => item.GetProperty("requestSnapshotId").GetGuid() == snapshotId);
         Assert.Equal("get", get.GetProperty("kind").GetString());
         Assert.Equal(
             snapshotId,
-            get.GetProperty("snapshot").GetProperty("summary").GetProperty("snapshotId").GetGuid());
+            get.GetProperty("snapshot").GetProperty("summary").GetProperty("requestSnapshotId").GetGuid());
     }
 
     /// <summary>
@@ -320,12 +319,12 @@ public sealed class ScryfallReferenceToolTests
     /// Verifies fields that do not belong to the chosen snapshot kind, a missing ID, and an unknown kind are refused.
     /// </summary>
     [Theory]
-    [InlineData("list", "id", "snapshotId")]
+    [InlineData("list", "id", "requestSnapshotId")]
     [InlineData("list", "raw", "includeRaw")]
     [InlineData("get", "operation", "operation")]
     [InlineData("get", "after", "retrievedAfterUtc")]
     [InlineData("get", "before", "retrievedBeforeUtc")]
-    [InlineData("get", "none", "snapshotId")]
+    [InlineData("get", "none", "requestSnapshotId")]
     [InlineData("other", "none", "kind")]
     public async Task RequestSnapshots_InvalidFieldCombination_ReturnsInvalidInputNamingTheField(
         string kind,
@@ -336,7 +335,7 @@ public sealed class ScryfallReferenceToolTests
 
         OperationResult<ScryfallSnapshotsResult> result = await fixture.Tools.GetRequestSnapshotsAsync(
             kind,
-            snapshotId: kind == "get" && misplaced == "none" ? null : misplaced == "id" || kind == "get"
+            requestSnapshotId: kind == "get" && misplaced == "none" ? null : misplaced == "id" || kind == "get"
                 ? Guid.CreateVersion7()
                 : null,
             operation: misplaced == "operation" ? "search" : null,

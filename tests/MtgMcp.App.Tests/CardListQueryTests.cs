@@ -81,8 +81,8 @@ public sealed class CardListQueryTests
             metrics: ["pips", "sources", "sum:priceUsd", "sum:cheapestPriceUsd"],
             rows: new CardListRowsInput(
                 ["name", "priceUsd"],
-                [new CardListSortInput("priceUsd", "desc")],
-                2)));
+                [new CardListSortInput("priceUsd", "desc")]),
+            pageSize: 2));
 
         ScryfallOrderedObject total = Assert.Single(result.Groups);
         ScryfallOrderedObject pips = (ScryfallOrderedObject)total.Get("pips")!;
@@ -91,7 +91,7 @@ public sealed class CardListQueryTests
         Assert.Equal(1L, ((ScryfallOrderedObject)total.Get("sources")!).Get("G"));
         Assert.Equal("5.50", total.Get("sum:priceUsd"));
         Assert.Equal(["Foxtrot", "Alpha"], result.Rows!.Items.Select(row => (string)row.Get("name")!));
-        Assert.NotNull(result.Rows.NextCursor);
+        Assert.NotNull(result.NextCursor);
     }
 
     /// <summary>
@@ -103,17 +103,18 @@ public sealed class CardListQueryTests
         using CardListWorld world = await CardListWorld.CreateAsync();
         DeckDocument deck = await world.CreateDeckAsync();
         DeckSourceInput source = new(deck.DeckId);
-        CardListRowsInput rows = new(["name", "zone", "category", "quantity"], PageSize: 2);
+        CardListRowsInput rows = new(["name", "zone", "category", "quantity"]);
 
-        CardListQueryResult first = Success(await Query(world, source, rows: rows));
-        CardListQueryResult second = Success(await Query(world, source, rows: rows, cursor: first.Rows!.NextCursor));
-        CardListQueryResult again = Success(await Query(world, source, rows: rows));
+        CardListQueryResult first = Success(await Query(world, source, rows: rows, pageSize: 2));
+        CardListQueryResult second = Success(await Query(
+            world, source, rows: rows, cursor: first.NextCursor, pageSize: 2));
+        CardListQueryResult again = Success(await Query(world, source, rows: rows, pageSize: 2));
 
-        Assert.Equal(["Alpha", "Delta"], first.Rows.Items.Select(row => (string)row.Get("name")!));
+        Assert.Equal(["Alpha", "Delta"], first.Rows!.Items.Select(row => (string)row.Get("name")!));
         Assert.Equal(["Foxtrot"], second.Rows!.Items.Select(row => (string)row.Get("name")!));
         Assert.Equal(3, first.Rows.TotalRows);
-        Assert.Null(second.Rows.NextCursor);
-        Assert.Equal(first.Rows.NextCursor, again.Rows!.NextCursor);
+        Assert.Null(second.NextCursor);
+        Assert.Equal(first.NextCursor, again.NextCursor);
         Assert.Equal("commander", second.Rows.Items[0].Get("zone"));
     }
 
@@ -342,13 +343,15 @@ public sealed class CardListQueryTests
         DeckDocument deck = await world.CreateDeckAsync();
         DeckSourceInput source = new(deck.DeckId);
 
-        OperationInvalidInput size = Failure(await Query(world, source, rows: new CardListRowsInput(PageSize: 0)));
+        OperationInvalidInput size = Failure(await Query(world, source, rows: new CardListRowsInput(), pageSize: 0));
         OperationInvalidInput noRows = Failure(await Query(world, source, cursor: "x"));
+        OperationInvalidInput noRowsSize = Failure(await Query(world, source, pageSize: 5));
         OperationInvalidInput badCursor = Failure(await Query(
             world,
             source,
-            rows: new CardListRowsInput(["name"], PageSize: 1),
-            cursor: "x"));
+            rows: new CardListRowsInput(["name"]),
+            cursor: "x",
+            pageSize: 1));
         OperationInvalidInput badSource = Failure(await Query(world, new CardsSourceInput([])));
         OperationConflict stale = Assert.IsType<OperationConflict>((await Query(
             world,
@@ -359,8 +362,9 @@ public sealed class CardListQueryTests
             where: [new CardListFilterInput("quantity", "gte", JsonElement.Parse("2"))],
             rows: new CardListRowsInput(["name"])));
 
-        Assert.Equal("rows.pageSize", size.Path);
-        Assert.Equal("cursor-requires-rows", noRows.ReasonCode);
+        Assert.Equal("pageSize", size.Path);
+        Assert.Equal(("cursor-requires-rows", "cursor"), (noRows.ReasonCode, noRows.Path));
+        Assert.Equal(("cursor-requires-rows", "pageSize"), (noRowsSize.ReasonCode, noRowsSize.Path));
         Assert.Equal("invalid-cursor", badCursor.ReasonCode);
         Assert.Equal("invalid-source", badSource.ReasonCode);
         Assert.Equal(deck.Revision, stale.Current!.Revision);
@@ -376,8 +380,8 @@ public sealed class CardListQueryTests
         using CardListWorld world = await CardListWorld.CreateAsync();
         DeckDocument deck = await world.CreateDeckAsync();
         DeckSourceInput source = new(deck.DeckId);
-        CardListRowsInput rows = new(["name"], PageSize: 1);
-        CardListQueryResult first = Success(await Query(world, source, rows: rows));
+        CardListRowsInput rows = new(["name"]);
+        CardListQueryResult first = Success(await Query(world, source, rows: rows, pageSize: 1));
         _ = Success(await world.Data.Store.ApplyChangesAsync(
             deck.DeckId,
             deck.Revision,
@@ -385,8 +389,9 @@ public sealed class CardListQueryTests
             TestContext.Current.CancellationToken));
 
         OperationConflict conflict = Assert.IsType<OperationConflict>(
-            (await Query(world, source, rows: rows, cursor: first.Rows!.NextCursor)).Value);
+            (await Query(world, source, rows: rows, cursor: first.NextCursor, pageSize: 1)).Value);
 
+        Assert.Equal(SharedReasonCodes.CursorStale, conflict.ReasonCode);
         Assert.Equal(deck.Revision + 1, conflict.Current!.Revision);
     }
 
@@ -420,8 +425,9 @@ public sealed class CardListQueryTests
             null,
             ["name"],
             ["quantity", "cards", "pips", "sources", "sum:priceUsd"],
-            new CardListRowsInput(["name", "typeLine", "oracleText"], PageSize: 100),
+            new CardListRowsInput(["name", "typeLine", "oracleText"]),
             null,
+            100,
             TestContext.Current.CancellationToken));
 
         int bytes = JsonSerializer.SerializeToUtf8Bytes(result, ToolCallPolicy.SerializerOptions).Length;
@@ -463,6 +469,7 @@ public sealed class CardListQueryTests
                     ? rows.Deserialize<CardListRowsInput>(ToolCallPolicy.SerializerOptions)
                     : null,
                 null,
+                arguments.TryGetValue("pageSize", out JsonElement pageSize) ? pageSize.GetInt32() : null,
                 TestContext.Current.CancellationToken);
 
             Assert.True(
@@ -481,11 +488,11 @@ public sealed class CardListQueryTests
         using CardListWorld world = await CardListWorld.CreateAsync();
         DeckDocument deck = await world.CreateDeckAsync();
         DeckSourceInput source = new(deck.DeckId);
-        CardListRowsInput rows = new(["name"], PageSize: 2);
-        CardListQueryResult first = Success(await Query(world, source, rows: rows));
-        string past = CardListCursors.Encode(first.Fingerprint, 99, [.. first.Sources.Select(item => item.Marker)]);
+        CardListRowsInput rows = new(["name"]);
+        CardListQueryResult first = Success(await Query(world, source, rows: rows, pageSize: 2));
+        string past = CardListCursors.Encode(first.Fingerprint, 99, first.Sources);
 
-        OperationInvalidInput beyond = Failure(await Query(world, source, rows: rows, cursor: past));
+        OperationInvalidInput beyond = Failure(await Query(world, source, rows: rows, cursor: past, pageSize: 2));
 
         Assert.Equal(("invalid-cursor", "cursor"), (beyond.ReasonCode, beyond.Path));
     }
@@ -570,7 +577,8 @@ public sealed class CardListQueryTests
         IReadOnlyList<string>? groupBy = null,
         IReadOnlyList<string>? metrics = null,
         CardListRowsInput? rows = null,
-        string? cursor = null)
+        string? cursor = null,
+        int? pageSize = null)
     {
         return world.Coordinator().QueryAsync(
             source,
@@ -579,6 +587,7 @@ public sealed class CardListQueryTests
             metrics,
             rows,
             cursor,
+            pageSize,
             TestContext.Current.CancellationToken);
     }
 

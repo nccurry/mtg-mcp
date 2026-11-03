@@ -434,7 +434,7 @@ public sealed class CardListCompareTests
             right,
             "union",
             cursor: first.Page.NextCursor![..^2] + "AA"));
-        string past = CardListCursors.Encode(first.Fingerprint, 99, [.. first.Sources.Select(source => source.Marker)]);
+        string past = CardListCursors.Encode(first.Fingerprint, 99, first.Sources);
         OperationInvalidInput beyond = Failure(await Compare(world, left, right, "union", cursor: past));
 
         Assert.All([otherOperation, garbage, edited, beyond], failure => Assert.Equal("invalid-cursor",
