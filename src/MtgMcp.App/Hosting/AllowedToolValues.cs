@@ -29,3 +29,19 @@ internal sealed class TagKindValuesAttribute()
 [AttributeUsage(AttributeTargets.Parameter | AttributeTargets.Property)]
 internal sealed class ResponseFormatValuesAttribute()
     : AllowedValuesAttribute("concise", "standard", "full");
+
+/// <summary>
+/// Publishes the two response formats of tools that have no raw provider objects to add, so no full format, as a
+/// schema enum.
+/// </summary>
+[AttributeUsage(AttributeTargets.Parameter | AttributeTargets.Property)]
+internal sealed class ConciseResponseFormatValuesAttribute()
+    : AllowedValuesAttribute("concise", "standard");
+
+/// <summary>
+/// Publishes the bulk metadata cache policies a card-data sync accepts as a schema enum. A sync has no cache-only
+/// value because it cannot install anything without the network.
+/// </summary>
+[AttributeUsage(AttributeTargets.Parameter | AttributeTargets.Property)]
+internal sealed class SyncFreshnessPolicyValuesAttribute()
+    : AllowedValuesAttribute("default", "refresh");

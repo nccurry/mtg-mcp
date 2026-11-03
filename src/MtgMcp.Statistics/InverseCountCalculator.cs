@@ -20,10 +20,12 @@ public sealed partial class ExactStatisticsCalculator
         if (!TryParseTarget(
                 request.TargetNumerator,
                 request.TargetDenominator,
-                out ExactFraction target))
+                out ExactFraction target,
+                out string targetPath))
         {
             return Invalid<MinimumCountResult>(
-                "request target must be a base-10 rational probability with a positive denominator.");
+                "request target must be a base-10 rational probability with a positive denominator.",
+                targetPath);
         }
 
         PreparedMinimumCountEvent preparation = PrepareMinimumEvent(request.Event);
@@ -59,9 +61,10 @@ public sealed partial class ExactStatisticsCalculator
                 request.MinimumCount,
                 request.MaximumCount,
                 prepared.PopulationSize,
-                out string? rangeError))
+                out string? rangeError,
+                out string rangePath))
         {
-            return Invalid<MinimumCountResult>(rangeError!);
+            return Invalid<MinimumCountResult>(rangeError!, rangePath);
         }
 
         HypergeometricEventSnapshot eventSnapshot = new(
@@ -154,9 +157,10 @@ public sealed partial class ExactStatisticsCalculator
                 request.MinimumCount,
                 request.MaximumCount,
                 prepared.PopulationSize,
-                out string? rangeError))
+                out string? rangeError,
+                out string rangePath))
         {
-            return Invalid<MinimumCountResult>(rangeError!);
+            return Invalid<MinimumCountResult>(rangeError!, rangePath);
         }
 
         ExactFraction? previous = null;
@@ -275,15 +279,22 @@ public sealed partial class ExactStatisticsCalculator
     private static bool TryParseTarget(
         string? numeratorText,
         string? denominatorText,
-        out ExactFraction target)
+        out ExactFraction target,
+        out string path)
     {
         target = ExactFraction.Zero;
+        path = "request.targetNumerator";
         if (!BigInteger.TryParse(
                 numeratorText,
                 NumberStyles.AllowLeadingSign,
                 CultureInfo.InvariantCulture,
-                out BigInteger numerator) ||
-            !BigInteger.TryParse(
+                out BigInteger numerator))
+        {
+            return false;
+        }
+
+        path = "request.targetDenominator";
+        if (!BigInteger.TryParse(
                 denominatorText,
                 NumberStyles.AllowLeadingSign,
                 CultureInfo.InvariantCulture,
@@ -293,6 +304,7 @@ public sealed partial class ExactStatisticsCalculator
             return false;
         }
 
+        path = "request.targetNumerator";
         target = new ExactFraction(numerator, denominator);
         return target.CompareTo(ExactFraction.Zero) >= 0 &&
             target.CompareTo(ExactFraction.One) <= 0;
@@ -305,9 +317,11 @@ public sealed partial class ExactStatisticsCalculator
         int minimum,
         int maximum,
         int population,
-        out string? error)
+        out string? error,
+        out string path)
     {
         error = null;
+        path = minimum < 0 ? "request.minimumCount" : "request.maximumCount";
         if (minimum < 0 || maximum < minimum || maximum > population)
         {
             error = "request minimumCount and maximumCount must define an inclusive range inside the population.";
@@ -341,11 +355,13 @@ public sealed partial class ExactStatisticsCalculator
             case null:
                 return new OperationInvalidInput(
                     "invalid-statistics-request",
-                    "request.event is required.");
+                    "request.event is required.",
+                    "request.event");
             default:
                 return new OperationInvalidInput(
                     "invalid-statistics-request",
-                    "request.event contains invalid fixed population or success values.");
+                    "request.event contains invalid fixed population or success values.",
+                    "request.event");
         }
     }
 
@@ -367,7 +383,8 @@ public sealed partial class ExactStatisticsCalculator
         {
             return new OperationInvalidInput(
                 "invalid-statistics-request",
-                "request.event contains an invalid explicit turn schedule.");
+                "request.event contains an invalid explicit turn schedule.",
+                    "request.event");
         }
 
         int cardsSeen = input.OpeningHandSize;
@@ -386,7 +403,8 @@ public sealed partial class ExactStatisticsCalculator
 
         return new OperationInvalidInput(
             "invalid-statistics-request",
-            "request.event.turn must identify one supplied draw schedule row.");
+            "request.event.turn must identify one supplied draw schedule row.",
+                    "request.event.turn");
     }
 
     /// <summary>
@@ -404,7 +422,8 @@ public sealed partial class ExactStatisticsCalculator
         {
             return new OperationInvalidInput(
                 "invalid-statistics-request",
-                "request.event contains an invalid repeated-source mana case.");
+                "request.event contains an invalid repeated-source mana case.",
+                    "request.event");
         }
 
         return new PreparedManaMinimum(

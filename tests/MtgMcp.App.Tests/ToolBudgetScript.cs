@@ -137,59 +137,18 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
                     ["formatId"] = format,
                     ["artifact"] = info.GetProperty("fileName").GetString(),
                 },
-                "chunk.nextOffset",
-                "offset");
+                "nextCursor",
+                "cursor");
         }
 
-        JsonElement chunk = first.Data.GetProperty("chunk");
-        if (chunk.TryGetProperty("nextOffset", out JsonElement next) && next.ValueKind == JsonValueKind.Number)
+        if (first.Data.TryGetProperty("nextCursor", out JsonElement next) && next.ValueKind == JsonValueKind.String)
         {
             await PageAsync(
                 "local_deck_export_bundle",
-                new JsonObject { ["deckId"] = deckId.ToString(), ["formatId"] = format, ["offset"] = next.GetInt32() },
-                "chunk.nextOffset",
-                "offset");
+                new JsonObject { ["deckId"] = deckId.ToString(), ["formatId"] = format, ["cursor"] = next.GetString() },
+                "nextCursor",
+                "cursor");
         }
-    }
-
-    /// <summary>
-    /// Calls a tool that pages two lists, operations and differences, until neither has a next page, and returns the
-    /// last page.
-    /// </summary>
-    private async Task<ToolBudgetWorld.ToolOutcome> PageTwoListsAsync(string tool, JsonObject arguments)
-    {
-        for (int page = 0; page < MaximumPages; page++)
-        {
-            ToolBudgetWorld.ToolOutcome outcome = await CallAsync(tool, arguments);
-            JsonElement data = outcome.Data;
-            bool moreOperations = TryReadOffset(data, "nextOperationOffset", out int operations);
-            bool moreDifferences = TryReadOffset(data, "nextDifferenceOffset", out int differences);
-            if (!moreOperations && !moreDifferences)
-            {
-                return outcome;
-            }
-
-            // A page that is not the last carries both next offsets; a missing one is a defect, not a cue to guess.
-            Assert.True(
-                moreOperations && moreDifferences,
-                $"{tool} left out a next offset on a page that is not the last.");
-            arguments["operationOffset"] = operations;
-            arguments["differenceOffset"] = differences;
-        }
-
-        Assert.Fail($"{tool} did not finish after {MaximumPages} pages.");
-        return null!;
-    }
-
-    /// <summary>
-    /// Reads a whole-number property that is present and not null.
-    /// </summary>
-    private static bool TryReadOffset(JsonElement data, string name, out int value)
-    {
-        value = 0;
-        return data.TryGetProperty(name, out JsonElement element) &&
-            element.ValueKind == JsonValueKind.Number &&
-            element.TryGetInt32(out value);
     }
 
     /// <summary>
@@ -419,22 +378,24 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
     {
         _ = await CallAsync("archidekt_auth_status", []);
         await PageAsync("archidekt_deck_list", [], "nextCursor", "cursor");
-        await PageAsync("archidekt_deck_get", new JsonObject { ["deckId"] = "42" }, "nextOffset", "offset");
-        await PageAsync("archidekt_folders_get", new JsonObject { ["kind"] = "list" }, "folders.nextOffset", "offset");
+        await PageAsync("archidekt_deck_get", new JsonObject { ["remoteDeckId"] = "42" }, "nextCursor", "cursor");
+        await PageAsync("archidekt_folders_get", new JsonObject { ["kind"] = "list" }, "folders.nextCursor", "cursor");
         await PageAsync(
             "archidekt_folders_get",
             new JsonObject { ["kind"] = "get", ["folderId"] = "9" },
-            "folder.nextOffset",
-            "offset");
-        _ = await CallAsync("archidekt_snapshots_get", new JsonObject { ["kind"] = "list", ["deckId"] = "42" });
+            "folder.nextCursor",
+            "cursor");
+        _ = await CallAsync("archidekt_snapshots_get", new JsonObject { ["kind"] = "list", ["remoteDeckId"] = "42" });
         await PageAsync(
             "archidekt_snapshots_get",
-            new JsonObject { ["kind"] = "get", ["deckId"] = "42", ["snapshotId"] = "77" },
-            "snapshot.deck.nextOffset",
-            "offset");
-        _ = await PageTwoListsAsync(
+            new JsonObject { ["kind"] = "get", ["remoteDeckId"] = "42", ["snapshotId"] = "77" },
+            "snapshot.deck.nextCursor",
+            "cursor");
+        _ = await PageAsync(
             "archidekt_snapshot_restore_preview",
-            new JsonObject { ["deckId"] = "42", ["snapshotId"] = "77" });
+            new JsonObject { ["remoteDeckId"] = "42", ["snapshotId"] = "77" },
+            "nextCursor",
+            "cursor");
 
         ToolBudgetWorld.ToolOutcome pull = await CallAsync(
             "archidekt_pull_preview",
@@ -444,21 +405,16 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
             "archidekt_pull_apply",
             new JsonObject
             {
-                ["request"] = new JsonObject
-                {
-                    ["remoteDeckId"] = "42",
-                    ["localDeckId"] = null,
-                    ["expectedLocalRevision"] = null,
-                    ["expectedRemoteFingerprint"] = pulled.GetProperty("remoteFingerprint").GetString(),
-                    ["previewFingerprint"] = pulled.GetProperty("previewFingerprint").GetString(),
-                },
+                ["remoteDeckId"] = "42",
+                ["expectedRemoteFingerprint"] = pulled.GetProperty("remoteFingerprint").GetString(),
+                ["previewFingerprint"] = pulled.GetProperty("previewFingerprint").GetString(),
             });
         Guid localId = applied.Data.GetProperty("localDeckId").GetGuid();
         await PageAsync(
             "archidekt_pull_preview",
             new JsonObject { ["remoteDeckId"] = "42", ["localDeckId"] = localId.ToString() },
-            "nextDifferenceOffset",
-            "differenceOffset");
+            "nextCursor",
+            "cursor");
 
         DeckDocument local = Assert.IsType<MtgMcp.Core.Results.OperationSuccess<DeckDocument>>(
             (await world.Store.GetAsync(localId, token)).Value).Data;
@@ -473,23 +429,22 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
         await PageAsync(
             "archidekt_sync_diff",
             new JsonObject { ["localDeckId"] = localId.ToString() },
-            "nextDifferenceOffset",
-            "differenceOffset");
-        ToolBudgetWorld.ToolOutcome last = await PageTwoListsAsync(
+            "nextCursor",
+            "cursor");
+        ToolBudgetWorld.ToolOutcome last = await PageAsync(
             "archidekt_push_preview",
-            new JsonObject { ["localDeckId"] = localId.ToString() });
+            new JsonObject { ["localDeckId"] = localId.ToString() },
+            "nextCursor",
+            "cursor");
         JsonElement preview = last.Data;
         _ = await CallAsync(
             "archidekt_push_apply",
             new JsonObject
             {
-                ["request"] = new JsonObject
-                {
-                    ["localDeckId"] = localId.ToString(),
-                    ["expectedLocalRevision"] = edited.Revision,
-                    ["expectedRemoteFingerprint"] = preview.GetProperty("remoteFingerprint").GetString(),
-                    ["previewFingerprint"] = preview.GetProperty("previewFingerprint").GetString(),
-                },
+                ["localDeckId"] = localId.ToString(),
+                ["expectedRevision"] = edited.Revision,
+                ["expectedRemoteFingerprint"] = preview.GetProperty("remoteFingerprint").GetString(),
+                ["previewFingerprint"] = preview.GetProperty("previewFingerprint").GetString(),
             });
     }
 
@@ -501,8 +456,8 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
         await PageAsync(
             "local_deck_import_preview",
             new JsonObject { ["formatId"] = format, ["content"] = content },
-            "nextOffset",
-            "offset",
+            "nextCursor",
+            "cursor",
             PageTarget);
     }
 
@@ -526,14 +481,13 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
         while (true)
         {
             ToolBudgetWorld.ToolOutcome chunk = await CallAsync("local_deck_export_bundle", arguments);
-            JsonElement data = chunk.Data.GetProperty("chunk");
-            content.Append(data.GetProperty("content").GetString());
-            if (!TryReadOffset(data, "nextOffset", out int next))
+            content.Append(chunk.Data.GetProperty("chunk").GetProperty("content").GetString());
+            if (!chunk.Data.TryGetProperty("nextCursor", out JsonElement next) || next.ValueKind != JsonValueKind.String)
             {
                 break;
             }
 
-            arguments["offset"] = next;
+            arguments["cursor"] = next.GetString();
         }
 
         await PreviewImportAsync("mtg-mcp-json-v1", content.ToString());
@@ -549,8 +503,8 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
         ToolBudgetWorld.ToolOutcome importPreview = await PageAsync(
             "local_deck_import_preview",
             import,
-            "nextOffset",
-            "offset");
+            "nextCursor",
+            "cursor");
         string[] names = [.. world.Cards.Take(300).Select(card => card["name"]!.GetValue<string>())];
         await PreviewImportAsync(
             "archidekt-text-v1",
@@ -566,7 +520,7 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
             {
                 ["formatId"] = "generic-text-v1",
                 ["content"] = text,
-                ["expectedFingerprint"] = importPreview.Data.GetProperty("fingerprint").GetString(),
+                ["previewFingerprint"] = importPreview.Data.GetProperty("previewFingerprint").GetString(),
             });
 
         ToolBudgetWorld.ToolOutcome reconcile = await PageAsync(
@@ -577,8 +531,8 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
                 ["expectedRevision"] = unresolved.Revision,
                 ["entryIds"] = Strings(unresolved.Entries.Take(150).Select(value => value.EntryId.ToString())),
             },
-            "nextOffset",
-            "offset");
+            "nextCursor",
+            "cursor");
         _ = await CallAsync(
             "local_deck_identity_reconcile_apply",
             new JsonObject
@@ -614,15 +568,15 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
                 ["source"] = source.DeepClone(),
                 ["freshnessPolicy"] = "cache-only",
             },
-            "nextOffset",
-            "offset");
+            "nextCursor",
+            "cursor");
         _ = await CallAsync(
             "local_deck_category_rules_apply",
             new JsonObject
             {
                 ["deckId"] = main.DeckId.ToString(),
                 ["expectedRevision"] = main.Revision,
-                ["expectedCorpusGeneration"] = rules.Data.GetProperty("corpusGenerationId").GetString(),
+                ["expectedActiveGeneration"] = rules.Data.GetProperty("corpusGenerationId").GetString(),
                 ["source"] = source.DeepClone(),
                 ["freshnessPolicy"] = "cache-only",
                 ["previewFingerprint"] = rules.Data.GetProperty("previewFingerprint").GetString(),
@@ -673,6 +627,7 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
             {
                 ["deckId"] = createdId.ToString(),
                 ["expectedRevision"] = edited.Data.GetProperty("revision").GetInt64(),
+                ["confirmation"] = $"delete deck {createdId:D}",
             });
     }
 
@@ -686,29 +641,30 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
             "scryfall_request_snapshots_get",
             new JsonObject { ["kind"] = "list" });
         JsonElement first = list.Data.GetProperty("snapshots").GetProperty("items")[0];
-        string snapshotId = first.GetProperty("snapshotId").GetString()!;
+        string snapshotId = first.GetProperty("requestSnapshotId").GetString()!;
         _ = await CallAsync(
             "scryfall_request_snapshots_get",
-            new JsonObject { ["kind"] = "get", ["snapshotId"] = snapshotId });
+            new JsonObject { ["kind"] = "get", ["requestSnapshotId"] = snapshotId });
         _ = await CallAsync(
             "scryfall_request_snapshot_delete",
             new JsonObject
             {
-                ["snapshotId"] = snapshotId,
+                ["requestSnapshotId"] = snapshotId,
                 ["expectedChecksum"] = first.GetProperty("checksum").GetString(),
-                ["acknowledgeDataLoss"] = true,
+                ["confirmation"] = "delete request-snapshot " + snapshotId,
             });
         world.PublishNewerCardData();
-        _ = await CallAsync("scryfall_card_data_sync", new JsonObject { ["metadataPolicy"] = "refresh" });
+        _ = await CallAsync("scryfall_card_data_sync", new JsonObject { ["freshnessPolicy"] = "refresh" });
         ToolBudgetWorld.ToolOutcome after = await CallAsync("scryfall_card_data_status", []);
         JsonElement active = after.Data;
+        string previous = active.GetProperty("previous").GetProperty("generationId").GetString()!;
         _ = await CallAsync(
             "scryfall_card_data_rollback",
             new JsonObject
             {
                 ["expectedActiveGeneration"] = active.GetProperty("active").GetProperty("generationId").GetString(),
-                ["expectedPreviousGeneration"] = active.GetProperty("previous").GetProperty("generationId").GetString(),
-                ["acknowledgeActivationChange"] = true,
+                ["expectedPreviousGeneration"] = previous,
+                ["confirmation"] = "rollback card-data " + previous,
             });
     }
 
@@ -725,10 +681,15 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
             {
                 ["backupId"] = backupId,
                 ["expectedDatabaseFingerprint"] = list.Data.GetProperty("currentDatabaseFingerprint").GetString(),
+                ["confirmation"] = $"restore backup {backupId}",
             });
         _ = await CallAsync(
             "local_deck_backup_delete",
-            new JsonObject { ["backupId"] = restored.Data.GetProperty("rollbackBackupId").GetString() });
+            new JsonObject
+            {
+                ["backupId"] = restored.Data.GetProperty("rollbackBackupId").GetString(),
+                ["confirmation"] = $"delete backup {restored.Data.GetProperty("rollbackBackupId").GetString()}",
+            });
         _ = await CallAsync(
             "scryfall_card_data_delete",
             ScryfallDeleteArguments(await CallAsync("scryfall_card_data_status", [])));
@@ -739,10 +700,11 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
     /// </summary>
     private static JsonObject ScryfallDeleteArguments(ToolBudgetWorld.ToolOutcome status)
     {
+        string active = status.Data.GetProperty("active").GetProperty("generationId").GetString()!;
         return new JsonObject
         {
-            ["expectedActiveGeneration"] = status.Data.GetProperty("active").GetProperty("generationId").GetString(),
-            ["acknowledgeDataLoss"] = true,
+            ["expectedActiveGeneration"] = active,
+            ["confirmation"] = "delete card-data " + active,
         };
     }
 

@@ -63,6 +63,8 @@ public sealed class DeckEditWorkflowScenarioTests
             world.CalledTools);
         Assert.All(maybeboard.Concat(added), name => Assert.Equal(["Sideboard"], world.Fake.CategoriesOf(name)));
         Assert.All(added, name => Assert.Equal(1, world.Fake.QuantityOf(name)));
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -92,6 +94,8 @@ public sealed class DeckEditWorkflowScenarioTests
             ["local_deck_apply_changes", "archidekt_push_preview", "archidekt_push_apply"],
             world.CalledTools);
         Assert.All(added, name => Assert.Equal(["Sideboard"], world.Fake.CategoriesOf(name)));
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -188,13 +192,10 @@ public sealed class DeckEditWorkflowScenarioTests
             "archidekt_push_apply",
             new JsonObject
             {
-                ["request"] = new JsonObject
-                {
-                    ["localDeckId"] = localDeckId,
-                    ["expectedLocalRevision"] = summary.GetProperty("revision").GetInt64(),
-                    ["expectedRemoteFingerprint"] = preview.GetProperty("remoteFingerprint").GetString(),
-                    ["previewFingerprint"] = preview.GetProperty("previewFingerprint").GetString(),
-                },
+                ["localDeckId"] = localDeckId,
+                ["expectedRevision"] = summary.GetProperty("revision").GetInt64(),
+                ["expectedRemoteFingerprint"] = preview.GetProperty("remoteFingerprint").GetString(),
+                ["previewFingerprint"] = preview.GetProperty("previewFingerprint").GetString(),
             },
             token)).Data;
         return (preview, applied);

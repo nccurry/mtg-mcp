@@ -201,14 +201,13 @@ public sealed class PlaygroupServiceTests
 
     /// <summary>Verifies invalid read parameters fail before provider I/O.</summary>
     [Theory]
-    [InlineData("commander-id")]
-    [InlineData("turn-damage-commander-id")]
-    [InlineData("commander-name")]
-    [InlineData("elo-scope")]
-    [InlineData("game-page")]
-    [InlineData("game-limit")]
-    [InlineData("playgroup-id")]
-    public async Task ReadValidation_RejectsInvalidInputBeforeHttp(string scenario)
+    [InlineData("commander-id", "commanderId")]
+    [InlineData("turn-damage-commander-id", "commanderId")]
+    [InlineData("commander-name", "name")]
+    [InlineData("elo-scope", "leagueId")]
+    [InlineData("game-limit", "pageSize")]
+    [InlineData("playgroup-id", "playgroupId")]
+    public async Task ReadValidation_RejectsInvalidInputBeforeHttp(string scenario, string path)
     {
         PlaygroupTestHttpHandler handler = new();
         using PlaygroupService service = PlaygroupTestFactory.CreateService(handler);
@@ -219,13 +218,12 @@ public sealed class PlaygroupServiceTests
             "turn-damage-commander-id" => await service.GetCommanderTurnDamageAsync(0, token),
             "commander-name" => await service.GetCommanderByNameAsync(" ", token),
             "elo-scope" => await service.GetDeckEloHistoryAsync(1, null, 2, false, token),
-            "game-page" => await service.ListPlaygroupGamesAsync(1, 0, 10, false, token),
             "game-limit" => await service.ListPlaygroupGamesAsync(1, 1, 101, false, token),
             "playgroup-id" => await service.GetUserPlaygroupAsync(1, -1, token),
             _ => throw new Xunit.Sdk.XunitException("Unknown validation scenario."),
         };
 
-        Assert.IsType<OperationInvalidInput>(result.Value);
+        Assert.Equal(path, Assert.IsType<OperationInvalidInput>(result.Value).Path);
         Assert.Empty(handler.Requests);
     }
 
@@ -237,32 +235,36 @@ public sealed class PlaygroupServiceTests
         using PlaygroupService service = PlaygroupTestFactory.CreateService(handler);
         CancellationToken token = TestContext.Current.CancellationToken;
 
-        Assert.IsType<OperationInvalidInput>((await service.CreateGameEventsBatchAsync(1, [], token)).Value);
-        Assert.IsType<OperationInvalidInput>((await service.CreateGameEventsBatchAsync(1, null!, token)).Value);
-        Assert.IsType<OperationInvalidInput>((await service.CreateGameEventsBatchAsync(
+        OperationResult<PlaygroupEvidence> empty = await service.CreateGameEventsBatchAsync(1, [], token);
+        OperationResult<PlaygroupEvidence> missing = await service.CreateGameEventsBatchAsync(1, null!, token);
+        Assert.Equal("events", Assert.IsType<OperationInvalidInput>(empty.Value).Path);
+        Assert.Equal("events", Assert.IsType<OperationInvalidInput>(missing.Value).Path);
+        Assert.Equal("events[0].name", Assert.IsType<OperationInvalidInput>((await service.CreateGameEventsBatchAsync(
             1,
             [new PlaygroupEventImport(" ", "0")],
-            token)).Value);
-        Assert.IsType<OperationInvalidInput>((await service.CreateGameEventsBatchAsync(
+            token)).Value).Path);
+        OperationResult<PlaygroupEvidence> badSource = await service.CreateGameEventsBatchAsync(
             1,
             [new PlaygroupEventImport("Damage", "6")],
-            token)).Value);
-        Assert.IsType<OperationInvalidInput>((await service.CreateGameEventsBatchAsync(
+            token);
+        Assert.Equal("events[0].sourcePlayerId", Assert.IsType<OperationInvalidInput>(badSource.Value).Path);
+        OperationResult<PlaygroupEvidence> badTarget = await service.CreateGameEventsBatchAsync(
             1,
             [new PlaygroupEventImport("Damage", "0", TargetPlayerId: "bad")],
-            token)).Value);
+            token);
+        Assert.Equal("events[0].targetPlayerId", Assert.IsType<OperationInvalidInput>(badTarget.Value).Path);
         Assert.Empty(handler.Requests);
     }
 
     /// <summary>Verifies malformed session combinations fail before remote creation.</summary>
     [Theory]
-    [InlineData("players")]
-    [InlineData("bracket")]
-    [InlineData("league")]
-    [InlineData("visibility")]
-    [InlineData("languages")]
-    [InlineData("client")]
-    public async Task LiveSessionValidation_RejectsInvalidInputBeforeHttp(string scenario)
+    [InlineData("players", "playerAmount")]
+    [InlineData("bracket", "bracket")]
+    [InlineData("league", "leagueId")]
+    [InlineData("visibility", "discoverable")]
+    [InlineData("languages", "languageIds")]
+    [InlineData("client", "clientIdentifier")]
+    public async Task LiveSessionValidation_RejectsInvalidInputBeforeHttp(string scenario, string path)
     {
         PlaygroupTestHttpHandler handler = new();
         using PlaygroupService service = PlaygroupTestFactory.CreateService(handler);
@@ -281,7 +283,7 @@ public sealed class PlaygroupServiceTests
             request,
             TestContext.Current.CancellationToken);
 
-        Assert.IsType<OperationInvalidInput>(result.Value);
+        Assert.Equal(path, Assert.IsType<OperationInvalidInput>(result.Value).Path);
         Assert.Empty(handler.Requests);
     }
 

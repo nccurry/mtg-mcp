@@ -41,7 +41,8 @@ public sealed partial class ExactStatisticsCalculator
         if (request.KeepConditions is null)
         {
             return Invalid<MulliganResult>(
-                "request.keepConditions is required; use an empty array for an always-keep conjunction.");
+                "request.keepConditions is required; use an empty array for an always-keep conjunction.",
+                "request.keepConditions");
         }
 
         if (!TryPrepareAttempts(
@@ -50,7 +51,7 @@ public sealed partial class ExactStatisticsCalculator
                 out MulliganAttemptInput[] attempts,
                 out string? attemptError))
         {
-            return Invalid<MulliganResult>(attemptError!);
+            return Invalid<MulliganResult>(attemptError!, "request.attempts");
         }
 
         if (!TryPrepareOptionalConditions(
@@ -60,7 +61,7 @@ public sealed partial class ExactStatisticsCalculator
                 out StatisticsGroupConditionInput[] keepConditions,
                 out string? keepError))
         {
-            return Invalid<MulliganResult>(keepError!);
+            return Invalid<MulliganResult>(keepError!, "request.keepConditions");
         }
 
         if (!TryPrepareOptionalConditions(
@@ -70,7 +71,7 @@ public sealed partial class ExactStatisticsCalculator
                 out StatisticsGroupConditionInput[] preparedFinalConditions,
                 out string? finalError))
         {
-            return Invalid<MulliganResult>(finalError!);
+            return Invalid<MulliganResult>(finalError!, "request.finalConditions");
         }
 
         StatisticsGroupConditionInput[]? finalConditions = request.FinalConditions is null
@@ -83,7 +84,7 @@ public sealed partial class ExactStatisticsCalculator
                 out string[] bottomPriority,
                 out string? bottomError))
         {
-            return Invalid<MulliganResult>(bottomError!);
+            return Invalid<MulliganResult>(bottomError!, "request.bottomPriority");
         }
 
         string[] groups = keepConditions

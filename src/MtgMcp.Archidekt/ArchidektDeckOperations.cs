@@ -126,31 +126,28 @@ internal sealed class ArchidektDeckOperations
     }
 
     /// <summary>
-    /// Lists one bounded authenticated deck page.
+    /// Lists every deck the configured account owns. The provider returns every owned deck in one response, so the
+    /// delete check can treat a missing ID as a missing deck.
     /// </summary>
-    internal Task<OperationResult<RemoteDeckPage>> ListAsync(
-        string? cursor,
-        int pageSize,
+    internal Task<OperationResult<RemoteDeckList>> ListAsync(
         CancellationToken cancellationToken)
     {
         return ArchidektOperationResults.ExecuteAsync(
             maximumRequestsPerOperation,
-            budget => transport.ListAsync(cursor, pageSize, budget, cancellationToken));
+            budget => transport.ListAsync(budget, cancellationToken));
     }
 
     /// <summary>
-    /// Lists one deck page under a caller-owned composed-operation budget.
+    /// Lists every owned deck under a caller-owned composed-operation budget.
     /// </summary>
-    internal Task<OperationResult<RemoteDeckPage>> ListAsync(
-        string? cursor,
-        int pageSize,
+    internal Task<OperationResult<RemoteDeckList>> ListAsync(
         ArchidektOperationScope operationScope,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(operationScope);
         return ArchidektOperationResults.ExecuteAsync(
             operationScope.Budget,
-            budget => transport.ListAsync(cursor, pageSize, budget, cancellationToken));
+            budget => transport.ListAsync(budget, cancellationToken));
     }
 
     /// <summary>
@@ -222,9 +219,14 @@ internal sealed class ArchidektDeckOperations
             maximumRequestsPerOperation,
             async budget =>
             {
-                ArchidektOperationResults.RequireConfirmation(request.Confirmation, $"delete {request.DeckId}");
+                ArchidektOperationResults.RequireConfirmation(
+                    request.Confirmation,
+                    "delete",
+                    "deck",
+                    request.RemoteDeckId,
+                    "remoteDeckId");
                 RemoteDeckSnapshot current = await transport.GetAsync(
-                    request.DeckId,
+                    request.RemoteDeckId,
                     requireAuthentication: true,
                     budget,
                     cancellationToken).ConfigureAwait(false);
@@ -236,7 +238,7 @@ internal sealed class ArchidektDeckOperations
                 try
                 {
                     await transport.DeleteAsync(
-                        request.DeckId,
+                        request.RemoteDeckId,
                         budget,
                         cancellationToken).ConfigureAwait(false);
                 }
@@ -244,13 +246,13 @@ internal sealed class ArchidektDeckOperations
                     when (exception.Kind == ArchidektFailureKind.Unavailable)
                 {
                     return PartialResult(
-                        request.DeckId,
-                        new ArchidektRemoteOperation(1, "deck-delete", request.DeckId, "Delete one exact deck."),
+                        request.RemoteDeckId,
+                        new ArchidektRemoteOperation(1, "deck-delete", request.RemoteDeckId, "Delete one exact deck."),
                         exception.Message);
                 }
 
                 bool present = await DeckAppearsInAuthenticatedListingAsync(
-                    request.DeckId,
+                    request.RemoteDeckId,
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 if (present)
@@ -263,13 +265,13 @@ internal sealed class ArchidektDeckOperations
                 return new ArchidektApplyResult(
                     "applied",
                     LocalDeckId: null,
-                    LocalRevision: null,
-                    request.DeckId,
+                    Revision: null,
+                    request.RemoteDeckId,
                     FinalRemoteFingerprint: null,
                     [new ArchidektOperationStatus(
                         1,
                         "deck-delete",
-                        request.DeckId,
+                        request.RemoteDeckId,
                         "applied",
                         "Verified absent from the authenticated deck listing.")]);
             });
@@ -461,7 +463,7 @@ internal sealed class ArchidektDeckOperations
                 RequireFingerprint(
                     expectedPlanFingerprint,
                     plan.PlanFingerprint,
-                    "push-preview-changed",
+                    SharedReasonCodes.PreviewChanged,
                     current.RemoteFingerprint);
                 return await ApplyPlanAsync(
                     current,
@@ -546,7 +548,7 @@ internal sealed class ArchidektDeckOperations
             return new ArchidektApplyResult(
                 "applied-unverified",
                 LocalDeckId: null,
-                LocalRevision: null,
+                Revision: null,
                 current.RemoteId,
                 FinalRemoteFingerprint: null,
                 progress.Statuses)
@@ -560,7 +562,7 @@ internal sealed class ArchidektDeckOperations
             return new ArchidektApplyResult(
                 "verification-mismatch",
                 LocalDeckId: null,
-                LocalRevision: null,
+                Revision: null,
                 current.RemoteId,
                 verified.RemoteFingerprint,
                 progress.Statuses)
@@ -582,7 +584,7 @@ internal sealed class ArchidektDeckOperations
         return new ArchidektApplyResult(
             "applied",
             LocalDeckId: null,
-            LocalRevision: null,
+            Revision: null,
             current.RemoteId,
             verified.RemoteFingerprint,
             progress.Statuses);
@@ -665,7 +667,7 @@ internal sealed class ArchidektDeckOperations
         return new ArchidektApplyResult(
             "not-applied",
             LocalDeckId: null,
-            LocalRevision: null,
+            Revision: null,
             deckId,
             FinalRemoteFingerprint: null,
             statuses);
@@ -698,7 +700,7 @@ internal sealed class ArchidektDeckOperations
         return new ArchidektApplyResult(
             nothingChanged ? "not-applied" : "partial",
             LocalDeckId: null,
-            LocalRevision: null,
+            Revision: null,
             remoteId,
             FinalRemoteFingerprint: null,
             statuses);
@@ -984,24 +986,8 @@ internal sealed class ArchidektDeckOperations
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
-        string? cursor = null;
-        do
-        {
-            RemoteDeckPage page = await transport.ListAsync(
-                cursor,
-                100,
-                budget,
-                cancellationToken).ConfigureAwait(false);
-            if (page.Items.Any(value => string.Equals(value.RemoteId, deckId, StringComparison.Ordinal)))
-            {
-                return true;
-            }
-
-            cursor = page.NextCursor;
-        }
-        while (cursor is not null);
-
-        return false;
+        RemoteDeckList page = await transport.ListAsync(budget, cancellationToken).ConfigureAwait(false);
+        return page.Items.Any(value => string.Equals(value.RemoteId, deckId, StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -1015,7 +1001,13 @@ internal sealed class ArchidektDeckOperations
     {
         if (!string.Equals(expected, actual, StringComparison.Ordinal))
         {
-            throw Conflict(reasonCode, "Provider evidence changed after the preview.", currentRemoteFingerprint);
+            throw Conflict(
+                reasonCode,
+                reasonCode == SharedReasonCodes.PreviewChanged
+                    ? "Provider evidence changed after the preview. " +
+                        "Run the preview again and pass its previewFingerprint."
+                    : "Provider evidence changed after the preview.",
+                currentRemoteFingerprint);
         }
     }
 
@@ -1075,7 +1067,7 @@ internal sealed class ArchidektDeckOperations
         return new ArchidektApplyResult(
             "partial",
             LocalDeckId: null,
-            LocalRevision: null,
+            Revision: null,
             remoteId,
             FinalRemoteFingerprint: null,
             [Status(operation, UnknownStatus, message)]);

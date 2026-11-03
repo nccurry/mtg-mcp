@@ -78,13 +78,10 @@ public sealed class AddByNameScenarioTests
             "archidekt_push_apply",
             new JsonObject
             {
-                ["request"] = new JsonObject
-                {
-                    ["localDeckId"] = localDeckId,
-                    ["expectedLocalRevision"] = summary.GetProperty("revision").GetInt64(),
-                    ["expectedRemoteFingerprint"] = push.GetProperty("remoteFingerprint").GetString(),
-                    ["previewFingerprint"] = push.GetProperty("previewFingerprint").GetString(),
-                },
+                ["localDeckId"] = localDeckId,
+                ["expectedRevision"] = summary.GetProperty("revision").GetInt64(),
+                ["expectedRemoteFingerprint"] = push.GetProperty("remoteFingerprint").GetString(),
+                ["previewFingerprint"] = push.GetProperty("previewFingerprint").GetString(),
             },
             token)).Data;
         JsonElement pushAfter = (await world.CallAsync(
@@ -110,6 +107,8 @@ public sealed class AddByNameScenarioTests
         Assert.Equal(0, pushAfter.GetProperty("summary").GetProperty("operationCount").GetInt32());
         Assert.Equal(0, pushAfter.GetProperty("summary").GetProperty("differenceCount").GetInt32());
         Assert.Equal(0, pullAfter.GetProperty("summary").GetProperty("differenceCount").GetInt32());
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -125,17 +124,14 @@ public sealed class AddByNameScenarioTests
             "archidekt_pull_apply",
             new JsonObject
             {
-                ["request"] = new JsonObject
-                {
-                    ["remoteDeckId"] = "42",
-                    ["localDeckId"] = null,
-                    ["expectedLocalRevision"] = null,
-                    ["expectedRemoteFingerprint"] = pull.GetProperty("remoteFingerprint").GetString(),
-                    ["previewFingerprint"] = pull.GetProperty("previewFingerprint").GetString(),
-                },
+                ["remoteDeckId"] = "42",
+                ["localDeckId"] = null,
+                ["expectedRevision"] = null,
+                ["expectedRemoteFingerprint"] = pull.GetProperty("remoteFingerprint").GetString(),
+                ["previewFingerprint"] = pull.GetProperty("previewFingerprint").GetString(),
             },
             token)).Data;
-        return (pulled.GetProperty("localDeckId").GetString()!, pulled.GetProperty("localRevision").GetInt64());
+        return (pulled.GetProperty("localDeckId").GetString()!, pulled.GetProperty("revision").GetInt64());
     }
 
     /// <summary>
@@ -169,14 +165,11 @@ public sealed class AddByNameScenarioTests
             "archidekt_pull_apply",
             new JsonObject
             {
-                ["request"] = new JsonObject
-                {
-                    ["remoteDeckId"] = "42",
-                    ["localDeckId"] = null,
-                    ["expectedLocalRevision"] = null,
-                    ["expectedRemoteFingerprint"] = pull.GetProperty("remoteFingerprint").GetString(),
-                    ["previewFingerprint"] = pull.GetProperty("previewFingerprint").GetString(),
-                },
+                ["remoteDeckId"] = "42",
+                ["localDeckId"] = null,
+                ["expectedRevision"] = null,
+                ["expectedRemoteFingerprint"] = pull.GetProperty("remoteFingerprint").GetString(),
+                ["previewFingerprint"] = pull.GetProperty("previewFingerprint").GetString(),
             },
             token)).Data;
         string localDeckId = pulled.GetProperty("localDeckId").GetString()!;
@@ -195,7 +188,7 @@ public sealed class AddByNameScenarioTests
             new JsonObject
             {
                 ["deckId"] = localDeckId,
-                ["expectedRevision"] = pulled.GetProperty("localRevision").GetInt64(),
+                ["expectedRevision"] = pulled.GetProperty("revision").GetInt64(),
                 ["changes"] = changes,
             },
             token)).Data;
@@ -221,5 +214,7 @@ public sealed class AddByNameScenarioTests
         Assert.DoesNotContain(
             world.CalledTools,
             tool => tool.StartsWith("local_deck_identity_reconcile", StringComparison.Ordinal));
+
+        world.AssertNoPathlessRefusals();
     }
 }

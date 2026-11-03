@@ -101,13 +101,20 @@ internal sealed class DeckWriteTools
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Local deck store: deletes one local deck and dependent rows when expectedRevision is current.")]
+        "Local deck store: deletes one local deck and dependent rows when expectedRevision is current. It cannot " +
+        "be undone except from a backup, so confirmation must be exactly \"delete deck <deckId>\"; a wrong " +
+        "phrase is refused and shows the exact phrase.")]
     internal Task<OperationResult<DeckDeleteResult>> DeleteAsync(
         [Description("Stable local deck UUID.")] Guid deckId,
         [Description("Current deck revision required for optimistic concurrency.")] long expectedRevision,
+        [Description("The exact phrase \"delete deck <deckId>\" with the deck UUID.")]
+        string confirmation,
         CancellationToken cancellationToken = default)
     {
-        return ExecuteAsync(() => store.DeleteAsync(deckId, expectedRevision, cancellationToken));
+        return ExecuteAsync(() => Confirmed(
+            confirmation,
+            Confirmation.Phrase("delete", "deck", deckId),
+            () => store.DeleteAsync(deckId, expectedRevision, cancellationToken)));
     }
 
     /// <summary>
@@ -142,18 +149,21 @@ internal sealed class DeckWriteTools
         UseStructuredContent = true)]
     [Description(
         "Local deck store: restores a verified backup only when the supplied current database " +
-        "fingerprint still matches.")]
+        "fingerprint still matches. A rollback backup of the current decks is made first and returned. The " +
+        "confirmation must be exactly \"restore backup <backupId>\"; a wrong phrase is refused and shows the phrase.")]
     internal Task<OperationResult<DeckRestoreResult>> RestoreBackupAsync(
         [Description("Opaque backup UUID returned by local_deck_backup_list or local_deck_backup_create.")]
         Guid backupId,
         [Description("Current database fingerprint returned by local_deck_backup_list.")]
         string expectedDatabaseFingerprint,
+        [Description("The exact phrase \"restore backup <backupId>\" with the backup UUID.")]
+        string confirmation,
         CancellationToken cancellationToken = default)
     {
-        return ExecuteAsync(() => store.Backups.RestoreAsync(
-            backupId,
-            expectedDatabaseFingerprint,
-            cancellationToken));
+        return ExecuteAsync(() => Confirmed(
+            confirmation,
+            Confirmation.Phrase("restore", "backup", backupId),
+            () => store.Backups.RestoreAsync(backupId, expectedDatabaseFingerprint, cancellationToken)));
     }
 
     /// <summary>
@@ -168,13 +178,32 @@ internal sealed class DeckWriteTools
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Local deck store: deletes one local deck backup by opaque ID without accepting a filesystem path.")]
+        "Local deck store: deletes one local deck backup by opaque ID without accepting a filesystem path. " +
+        "confirmation must be exactly \"delete backup <backupId>\"; a wrong phrase is refused and shows the phrase.")]
     internal Task<OperationResult<DeckDeleteResult>> DeleteBackupAsync(
         [Description("Opaque backup UUID returned by local_deck_backup_list or local_deck_backup_create.")]
         Guid backupId,
+        [Description("The exact phrase \"delete backup <backupId>\" with the backup UUID.")]
+        string confirmation,
         CancellationToken cancellationToken = default)
     {
-        return ExecuteAsync(() => store.Backups.DeleteAsync(backupId, cancellationToken));
+        return ExecuteAsync(() => Confirmed(
+            confirmation,
+            Confirmation.Phrase("delete", "backup", backupId),
+            () => store.Backups.DeleteAsync(backupId, cancellationToken)));
+    }
+
+    /// <summary>
+    /// Runs an operation only when the caller passed its exact confirmation phrase.
+    /// </summary>
+    private static Task<OperationResult<T>> Confirmed<T>(
+        string confirmation,
+        string phrase,
+        Func<Task<OperationResult<T>>> operation)
+    {
+        return Confirmation.Check(confirmation, phrase) is { } refused
+            ? Task.FromResult<OperationResult<T>>(refused)
+            : operation();
     }
 
     /// <summary>

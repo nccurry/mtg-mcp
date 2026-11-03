@@ -78,13 +78,15 @@ public sealed partial class ExactStatisticsCalculator
             !population.HasGroup(successGroup))
         {
             return Invalid<HypergeometricResult>(
-                "request.successGroup must be one exact declared population group.");
+                "request.successGroup must be one exact declared population group.",
+                "request.successGroup");
         }
 
         if (request.DrawCount < 0 || request.DrawCount > population.TotalCount)
         {
             return Invalid<HypergeometricResult>(
-                "request.drawCount must be between zero and the selected population size.");
+                "request.drawCount must be between zero and the selected population size.",
+                "request.drawCount");
         }
 
         if (!TryResolveEvent(
@@ -93,7 +95,7 @@ public sealed partial class ExactStatisticsCalculator
                 out HypergeometricEventSnapshot? eventSnapshot,
                 out string? eventError))
         {
-            return Invalid<HypergeometricResult>(eventError!);
+            return Invalid<HypergeometricResult>(eventError!, "request.event");
         }
 
         int successCount = population.CountGroup(successGroup);
@@ -259,9 +261,9 @@ public sealed partial class ExactStatisticsCalculator
     /// <summary>
     /// Creates one stable invalid-input operation result.
     /// </summary>
-    private static OperationResult<StatisticsCalculation<T>> Invalid<T>(string message)
+    private static OperationResult<StatisticsCalculation<T>> Invalid<T>(string message, string path)
     {
-        return new OperationInvalidInput("invalid-statistics-request", message);
+        return new OperationInvalidInput("invalid-statistics-request", message, path);
     }
 
     /// <summary>

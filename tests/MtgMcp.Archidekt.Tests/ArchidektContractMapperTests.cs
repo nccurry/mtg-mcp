@@ -141,7 +141,7 @@ public sealed class ArchidektContractMapperTests
     {
         using JsonDocument document = JsonDocument.Parse(ArchidektTestPayloads.DeckList);
 
-        RemoteDeckPage page = ArchidektDeckContractMapper.MapDeckPage(
+        RemoteDeckList page = ArchidektDeckContractMapper.MapDeckList(
             document.RootElement,
             ArchidektTestPayloads.DeckList,
             DateTimeOffset.UtcNow,
@@ -152,7 +152,6 @@ public sealed class ArchidektContractMapperTests
         Assert.Equal("9", item.ParentFolderId);
         Assert.Equal("Root/Tests", item.ParentFolderPath);
         Assert.Equal(4, item.CardCount);
-        Assert.Equal("opaque-next", page.NextCursor);
     }
 
     /// <summary>
@@ -205,7 +204,7 @@ public sealed class ArchidektContractMapperTests
         RemoteNamedSnapshotSummary summary = Assert.Single(page.Items);
         Assert.Equal("77", summary.SnapshotId);
         Assert.Contains("extra", summary.Extensions.Keys);
-        Assert.Equal("42", snapshot.Summary.DeckId);
+        Assert.Equal("42", snapshot.Summary.RemoteDeckId);
         Assert.Equal(2, snapshot.Deck.Entries.Count);
         Assert.Equal("Before test", snapshot.Summary.Name);
     }

@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Hosting;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 using MtgMcp.Scryfall;
 
@@ -23,6 +24,16 @@ internal sealed class ScryfallReferenceTools
     /// Names the rulings section of the card details tool.
     /// </summary>
     internal const string IncludeRulings = "rulings";
+
+    /// <summary>
+    /// Separates the prints part of a details cursor from the rulings part.
+    /// </summary>
+    private const char PartSeparator = '~';
+
+    /// <summary>
+    /// Marks the part of a details cursor whose section has no more items.
+    /// </summary>
+    private const string ExhaustedPart = "end";
 
     /// <summary>
     /// Names the reference kind that reads sets.
@@ -83,7 +94,9 @@ internal sealed class ScryfallReferenceTools
         "Scryfall: gets the printings, the rulings, or both for one card, found by one lookup of any kind " +
         "(Scryfall ID, Oracle ID, exact name, fuzzy name, or set and collector number), from installed card data " +
         "or an official request snapshot. Set include to [\"prints\"], [\"rulings\"], or both; the result has a " +
-        "prints section and a rulings section, each present only when asked for. Example: " +
+        "prints section and a rulings section, each present only when asked for. One nextCursor continues every " +
+        "requested section: pass it unchanged with the same arguments, and a section with no more items is left " +
+        "out of later pages. nextCursor is null when no section has more. Example: " +
         "{\"lookup\":{\"kind\":\"exact-name\",\"value\":\"Sol Ring\"},\"include\":[\"rulings\"]}.")]
     internal Task<OperationResult<ScryfallCardDetailsResult>> GetCardDetailsAsync(
         [Description(
@@ -98,11 +111,11 @@ internal sealed class ScryfallReferenceTools
         string freshnessPolicy = "default",
         [Description("Include each lossless raw provider object in the requested sections.")]
         bool includeRaw = false,
-        [Description("Only with prints: opaque cursor from a previous prints section.")]
-        string? printsCursor = null,
-        [Description("Only with rulings: opaque cursor from a previous rulings section.")]
-        string? rulingsCursor = null,
-        [Description("Items to return in each requested section, from 1 through 100, or through 25 with includeRaw; default 25.")]
+        [Description("Opaque cursor from nextCursor of a previous call with the same arguments.")]
+        string? cursor = null,
+        [Description(
+            "Items to return in each requested section, from 1 through 100, or through 25 with includeRaw; " +
+            "default 25. A section may hold fewer when the page reaches the result size limit.")]
         int pageSize = 25,
         CancellationToken cancellationToken = default)
     {
@@ -111,8 +124,7 @@ internal sealed class ScryfallReferenceTools
             include,
             freshnessPolicy,
             includeRaw,
-            printsCursor,
-            rulingsCursor,
+            cursor,
             pageSize,
             cancellationToken));
     }
@@ -175,14 +187,15 @@ internal sealed class ScryfallReferenceTools
         "Saved Scryfall requests: reads the local snapshots saved for every kind of Scryfall request (search, " +
         "card lookups, sets, catalogs, and more), with no network access. kind list pages snapshot metadata, with " +
         "optional operation (the request type) and time filters; kind get replays the ordered members of one " +
-        "snapshot (snapshotId is required). The result has the same kind. Example: " +
-        "{\"kind\":\"list\",\"operation\":\"search\",\"pageSize\":10}.")]
+        "snapshot (requestSnapshotId is required). The result has the same kind. " +
+        "A page of members is cut to the result size limit; then truncated is true and nextCursor continues after " +
+        "the last member shown. Example: {\"kind\":\"list\",\"operation\":\"search\",\"pageSize\":10}.")]
     internal Task<OperationResult<ScryfallSnapshotsResult>> GetRequestSnapshotsAsync(
         [Description("What to read: list (snapshot metadata) or get (one snapshot's members)."),
          AllowedValues(KindList, KindGet)]
         string kind,
-        [Description("Only with kind get, and then required: immutable snapshot UUID from a Scryfall result.")]
-        Guid? snapshotId = null,
+        [Description("Only with kind get, and then required: immutable request snapshot UUID from a Scryfall result.")]
+        Guid? requestSnapshotId = null,
         [Description("Only with kind list: optional exact snapshot operation filter."),
          AllowedValues(
              "search", "autocomplete", "card-get", "card-collection", "card-prints", "card-rulings",
@@ -201,7 +214,7 @@ internal sealed class ScryfallReferenceTools
     {
         return ScryfallToolExecution.RunAsync(() => ReadSnapshotsAsync(
             kind,
-            snapshotId,
+            requestSnapshotId,
             operation,
             retrievedAfterUtc,
             retrievedBeforeUtc,
@@ -219,18 +232,24 @@ internal sealed class ScryfallReferenceTools
         IReadOnlyList<string>? include,
         string freshnessPolicy,
         bool includeRaw,
-        string? printsCursor,
-        string? rulingsCursor,
+        string? cursor,
         int pageSize,
         CancellationToken cancellationToken)
     {
-        OperationInvalidInput? invalid = ValidateDetails(include, includeRaw, printsCursor, rulingsCursor, pageSize);
+        OperationInvalidInput? invalid = ValidateDetails(include, includeRaw, pageSize);
         if (invalid is not null)
         {
             return invalid;
         }
 
         IReadOnlyList<string> sections = include!;
+        bool wantsPrints = sections.Contains(IncludePrints);
+        bool wantsRulings = sections.Contains(IncludeRulings);
+        if (!TrySplitCursor(cursor, wantsPrints, wantsRulings, out string? printsCursor, out string? rulingsCursor))
+        {
+            return PageCursor.Invalid();
+        }
+
         OperationResult<ScryfallCardIdentity> identityResult = await service.ResolveCardIdentityAsync(
             lookup, freshnessPolicy, cancellationToken).ConfigureAwait(false);
         if (identityResult is not OperationSuccess<ScryfallCardIdentity> identity)
@@ -238,8 +257,9 @@ internal sealed class ScryfallReferenceTools
             return OperationFailure.Forward<ScryfallCardIdentity, ScryfallCardDetailsResult>(identityResult);
         }
 
-        ScryfallPrintsResult? prints = null;
-        if (sections.Contains(IncludePrints))
+        ScryfallDetailsSection<ScryfallCard>? prints = null;
+        string? printsNext = null;
+        if (wantsPrints && printsCursor != ExhaustedPart)
         {
             OperationResult<ScryfallPrintsResult> printsResult = await service.GetPrintsAsync(
                 identity.Data.OracleId, freshnessPolicy, printsCursor, pageSize, includeRaw, cancellationToken)
@@ -249,11 +269,18 @@ internal sealed class ScryfallReferenceTools
                 return OperationFailure.Forward<ScryfallPrintsResult, ScryfallCardDetailsResult>(printsResult);
             }
 
-            prints = printsSuccess.Data;
+            ScryfallPage<ScryfallCard> printsPage = printsSuccess.Data.Page;
+            printsNext = printsPage.NextCursor;
+            prints = new(
+                printsPage.Items,
+                printsPage.TotalCount,
+                printsSuccess.Data.Snapshot,
+                printsSuccess.Data.CorpusGenerationId);
         }
 
-        ScryfallRulingsResult? rulings = null;
-        if (sections.Contains(IncludeRulings))
+        ScryfallDetailsSection<ScryfallRuling>? rulings = null;
+        string? rulingsNext = null;
+        if (wantsRulings && rulingsCursor != ExhaustedPart)
         {
             OperationResult<ScryfallRulingsResult> rulingsResult = await service.GetRulingsAsync(
                 identity.Data.OracleId,
@@ -268,22 +295,59 @@ internal sealed class ScryfallReferenceTools
                 return OperationFailure.Forward<ScryfallRulingsResult, ScryfallCardDetailsResult>(rulingsResult);
             }
 
-            rulings = rulingsSuccess.Data;
+            ScryfallPage<ScryfallRuling> rulingsPage = rulingsSuccess.Data.Page;
+            rulingsNext = rulingsPage.NextCursor;
+            rulings = new(
+                rulingsPage.Items,
+                rulingsPage.TotalCount,
+                rulingsSuccess.Data.Snapshot,
+                rulingsSuccess.Data.CorpusGenerationId);
         }
 
+        string? next = printsNext is null && rulingsNext is null
+            ? null
+            : (wantsPrints ? printsNext ?? ExhaustedPart : string.Empty) + PartSeparator +
+                (wantsRulings ? rulingsNext ?? ExhaustedPart : string.Empty);
         return new OperationSuccess<ScryfallCardDetailsResult>(
-            new ScryfallCardDetailsResult(identity.Data.OracleId, identity.Data.ScryfallId, prints, rulings));
+            new ScryfallCardDetailsResult(identity.Data.OracleId, identity.Data.ScryfallId, prints, rulings, next));
     }
 
     /// <summary>
-    /// Checks the include list, the page size and raw-output rule, and the cursors that apply to only one section, so a
-    /// bad request fails before the card is resolved.
+    /// Splits the one cursor of the details tool into the cursor of each requested section. A section the cursor marks
+    /// exhausted comes back as the exhausted marker, and a section that was not asked for must have no part.
+    /// </summary>
+    private static bool TrySplitCursor(
+        string? cursor,
+        bool wantsPrints,
+        bool wantsRulings,
+        out string? printsCursor,
+        out string? rulingsCursor)
+    {
+        printsCursor = null;
+        rulingsCursor = null;
+        if (cursor is null)
+        {
+            return true;
+        }
+
+        string[] parts = cursor.Split(PartSeparator);
+        if (parts.Length != 2 || (parts[0].Length > 0) != wantsPrints || (parts[1].Length > 0) != wantsRulings)
+        {
+            return false;
+        }
+
+        printsCursor = wantsPrints ? parts[0] : null;
+        rulingsCursor = wantsRulings ? parts[1] : null;
+        return true;
+    }
+
+    /// <summary>
+    /// Checks the include list and the page size and raw-output rule, so a bad request fails before the card is
+    /// resolved.
     /// </summary>
     private static OperationInvalidInput? ValidateDetails(
         IReadOnlyList<string>? include,
         bool includeRaw,
-        string? printsCursor,
-        string? rulingsCursor,
         int pageSize)
     {
         OperationInvalidInput? pageFailure = ScryfallCardEvidenceOperations.ValidatePageSize(pageSize, includeRaw);
@@ -312,20 +376,7 @@ internal sealed class ScryfallReferenceTools
             }
         }
 
-        if (!seen.Contains(IncludeRulings) && rulingsCursor is not null)
-        {
-            return new OperationInvalidInput(
-                KindFields.FieldNotAllowed,
-                "rulingsCursor is allowed only when include has rulings.",
-                "rulingsCursor");
-        }
-
-        return !seen.Contains(IncludePrints) && printsCursor is not null
-            ? new OperationInvalidInput(
-                KindFields.FieldNotAllowed,
-                "printsCursor is allowed only when include has prints.",
-                "printsCursor")
-            : null;
+        return null;
     }
 
     /// <summary>
@@ -391,7 +442,7 @@ internal sealed class ScryfallReferenceTools
     /// </summary>
     private async Task<OperationResult<ScryfallSnapshotsResult>> ReadSnapshotsAsync(
         string kind,
-        Guid? snapshotId,
+        Guid? requestSnapshotId,
         string? operation,
         DateTimeOffset? retrievedAfterUtc,
         DateTimeOffset? retrievedBeforeUtc,
@@ -403,11 +454,14 @@ internal sealed class ScryfallReferenceTools
         OperationInvalidInput? invalid = KindFields.CheckKind(kind, KindList, KindGet);
         if (invalid is null && kind == KindList)
         {
-            invalid = KindFields.RejectGiven(kind, ("snapshotId", snapshotId is not null), ("includeRaw", includeRaw));
+            invalid = KindFields.RejectGiven(
+                kind,
+                ("requestSnapshotId", requestSnapshotId is not null),
+                ("includeRaw", includeRaw));
         }
         else
         {
-            invalid ??= KindFields.Require(kind, "snapshotId", snapshotId is not null)
+            invalid ??= KindFields.Require(kind, "requestSnapshotId", requestSnapshotId is not null)
                 ?? KindFields.RejectGiven(
                     kind,
                     ("operation", operation is not null),
@@ -431,7 +485,12 @@ internal sealed class ScryfallReferenceTools
         }
 
         OperationResult<ScryfallSnapshotPage> get = await service.GetSnapshotAsync(
-            snapshotId!.Value, cursor, pageSize, includeRaw, cancellationToken).ConfigureAwait(false);
+            requestSnapshotId!.Value,
+            cursor,
+            pageSize,
+            includeRaw,
+            ScryfallToolExecution.CountFitting<ScryfallSnapshotMember>(),
+            cancellationToken).ConfigureAwait(false);
         return get is OperationSuccess<ScryfallSnapshotPage> getSuccess
             ? new OperationSuccess<ScryfallSnapshotsResult>(new ScryfallSnapshotGetReference(getSuccess.Data))
             : OperationFailure.Forward<ScryfallSnapshotPage, ScryfallSnapshotsResult>(get);

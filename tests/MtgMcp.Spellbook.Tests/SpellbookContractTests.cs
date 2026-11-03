@@ -78,8 +78,20 @@ public sealed class SpellbookContractTests
     {
         Assert.Equal("invalid-source-query", Assert.Throws<SpellbookProviderException>(
             () => SpellbookContract.RequiredSourceQuery(" ", "query")).ReasonCode);
-        Assert.Equal("invalid-page-options", Assert.Throws<SpellbookProviderException>(
-            () => SpellbookContract.Page(new SpellbookPageOptions(26))).ReasonCode);
+        SpellbookProviderException size = Assert.Throws<SpellbookProviderException>(
+            () => SpellbookContract.Page(new SpellbookPageOptions(26)));
+        Assert.Equal("invalid-page-size", size.ReasonCode);
+        Assert.Equal("pageSize", size.Path);
+        SpellbookProviderException offset = Assert.Throws<SpellbookProviderException>(
+            () => SpellbookContract.Page(new SpellbookPageOptions(Offset: 1_001)));
+        Assert.Equal("invalid-cursor", offset.ReasonCode);
+        Assert.Equal("cursor", offset.Path);
+        Assert.Equal("sourceQuery", Assert.Throws<SpellbookProviderException>(
+            () => SpellbookContract.RequiredSourceQuery(" ", "query")).Path);
+        Assert.Equal("variantId", Assert.Throws<SpellbookProviderException>(
+            () => SpellbookContract.RequiredVariantId(" ", "id")).Path);
+        Assert.Equal("deckId", Assert.Throws<SpellbookProviderException>(
+            () => SpellbookContract.Deck(new SpellbookDeckRequest([], []))).Path);
         Assert.Equal("invalid-variant-id", Assert.Throws<SpellbookProviderException>(
             () => SpellbookContract.RequiredVariantId(" ", "id")).ReasonCode);
         Assert.Equal("empty-deck-request", Assert.Throws<SpellbookProviderException>(

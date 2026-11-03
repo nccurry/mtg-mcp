@@ -21,10 +21,7 @@ public sealed class ArchidektServiceTests
         using ArchidektService service = CreateService(handler);
 
         ArchidektAuthStatus auth = Success(service.GetAuthStatus());
-        RemoteDeckPage page = Success(await service.ListDecksAsync(
-            cursor: null,
-            pageSize: 50,
-            TestContext.Current.CancellationToken));
+        RemoteDeckList page = Success(await service.ListDecksAsync(TestContext.Current.CancellationToken));
 
         Assert.True(auth.CredentialsConfigured);
         Assert.False(auth.SessionAuthenticated);
@@ -67,10 +64,7 @@ public sealed class ArchidektServiceTests
         handler.Add(HttpMethod.Get, "api/decks/v3/?ownerUsername=user", ArchidektTestPayloads.DeckList);
         using ArchidektService service = CreateService(handler);
 
-        RemoteDeckPage page = Success(await service.ListDecksAsync(
-            null,
-            50,
-            TestContext.Current.CancellationToken));
+        RemoteDeckList page = Success(await service.ListDecksAsync(TestContext.Current.CancellationToken));
 
         Assert.Single(page.Items);
         Assert.Equal(4, handler.Requests.Count);
@@ -106,12 +100,47 @@ public sealed class ArchidektServiceTests
             new ArchidektDeckDeleteRequest(
                 "42",
                 deck.RemoteFingerprint,
-                "delete 42"),
+                "delete deck 42"),
             TestContext.Current.CancellationToken));
 
         Assert.Equal("partial", result.Outcome);
         Assert.Equal("unknown", Assert.Single(result.Operations).Status);
         Assert.Single(mutationHandler.Requests.Where(value => value.Method == HttpMethod.Delete));
+    }
+
+    /// <summary>
+    /// Verifies a destructive operation refuses an ID that is not numeric before it builds a confirmation phrase, so a
+    /// refusal never echoes the caller text.
+    /// </summary>
+    [Fact]
+    public async Task DestructiveOperations_RefuseANonNumericIdWithoutEchoingIt()
+    {
+        string id = new('x', 5000);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        ArchidektTestHttpHandler handler = new();
+        AddLogin(handler);
+        using ArchidektService service = CreateService(handler);
+        ArchidektDeckDeleteRequest deck = new(id, "f", "delete deck " + id);
+        ArchidektFolderDeleteRequest folder = new(id, "n", "f", "delete folder " + id);
+        ArchidektSnapshotDeleteRequest snapshot = new("42", id, "c", "delete snapshot " + id);
+        ArchidektSnapshotRestoreApplyRequest restore = new("42", id, "c", "c", "r", "p", "restore snapshot " + id);
+        (OperationResult<ArchidektApplyResult> Result, string Path)[] refusals =
+        [
+            (await service.DeleteDeckAsync(deck, token), "remoteDeckId"),
+            (await service.DeleteFolderAsync(folder, token), "folderId"),
+            (await service.DeleteSnapshotAsync(snapshot, token), "snapshotId"),
+            (await service.ApplySnapshotRestoreAsync(restore, token), "snapshotId"),
+        ];
+
+        foreach ((OperationResult<ArchidektApplyResult> result, string path) in refusals)
+        {
+            OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(result.Value);
+            Assert.Equal("invalid-id", invalid.ReasonCode);
+            Assert.Equal(path, invalid.Path);
+            Assert.DoesNotContain("xxxx", invalid.Message, StringComparison.Ordinal);
+        }
+
+        Assert.Empty(handler.Requests);
     }
 
     /// <summary>
@@ -131,10 +160,7 @@ public sealed class ArchidektServiceTests
             statusCode == 429 ? "5" : null);
         using ArchidektService service = CreateService(handler);
 
-        OperationResult<RemoteDeckPage> result = await service.ListDecksAsync(
-            null,
-            50,
-            TestContext.Current.CancellationToken);
+        OperationResult<RemoteDeckList> result = await service.ListDecksAsync(TestContext.Current.CancellationToken);
 
         OperationUnavailable unavailable = Assert.IsType<OperationUnavailable>(result.Value);
         Assert.Equal(reasonCode, unavailable.ReasonCode);
@@ -155,13 +181,8 @@ public sealed class ArchidektServiceTests
         OperationResult<RemoteDeckSnapshot> malformed = await service.GetDeckAsync(
             "42",
             TestContext.Current.CancellationToken);
-        OperationResult<RemoteDeckPage> invalidPage = await service.ListDecksAsync(
-            null,
-            101,
-            TestContext.Current.CancellationToken);
 
         Assert.IsType<OperationUnsupported>(malformed.Value);
-        Assert.IsType<OperationInvalidInput>(invalidPage.Value);
     }
 
     /// <summary>
@@ -186,7 +207,7 @@ public sealed class ArchidektServiceTests
             new ArchidektDeckDeleteRequest(
                 created.RemoteId,
                 created.RemoteFingerprint,
-                "delete 42"),
+                "delete deck 42"),
             TestContext.Current.CancellationToken));
 
         Assert.Equal("applied", deleted.Outcome);
@@ -201,7 +222,7 @@ public sealed class ArchidektServiceTests
     /// Verifies stale deletion guards and wrong confirmation perform zero remote writes.
     /// </summary>
     [Theory]
-    [InlineData("wrong", "delete 42", "remote-deck-changed")]
+    [InlineData("wrong", "delete deck 42", "remote-deck-changed")]
     [InlineData("placeholder", "wrong phrase", "confirmation-required")]
     public async Task DeleteDeck_InvalidGuardsPerformZeroWrites(
         string fingerprint,
@@ -253,7 +274,7 @@ public sealed class ArchidektServiceTests
 
         string[] expected =
         [
-            "delete 42",
+            "delete deck 42",
             "delete folder 12",
             "delete snapshot 7",
             "restore snapshot 7",
@@ -262,7 +283,7 @@ public sealed class ArchidektServiceTests
         {
             OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(results[index].Value);
             Assert.Equal("confirmation-required", invalid.ReasonCode);
-            Assert.Equal($"Pass confirmation exactly as: {expected[index]}", invalid.Message);
+            Assert.Equal($"confirmation must be exactly \"{expected[index]}\".", invalid.Message);
         }
 
         Assert.Empty(handler.Requests);
@@ -346,7 +367,7 @@ public sealed class ArchidektServiceTests
         deleteHandler.Add(HttpMethod.Get, "api/decks/42/", ArchidektTestPayloads.Deck);
         using ArchidektService deleteService = CreateService(deleteHandler);
         OperationConflict changed = Assert.IsType<OperationConflict>((await deleteService.DeleteDeckAsync(
-            new ArchidektDeckDeleteRequest("42", "wrong", "delete 42"),
+            new ArchidektDeckDeleteRequest("42", "wrong", "delete deck 42"),
             TestContext.Current.CancellationToken)).Value);
 
         ArchidektTestHttpHandler applyHandler = new();
@@ -371,7 +392,7 @@ public sealed class ArchidektServiceTests
 
         Assert.Equal("remote-deck-changed", changed.ReasonCode);
         Assert.Equal(new ConflictState(RemoteFingerprint: deck.RemoteFingerprint), changed.Current);
-        Assert.Equal("push-preview-changed", preview.ReasonCode);
+        Assert.Equal("preview-changed", preview.ReasonCode);
         Assert.Equal(new ConflictState(RemoteFingerprint: deck.RemoteFingerprint), preview.Current);
         Assert.Equal("folder-tree-changed", folder.ReasonCode);
         Assert.Equal(new ConflictState(RemoteFingerprint: tree.TreeFingerprint), folder.Current);
@@ -527,8 +548,10 @@ public sealed class ArchidektServiceTests
                 "restore snapshot 77"),
             TestContext.Current.CancellationToken)).Value);
 
-        Assert.Equal("restore-preview-changed", conflict.ReasonCode);
-        Assert.Equal(new ConflictState(RemoteFingerprint: preview.RemoteFingerprint), conflict.Current);
+        Assert.Equal("preview-changed", conflict.ReasonCode);
+        Assert.Equal(preview.RemoteFingerprint, conflict.Current?.RemoteFingerprint);
+        Assert.NotNull(conflict.Current?.PreviewFingerprint);
+        Assert.NotEqual("stale-preview", conflict.Current.PreviewFingerprint);
     }
 
     /// <summary>
@@ -654,12 +677,9 @@ public sealed class ArchidektServiceTests
         AddLogin(handler);
         using ArchidektService service = CreateService(handler, maximumRequestsPerOperation: 1);
 
-        OperationResult<RemoteDeckPage> result = await service.ListDecksAsync(
-            null,
-            50,
-            TestContext.Current.CancellationToken);
+        OperationResult<RemoteDeckList> result = await service.ListDecksAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal("request-limit-exceeded", Assert.IsType<OperationInvalidInput>(result.Value).ReasonCode);
+        Assert.Equal("request-limit-exceeded", Assert.IsType<OperationUnsupported>(result.Value).ReasonCode);
         Assert.Single(handler.Requests);
     }
 
@@ -694,7 +714,7 @@ public sealed class ArchidektServiceTests
 
         Assert.Equal(
             "request-limit-exceeded",
-            Assert.IsType<OperationInvalidInput>(capped.Value).ReasonCode);
+            Assert.IsType<OperationUnsupported>(capped.Value).ReasonCode);
         Assert.Equal(2, handler.Requests.Count);
     }
 
@@ -723,15 +743,15 @@ public sealed class ArchidektServiceTests
 
         Assert.Equal(
             "request-limit-exceeded",
-            Assert.IsType<OperationInvalidInput>(result.Value).ReasonCode);
+            Assert.IsType<OperationUnsupported>(result.Value).ReasonCode);
         Assert.DoesNotContain(handler.Requests, value => value.Method == HttpMethod.Patch);
     }
 
     /// <summary>
-    /// Verifies owned-deck pagination uses a checksum-bound local cursor and detects changed evidence.
+    /// Verifies the owned-deck list returns every deck of one fresh observation in one request, with no cursor.
     /// </summary>
     [Fact]
-    public async Task ListDecks_PaginatesOneFreshOwnedCollectionWithBoundCursor()
+    public async Task ListDecks_ReturnsTheWholeOwnedCollection()
     {
         const string collection = """
             {"results":[
@@ -742,65 +762,11 @@ public sealed class ArchidektServiceTests
         ArchidektTestHttpHandler handler = new();
         AddLogin(handler);
         handler.Add(HttpMethod.Get, "api/decks/v3/?ownerUsername=user", collection);
-        handler.Add(HttpMethod.Get, "api/decks/v3/?ownerUsername=user", collection);
         using ArchidektService service = CreateService(handler);
 
-        RemoteDeckPage first = Success(await service.ListDecksAsync(
-            null,
-            1,
-            TestContext.Current.CancellationToken));
-        RemoteDeckPage second = Success(await service.ListDecksAsync(
-            first.NextCursor,
-            1,
-            TestContext.Current.CancellationToken));
+        RemoteDeckList page = Success(await service.ListDecksAsync(TestContext.Current.CancellationToken));
 
-        Assert.Equal("Alpha", Assert.Single(first.Items).Name);
-        Assert.Equal("Beta", Assert.Single(second.Items).Name);
-        Assert.Null(second.NextCursor);
-        Assert.Equal(
-            "invalid-deck-list-cursor",
-            Assert.IsType<OperationInvalidInput>((await service.ListDecksAsync(
-                "not-a-cursor",
-                1,
-                TestContext.Current.CancellationToken)).Value).ReasonCode);
-    }
-
-    /// <summary>
-    /// Verifies a continuation refuses to splice rows from a changed owned-deck observation.
-    /// </summary>
-    [Fact]
-    public async Task ListDecks_ChangedCollectionInvalidatesCursor()
-    {
-        const string firstCollection = """
-            {"results":[
-              {"id":1,"name":"Alpha","deckFormat":3,"private":true},
-              {"id":2,"name":"Beta","deckFormat":3,"private":true}
-            ]}
-            """;
-        const string changedCollection = """
-            {"results":[
-              {"id":1,"name":"Alpha","deckFormat":3,"private":true},
-              {"id":2,"name":"Changed","deckFormat":3,"private":true}
-            ]}
-            """;
-        ArchidektTestHttpHandler handler = new();
-        AddLogin(handler);
-        handler.Add(HttpMethod.Get, "api/decks/v3/?ownerUsername=user", firstCollection);
-        handler.Add(HttpMethod.Get, "api/decks/v3/?ownerUsername=user", changedCollection);
-        using ArchidektService service = CreateService(handler);
-
-        RemoteDeckPage first = Success(await service.ListDecksAsync(
-            null,
-            1,
-            TestContext.Current.CancellationToken));
-        OperationResult<RemoteDeckPage> continuation = await service.ListDecksAsync(
-            first.NextCursor,
-            1,
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(
-            "deck-list-changed",
-            Assert.IsType<OperationConflict>(continuation.Value).ReasonCode);
+        Assert.Equal(["Alpha", "Beta"], page.Items.Select(value => value.Name));
     }
 
     /// <summary>

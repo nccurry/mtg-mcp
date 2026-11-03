@@ -95,7 +95,7 @@ public sealed class RedWhiteWeeniesLiveMcpTests
         Assert.All(
             resolved.SelectMany(row => row.GetProperty("card").GetProperty("priceEvidence").EnumerateArray()),
             evidence => Assert.Equal("scryfall-market-price", evidence.GetProperty("context").GetString()));
-        Assert.NotEqual(Guid.Empty, collection.GetProperty("snapshot").GetProperty("snapshotId").GetGuid());
+        Assert.NotEqual(Guid.Empty, collection.GetProperty("snapshot").GetProperty("requestSnapshotId").GetGuid());
 
         JsonElement snapshots = await CallSuccessAsync(
             session,

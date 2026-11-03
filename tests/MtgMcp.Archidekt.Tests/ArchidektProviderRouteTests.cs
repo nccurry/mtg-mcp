@@ -60,10 +60,7 @@ public sealed class ArchidektProviderRouteTests
             (HttpStatusCode)status);
         using ArchidektService service = CreateService(handler);
 
-        OperationResult<RemoteDeckPage> result = await service.ListDecksAsync(
-            null,
-            10,
-            TestContext.Current.CancellationToken);
+        OperationResult<RemoteDeckList> result = await service.ListDecksAsync(TestContext.Current.CancellationToken);
 
         (string reasonCode, string message) = result.Value switch
         {
@@ -86,20 +83,14 @@ public sealed class ArchidektProviderRouteTests
             noCredentialsHandler,
             username: null,
             password: null);
-        OperationResult<RemoteDeckPage> missing = await noCredentials.ListDecksAsync(
-            null,
-            50,
-            TestContext.Current.CancellationToken);
+        OperationResult<RemoteDeckList> missing = await noCredentials.ListDecksAsync(TestContext.Current.CancellationToken);
         Assert.Equal("credentials-unavailable", Assert.IsType<OperationUnavailable>(missing.Value).ReasonCode);
         Assert.Empty(noCredentialsHandler.Requests);
 
         ArchidektTestHttpHandler malformedHandler = new();
         malformedHandler.Add(HttpMethod.Post, "api/rest-auth/login/", "{}");
         using ArchidektService malformed = CreateService(malformedHandler);
-        OperationResult<RemoteDeckPage> invalidToken = await malformed.ListDecksAsync(
-            null,
-            50,
-            TestContext.Current.CancellationToken);
+        OperationResult<RemoteDeckList> invalidToken = await malformed.ListDecksAsync(TestContext.Current.CancellationToken);
         Assert.Equal(
             "provider-contract-unsupported",
             Assert.IsType<OperationUnsupported>(invalidToken.Value).ReasonCode);

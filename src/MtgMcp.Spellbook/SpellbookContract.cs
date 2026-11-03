@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using MtgMcp.Core.Results;
 
 namespace MtgMcp.Spellbook;
 
@@ -74,9 +75,9 @@ internal static class SpellbookContract
     internal const int MaximumLimit = 25;
 
     /// <summary>
-    /// Caps source offsets so one tool call stays bounded.
+    /// Names the tool argument that selects the local deck a deck request is built from.
     /// </summary>
-    internal const int MaximumOffset = 1_000;
+    private const string DeckPath = "deckId";
 
     /// <summary>
     /// Lists facts that limit interpretation of every source response.
@@ -98,7 +99,9 @@ internal static class SpellbookContract
         {
             throw Invalid(
                 "invalid-source-query",
-                $"{parameterName} must contain 1 through {MaximumSourceQueryLength.ToString(CultureInfo.InvariantCulture)} characters.");
+                $"{parameterName} must contain 1 through " +
+                    $"{MaximumSourceQueryLength.ToString(CultureInfo.InvariantCulture)} characters.",
+                "sourceQuery");
         }
 
         return value;
@@ -121,7 +124,9 @@ internal static class SpellbookContract
         {
             throw Invalid(
                 "invalid-variant-id",
-                $"{parameterName} must contain 1 through {MaximumVariantIdLength.ToString(CultureInfo.InvariantCulture)} characters.");
+                $"{parameterName} must contain 1 through " +
+                    $"{MaximumVariantIdLength.ToString(CultureInfo.InvariantCulture)} characters.",
+                "variantId");
         }
 
         return value;
@@ -135,11 +140,21 @@ internal static class SpellbookContract
         int limit = value?.Limit ?? DefaultLimit;
         int offset = value?.Offset ?? DefaultOffset;
         bool groupByCombo = value?.GroupByCombo ?? DefaultGroupByCombo;
-        if (limit is < 1 or > MaximumLimit || offset is < 0 or > MaximumOffset)
+        if (limit is < 1 or > MaximumLimit)
         {
             throw Invalid(
-                "invalid-page-options",
-                $"limit must be 1 through {MaximumLimit.ToString(CultureInfo.InvariantCulture)} and offset must be 0 through {MaximumOffset.ToString(CultureInfo.InvariantCulture)}.");
+                SharedReasonCodes.InvalidPageSize,
+                $"pageSize must be 1 through {MaximumLimit.ToString(CultureInfo.InvariantCulture)}.",
+                "pageSize");
+        }
+
+        if (offset is < 0 or > SpellbookPageOptions.MaximumOffset)
+        {
+            throw Invalid(
+                SharedReasonCodes.InvalidCursor,
+                "The cursor is not valid for this request. Pass nextCursor unchanged with the same arguments, or " +
+                "start again without a cursor.",
+                "cursor");
         }
 
         return new SpellbookPageRequest(limit, offset, groupByCombo);
@@ -152,7 +167,7 @@ internal static class SpellbookContract
     {
         if (value is null)
         {
-            throw Invalid("invalid-deck-request", "deck is required.");
+            throw Invalid("invalid-deck-request", "deck is required.", DeckPath);
         }
 
         IReadOnlyList<SpellbookDeckEntry> commanders = NormalizeZone(
@@ -162,7 +177,10 @@ internal static class SpellbookContract
         IReadOnlyList<SpellbookDeckEntry> main = NormalizeZone(value.Main, "deck.main", MaximumMainEntries);
         if (commanders.Count == 0 && main.Count == 0)
         {
-            throw Invalid("empty-deck-request", "deck must contain at least one commander or main-deck entry.");
+            throw Invalid(
+                "empty-deck-request",
+                "deck must contain at least one commander or main-deck entry.",
+                DeckPath);
         }
 
         return new SpellbookDeckRequest(commanders, main);
@@ -203,7 +221,7 @@ internal static class SpellbookContract
     {
         if (values is null)
         {
-            throw Invalid("invalid-deck-request", $"{parameterName} is required.");
+            throw Invalid("invalid-deck-request", $"{parameterName} is required.", DeckPath);
         }
 
         SortedDictionary<string, int> quantities = new(StringComparer.Ordinal);
@@ -214,7 +232,10 @@ internal static class SpellbookContract
             {
                 throw Invalid(
                     "invalid-deck-entry",
-                    $"{parameterName}[{index.ToString(CultureInfo.InvariantCulture)}] must have a nonblank card name no longer than {MaximumCardNameLength.ToString(CultureInfo.InvariantCulture)} characters and a positive quantity.");
+                    $"{parameterName}[{index.ToString(CultureInfo.InvariantCulture)}] must have a nonblank card " +
+                    $"name no longer than {MaximumCardNameLength.ToString(CultureInfo.InvariantCulture)} " +
+                    "characters and a positive quantity.",
+                    DeckPath);
             }
 
             try
@@ -228,7 +249,8 @@ internal static class SpellbookContract
                     SpellbookFailureKind.InvalidInput,
                     "deck-quantity-overflow",
                     "Repeated deck entry quantities exceed the supported integer range.",
-                    innerException: exception);
+                    innerException: exception,
+                    path: DeckPath);
             }
         }
 
@@ -236,7 +258,9 @@ internal static class SpellbookContract
         {
             throw Invalid(
                 "too-many-deck-entries",
-                $"{parameterName} cannot contain more than {maximumEntries.ToString(CultureInfo.InvariantCulture)} source entries.");
+                $"{parameterName} cannot contain more than " +
+                    $"{maximumEntries.ToString(CultureInfo.InvariantCulture)} source entries.",
+                DeckPath);
         }
 
         List<SpellbookDeckEntry> normalized = new(quantities.Count);
@@ -251,9 +275,9 @@ internal static class SpellbookContract
     /// <summary>
     /// Creates a safe invalid-input failure.
     /// </summary>
-    private static SpellbookProviderException Invalid(string reasonCode, string message)
+    private static SpellbookProviderException Invalid(string reasonCode, string message, string path)
     {
-        return new SpellbookProviderException(SpellbookFailureKind.InvalidInput, reasonCode, message);
+        return new SpellbookProviderException(SpellbookFailureKind.InvalidInput, reasonCode, message, path: path);
     }
 
     /// <summary>

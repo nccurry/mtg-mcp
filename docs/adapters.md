@@ -44,6 +44,8 @@ user-owned operations.
 - `403` and `429` stop the operation.
 - Ambiguous writes are never retried.
 - Read retries are bounded to two transient failures.
+- An operation that would pass the request budget returns an `unsupported` result with reason
+  `request-limit-exceeded`, because no argument is at fault.
 
 Configure credentials with `MTGMCP__ARCHIDEKT__USERNAME` and
 `MTGMCP__ARCHIDEKT__PASSWORD`, or use `~/.mtg-mcp/archidekt.json`.
@@ -57,6 +59,11 @@ Credentials and session tokens remain in memory and never appear in output.
 - GET requests retry transient failures at most twice.
 - A `429` retries once only with a bounded `Retry-After`.
 - Writes are single-attempt.
+- A provider `400` or `422` is an `invalid-input` result with reason `provider-request-rejected` and the `path` of the
+  tool argument that carried the value.
+- `playgroup_playgroup_games_list` pages with `cursor`; the cursor records the provider page number and, inside a page
+  cut to the result size limit, how many rows were shown and a checksum of that page. Playgroup reports no total, so
+  the last page can be empty.
 - Missing public operations return unsupported results. The adapter does not
   probe private routes.
 
@@ -73,7 +80,9 @@ combo evidence. It has no account or write operation.
   `POST /find-my-combos` at the fixed public origin.
 - It sends the caller's source query unchanged apart from URL escaping.
 - It makes at most one upstream request per tool call and never follows a
-  provider paging link.
+  provider paging link. A tool `cursor` holds the source offset, which ends at the source cap of 1,000.
+- A provider `400` is an `invalid-input` result with reason `source-request-rejected` and the `path` of the tool
+  argument that carried the value, such as `sourceQuery`.
 - Starts are at least one second apart across processes that share a data root.
 - It has no automatic retries. A `429` records a cooldown of at most 60 seconds
   for later calls.

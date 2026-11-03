@@ -38,7 +38,8 @@ public sealed class DeckChangeInputTests
             inputs,
             out IReadOnlyList<DeckChange> changes,
             out IReadOnlyList<int> callerIndexes,
-            out string failure);
+            out string failure,
+            out _);
 
         Assert.True(success);
         Assert.Equal(string.Empty, failure);
@@ -69,7 +70,8 @@ public sealed class DeckChangeInputTests
             null,
             out IReadOnlyList<DeckChange> nullChanges,
             out _,
-            out string nullFailure));
+            out string nullFailure,
+            out _));
         Assert.Empty(nullChanges);
         Assert.NotEmpty(nullFailure);
 
@@ -77,7 +79,8 @@ public sealed class DeckChangeInputTests
             [new UnsupportedDeckChangeInput()],
             out IReadOnlyList<DeckChange> unknownChanges,
             out _,
-            out string unknownFailure));
+            out string unknownFailure,
+            out _));
         Assert.Empty(unknownChanges);
         Assert.Equal(
             "Deck change at index 0 with kind 'unsupported' requires a supported change kind.",
@@ -87,7 +90,8 @@ public sealed class DeckChangeInputTests
             [new RemoveDeckEntryInput(Guid.Empty)],
             out IReadOnlyList<DeckChange> incompleteChanges,
             out _,
-            out string incompleteFailure));
+            out string incompleteFailure,
+            out _));
         Assert.Empty(incompleteChanges);
         Assert.Equal(
             "Deck change at index 0 with kind 'remove-entry' requires a non-empty entryId.",

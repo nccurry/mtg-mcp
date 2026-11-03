@@ -5,21 +5,29 @@ namespace MtgMcp.Core.Decks;
 /// <summary>Checks the closed category-rule grammar before source data is read.</summary>
 public static class CategoryRuleSetValidator
 {
-    /// <summary>Validates a caller-supplied category rule set without consulting a provider.</summary>
-    public static OperationResult<CategoryRuleSet> Validate(CategoryRuleSet? rules)
+    /// <summary>
+    /// Validates a caller-supplied category rule set without consulting a provider. A refusal names the argument path
+    /// of the rejected value, built from <paramref name="path"/>, the path of the rule set in the tool arguments.
+    /// </summary>
+    public static OperationResult<CategoryRuleSet> Validate(CategoryRuleSet? rules, string path = "source.ruleSet")
     {
         if (rules is null ||
             rules.AssignmentMode is not ("add-only" or "synchronize-listed-categories") ||
             rules.Rules is null ||
             rules.Rules.Count == 0)
         {
-            return Invalid("Rules require a supported assignment mode and at least one category rule.");
+            return Invalid(
+                "Rules require a supported assignment mode and at least one category rule.",
+                rules?.AssignmentMode is "add-only" or "synchronize-listed-categories"
+                    ? path + ".rules"
+                    : path + ".assignmentMode");
         }
 
         HashSet<Guid> categoryIds = [];
         HashSet<int> primaryPriorities = [];
-        foreach (CategoryRule? rule in rules.Rules)
+        for (int index = 0; index < rules.Rules.Count; index++)
         {
+            CategoryRule? rule = rules.Rules[index];
             if (rule is null ||
                 rule.CategoryId == Guid.Empty ||
                 !categoryIds.Add(rule.CategoryId) ||
@@ -28,7 +36,10 @@ public static class CategoryRuleSetValidator
                 !HasValidSelectors(rule.NoneOf) ||
                 (rule.PrimaryPriority is int priority && !primaryPriorities.Add(priority)))
             {
-                return Invalid("Every category rule must have a unique category, valid selector groups, and a unique primary priority when supplied.");
+                return Invalid(
+                    "Every category rule must have a unique category, valid selector groups, and a unique primary " +
+                    "priority when supplied.",
+                    $"{path}.rules[{index}]");
             }
         }
 
@@ -72,8 +83,8 @@ public static class CategoryRuleSetValidator
     }
 
     /// <summary>Creates one stable invalid-input result for malformed rule grammar.</summary>
-    private static OperationInvalidInput Invalid(string message)
+    private static OperationInvalidInput Invalid(string message, string path)
     {
-        return new OperationInvalidInput("invalid-category-rules", message);
+        return new OperationInvalidInput("invalid-category-rules", message, path);
     }
 }

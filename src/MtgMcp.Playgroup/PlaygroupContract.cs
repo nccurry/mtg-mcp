@@ -41,7 +41,8 @@ internal static class PlaygroupContract
             throw new PlaygroupProviderException(
                 PlaygroupFailureKind.InvalidInput,
                 "invalid-provider-id",
-                $"{parameterName} must be a positive provider identifier.");
+                $"{parameterName} must be a positive provider identifier.",
+                path: parameterName);
         }
 
         return value;
@@ -58,7 +59,9 @@ internal static class PlaygroupContract
             throw new PlaygroupProviderException(
                 PlaygroupFailureKind.InvalidInput,
                 "invalid-provider-input",
-                $"{parameterName} must be nonblank and no longer than {maximumLength.ToString(CultureInfo.InvariantCulture)} characters.");
+                $"{parameterName} must be nonblank and no longer than " +
+                    $"{maximumLength.ToString(CultureInfo.InvariantCulture)} characters.",
+                path: parameterName);
         }
 
         return normalized;

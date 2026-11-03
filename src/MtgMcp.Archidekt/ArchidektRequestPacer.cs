@@ -41,7 +41,7 @@ internal sealed class ArchidektOperationBudget
         if (predictedRequests > MaximumRequests)
         {
             throw new ArchidektProviderException(
-                ArchidektFailureKind.InvalidInput,
+                ArchidektFailureKind.Unsupported,
                 ArchidektProviderException.RequestLimitReasonCode,
                 $"The operation needs about {predictedRequests} requests to Archidekt, over the " +
                     $"{MaximumRequests}-request limit for one call; no remote writes were attempted.");
@@ -58,7 +58,7 @@ internal sealed class ArchidektOperationBudget
         {
             string over = DescribeOverLimit(predictedRequests, MaximumRequests, operationCount, operationRequestCount);
             throw new ArchidektProviderException(
-                ArchidektFailureKind.InvalidInput,
+                ArchidektFailureKind.Unsupported,
                 ArchidektProviderException.RequestLimitReasonCode,
                 $"This push {over} No remote writes were attempted.");
         }
@@ -94,7 +94,7 @@ internal sealed class ArchidektOperationBudget
         {
             Interlocked.Decrement(ref requestCount);
             throw new ArchidektProviderException(
-                ArchidektFailureKind.InvalidInput,
+                ArchidektFailureKind.Unsupported,
                 ArchidektProviderException.RequestLimitReasonCode,
                 "The operation would exceed its request limit.");
         }
@@ -397,4 +397,14 @@ internal sealed class ArchidektProviderException : Exception
     /// Gets the current provider state fingerprint when a conflict is about stale provider state.
     /// </summary>
     internal string? CurrentRemoteFingerprint { get; init; }
+
+    /// <summary>
+    /// Gets the fingerprint of the preview as it is now when a conflict is about a preview that no longer matches.
+    /// </summary>
+    internal string? CurrentPreviewFingerprint { get; init; }
+
+    /// <summary>
+    /// Gets the name of the argument that an invalid-input failure refuses, or null when no argument is at fault.
+    /// </summary>
+    internal string? Path { get; init; }
 }

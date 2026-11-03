@@ -17,14 +17,14 @@ internal static class ArchidektDeckContractMapper
         return ArchidektJsonContract.MapDeck(root, sourceJson, retrievedAtUtc, method);
     }
 
-    /// <summary>Maps one page of provider deck summaries.</summary>
-    internal static RemoteDeckPage MapDeckPage(
+    /// <summary>Maps the deck-list response.</summary>
+    internal static RemoteDeckList MapDeckList(
         JsonElement root,
         string sourceJson,
         DateTimeOffset retrievedAtUtc,
         string method)
     {
-        return ArchidektJsonContract.MapDeckPage(root, sourceJson, retrievedAtUtc, method);
+        return ArchidektJsonContract.MapDeckList(root, sourceJson, retrievedAtUtc, method);
     }
 }
 

@@ -1,126 +1,52 @@
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using MtgMcp.App.Hosting;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.App.CardLists;
 
 /// <summary>
-/// Carries what a page cursor holds: the fingerprint of the request, the position of the next item, and the marker
-/// of each source, so a source that changed between pages is noticed. Nothing else is stored.
-/// </summary>
-/// <param name="Fingerprint">The fingerprint of the request without its cursor and page size.</param>
-/// <param name="Offset">The position of the first item of the next page.</param>
-/// <param name="Markers">The marker of each source, in request order.</param>
-internal sealed record CardListCursor(string? Fingerprint, int Offset, IReadOnlyList<string>? Markers);
-
-/// <summary>
-/// Builds request fingerprints and reads and writes page cursors for the card list tools.
+/// Writes and reads the page cursors of the card list tools. A cursor binds the request without its cursor and page
+/// size, and the marker of every source, so a source that changed between pages is noticed.
 /// </summary>
 internal static class CardListCursors
 {
     /// <summary>
-    /// Fingerprints the parts of a request that must stay the same from page to page. The parts are serialized with
-    /// the server's own options, in the order given.
+    /// Reads the offset of a cursor against the sources read now. A missing cursor starts at the first item. A
+    /// cursor that is malformed or belongs to another request is invalid input at <c>cursor</c>, and one whose source
+    /// changed is a stale-cursor conflict that carries the new revision or remote fingerprint of the source.
     /// </summary>
-    internal static string Fingerprint(params (object? Value, Type Type)[] parts)
+    internal static OperationResult<int> Read(
+        string? cursor,
+        string fingerprint,
+        IReadOnlyList<CardListSourceInfo> sources)
     {
-        StringBuilder text = new();
-        foreach ((object? value, Type type) in parts)
-        {
-            text.Append(JsonSerializer.Serialize(value, type, ToolCallPolicy.SerializerOptions)).Append('\u001f');
-        }
-
-        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())))[..32];
+        OperationResult<PageCursorPosition> decoded = PageCursor.Decode(
+            cursor,
+            Binding(fingerprint, sources),
+            current: Current(sources));
+        return decoded is OperationSuccess<PageCursorPosition> position
+            ? new OperationSuccess<int>(position.Data.Offset)
+            : OperationFailure.Forward<PageCursorPosition, int>(decoded);
     }
 
     /// <summary>
-    /// Encodes a cursor as opaque text.
+    /// Binds the request and the state of every source.
     /// </summary>
-    internal static string Encode(string fingerprint, int offset, IReadOnlyList<string> markers)
+    internal static PageCursorBinding Binding(string fingerprint, IReadOnlyList<CardListSourceInfo> sources)
     {
-        byte[] payload = JsonSerializer.SerializeToUtf8Bytes(new CardListCursor(fingerprint, offset, markers));
-        return Convert.ToBase64String(payload).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        string markers = RequestHash.Of((sources.Select(source => source.Marker).ToArray(), typeof(string[])));
+        return PageCursorBinding.ForRequest(fingerprint).And(PageCursorBinding.ForSource(markers));
     }
 
     /// <summary>
-    /// Reads a cursor and checks that it belongs to this request. A missing cursor starts at the first item. A cursor
-    /// that is malformed or belongs to another request is invalid input and returns no data.
+    /// Names the first deck revision and live Archidekt fingerprint among the sources, so a caller can see what the
+    /// sources are now.
     /// </summary>
-    internal static OperationResult<CardListCursor> Read(string? cursor, string fingerprint)
+    private static ConflictState? Current(IReadOnlyList<CardListSourceInfo> sources)
     {
-        if (cursor is null)
-        {
-            return new OperationSuccess<CardListCursor>(new CardListCursor(fingerprint, 0, null));
-        }
-
-        CardListCursor? decoded = Decode(cursor);
-        if (decoded?.Fingerprint is null ||
-            !CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(decoded.Fingerprint),
-                Encoding.UTF8.GetBytes(fingerprint)) ||
-            decoded.Offset < 0 ||
-            decoded.Markers is null)
-        {
-            return new OperationInvalidInput(
-                "invalid-cursor",
-                "The cursor is not valid for this request. Send the same request with nextCursor unchanged, or " +
-                "start again without a cursor.",
-                "cursor");
-        }
-
-        return new OperationSuccess<CardListCursor>(decoded);
-    }
-
-    /// <summary>
-    /// Compares the sources read now with the markers the cursor stored. A source that changed returns a conflict
-    /// that carries its new revision or state marker, so the agent can start again.
-    /// </summary>
-    internal static OperationConflict? FindChange(CardListCursor cursor, IReadOnlyList<CardListSourceInfo> sources)
-    {
-        if (cursor.Markers is not { } stored)
-        {
-            return null;
-        }
-
-        for (int index = 0; index < sources.Count; index++)
-        {
-            string now = sources[index].Marker;
-            if (index < stored.Count && string.Equals(stored[index], now, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            ConflictState? state = sources[index] switch
-            {
-                { Kind: "deck", Revision: long revision } => new ConflictState(Revision: revision),
-                { Kind: "archidekt-deck", StateMarker: { } marker } => new ConflictState(RemoteFingerprint: marker),
-                _ => null,
-            };
-            return new OperationConflict(
-                "source-changed-between-pages",
-                $"The source at {sources[index].Side} changed since the first page. Start again without a cursor.",
-                state);
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Decodes a cursor, or returns null when it is malformed.
-    /// </summary>
-    private static CardListCursor? Decode(string cursor)
-    {
-        try
-        {
-            string padded = cursor.Replace('-', '+').Replace('_', '/');
-            padded = padded.PadRight((padded.Length + 3) / 4 * 4, '=');
-            return JsonSerializer.Deserialize<CardListCursor>(Convert.FromBase64String(padded));
-        }
-        catch (Exception exception) when (exception is FormatException or JsonException or ArgumentException)
-        {
-            return null;
-        }
+        long? revision = sources.FirstOrDefault(source => source is { Kind: "deck", Revision: not null })?.Revision;
+        string? remote = sources.FirstOrDefault(source => source is { Kind: "archidekt-deck", StateMarker: not null })
+            ?.StateMarker;
+        return revision is null && remote is null ? null : new ConflictState(revision, remote);
     }
 }

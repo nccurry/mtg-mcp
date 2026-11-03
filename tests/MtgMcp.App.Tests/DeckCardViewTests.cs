@@ -436,7 +436,7 @@ public sealed class DeckCardViewTests
 
         Assert.Equal("invalid-cursor", Assert.IsType<OperationInvalidInput>(otherRequest.Value).ReasonCode);
         OperationConflict conflict = Assert.IsType<OperationConflict>(changed.Value);
-        Assert.Equal("deck-changed-between-pages", conflict.ReasonCode);
+        Assert.Equal("cursor-stale", conflict.ReasonCode);
         Assert.Equal(renamed.Revision, conflict.Current!.Revision);
     }
 
@@ -468,35 +468,33 @@ public sealed class DeckCardViewTests
     }
 
     /// <summary>
-    /// Verifies a cursor with a missing or null fingerprint, a JSON null body, a negative position, or a wrong
-    /// fingerprint is refused as invalid, never as an exception.
+    /// Verifies a cursor that is empty, not a cursor, edited, or issued for another deck is refused as invalid at the
+    /// cursor path, never as an exception.
     /// </summary>
     [Theory]
-    [InlineData("missing-fingerprint")]
-    [InlineData("null-fingerprint")]
-    [InlineData("json-null")]
-    [InlineData("negative-offset")]
-    [InlineData("wrong-fingerprint")]
-    [InlineData("offset-past-the-end")]
+    [InlineData("empty")]
+    [InlineData("garbage")]
+    [InlineData("edited")]
+    [InlineData("other-deck")]
     public async Task Get_MalformedCursor_ReturnsInvalidCursor(string kind)
     {
         using TestSetup setup = await TestSetup.CreateAsync(installCardData: false);
         DeckDocument deck = await setup.CreateDeckAsync(4);
         DeckDocumentView first = Success(await setup.Get(deck.DeckId, ["tags"], null, null, 2));
-        JsonObject real = DecodeCursor(first.NextCursor!);
+        DeckDocument other = await setup.CreateDeckAsync(4);
+        DeckDocumentView otherFirst = Success(await setup.Get(other.DeckId, ["tags"], null, null, 2));
         string cursor = kind switch
         {
-            "missing-fingerprint" => EncodeCursor($"{{\"Revision\":{deck.Revision},\"Offset\":2}}"),
-            "null-fingerprint" => EncodeCursor($"{{\"Fingerprint\":null,\"Revision\":{deck.Revision},\"Offset\":2}}"),
-            "json-null" => EncodeCursor("null"),
-            "negative-offset" => EncodeCursor(WithOffset(real, -1)),
-            "wrong-fingerprint" => EncodeCursor($"{{\"Fingerprint\":\"x\",\"Revision\":{deck.Revision},\"Offset\":2}}"),
-            _ => EncodeCursor(WithOffset(real, 99)),
+            "empty" => string.Empty,
+            "garbage" => "not-a-cursor",
+            "edited" => first.NextCursor + "x",
+            _ => otherFirst.NextCursor!,
         };
 
         OperationResult<DeckDocumentView> result = await setup.Get(deck.DeckId, ["tags"], null, cursor, 2);
 
-        Assert.Equal("invalid-cursor", Assert.IsType<OperationInvalidInput>(result.Value).ReasonCode);
+        OperationInvalidInput refused = Assert.IsType<OperationInvalidInput>(result.Value);
+        Assert.Equal(("invalid-cursor", "cursor"), (refused.ReasonCode, refused.Path));
     }
 
     /// <summary>
@@ -539,7 +537,7 @@ public sealed class DeckCardViewTests
 
     /// <summary>
     /// Verifies a name list with no match gives no entries, and an empty list, too many names, a blank name, and an
-    /// unknown response format are refused.
+    /// unknown response format are refused. The format full no longer exists.
     /// </summary>
     [Fact]
     public async Task Get_CardNames_AllMissOrInvalid_AreHandled()
@@ -562,6 +560,9 @@ public sealed class DeckCardViewTests
         OperationInvalidInput blankFailure = Assert.IsType<OperationInvalidInput>(blank.Value);
         Assert.Equal("cardNames[1]", blankFailure.Path);
         Assert.Equal("invalid-response-format", Assert.IsType<OperationInvalidInput>(format.Value).ReasonCode);
+        OperationInvalidInput removed = Assert.IsType<OperationInvalidInput>(
+            (await setup.Get(deck.DeckId, responseFormat: "full")).Value);
+        Assert.Equal(("invalid-response-format", "responseFormat"), (removed.ReasonCode, removed.Path));
     }
 
     /// <summary>
@@ -594,7 +595,7 @@ public sealed class DeckCardViewTests
 
     /// <summary>
     /// Verifies concise entries hold only the entry ID, card name, quantity, zone, and category names, with no
-    /// assignment rows, include still adds card data to them, and standard gives the same result as full.
+    /// assignment rows, include still adds card data to them, and standard is the default.
     /// </summary>
     [Fact]
     public async Task Get_Concise_ReturnsOnlyTheShortEntryFields()
@@ -803,37 +804,6 @@ public sealed class DeckCardViewTests
     private static int Bytes<T>(T value)
     {
         return JsonSerializer.SerializeToUtf8Bytes(value, ToolCallPolicy.SerializerOptions).Length;
-    }
-
-    /// <summary>
-    /// Reads the JSON body of an opaque cursor.
-    /// </summary>
-    private static JsonObject DecodeCursor(string cursor)
-    {
-        string padded = cursor.Replace('-', '+').Replace('_', '/');
-        padded = padded.PadRight((padded.Length + 3) / 4 * 4, '=');
-        return JsonNode.Parse(Convert.FromBase64String(padded))!.AsObject();
-    }
-
-    /// <summary>
-    /// Builds an opaque cursor from JSON text.
-    /// </summary>
-    private static string EncodeCursor(string json)
-    {
-        return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json))
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
-    }
-
-    /// <summary>
-    /// Writes a real cursor body with another entry position.
-    /// </summary>
-    private static string WithOffset(JsonObject body, int offset)
-    {
-        JsonObject copy = JsonNode.Parse(body.ToJsonString())!.AsObject();
-        copy["Offset"] = offset;
-        return copy.ToJsonString();
     }
 
     /// <summary>
@@ -1102,7 +1072,7 @@ public sealed class DeckCardViewTests
             string? cursor = null,
             int? pageSize = null,
             string[]? cardNames = null,
-            string responseFormat = "full",
+            string responseFormat = "standard",
             string[]? zones = null,
             string[]? categoryNames = null)
         {

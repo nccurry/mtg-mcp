@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Hosting;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 using MtgMcp.Playgroup;
 
@@ -47,7 +48,9 @@ internal sealed class PlaygroupReadTools
         [Description("Exact Playgroup commander identifier.")] int commanderId,
         CancellationToken cancellationToken = default)
     {
-        return service.GetCommanderAsync(commanderId, cancellationToken);
+        return InvalidInputPath.DefaultAsync(
+            service.GetCommanderAsync(commanderId, cancellationToken),
+            "commanderId");
     }
 
     /// <summary>Gets one commander through the provider's name lookup.</summary>
@@ -60,7 +63,9 @@ internal sealed class PlaygroupReadTools
         [Description("Exact commander name sent to Playgroup's documented lookup.")] string name,
         CancellationToken cancellationToken = default)
     {
-        return service.GetCommanderByNameAsync(name, cancellationToken);
+        return InvalidInputPath.DefaultAsync(
+            service.GetCommanderByNameAsync(name, cancellationToken),
+            "name");
     }
 
     /// <summary>Gets one provider-computed commander turn-damage observation.</summary>
@@ -73,7 +78,9 @@ internal sealed class PlaygroupReadTools
         [Description("Exact Playgroup commander identifier.")] int commanderId,
         CancellationToken cancellationToken = default)
     {
-        return service.GetCommanderTurnDamageAsync(commanderId, cancellationToken);
+        return InvalidInputPath.DefaultAsync(
+            service.GetCommanderTurnDamageAsync(commanderId, cancellationToken),
+            "commanderId");
     }
 
     /// <summary>Gets one provider deck.</summary>
@@ -81,11 +88,13 @@ internal sealed class PlaygroupReadTools
     [Description("Playgroup: gets one deck by provider identifier with an explicit archived-deck option." +
         UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> GetDeckAsync(
-        [Description("Exact Playgroup deck identifier.")] int deckId,
+        [Description("Exact Playgroup deck identifier.")] int playgroupDeckId,
         [Description("Whether an archived deck may be returned.")] bool includeArchived = false,
         CancellationToken cancellationToken = default)
     {
-        return service.GetDeckAsync(deckId, includeArchived, cancellationToken);
+        return InvalidInputPath.DefaultAsync(
+            service.GetDeckAsync(playgroupDeckId, includeArchived, cancellationToken),
+            "playgroupDeckId");
     }
 
     /// <summary>Gets provider-computed deck ELO history.</summary>
@@ -95,18 +104,15 @@ internal sealed class PlaygroupReadTools
         "not rank deck quality locally." +
         UntrustedTextNotes.Playgroup)]
     internal Task<OperationResult<PlaygroupEvidence>> GetDeckEloHistoryAsync(
-        [Description("Exact Playgroup deck identifier.")] int deckId,
+        [Description("Exact Playgroup deck identifier.")] int playgroupDeckId,
         [Description("Optional exact playgroup scope for the provider-computed history.")] int? playgroupId = null,
         [Description("Optional exact league scope for the provider-computed history.")] int? leagueId = null,
         [Description("Whether an archived deck may be used.")] bool includeArchived = false,
         CancellationToken cancellationToken = default)
     {
-        return service.GetDeckEloHistoryAsync(
-            deckId,
-            playgroupId,
-            leagueId,
-            includeArchived,
-            cancellationToken);
+        return InvalidInputPath.DefaultAsync(
+            service.GetDeckEloHistoryAsync(playgroupDeckId, playgroupId, leagueId, includeArchived, cancellationToken),
+            "playgroupDeckId");
     }
 
     /// <summary>Gets one provider user.</summary>
@@ -117,7 +123,9 @@ internal sealed class PlaygroupReadTools
         [Description("Exact Playgroup user identifier visible to the authenticated key.")] int userId,
         CancellationToken cancellationToken = default)
     {
-        return service.GetUserAsync(userId, cancellationToken);
+        return InvalidInputPath.DefaultAsync(
+            service.GetUserAsync(userId, cancellationToken),
+            "userId");
     }
 
     /// <summary>Lists one user's provider decks.</summary>
@@ -130,7 +138,9 @@ internal sealed class PlaygroupReadTools
         [Description("Whether archived decks should be included.")] bool includeArchived = false,
         CancellationToken cancellationToken = default)
     {
-        return service.ListUserDecksAsync(userId, includeArchived, cancellationToken);
+        return InvalidInputPath.DefaultAsync(
+            service.ListUserDecksAsync(userId, includeArchived, cancellationToken),
+            "userId");
     }
 
     /// <summary>Lists playgroups visible for one authenticated user.</summary>
@@ -141,7 +151,9 @@ internal sealed class PlaygroupReadTools
         [Description("Exact Playgroup user identifier visible to the authenticated key.")] int userId,
         CancellationToken cancellationToken = default)
     {
-        return service.ListUserPlaygroupsAsync(userId, cancellationToken);
+        return InvalidInputPath.DefaultAsync(
+            service.ListUserPlaygroupsAsync(userId, cancellationToken),
+            "userId");
     }
 
     /// <summary>Gets one user's playgroup relationship.</summary>
@@ -153,7 +165,9 @@ internal sealed class PlaygroupReadTools
         [Description("Exact playgroup identifier visible to the authenticated key.")] int playgroupId,
         CancellationToken cancellationToken = default)
     {
-        return service.GetUserPlaygroupAsync(userId, playgroupId, cancellationToken);
+        return InvalidInputPath.DefaultAsync(
+            service.GetUserPlaygroupAsync(userId, playgroupId, cancellationToken),
+            "userId");
     }
 
     /// <summary>Lists members of one authenticated playgroup.</summary>
@@ -164,23 +178,63 @@ internal sealed class PlaygroupReadTools
         [Description("Exact playgroup identifier visible to the authenticated key.")] int playgroupId,
         CancellationToken cancellationToken = default)
     {
-        return service.ListPlaygroupMembersAsync(playgroupId, cancellationToken);
+        return InvalidInputPath.DefaultAsync(
+            service.ListPlaygroupMembersAsync(playgroupId, cancellationToken),
+            "playgroupId");
     }
 
     /// <summary>Lists one bounded page of playgroup games.</summary>
     [McpServerTool(Name = "playgroup_playgroup_games_list", Title = "List Playgroup Games", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
     [Description(
-        "Playgroup: lists one page of games for a playgroup. You choose the page, the page size, and whether " +
-        "events are included." +
+        "Playgroup: lists one page of games for a playgroup. You choose the page size and whether events are " +
+        "included. The result has no total: nextCursor follows every full page, so when the game count is an exact " +
+        "multiple of pageSize the last page is empty, and nextCursor is null on any shorter page. A page cut to the " +
+        "result size limit says truncated true and its nextCursor continues with the games left out." +
         UntrustedTextNotes.Playgroup)]
-    internal Task<OperationResult<PlaygroupEvidence>> ListPlaygroupGamesAsync(
+    internal async Task<OperationResult<PlaygroupGamesPage>> ListPlaygroupGamesAsync(
         [Description("Exact playgroup identifier visible to the authenticated key.")] int playgroupId,
-        [Description("One-based provider page number.")] int page = 1,
-        [Description("Provider page size from 1 through 100.")] int limit = 10,
+        [Description("Provider page size from 1 through 100.")] int pageSize = 10,
+        [Description("The nextCursor of the previous page; omitted starts at the first page.")] string? cursor = null,
         [Description("Whether each returned game should include provider event records.")] bool includeEvents = false,
         CancellationToken cancellationToken = default)
     {
-        return service.ListPlaygroupGamesAsync(playgroupId, page, limit, includeEvents, cancellationToken);
+        if (ResultPage.CheckPageSize(pageSize, 100) is { } invalidSize)
+        {
+            return invalidSize;
+        }
+
+        PageCursorBinding binding = PageCursorBinding.ForRequest(RequestHash.Of(
+            (playgroupId, typeof(int)),
+            (pageSize, typeof(int)),
+            (includeEvents, typeof(bool))));
+        OperationResult<PageCursorPosition> position = PlaygroupGamesPaging.Position(cursor, binding, pageSize);
+        if (position is not OperationSuccess<PageCursorPosition> start)
+        {
+            return OperationFailure.Forward<PageCursorPosition, PlaygroupGamesPage>(position);
+        }
+
+        OperationResult<PlaygroupEvidence> page = InvalidInputPath.Default(
+            await service.ListPlaygroupGamesAsync(
+                playgroupId,
+                start.Data.Page + 1,
+                pageSize,
+                includeEvents,
+                cancellationToken).ConfigureAwait(false),
+            "playgroupId");
+        if (page is not OperationSuccess<PlaygroupEvidence> success)
+        {
+            return OperationFailure.Forward<PlaygroupEvidence, PlaygroupGamesPage>(page);
+        }
+
+        OperationResult<PageCursorPosition> checkedPosition = PlaygroupGamesPaging.Continue(
+            cursor,
+            start.Data,
+            binding,
+            success.Data);
+        return checkedPosition is OperationSuccess<PageCursorPosition> continued
+            ? new OperationSuccess<PlaygroupGamesPage>(
+                PlaygroupGamesPaging.Shape(success.Data, continued.Data, pageSize, binding))
+            : OperationFailure.Forward<PageCursorPosition, PlaygroupGamesPage>(checkedPosition);
     }
 
     /// <summary>Gets one game with optional event records.</summary>
@@ -195,6 +249,8 @@ internal sealed class PlaygroupReadTools
         [Description("Whether the returned game should include provider event records.")] bool includeEvents = false,
         CancellationToken cancellationToken = default)
     {
-        return service.GetPlaygroupGameAsync(playgroupId, gameId, includeEvents, cancellationToken);
+        return InvalidInputPath.DefaultAsync(
+            service.GetPlaygroupGameAsync(playgroupId, gameId, includeEvents, cancellationToken),
+            "playgroupId");
     }
 }

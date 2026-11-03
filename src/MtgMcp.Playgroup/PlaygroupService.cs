@@ -82,12 +82,13 @@ public sealed class PlaygroupService : IDisposable
 
     /// <summary>Gets one provider deck, optionally including an archived deck.</summary>
     public Task<OperationResult<PlaygroupEvidence>> GetDeckAsync(
-        int deckId,
+        int playgroupDeckId,
         bool includeArchived,
         CancellationToken cancellationToken)
     {
         return ExecuteAsync(() => GetCoreAsync(
-            $"decks/{PlaygroupContract.PositiveId(deckId, nameof(deckId))}?include_archived={Bool(includeArchived)}",
+            $"decks/{PlaygroupContract.PositiveId(playgroupDeckId, nameof(playgroupDeckId))}" +
+            $"?include_archived={Bool(includeArchived)}",
             "getDeckById",
             requiresAuthentication: false,
             cancellationToken));
@@ -95,7 +96,7 @@ public sealed class PlaygroupService : IDisposable
 
     /// <summary>Gets provider-computed ELO history for one deck and explicit optional scope.</summary>
     public Task<OperationResult<PlaygroupEvidence>> GetDeckEloHistoryAsync(
-        int deckId,
+        int playgroupDeckId,
         int? playgroupId,
         int? leagueId,
         bool includeArchived,
@@ -105,7 +106,7 @@ public sealed class PlaygroupService : IDisposable
         {
             if (leagueId is not null && playgroupId is null)
             {
-                throw Invalid("invalid-elo-scope", "leagueId requires playgroupId.");
+                throw Invalid("invalid-elo-scope", "leagueId requires playgroupId.", "leagueId");
             }
 
             List<KeyValuePair<string, string>> query =
@@ -115,7 +116,8 @@ public sealed class PlaygroupService : IDisposable
             AddOptionalId(query, "playgroup_id", playgroupId, nameof(playgroupId));
             AddOptionalId(query, "league_id", leagueId, nameof(leagueId));
             return GetCoreAsync(
-                $"decks/{PlaygroupContract.PositiveId(deckId, nameof(deckId))}/elo_history{Query(query)}",
+                $"decks/{PlaygroupContract.PositiveId(playgroupDeckId, nameof(playgroupDeckId))}" +
+                $"/elo_history{Query(query)}",
                 "getDeckEloHistory",
                 requiresAuthentication: false,
                 cancellationToken);
@@ -194,11 +196,9 @@ public sealed class PlaygroupService : IDisposable
     {
         return ExecuteAsync(() =>
         {
-            if (page <= 0 || limit is < 1 or > 100)
+            if (limit is < 1 or > 100)
             {
-                throw Invalid(
-                    "invalid-page-boundary",
-                    "page must be positive and limit must be between 1 and 100.");
+                throw Invalid(SharedReasonCodes.InvalidPageSize, "pageSize must be between 1 and 100.", "pageSize");
             }
 
             string query = Query(
@@ -240,7 +240,7 @@ public sealed class PlaygroupService : IDisposable
     {
         if (maxGames is < 1 or > 1000)
         {
-            return new OperationInvalidInput("invalid-max-games", "maxGames must be from 1 through 1000.");
+            return new OperationInvalidInput("invalid-max-games", "maxGames must be from 1 through 1000.", "maxGames");
         }
 
         int pageSize = Math.Min(100, maxGames);
@@ -301,7 +301,7 @@ public sealed class PlaygroupService : IDisposable
         {
             if (events is null || events.Count is < 1 or > 1_000)
             {
-                throw Invalid("invalid-event-batch", "events must contain between 1 and 1000 rows.");
+                throw Invalid("invalid-event-batch", "events must contain between 1 and 1000 rows.", "events");
             }
 
             PlaygroupEventImport[] normalized = new PlaygroupEventImport[events.Count];
@@ -309,7 +309,8 @@ public sealed class PlaygroupService : IDisposable
             {
                 PlaygroupEventImport value = events[index] ?? throw Invalid(
                     "invalid-event-batch",
-                    "events cannot contain null rows.");
+                    "events cannot contain null rows.",
+                    $"events[{index}]");
                 normalized[index] = value with
                 {
                     Name = PlaygroupContract.Required(value.Name, $"events[{index}].name"),
@@ -338,26 +339,34 @@ public sealed class PlaygroupService : IDisposable
         {
             if (request is null)
             {
-                throw Invalid("invalid-live-session", "request is required.");
+                throw Invalid("invalid-live-session", "request is required.", "playerAmount");
             }
-            if (request.PlayerAmount is < 1 or > 6 || request.LifeAmount <= 0 ||
-                request.Bracket is not null and (< 1 or > 5))
+            if (request.PlayerAmount is < 1 or > 6)
             {
-                throw Invalid(
-                    "invalid-live-session",
-                    "Player amount, life amount, or bracket is outside the documented boundary.");
+                throw Invalid("invalid-live-session", "playerAmount must be from 1 through 6.", "playerAmount");
+            }
+
+            if (request.LifeAmount <= 0)
+            {
+                throw Invalid("invalid-live-session", "lifeAmount must be above 0.", "lifeAmount");
+            }
+
+            if (request.Bracket is not null and (< 1 or > 5))
+            {
+                throw Invalid("invalid-live-session", "bracket must be from 1 through 5.", "bracket");
             }
 
             if (request.LeagueId is not null && request.PlaygroupId is null)
             {
-                throw Invalid("invalid-live-session-scope", "leagueId requires playgroupId.");
+                throw Invalid("invalid-live-session-scope", "leagueId requires playgroupId.", "leagueId");
             }
 
             if (request.Discoverable && request.PlaygroupId is not null)
             {
                 throw Invalid(
                     "invalid-live-session-visibility",
-                    "A playgroup-private session cannot also be discoverable.");
+                    "A playgroup-private session cannot also be discoverable.",
+                    "discoverable");
             }
 
             int[] languages = request.LanguageIds?.ToArray() ?? [];
@@ -366,19 +375,20 @@ public sealed class PlaygroupService : IDisposable
             {
                 throw Invalid(
                     "invalid-language-ids",
-                    "languageIds must contain at most 64 distinct positive identifiers.");
+                    "languageIds must contain at most 64 distinct positive identifiers.",
+                    "languageIds");
             }
 
             string? clientIdentifier = request.ClientIdentifier is null
                 ? null
-                : PlaygroupContract.Required(request.ClientIdentifier, nameof(request.ClientIdentifier));
+                : PlaygroupContract.Required(request.ClientIdentifier, "clientIdentifier");
             object payload = new
             {
                 playerAmount = request.PlayerAmount,
                 lifeAmount = request.LifeAmount,
                 bracket = request.Bracket,
-                playgroupId = OptionalPositiveId(request.PlaygroupId, nameof(request.PlaygroupId)),
-                leagueId = OptionalPositiveId(request.LeagueId, nameof(request.LeagueId)),
+                playgroupId = OptionalPositiveId(request.PlaygroupId, "playgroupId"),
+                leagueId = OptionalPositiveId(request.LeagueId, "leagueId"),
                 discoverable = request.Discoverable,
                 languageIds = request.LanguageIds is null ? null : languages,
                 clientIdentifier,
@@ -527,7 +537,8 @@ public sealed class PlaygroupService : IDisposable
             {
                 PlaygroupFailureKind.InvalidInput => new OperationInvalidInput(
                     exception.ReasonCode,
-                    exception.Message),
+                    exception.Message,
+                    exception.Path),
                 PlaygroupFailureKind.NotFound => new OperationNotFound(
                     exception.ReasonCode,
                     exception.Message),
@@ -585,15 +596,16 @@ public sealed class PlaygroupService : IDisposable
         string normalized = PlaygroupContract.Required(value, parameterName, 1);
         return normalized is "0" or "1" or "2" or "3" or "4" or "5"
             ? normalized
-            : throw Invalid("invalid-player-id", "Player IDs must be HUD indexes from 0 through 5.");
+            : throw Invalid("invalid-player-id", "Player IDs must be HUD indexes from 0 through 5.", parameterName);
     }
 
     /// <summary>Creates one sanitized validation failure.</summary>
-    private static PlaygroupProviderException Invalid(string reasonCode, string message)
+    private static PlaygroupProviderException Invalid(string reasonCode, string message, string path)
     {
         return new PlaygroupProviderException(
             PlaygroupFailureKind.InvalidInput,
             reasonCode,
-            message);
+            message,
+            path: path);
     }
 }

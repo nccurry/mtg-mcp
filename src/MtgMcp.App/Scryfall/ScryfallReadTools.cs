@@ -149,8 +149,8 @@ internal sealed class ScryfallReadTools
             "quantities normally require only one lookup row.")]
         IReadOnlyList<ScryfallCardLookup> lookups,
         [Description(
-            "Cache policy for the first page: default, cache-only, or refresh; " +
-            "a cursor always replays bound evidence."),
+            "Cache policy: default, cache-only, or refresh; send the same value on every page. " +
+            "A cursor always replays bound evidence."),
          FreshnessPolicyValues]
         string freshnessPolicy = "default",
         [Description("Opaque continuation cursor bound to the complete ordered request and exact evidence.")]
@@ -228,7 +228,9 @@ internal sealed class ScryfallReadTools
     [Description(
         "Installed Scryfall card data: searches installed official community-tag metadata by ID, slug, label, or " +
         "alias without category " +
-        "inference. Use it to find a tag's exact slug, then filter cards with scryfall_search and otag:<slug>.")]
+        "inference. Use it to find a tag's exact slug, then filter cards with scryfall_search and otag:<slug>. " +
+        "A page is cut to the result size limit; then truncated is true and nextCursor continues after the last tag " +
+        "shown.")]
     internal Task<OperationResult<ScryfallPage<ScryfallTag>>> SearchTagsAsync(
         [Description("Case-insensitive exact or substring community-tag search text.")] string query,
         [Description("Optional tag kind: oracle or art."), TagKindValues]
@@ -239,7 +241,14 @@ internal sealed class ScryfallReadTools
         CancellationToken cancellationToken = default)
     {
         return ScryfallToolExecution.RunAsync(() =>
-            service.SearchTagsAsync(query, tagType, cursor, pageSize, includeRaw, cancellationToken));
+            service.SearchTagsAsync(
+                query,
+                tagType,
+                cursor,
+                pageSize,
+                includeRaw,
+                ScryfallToolExecution.CountFitting<ScryfallTag>(),
+                cancellationToken));
     }
 
     /// <summary>

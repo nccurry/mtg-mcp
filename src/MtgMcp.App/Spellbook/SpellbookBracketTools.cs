@@ -126,9 +126,11 @@ internal sealed class SpellbookBracketTools
             return OperationFailure.Forward<SpellbookResolvedDeck, SpellbookBracketFactsResult>(resolved);
         }
 
-        OperationResult<SpellbookBracketFacts> facts = await service.EstimateBracketFactsAsync(
-            chosen.Data.Selection.Request,
-            cancellationToken).ConfigureAwait(false);
+        OperationResult<SpellbookBracketFacts> facts = InvalidInputPath.Default(
+            await service.EstimateBracketFactsAsync(
+                chosen.Data.Selection.Request,
+                cancellationToken).ConfigureAwait(false),
+            "deckId");
         if (facts is not OperationSuccess<SpellbookBracketFacts> success)
         {
             return OperationFailure.Forward<SpellbookBracketFacts, SpellbookBracketFactsResult>(facts);

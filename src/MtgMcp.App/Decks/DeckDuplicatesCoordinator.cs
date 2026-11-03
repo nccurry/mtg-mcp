@@ -84,7 +84,7 @@ internal sealed class DeckDuplicatesCoordinator
         if (expectedRevision is long expected && expected != deck.Revision)
         {
             return new OperationConflict(
-                "deck-revision-conflict",
+                SharedReasonCodes.StaleDeckRevision,
                 $"The deck is at revision {deck.Revision}, not {expected}. Repeat the request with the current " +
                 "revision, or omit expectedRevision.",
                 new ConflictState(Revision: deck.Revision));

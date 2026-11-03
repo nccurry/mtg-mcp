@@ -103,17 +103,58 @@ public sealed class DeckWriteToolsTests
         DeckRestoreResult restored = RequireSuccess(await writes.RestoreBackupAsync(
             backup.BackupId,
             changedInventory.CurrentDatabaseFingerprint!,
+            $"restore backup {backup.BackupId:D}",
             TestContext.Current.CancellationToken));
         Assert.Equal(backup.Fingerprint, restored.CurrentDatabaseFingerprint);
         Assert.Equal(backup.BackupId, RequireSuccess(await writes.DeleteBackupAsync(
             backup.BackupId,
+            $"delete backup {backup.BackupId:D}",
             TestContext.Current.CancellationToken)).DeletedId);
         Assert.Equal(deck.DeckId, RequireSuccess(await writes.DeleteAsync(
             deck.DeckId,
             deck.Revision,
+            $"delete deck {deck.DeckId:D}",
             TestContext.Current.CancellationToken)).DeletedId);
     }
 
+
+    /// <summary>
+    /// Verifies the deck delete, backup delete, and backup restore refuse a missing phrase, a phrase for another target,
+    /// and a phrase with other case, name the confirmation argument, show the exact phrase, and change nothing.
+    /// </summary>
+    [Fact]
+    public async Task DestructiveTools_RefuseAWrongPhrase_AndShowTheExactPhrase()
+    {
+        CancellationToken token = TestContext.Current.CancellationToken;
+        using TemporaryDirectory temporary = new();
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        using UninstalledCardData cardData = new();
+        DeckWriteTools writes = new(store, OperationMode.Local, cardData.Resolver);
+        DeckWriteResult deck = RequireSuccess(
+            await writes.CreateAsync(new DeckCreateRequest("Keep"), cancellationToken: token));
+        DeckBackup backup = RequireSuccess(await writes.CreateBackupAsync(token));
+        string fingerprint = RequireSuccess(await store.Backups.ListAsync(token)).CurrentDatabaseFingerprint!;
+        Guid other = Guid.CreateVersion7();
+
+        OperationInvalidInput[] refusals =
+        [
+            Invalid(await writes.DeleteAsync(deck.DeckId, deck.Revision, string.Empty, token)),
+            Invalid(await writes.DeleteAsync(deck.DeckId, deck.Revision, $"delete deck {other:D}", token)),
+            Invalid(await writes.DeleteBackupAsync(backup.BackupId, $"DELETE BACKUP {backup.BackupId:D}", token)),
+            Invalid(await writes.RestoreBackupAsync(backup.BackupId, fingerprint, $"restore backup {other:D}", token)),
+        ];
+
+        Assert.All(refusals, refusal =>
+        {
+            Assert.Equal("confirmation-required", refusal.ReasonCode);
+            Assert.Equal("confirmation", refusal.Path);
+        });
+        Assert.Equal($"confirmation must be exactly \"delete deck {deck.DeckId:D}\".", refusals[0].Message);
+        Assert.Equal($"confirmation must be exactly \"delete backup {backup.BackupId:D}\".", refusals[2].Message);
+        Assert.Equal($"confirmation must be exactly \"restore backup {backup.BackupId:D}\".", refusals[3].Message);
+        Assert.Single(RequireSuccess(await store.ListAsync(0, 10, token)).Items);
+        Assert.Single(RequireSuccess(await store.Backups.ListAsync(token)).Items);
+    }
     /// <summary>
     /// Verifies defense-in-depth mode enforcement rejects direct write invocation without creating storage.
     /// </summary>
@@ -147,6 +188,14 @@ public sealed class DeckWriteToolsTests
             changes,
             returnDeck: true,
             cancellationToken: TestContext.Current.CancellationToken)).Deck!;
+    }
+
+    /// <summary>
+    /// Extracts an invalid-input refusal or fails with the actual result case.
+    /// </summary>
+    private static OperationInvalidInput Invalid<T>(OperationResult<T> result)
+    {
+        return Assert.IsType<OperationInvalidInput>(result.Value);
     }
 
     /// <summary>

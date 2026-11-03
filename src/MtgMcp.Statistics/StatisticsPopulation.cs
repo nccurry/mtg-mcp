@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.Statistics;
@@ -180,17 +181,21 @@ internal static class StatisticsPopulationValidator
     {
         if (population is null)
         {
-            return Invalid("population is required.");
+            return Invalid("population is required.", "request.population");
         }
 
         if (population.Buckets is null || population.Buckets.Count == 0)
         {
-            return Invalid("population.buckets must contain at least one bucket.");
+            return Invalid(
+                "population.buckets must contain at least one bucket.",
+                "request.population.buckets");
         }
 
         if (population.DeclaredGroups is null)
         {
-            return Invalid("population.declaredGroups is required.");
+            return Invalid(
+                "population.declaredGroups is required.",
+                "request.population.declaredGroups");
         }
 
         HashSet<string> declared = new(StringComparer.Ordinal);
@@ -199,7 +204,8 @@ internal static class StatisticsPopulationValidator
             if (!TryValidateGroup(rawGroup, out string group) || !declared.Add(group))
             {
                 return Invalid(
-                    "population.declaredGroups must contain unique, nonblank, unpadded names.");
+                    "population.declaredGroups must contain unique, nonblank, unpadded names.",
+                    "request.population.declaredGroups");
             }
         }
 
@@ -215,16 +221,18 @@ internal static class StatisticsPopulationValidator
 
         Dictionary<string, int> countsBySignature = new(StringComparer.Ordinal);
         long total = 0;
-        foreach (StatisticsPopulationBucket? bucket in population.Buckets)
+        for (int index = 0; index < population.Buckets.Count; index++)
         {
+            StatisticsPopulationBucket? bucket = population.Buckets[index];
+            string at = $"population.buckets[{index.ToString(CultureInfo.InvariantCulture)}]";
             if (bucket is null || bucket.Count <= 0)
             {
-                return Invalid("population.buckets[].count must be positive.");
+                return Invalid($"{at}.count must be positive.", $"request.{at}.count");
             }
 
             if (bucket.Groups is null)
             {
-                return Invalid("population.buckets[].groups is required.");
+                return Invalid($"{at}.groups is required.", $"request.{at}.groups");
             }
 
             HashSet<string> bucketGroups = new(StringComparer.Ordinal);
@@ -235,7 +243,8 @@ internal static class StatisticsPopulationValidator
                     !bucketGroups.Add(group))
                 {
                     return Invalid(
-                        "population.buckets[].groups must contain unique exact declared names.");
+                        $"{at}.groups must contain unique exact declared names.",
+                        $"request.{at}.groups");
                 }
             }
 
@@ -296,9 +305,9 @@ internal static class StatisticsPopulationValidator
     /// <summary>
     /// Creates one stable malformed-population result.
     /// </summary>
-    private static OperationInvalidInput Invalid(string message)
+    private static OperationInvalidInput Invalid(string message, string path)
     {
-        return new OperationInvalidInput("invalid-statistics-population", message);
+        return new OperationInvalidInput("invalid-statistics-population", message, path);
     }
 
     /// <summary>

@@ -28,7 +28,7 @@ internal sealed class ArchidektSnapshotTransport
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
-        deckId = ArchidektContract.Required(deckId, nameof(deckId));
+        deckId = ArchidektContract.Required(deckId, "remoteDeckId");
         ArchidektSession.ProviderResponse response = await session.SendAsync(
             HttpMethod.Get,
             $"api/decks/{Uri.EscapeDataString(deckId)}/snapshots/",
@@ -55,7 +55,7 @@ internal sealed class ArchidektSnapshotTransport
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
-        deckId = ArchidektContract.Required(deckId, nameof(deckId));
+        deckId = ArchidektContract.Required(deckId, "remoteDeckId");
         snapshotId = ArchidektContract.Required(snapshotId, nameof(snapshotId));
         ArchidektSession.ProviderResponse response = await session.SendAsync(
             HttpMethod.Get,

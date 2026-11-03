@@ -35,13 +35,13 @@ public sealed class ToolSurfaceRulesTests : IClassFixture<ToolCatalogFixture>
     private static readonly MergedTool[] MergedTools =
     [
         new("scryfall_cards_get", true, ["lookups"], null, []),
-        new("scryfall_card_details", true, ["include", "lookup"], "include", ["printsCursor", "rulingsCursor"]),
+        new("scryfall_card_details", true, ["include", "lookup"], "include", []),
         new("scryfall_reference_get", true, ["kind"], "kind",
             ["codeOrId", "catalogName", "includeRaw", "cursor", "pageSize"]),
         new("scryfall_request_snapshots_get", false, ["kind"], "kind",
-            ["snapshotId", "operation", "retrievedAfterUtc", "retrievedBeforeUtc", "includeRaw"]),
+            ["requestSnapshotId", "operation", "retrievedAfterUtc", "retrievedBeforeUtc", "includeRaw"]),
         new("archidekt_folders_get", true, ["kind"], "kind", ["folderId"]),
-        new("archidekt_snapshots_get", true, ["deckId", "kind"], "kind", ["snapshotId"]),
+        new("archidekt_snapshots_get", true, ["kind", "remoteDeckId"], "kind", ["snapshotId"]),
     ];
 
     /// <summary>

@@ -68,6 +68,8 @@ public sealed class ToolResultBudgetTests
         Assert.True(
             outcomes.Max(value => value.Characters) > 5_000,
             "The fixtures never produced a large result, so the test proves nothing.");
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -92,7 +94,7 @@ public sealed class ToolResultBudgetTests
     }
 
     /// <summary>
-    /// Tells whether a result says it was cut: a next offset or cursor, or <c>truncated</c> set to true, in the result
+    /// Tells whether a result says it was cut: a next cursor, or <c>truncated</c> set to true, in the result
     /// or in a result object inside it.
     /// </summary>
     private static bool ShowsPaging(JsonElement node)
@@ -104,9 +106,7 @@ public sealed class ToolResultBudgetTests
 
         foreach (JsonProperty property in node.EnumerateObject())
         {
-            bool next =
-                property.Name is "nextOffset" or "nextCursor" or "nextOperationOffset" or "nextDifferenceOffset";
-            if ((next && property.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number) ||
+            if ((property.Name == "nextCursor" && property.Value.ValueKind == JsonValueKind.String) ||
                 (property.Name == "truncated" && property.Value.ValueKind == JsonValueKind.True) ||
                 ShowsPaging(property.Value))
             {
@@ -133,10 +133,10 @@ public sealed class ToolResultBudgetTests
         const string playgroup =
             "Playgroup HTTP transport takes no injected handler, so no offline fixture can fill it; its list " +
             "results are " +
-            "cut by the provider's own page and limit arguments.";
+            "cut by cursor and pageSize.";
         const string spellbook =
             "Commander Spellbook HTTP transport takes no injected handler, so no offline fixture can fill it; its " +
-            "results are cut by the limit and offset arguments.";
+            "results are cut to the result limit and paged by cursor and pageSize.";
         const string archidektWrite =
             "The fake Archidekt has no route for this write, and the result is one fixed-size outcome that does " +
             "not grow " +

@@ -40,7 +40,8 @@ internal static partial class ToolCallPolicy
     internal static JsonSerializerOptions SerializerOptions { get; } = CreateSerializerOptions();
 
     /// <summary>
-    /// Wraps the tool call pipeline so failures carry the MCP error flag and binding failures name their path.
+    /// Wraps the tool call pipeline: checks the arguments before the call, diagnoses binding failures after it, and
+    /// marks failed results with the MCP error flag.
     /// </summary>
     internal static McpRequestHandler<CallToolRequestParams, CallToolResult> Filter(
         McpRequestHandler<CallToolRequestParams, CallToolResult> next)

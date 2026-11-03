@@ -137,7 +137,7 @@ public sealed class SpellbookService : IDisposable
     {
         if (request is null)
         {
-            throw Invalid("invalid-variant-search", "request is required.");
+            throw Invalid("invalid-variant-search", "request is required.", "sourceQuery");
         }
 
         string sourceQuery = SpellbookContract.RequiredSourceQuery(request.SourceQuery, nameof(request.SourceQuery));
@@ -194,7 +194,7 @@ public sealed class SpellbookService : IDisposable
     {
         if (request is null)
         {
-            throw Invalid("invalid-deck-combo-request", "request is required.");
+            throw Invalid("invalid-deck-combo-request", "request is required.", "deckId");
         }
 
         SpellbookDeckRequest deck = SpellbookContract.Deck(request.Deck);
@@ -369,7 +369,10 @@ public sealed class SpellbookService : IDisposable
         {
             return exception.Kind switch
             {
-                SpellbookFailureKind.InvalidInput => new OperationInvalidInput(exception.ReasonCode, exception.Message),
+                SpellbookFailureKind.InvalidInput => new OperationInvalidInput(
+                    exception.ReasonCode,
+                    exception.Message,
+                    exception.Path),
                 SpellbookFailureKind.NotFound => new OperationNotFound(exception.ReasonCode, exception.Message),
                 SpellbookFailureKind.Unsupported => new OperationUnsupported(exception.ReasonCode, exception.Message),
                 SpellbookFailureKind.Unavailable or SpellbookFailureKind.RateLimited => new OperationUnavailable(
@@ -396,8 +399,8 @@ public sealed class SpellbookService : IDisposable
     /// <summary>
     /// Creates one safe invalid-input failure before source or cache work starts.
     /// </summary>
-    private static SpellbookProviderException Invalid(string reasonCode, string message)
+    private static SpellbookProviderException Invalid(string reasonCode, string message, string path)
     {
-        return new SpellbookProviderException(SpellbookFailureKind.InvalidInput, reasonCode, message);
+        return new SpellbookProviderException(SpellbookFailureKind.InvalidInput, reasonCode, message, path: path);
     }
 }

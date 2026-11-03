@@ -2,6 +2,7 @@ using System.Text.Json;
 using MtgMcp.App.Decks;
 using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.App.Tests;
@@ -27,22 +28,22 @@ public sealed class DeckImportPreviewPagingTests
     {
         DeckImportPreview preview = HeavyPreview();
         List<DeckImportPreviewView> pages = [];
-        int offset = 0;
+        string? cursor = null;
 
         while (true)
         {
-            OperationResult<DeckImportPreviewView> result = DeckPreviewPaging.PageImport(preview, offset, null);
+            OperationResult<DeckImportPreviewView> result = DeckPreviewPaging.PageImport(preview, cursor, 100);
             DeckImportPreviewView page = Assert.IsType<OperationSuccess<DeckImportPreviewView>>(result.Value).Data;
             Assert.True(
                 ResultSize.Measure(result) < ResultSizeTarget,
-                $"page at {offset} takes {ResultSize.Measure(result)} bytes");
+                $"page {pages.Count} takes {ResultSize.Measure(result)} bytes");
             pages.Add(page);
-            if (page.NextOffset is not int next)
+            if (page.NextCursor is null)
             {
                 break;
             }
 
-            offset = next;
+            cursor = page.NextCursor;
         }
 
         DeckImportPreviewView first = pages[0];
@@ -91,14 +92,106 @@ public sealed class DeckImportPreviewPagingTests
             []);
 
         DeckImportPreviewView page = Assert.IsType<OperationSuccess<DeckImportPreviewView>>(
-            DeckPreviewPaging.PageImport(preview, 0, null).Value).Data;
+            DeckPreviewPaging.PageImport(preview, null, 100).Value).Data;
 
         Assert.Null(page.Truncated);
-        Assert.Null(page.NextOffset);
+        Assert.Null(page.NextCursor);
         Assert.Null(page.HeaderListsCut);
         Assert.Single(page.Proposal!.Entries);
         Assert.Single(page.Proposal.Categories);
         Assert.Single(page.Proposal.CategoryAssignments);
+    }
+
+    /// <summary>
+    /// Verifies a cursor whose offset is past the last entry is an invalid cursor at the cursor path, while an offset at
+    /// the end of the list still reads an empty last page.
+    /// </summary>
+    [Fact]
+    public void PageImport_WithAnOffsetPastTheEntries_IsAnInvalidCursor()
+    {
+        DeckImportPreview preview = new(
+            "generic-text-v1",
+            "complete",
+            "fingerprint",
+            Proposal([Entry(0)], [], [], [], []),
+            [],
+            0,
+            []);
+        PageCursorBinding binding = Binding("local_deck_import_preview", "fingerprint");
+
+        OperationInvalidInput past = Assert.IsType<OperationInvalidInput>(DeckPreviewPaging.PageImport(
+            preview,
+            PageCursor.Encode(PageCursorPosition.AtOffset(2), binding),
+            100).Value);
+        DeckImportPreviewView end = Assert.IsType<OperationSuccess<DeckImportPreviewView>>(DeckPreviewPaging.PageImport(
+            preview,
+            PageCursor.Encode(PageCursorPosition.AtOffset(1), binding),
+            100).Value).Data;
+
+        Assert.Equal(("invalid-cursor", "cursor"), (past.ReasonCode, past.Path));
+        Assert.Empty(end.Proposal!.Entries);
+    }
+
+    /// <summary>
+    /// Verifies a cursor whose offset is past the last identity row is an invalid cursor at the cursor path.
+    /// </summary>
+    [Fact]
+    public void PageIdentity_WithAnOffsetPastTheRows_IsAnInvalidCursor()
+    {
+        Guid deckId = Guid.NewGuid();
+        DeckIdentityReconciliationPreview preview = new(deckId, 3, [], true, 0, null, "fingerprint", "token");
+        PageCursorBinding binding = Binding("local_deck_identity_reconcile_preview", "fingerprint", deckId, 3);
+
+        OperationInvalidInput past = Assert.IsType<OperationInvalidInput>(DeckPreviewPaging.PageIdentity(
+            preview,
+            PageCursor.Encode(PageCursorPosition.AtOffset(1), binding),
+            100).Value);
+
+        Assert.Equal(("invalid-cursor", "cursor"), (past.ReasonCode, past.Path));
+    }
+
+    /// <summary>
+    /// Verifies a cursor issued by one preview tool is invalid on another preview tool even when the deck, revision,
+    /// and fingerprint match, while the tool that issued it accepts it.
+    /// </summary>
+    [Fact]
+    public void PageCategoryRules_WithACursorOfAnotherPreviewTool_IsAnInvalidCursor()
+    {
+        Guid deckId = Guid.NewGuid();
+        CategoryRuleSet rules = new("add-only", []);
+        DeckCategoryRulesPreview preview = new(
+            deckId,
+            3,
+            new InlineCategoryRuleSource(rules),
+            rules,
+            [],
+            true,
+            "fingerprint",
+            "token",
+            null);
+        string own = PageCursor.Encode(
+            PageCursorPosition.AtOffset(0),
+            Binding("local_deck_category_rules_preview", "fingerprint", deckId, 3));
+        string foreign = PageCursor.Encode(
+            PageCursorPosition.AtOffset(0),
+            Binding("local_deck_identity_reconcile_preview", "fingerprint", deckId, 3));
+
+        OperationInvalidInput other = Assert.IsType<OperationInvalidInput>(
+            DeckPreviewPaging.PageCategoryRules(preview, foreign, 100).Value);
+
+        Assert.Equal(("invalid-cursor", "cursor"), (other.ReasonCode, other.Path));
+        Assert.IsType<OperationSuccess<DeckCategoryRulesPreviewView>>(
+            DeckPreviewPaging.PageCategoryRules(preview, own, 100).Value);
+    }
+
+    /// <summary>
+    /// Builds the binding a preview tool gives its cursors.
+    /// </summary>
+    private static PageCursorBinding Binding(string tool, string fingerprint, Guid? deckId = null, long revision = 0)
+    {
+        PageCursorBinding binding = PageCursorBinding.ForRequest(RequestHash.Of((tool, typeof(string))))
+            .And(PageCursorBinding.ForPreview(fingerprint));
+        return deckId is Guid id ? binding.And(PageCursorBinding.ForDeck(id, revision)) : binding;
     }
 
     /// <summary>

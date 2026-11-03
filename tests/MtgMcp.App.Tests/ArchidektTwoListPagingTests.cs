@@ -1,5 +1,6 @@
 using MtgMcp.App.Archidekt;
 using MtgMcp.Archidekt;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.App.Tests;
@@ -11,15 +12,13 @@ namespace MtgMcp.App.Tests;
 public sealed class ArchidektTwoListPagingTests
 {
     /// <summary>
-    /// Verifies a caller that passes only the next offsets a page names reaches every difference and every operation
-    /// exactly once when the operations end on the first page and the differences go on for many pages.
+    /// Builds a push preview with the given number of operations and many large differences.
     /// </summary>
-    [Fact]
-    public void PushPreview_OperationsEndBeforeDifferences_FollowingTheFieldsAloneReadsEveryRowOnce()
+    private static ArchidektSyncPreview BuildPreview(string fingerprint, int differenceCount, int operationCount = 3)
     {
         List<ArchidektDifference> differences =
         [
-            .. Enumerable.Range(0, 200).Select(index => new ArchidektDifference(
+            .. Enumerable.Range(0, differenceCount).Select(index => new ArchidektDifference(
                 $"/entries/{index:000}",
                 "local-changed",
                 null,
@@ -28,68 +27,161 @@ public sealed class ArchidektTwoListPagingTests
         ];
         List<ArchidektRemoteOperation> operations =
         [
-            .. Enumerable.Range(1, 3).Select(index => new ArchidektRemoteOperation(index, "entry-update", "x", "y")),
+            .. Enumerable.Range(1, operationCount).Select(index => new ArchidektRemoteOperation(index, "entry-update", "x", "y")),
         ];
-        ArchidektSyncPreview preview = new(
-            "push", Guid.NewGuid(), 1, "42", "remote", "content", "preview", false, differences, operations, 3);
+        return new ArchidektSyncPreview(
+            "push", Guid.NewGuid(), 1, "42", "remote", "content", fingerprint, false, differences, operations, operationCount);
+    }
+
+    /// <summary>
+    /// Verifies a caller that passes only nextCursor reaches every difference and every operation exactly once when
+    /// the operations end on the first page and the differences go on for many pages, and that the last page has no
+    /// next cursor.
+    /// </summary>
+    [Fact]
+    public void PushPreview_OperationsEndBeforeDifferences_FollowingNextCursorReadsEveryRowOnce()
+    {
+        ArchidektSyncPreview preview = BuildPreview("preview", 200);
         List<string> paths = [];
         List<int> sequences = [];
-        int operationOffset = 0;
-        int differenceOffset = 0;
+        string? cursor = null;
         int pages = 0;
 
         while (true)
         {
-            OperationResult<ArchidektSyncPreviewView> result =
-                ArchidektResultPaging.PagePreview(preview, operationOffset, differenceOffset, null, "preview");
-            ArchidektSyncPreviewView page =
-                Assert.IsType<OperationSuccess<ArchidektSyncPreviewView>>(result.Value).Data;
+            ArchidektSyncPreviewView page = Assert.IsType<OperationSuccess<ArchidektSyncPreviewView>>(
+                ArchidektResultPaging.PagePreview(
+                    preview,
+                    cursor,
+                    100,
+                    PageCursorBinding.None,
+                    null,
+                    ArchidektResponseFormat.Standard).Value).Data;
             paths.AddRange(page.Differences.Select(value => value.Path));
             sequences.AddRange(page.Operations.Select(value => value.Sequence));
             pages++;
             Assert.True(pages < 100, "the pages never ended");
-            if (page.Truncated is null)
+            if (page.NextCursor is null)
             {
-                Assert.Null(page.NextOperationOffset);
-                Assert.Null(page.NextDifferenceOffset);
+                Assert.Null(page.Truncated);
                 break;
             }
 
-            operationOffset = Assert.NotNull(page.NextOperationOffset);
-            differenceOffset = Assert.NotNull(page.NextDifferenceOffset);
+            Assert.True(page.Truncated);
+            cursor = page.NextCursor;
         }
 
         Assert.True(pages > 2);
         Assert.Equal([1, 2, 3], sequences);
-        Assert.Equal(differences.Select(value => value.Path), paths);
+        Assert.Equal(preview.Differences.Select(value => value.Path), paths);
     }
 
     /// <summary>
-    /// Verifies a request whose offsets lie past a preview that has shrunk is told the preview changed when it names
-    /// another fingerprint, and told the offset is out of range only when the fingerprint is the preview's own.
+    /// Verifies a caller that passes only nextCursor reads every operation and every difference exactly once when the
+    /// operations alone span several pages, when a page ends exactly where the operations end, and when the operations
+    /// fill the first page with no difference after them.
+    /// </summary>
+    [Theory]
+    [InlineData(7, 10, 3)]
+    [InlineData(6, 9, 3)]
+    [InlineData(3, 6, 3)]
+    [InlineData(3, 0, 3)]
+    [InlineData(9, 2, 4)]
+    public void PushPreview_FollowingNextCursor_ReadsEveryOperationAndDifferenceExactlyOnce(
+        int operationCount,
+        int differenceCount,
+        int pageSize)
+    {
+        ArchidektSyncPreview preview = BuildPreview("preview", differenceCount, operationCount);
+        List<string> paths = [];
+        List<int> sequences = [];
+        string? cursor = null;
+        int pages = 0;
+
+        do
+        {
+            ArchidektSyncPreviewView page = Assert.IsType<OperationSuccess<ArchidektSyncPreviewView>>(
+                ArchidektResultPaging.PagePreview(
+                    preview,
+                    cursor,
+                    pageSize,
+                    PageCursorBinding.None,
+                    null,
+                    ArchidektResponseFormat.Standard).Value).Data;
+            Assert.True(page.Operations.Count + page.Differences.Count <= pageSize);
+            paths.AddRange(page.Differences.Select(value => value.Path));
+            sequences.AddRange(page.Operations.Select(value => value.Sequence));
+            cursor = page.NextCursor;
+            pages++;
+            Assert.True(pages < 100, "the pages never ended");
+        }
+        while (cursor is not null);
+
+        Assert.Equal(Enumerable.Range(1, operationCount), sequences);
+        Assert.Equal(preview.Differences.Select(value => value.Path), paths);
+        Assert.Equal((operationCount + differenceCount + pageSize - 1) / pageSize, pages);
+    }
+
+    /// <summary>
+    /// Verifies the rows of both lists together never pass the page size.
     /// </summary>
     [Fact]
-    public void PushPreview_OffsetsPastAShrunkPreview_ReportTheChangeBeforeTheOffset()
+    public void PushPreview_PageSize_CapsTheRowsOfBothLists()
     {
-        ArchidektSyncPreview preview = new(
-            "push",
-            Guid.NewGuid(),
-            1,
-            "42",
-            "remote",
-            "content",
-            "now",
-            false,
-            [new ArchidektDifference("/entries/000", "local-changed", null, "a", "b")],
-            [new ArchidektRemoteOperation(1, "entry-update", "x", "y")],
-            1);
+        ArchidektSyncPreview preview = BuildPreview("preview", 10);
 
-        OperationResult<ArchidektSyncPreviewView> changed =
-            ArchidektResultPaging.PagePreview(preview, 50, 50, null, "before");
-        OperationResult<ArchidektSyncPreviewView> outOfRange =
-            ArchidektResultPaging.PagePreview(preview, 50, 50, null, "now");
+        ArchidektSyncPreviewView page = Assert.IsType<OperationSuccess<ArchidektSyncPreviewView>>(
+            ArchidektResultPaging.PagePreview(
+                preview,
+                null,
+                5,
+                PageCursorBinding.None,
+                null,
+                ArchidektResponseFormat.Standard).Value).Data;
 
-        Assert.Equal("preview-changed", Assert.IsType<OperationConflict>(changed.Value).ReasonCode);
-        Assert.Equal("operationOffset", Assert.IsType<OperationInvalidInput>(outOfRange.Value).Path);
+        Assert.Equal(3, page.Operations.Count);
+        Assert.Equal(2, page.Differences.Count);
+        Assert.NotNull(page.NextCursor);
+    }
+
+    /// <summary>
+    /// Verifies a cursor from a preview that has since changed is refused as stale with the current preview, and a
+    /// cursor that is not one of this tool is invalid at the cursor argument.
+    /// </summary>
+    [Fact]
+    public void PushPreview_CursorOfAnotherPreview_IsStale_AndAMalformedCursorIsInvalid()
+    {
+        ArchidektSyncPreview before = BuildPreview("before", 200);
+        string cursor = Assert.IsType<OperationSuccess<ArchidektSyncPreviewView>>(
+            ArchidektResultPaging.PagePreview(
+                before,
+                null,
+                100,
+                PageCursorBinding.None,
+                null,
+                ArchidektResponseFormat.Standard).Value).Data.NextCursor!;
+        ArchidektSyncPreview now = BuildPreview("now", 1);
+
+        OperationConflict stale = Assert.IsType<OperationConflict>(
+            ArchidektResultPaging.PagePreview(
+                now,
+                cursor,
+                100,
+                PageCursorBinding.None,
+                null,
+                ArchidektResponseFormat.Standard).Value);
+        OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(
+            ArchidektResultPaging.PagePreview(
+                now,
+                "not-a-cursor",
+                100,
+                PageCursorBinding.None,
+                null,
+                ArchidektResponseFormat.Standard).Value);
+
+        Assert.Equal("cursor-stale", stale.ReasonCode);
+        Assert.Equal("now", stale.Current?.PreviewFingerprint);
+        Assert.Equal("invalid-cursor", invalid.ReasonCode);
+        Assert.Equal("cursor", invalid.Path);
     }
 }

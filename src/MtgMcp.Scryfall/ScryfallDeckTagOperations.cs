@@ -72,7 +72,8 @@ internal sealed class ScryfallDeckTagOperations
         {
             return new OperationInvalidInput(
                 "invalid-freshness-policy",
-                "Freshness policy must be default, cache-only, or refresh.");
+                "Freshness policy must be default, cache-only, or refresh.",
+                "freshnessPolicy");
         }
 
         if (string.Equals(freshnessPolicy, "refresh", StringComparison.Ordinal))

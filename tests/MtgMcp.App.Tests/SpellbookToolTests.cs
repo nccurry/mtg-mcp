@@ -84,7 +84,7 @@ public sealed class SpellbookToolTests
             TestContext.Current.CancellationToken);
 
         OperationConflict staleConflict = Assert.IsType<OperationConflict>(stale.Value);
-        Assert.Equal("deck-revision-conflict", staleConflict.ReasonCode);
+        Assert.Equal(SharedReasonCodes.StaleDeckRevision, staleConflict.ReasonCode);
         Assert.Equal(new ConflictState(Revision: sideboardOnly.Revision), staleConflict.Current);
         Assert.Equal(
             "invalid-spellbook-deck-selection",
@@ -204,7 +204,7 @@ public sealed class SpellbookToolTests
             "0.9.0-preview.1");
         SpellbookReadTools tools = new(service, new SpellbookDeckInputResolver(store));
 
-        OperationResult<SpellbookEvidence> search = await tools.SearchVariantsAsync(
+        OperationResult<SpellbookVariantPage> search = await tools.SearchVariantsAsync(
             string.Empty,
             cancellationToken: TestContext.Current.CancellationToken);
         OperationResult<SpellbookEvidence> variant = await tools.GetVariantAsync(
@@ -215,9 +215,12 @@ public sealed class SpellbookToolTests
             0,
             cancellationToken: TestContext.Current.CancellationToken);
 
+        Assert.Equal("sourceQuery", Assert.IsType<OperationInvalidInput>(search.Value).Path);
         Assert.Equal("invalid-source-query", Assert.IsType<OperationInvalidInput>(search.Value).ReasonCode);
         Assert.Equal("invalid-variant-id", Assert.IsType<OperationInvalidInput>(variant.Value).ReasonCode);
+        Assert.Equal("variantId", Assert.IsType<OperationInvalidInput>(variant.Value).Path);
         Assert.Equal("invalid-spellbook-deck-selection", Assert.IsType<OperationInvalidInput>(deck.Value).ReasonCode);
+        Assert.Equal("deckId", Assert.IsType<OperationInvalidInput>(deck.Value).Path);
         Assert.False(File.Exists(Path.Combine(temporary.Path, "spellbook.db")));
     }
 

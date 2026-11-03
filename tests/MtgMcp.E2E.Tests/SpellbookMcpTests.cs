@@ -31,9 +31,9 @@ public sealed class SpellbookMcpTests
             {
                 ["spellbook_deck_bracket_facts_get"] = ["deckId", "expectedRevision"],
                 ["spellbook_deck_combos_find"] =
-                    ["deckId", "expectedRevision", "groupByCombo", "limit", "offset", "sourceQuery"],
+                    ["cursor", "deckId", "expectedRevision", "groupByCombo", "pageSize", "sourceQuery"],
                 ["spellbook_variant_get"] = ["variantId"],
-                ["spellbook_variant_search"] = ["groupByCombo", "limit", "offset", "sourceQuery"],
+                ["spellbook_variant_search"] = ["cursor", "groupByCombo", "pageSize", "sourceQuery"],
             };
 
             Assert.Equal(expectedProperties.Keys.Order(StringComparer.Ordinal), tools.Select(tool => tool.Name));
@@ -94,8 +94,7 @@ public sealed class SpellbookMcpTests
             new Dictionary<string, object?>
             {
                 ["sourceQuery"] = "type:combo",
-                ["limit"] = 20,
-                ["offset"] = 0,
+                ["pageSize"] = 20,
                 ["groupByCombo"] = true,
             }).ConfigureAwait(false);
         JsonElement variant = await CallSuccessAsync(
@@ -110,13 +109,12 @@ public sealed class SpellbookMcpTests
                 ["deckId"] = deckId,
                 ["expectedRevision"] = revision,
                 ["sourceQuery"] = "type:combo",
-                ["limit"] = 20,
-                ["offset"] = 0,
+                ["pageSize"] = 20,
                 ["groupByCombo"] = true,
             }).ConfigureAwait(false);
 
-        Assert.Equal("cached", search.GetProperty("cacheStatus").GetString());
-        Assert.Equal("type:combo", search.GetProperty("request").GetProperty("sourceQuery").GetString());
+        Assert.Equal("cached", search.GetProperty("source").GetProperty("cacheStatus").GetString());
+        Assert.Equal("type:combo", search.GetProperty("source").GetProperty("request").GetProperty("sourceQuery").GetString());
         Assert.Equal("cached", variant.GetProperty("cacheStatus").GetString());
         Assert.Equal("fixture-variant", variant.GetProperty("request").GetProperty("variantId").GetString());
         JsonElement selectedDeck = combos.GetProperty("deck");

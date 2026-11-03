@@ -213,10 +213,53 @@ public sealed class DeckIdentityReconciliationTests
             true,
             false,
             TestContext.Current.CancellationToken)).Value);
-        Assert.Equal("deck-revision-conflict", stale.ReasonCode);
+        Assert.Equal("stale-deck-revision", stale.ReasonCode);
         Assert.Equal(new ConflictState(Revision: applied.Revision), stale.Current);
     }
 
+    /// <summary>
+    /// Verifies an apply whose valid token names a fingerprint other than the one the replayed evidence recomputes is
+    /// preview-changed with the recomputed fingerprint, and leaves the deck unchanged.
+    /// </summary>
+    [Fact]
+    public async Task Apply_WithAFingerprintOtherThanTheRecomputedOne_ReturnsPreviewChangedWithoutMutation()
+    {
+        using TemporaryDirectory temporary = new();
+        IdentityProviderHandler handler = new();
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        using ScryfallService scryfall = CreateScryfall(temporary.Path, handler);
+        DeckIdentityReconciliationCoordinator coordinator = new(store, scryfall);
+        DeckDocument deck = RequireSuccess(await store.CreateAsync(
+            new DeckCreateRequest("Changed Fixture", Entries: [new DeckEntryDraft(1, "canonical card")]),
+            TestContext.Current.CancellationToken));
+        DeckIdentityReconciliationPreview preview = RequireSuccess(await coordinator.PreviewAsync(
+            deck.DeckId,
+            deck.Revision,
+            null,
+            "default",
+            TestContext.Current.CancellationToken));
+        DeckIdentityApplyToken tokens = coordinator.Tokens;
+        Assert.True(tokens.TryDecode(preview.ApplyToken, out DeckIdentityApplyTokenPayload? payload));
+        const string Other = "not-the-recomputed-fingerprint";
+        string forged = tokens.Encode(payload! with { PreviewFingerprint = Other });
+
+        OperationConflict conflict = Assert.IsType<OperationConflict>((await coordinator.ApplyAsync(
+            deck.DeckId,
+            deck.Revision,
+            Other,
+            forged,
+            allowPartial: false,
+            returnDeck: false,
+            TestContext.Current.CancellationToken)).Value);
+
+        Assert.Equal("preview-changed", conflict.ReasonCode);
+        Assert.Equal(preview.PreviewFingerprint, conflict.Current?.PreviewFingerprint);
+        DeckDocument unchanged = RequireSuccess(await store.GetAsync(
+            deck.DeckId,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(deck.Revision, unchanged.Revision);
+        Assert.Equal(deck.Entries.ToArray(), unchanged.Entries.ToArray());
+    }
     /// <summary>
     /// Verifies a preview for a stale revision reports the current revision and makes no provider call.
     /// </summary>
@@ -239,7 +282,7 @@ public sealed class DeckIdentityReconciliationTests
             "default",
             TestContext.Current.CancellationToken)).Value);
 
-        Assert.Equal("deck-revision-conflict", conflict.ReasonCode);
+        Assert.Equal("stale-deck-revision", conflict.ReasonCode);
         Assert.Equal(new ConflictState(Revision: deck.Revision), conflict.Current);
         Assert.Empty(handler.RequestBodies);
     }
@@ -268,7 +311,7 @@ public sealed class DeckIdentityReconciliationTests
         _ = RequireSuccess(await scryfall.DeleteSnapshotAsync(
             snapshot.SnapshotId,
             snapshot.Checksum,
-            true,
+            $"delete request-snapshot {snapshot.SnapshotId:D}",
             TestContext.Current.CancellationToken));
 
         OperationUnavailable unavailable = Assert.IsType<OperationUnavailable>((await coordinator.ApplyAsync(

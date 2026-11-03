@@ -87,6 +87,11 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
     internal FakeArchidekt Fake { get; } = new();
 
     /// <summary>
+    /// Gets the record of invalid-input results the server returned without an argument path.
+    /// </summary>
+    internal InvalidInputPathAudit PathAudit { get; } = new();
+
+    /// <summary>
     /// Gets the fixture cards, in order.
     /// </summary>
     internal IReadOnlyList<JsonObject> Cards { get; private set; } = [];
@@ -149,6 +154,17 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
             ? value.GetString() ?? string.Empty
             : string.Empty;
         return new ToolOutcome(tool, result.IsError == true, kind, characters, structured);
+    }
+
+    /// <summary>
+    /// Fails when the server returned an invalid-input result without an argument path. A test calls it as its last
+    /// step, so a failure earlier in the test is never replaced by the audit.
+    /// </summary>
+    internal void AssertNoPathlessRefusals()
+    {
+        Assert.True(
+            PathAudit.Findings.Count == 0,
+            "Invalid-input results without a path:\n" + string.Join("\n", PathAudit.Findings));
     }
 
     /// <summary>
@@ -278,7 +294,9 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
         IMcpServerBuilder mcp = builder.Services
             .AddMcpServer()
             .WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream())
-            .WithRequestFilters(filters => filters.AddCallToolFilter(ToolCallPolicy.Filter));
+            .WithRequestFilters(filters => filters
+                .AddCallToolFilter(PathAudit.Filter)
+                .AddCallToolFilter(ToolCallPolicy.Filter));
         DeckToolsetManifest.Register(mcp, Store, scryfall, OperationMode.Remote);
         ScryfallToolsetManifest.Register(mcp, scryfall, OperationMode.Remote, new CardListAccess(Store, archidekt));
         StatisticsToolsetManifest.Register(mcp, Store, new ExactStatisticsCalculator("test"), scryfall);
@@ -327,7 +345,10 @@ internal sealed class ToolBudgetWorld : IAsyncDisposable
     private static JsonObject MakeCard(int index)
     {
         string[] types =
-            ["Creature — Elf Druid", "Instant", "Sorcery", "Artifact", "Enchantment", "Land", "Creature — Goblin Warrior"];
+            [
+                "Creature — Elf Druid", "Instant", "Sorcery", "Artifact", "Enchantment", "Land",
+                "Creature — Goblin Warrior",
+            ];
         string[] colors = ["G", "U", "B", "R", "W"];
         string color = colors[index % colors.Length];
         return CardJson.Make(

@@ -36,7 +36,14 @@ public sealed record RemoteDeckSummary(
     string? ParentFolderPath,
     int? CardCount,
     DateTimeOffset? UpdatedAtUtc,
-    string Fingerprint);
+    string Fingerprint)
+{
+    /// <summary>
+    /// Gets true when <c>Description</c> was cut to keep a page of summaries under the size limit.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? DescriptionTruncated { get; init; }
+}
 
 /// <summary>
 /// Preserves one provider category and the flags that influence board membership.
@@ -137,15 +144,14 @@ public sealed record RemoteDeckSnapshot(
 }
 
 /// <summary>
-/// Carries a canonically ordered page of remote deck summaries.
+/// Carries every deck the account owns, as summaries in canonical order.
 /// </summary>
-public sealed record RemoteDeckPage(
+public sealed record RemoteDeckList(
     IReadOnlyList<RemoteDeckSummary> Items,
-    string? NextCursor,
     ArchidektRetrievalEvidence Evidence)
 {
     /// <summary>
-    /// Gets the immutable page items.
+    /// Gets the immutable deck summaries.
     /// </summary>
     public IReadOnlyList<RemoteDeckSummary> Items { get; init; } =
         Array.AsReadOnly(Items.ToArray());
@@ -203,7 +209,7 @@ public sealed record RemoteFolderTree(
 /// </summary>
 public sealed record RemoteNamedSnapshotSummary(
     string SnapshotId,
-    string DeckId,
+    string RemoteDeckId,
     string Name,
     string? Description,
     DateTimeOffset? CreatedAtUtc,
@@ -412,7 +418,7 @@ public sealed record ArchidektConciseDifference(
 /// </summary>
 public sealed record ArchidektSyncDiff(
     Guid LocalDeckId,
-    long LocalRevision,
+    long Revision,
     string RemoteDeckId,
     string RemoteFingerprint,
     string? BaselineRemoteFingerprint,
@@ -432,7 +438,7 @@ public sealed record ArchidektSyncDiff(
 public sealed record ArchidektSyncPreview(
     string Direction,
     Guid? LocalDeckId,
-    long? LocalRevision,
+    long? Revision,
     string RemoteDeckId,
     string RemoteFingerprint,
     string ContentFingerprint,
@@ -490,7 +496,13 @@ public sealed record ArchidektPushPlan(
 /// Says why a push cannot be sent, with its reason code: <c>push-printing-unresolved</c> when a card has no Archidekt
 /// printing, <c>request-limit-exceeded</c> when the lookups or the push would pass the request limit.
 /// </summary>
-public sealed record ArchidektPushBlock(string Notice, string ReasonCode);
+public sealed record ArchidektPushBlock(string Notice, string ReasonCode)
+{
+    /// <summary>
+    /// Gets true when the push is blocked by the request limit rather than by an argument.
+    /// </summary>
+    public bool IsRequestLimit => ReasonCode == ArchidektProviderException.RequestLimitReasonCode;
+}
 
 /// <summary>
 /// Describes one previewed primitive provider operation without exposing transport payloads.
@@ -517,7 +529,7 @@ public sealed record ArchidektOperationStatus(
 public sealed record ArchidektApplyResult(
     string Outcome,
     Guid? LocalDeckId,
-    long? LocalRevision,
+    long? Revision,
     string RemoteDeckId,
     string? FinalRemoteFingerprint,
     IReadOnlyList<ArchidektOperationStatus> Operations)
@@ -591,7 +603,7 @@ public sealed record ArchidektFolderMoveResult(
 /// Carries a guarded snapshot restore preview.
 /// </summary>
 public sealed record ArchidektSnapshotRestorePreview(
-    string DeckId,
+    string RemoteDeckId,
     string SnapshotId,
     string SnapshotChecksum,
     string SnapshotContentFingerprint,

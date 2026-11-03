@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.App.Decks;
@@ -34,10 +35,6 @@ internal sealed record DeckExportChunk(string FileName, int Offset, string Conte
     /// </summary>
     public string? Narrow { get; init; }
 
-    /// <summary>
-    /// Gets the <c>offset</c> that returns the next chunk, or null on the last chunk.
-    /// </summary>
-    public int? NextOffset { get; init; }
 }
 
 /// <summary>
@@ -48,12 +45,18 @@ internal sealed record DeckExportBundleView(
     int SchemaVersion,
     string FormatId,
     Guid DeckId,
-    long DeckRevision,
+    long Revision,
     DateTimeOffset GeneratedAtUtc,
     string Status,
     IReadOnlyList<DeckExportArtifactInfo> Artifacts,
     DeckExportChunk Chunk,
-    IReadOnlyList<DeckFieldPreservation> Preservation);
+    IReadOnlyList<DeckFieldPreservation> Preservation)
+{
+    /// <summary>
+    /// Gets the <c>cursor</c> that returns the next chunk, or null on the last chunk.
+    /// </summary>
+    public string? NextCursor { get; init; }
+}
 
 /// <summary>
 /// Cuts an export bundle to the size at which Claude Code still shows a result inline.
@@ -68,7 +71,11 @@ internal static class DeckExportPaging
     /// <summary>
     /// Builds one chunk of one artifact of a bundle.
     /// </summary>
-    internal static OperationResult<DeckExportBundleView> Page(DeckExportBundle bundle, string? artifact, int offset)
+    internal static OperationResult<DeckExportBundleView> Page(
+        DeckExportBundle bundle,
+        string? artifact,
+        string? cursor,
+        int pageSize)
     {
         ArgumentNullException.ThrowIfNull(bundle);
         if (bundle.Artifacts.Count == 0)
@@ -88,36 +95,40 @@ internal static class DeckExportPaging
                 "artifact");
         }
 
+        if (ResultPage.CheckPageSize(pageSize, MaximumChunkBytes, "UTF-16 code units") is { } badSize)
+        {
+            return badSize;
+        }
+
+        PageCursorBinding binding = PageCursorBinding.ForArtifact(chosen.FileName, chosen.Sha256)
+            .And(PageCursorBinding.ForDeck(bundle.DeckId, bundle.DeckRevision));
+        OperationResult<PageCursorPosition> start = PageCursor.Decode(
+            cursor,
+            binding,
+            current: new ConflictState(bundle.DeckRevision));
+        if (start is not OperationSuccess<PageCursorPosition> position)
+        {
+            return OperationFailure.Forward<PageCursorPosition, DeckExportBundleView>(start);
+        }
+
         string content = chosen.Content;
-        if (ResultPage.CheckPage<DeckExportBundleView>(
-            null,
-            null,
-            new PageList("offset", offset, content.Length, "UTF-16 code units")) is { } refused)
+        int offset = position.Data.Offset;
+        if (offset > content.Length || (offset > 0 && offset < content.Length && char.IsLowSurrogate(content[offset])))
         {
-            return refused;
+            return PageCursor.Invalid();
         }
 
-        if (offset > 0 && offset < content.Length && char.IsLowSurrogate(content[offset]))
-        {
-            return new OperationInvalidInput(
-                "invalid-offset",
-                $"offset {offset} falls between the two halves of a surrogate pair (for example an emoji); use the " +
-                "nextOffset of the previous chunk.",
-                "offset");
-        }
-
-        int length = FitLength(content, offset);
+        int length = FitLength(content, offset, pageSize);
         int next = offset + length;
         bool more = next < content.Length;
         DeckExportChunk chunk = new(chosen.FileName, offset, content.Substring(offset, length))
         {
             Truncated = more ? true : null,
-            NextOffset = more ? next : null,
             Narrow = more
                 ? $"UTF-16 code units {offset} to {next - 1} of {content.Length} of {chosen.FileName} are shown to " +
-                    $"stay under the size limit. Call again with artifact \"{chosen.FileName}\" and offset " +
-                    $"{next} for the rest; the chunks joined in order are the whole file, and sha256 is the checksum " +
-                    "of the whole file."
+                    $"stay under the size limit. Call again with artifact \"{chosen.FileName}\" and " +
+                    $"cursor set to nextCursor for the rest; the chunks joined in order are the whole file, " +
+                    $"and sha256 is the checksum of the whole file."
                 : null,
         };
         return new OperationSuccess<DeckExportBundleView>(new DeckExportBundleView(
@@ -134,17 +145,20 @@ internal static class DeckExportPaging
                 value.Sha256,
                 value.Purpose))],
             chunk,
-            offset == 0 ? bundle.Preservation : []));
+            offset == 0 ? bundle.Preservation : [])
+        {
+            NextCursor = more ? PageCursor.Encode(PageCursorPosition.AtOffset(next), binding) : null,
+        });
     }
 
     /// <summary>
-    /// Finds how many characters from <paramref name="offset"/> fit the chunk limit once the server writes them as
-    /// JSON text, never ending a chunk inside a surrogate pair.
+    /// Finds how many characters from <paramref name="offset"/>, at most <paramref name="pageSize"/>, fit the
+    /// chunk limit once the server writes them as JSON text, never ending a chunk inside a surrogate pair.
     /// </summary>
-    private static int FitLength(string content, int offset)
+    private static int FitLength(string content, int offset, int pageSize)
     {
         JavaScriptEncoder encoder = ToolCallPolicy.SerializerOptions.Encoder ?? JavaScriptEncoder.Default;
-        int length = Math.Min(MaximumChunkBytes, content.Length - offset);
+        int length = Math.Min(pageSize, content.Length - offset);
         while (true)
         {
             length = WholeCharacters(content, offset, length);

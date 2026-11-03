@@ -46,7 +46,7 @@ public sealed class ToolsetNorthStarMcpTests
                 {
                     ["formatId"] = "generic-text-v1",
                     ["content"] = deckText,
-                    ["expectedFingerprint"] = preview.GetProperty("fingerprint").GetString(),
+                    ["previewFingerprint"] = preview.GetProperty("previewFingerprint").GetString(),
                     ["options"] = new
                     {
                         deckName = "Toolset Mock Commander",
@@ -108,6 +108,7 @@ public sealed class ToolsetNorthStarMcpTests
                 new Dictionary<string, object?>
                 {
                     ["deckId"] = deckId,
+                    ["confirmation"] = $"delete deck {deckId}",
                     ["expectedRevision"] = revision,
                 }).ConfigureAwait(false);
             JsonElement remaining = await CallSuccessAsync(

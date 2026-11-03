@@ -176,11 +176,13 @@ internal sealed class PlaygroupProviderException : Exception
         PlaygroupFailureKind kind,
         string reasonCode,
         string message,
-        Exception? innerException = null)
+        Exception? innerException = null,
+        string? path = null)
         : base(message, innerException)
     {
         Kind = kind;
         ReasonCode = reasonCode;
+        Path = path;
     }
 
     /// <summary>Gets the structured failure category.</summary>
@@ -188,4 +190,9 @@ internal sealed class PlaygroupProviderException : Exception
 
     /// <summary>Gets the stable machine-readable reason.</summary>
     internal string ReasonCode { get; }
+
+    /// <summary>
+    /// Gets the tool argument path an invalid-input failure refers to, or null when no argument is at fault.
+    /// </summary>
+    internal string? Path { get; }
 }

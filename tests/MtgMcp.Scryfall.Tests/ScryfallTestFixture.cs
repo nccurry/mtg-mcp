@@ -178,6 +178,15 @@ internal static class ScryfallTestFixture
             comment = string.Empty,
             fixture_extension = 2,
         });
+        string redRuling = JsonSerializer.Serialize(new
+        {
+            @object = "ruling",
+            oracle_id = RedOracleId,
+            source = "wotc",
+            published_at = "2026-07-06",
+            comment = "Red fixture ruling.",
+            fixture_extension = 3,
+        });
         string parentTag = JsonSerializer.Serialize(new
         {
             @object = "tag",
@@ -236,7 +245,7 @@ internal static class ScryfallTestFixture
         return new Dictionary<string, byte[]>(StringComparer.Ordinal)
         {
             ["all_cards"] = GzipLines([WhiteCard(whiteName), RedCard()]),
-            ["rulings"] = GzipLines([ruling, emptyCommentRuling]),
+            ["rulings"] = GzipLines([ruling, emptyCommentRuling, redRuling]),
             ["oracle_tags"] = GzipLines([parentTag, secondParentTag, childTag]),
             ["art_tags"] = GzipLines([artTag]),
         };

@@ -32,7 +32,7 @@ public sealed class EvidenceDescriptorTests
         string[][] expectedProperties =
         [
             ["kind", "retrievedAtUtc", "source"],
-            ["kind", "retrievedAtUtc", "snapshotId", "source", "sourceReference"],
+            ["kind", "requestSnapshotId", "retrievedAtUtc", "source", "sourceReference"],
             ["assumptions", "kind", "method"],
             ["assumptions", "kind", "parserVersion"],
             ["assumptions", "kind", "modelVersion"],

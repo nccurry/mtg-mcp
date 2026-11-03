@@ -236,6 +236,7 @@ public sealed class DeckMcpTests
             {
                 ["backupId"] = backupId,
                 ["expectedDatabaseFingerprint"] = currentFingerprint,
+                ["confirmation"] = $"restore backup {backupId}",
             });
         Guid rollbackBackupId = restored.GetProperty("rollbackBackupId").GetGuid();
         loaded = await CallSuccessAsync(
@@ -248,17 +249,26 @@ public sealed class DeckMcpTests
         _ = await CallSuccessAsync(
             session,
             "local_deck_backup_delete",
-            new Dictionary<string, object?> { ["backupId"] = backupId });
+            new Dictionary<string, object?>
+            {
+                ["backupId"] = backupId,
+                ["confirmation"] = $"delete backup {backupId}",
+            });
         _ = await CallSuccessAsync(
             session,
             "local_deck_backup_delete",
-            new Dictionary<string, object?> { ["backupId"] = rollbackBackupId });
+            new Dictionary<string, object?>
+            {
+                ["backupId"] = rollbackBackupId,
+                ["confirmation"] = $"delete backup {rollbackBackupId}",
+            });
         _ = await CallSuccessAsync(
             session,
             "local_deck_delete",
             new Dictionary<string, object?>
             {
                 ["deckId"] = deckId,
+                ["confirmation"] = $"delete deck {deckId}",
                 ["expectedRevision"] = revision,
             });
         listed = await CallSuccessAsync(

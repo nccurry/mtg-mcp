@@ -25,7 +25,7 @@ internal sealed record ArchidektSnapshotGetResult(
 
 /// <summary>
 /// Returns one named snapshot with its metadata and one size-limited page of its saved deck, in the same shape as
-/// <c>archidekt_deck_get</c>. When the deck's <c>nextOffset</c> is set, call again with that <c>offset</c>.
+/// <c>archidekt_deck_get</c>. When the deck's <c>nextCursor</c> is set, call again with that <c>cursor</c>.
 /// </summary>
 internal sealed record ArchidektSnapshotView(
     RemoteNamedSnapshotSummary Summary,
@@ -54,13 +54,12 @@ internal sealed record ArchidektFolderGetResult(
 
 /// <summary>
 /// Returns a folder tree with its folder count and one size-limited page of its folder records. The tree fingerprint
-/// covers the whole tree, whichever page was read. When <see cref="NextOffset"/> is set, call again with that
-/// <c>offset</c>.
+/// covers the whole tree, whichever page was read. When <see cref="NextCursor"/> is set, call again with that
+/// <c>cursor</c>.
 /// </summary>
 internal sealed record ArchidektFolderTreeView(
     int FolderCount,
-    int Offset,
-    IReadOnlyList<RemoteFolderRecord> Items,
+    IReadOnlyList<ArchidektFolderView> Items,
     ArchidektRetrievalEvidence Evidence,
     string TreeFingerprint)
 {
@@ -75,24 +74,23 @@ internal sealed record ArchidektFolderTreeView(
     public string? Narrow { get; init; }
 
     /// <summary>
-    /// Gets the <c>offset</c> that returns the next page of folder records, or null on the last page.
+    /// Gets the <c>cursor</c> that returns the next page of folder records, or null on the last page.
     /// </summary>
-    public int? NextOffset { get; init; }
+    public string? NextCursor { get; init; }
 }
 
 /// <summary>
 /// Returns the three-way differences of one local deck with a leading count and one size-limited page of the rows.
-/// When <see cref="NextDifferenceOffset"/> is set, call again with that <c>differenceOffset</c>.
+/// When <see cref="NextCursor"/> is set, call again with that <c>cursor</c>.
 /// </summary>
 internal sealed record ArchidektSyncDiffView(
     Guid LocalDeckId,
-    long LocalRevision,
+    long Revision,
     string RemoteDeckId,
     string RemoteFingerprint,
     string? BaselineRemoteFingerprint,
     bool HasConflicts,
     int DifferenceCount,
-    int DifferenceOffset,
     IReadOnlyList<ArchidektDifferenceRow> Differences)
 {
     /// <summary>
@@ -106,9 +104,9 @@ internal sealed record ArchidektSyncDiffView(
     public string? Narrow { get; init; }
 
     /// <summary>
-    /// Gets the <c>differenceOffset</c> that returns the next page of differences, or null on the last page.
+    /// Gets the <c>cursor</c> that returns the next page of differences, or null on the last page.
     /// </summary>
-    public int? NextDifferenceOffset { get; init; }
+    public string? NextCursor { get; init; }
 }
 
 /// <summary>
@@ -116,7 +114,7 @@ internal sealed record ArchidektSyncDiffView(
 /// Every guard describes the whole preview, whichever page was read, so the apply tool needs no page.
 /// </summary>
 internal sealed record ArchidektSnapshotRestorePreviewView(
-    string DeckId,
+    string RemoteDeckId,
     string SnapshotId,
     string SnapshotChecksum,
     string SnapshotContentFingerprint,
@@ -125,8 +123,6 @@ internal sealed record ArchidektSnapshotRestorePreviewView(
     int PredictedProviderRequests,
     int OperationCount,
     int DifferenceCount,
-    int OperationOffset,
-    int DifferenceOffset,
     IReadOnlyList<ArchidektRemoteOperation> Operations,
     IReadOnlyList<ArchidektDifference> Differences)
 {
@@ -141,16 +137,10 @@ internal sealed record ArchidektSnapshotRestorePreviewView(
     public string? Narrow { get; init; }
 
     /// <summary>
-    /// Gets the <c>operationOffset</c> that returns the next page of operations, or null on the last page. When the
-    /// operations ended but the differences did not, it is the number of operations.
+    /// Gets the <c>cursor</c> that returns the next page of rows, or null on the last page. It holds both list
+    /// positions and the preview it was read from.
     /// </summary>
-    public int? NextOperationOffset { get; init; }
-
-    /// <summary>
-    /// Gets the <c>differenceOffset</c> that returns the next page of differences, or null on the last page. When the
-    /// differences ended but the operations did not, it is the number of differences.
-    /// </summary>
-    public int? NextDifferenceOffset { get; init; }
+    public string? NextCursor { get; init; }
 }
 
 /// <summary>
@@ -201,10 +191,10 @@ internal sealed record ArchidektDuplicateGroup(
 internal sealed record ArchidektDeckSizeFact(string Format, int Expected, int MainAndCommander);
 
 /// <summary>
-/// Shows the entry fields that the concise format returns: what an agent needs to read a deck. The full format adds
-/// the rest in <see cref="ArchidektFullDeckEntryView"/>.
+/// Shows the entry fields that the concise format returns: what an agent needs to read a deck. The standard format adds
+/// the rest in <see cref="ArchidektStandardDeckEntryView"/>.
 /// </summary>
-[JsonDerivedType(typeof(ArchidektFullDeckEntryView))]
+[JsonDerivedType(typeof(ArchidektStandardDeckEntryView))]
 internal record ArchidektDeckEntryView(
     string CardName,
     int Quantity,
@@ -238,7 +228,7 @@ internal record ArchidektDeckEntryView(
 /// <summary>
 /// Shows one deck entry with every field Archidekt gives it, plus whether Archidekt counts it toward the deck.
 /// </summary>
-internal sealed record ArchidektFullDeckEntryView(
+internal sealed record ArchidektStandardDeckEntryView(
     string CardName,
     int Quantity,
     string Zone,
@@ -259,10 +249,10 @@ internal sealed record ArchidektFullDeckEntryView(
     /// <summary>
     /// Copies every field of an entry and adds whether its first category puts it in the deck.
     /// </summary>
-    internal static ArchidektFullDeckEntryView FullFrom(RemoteDeckEntry entry, bool inDeck)
+    internal static ArchidektStandardDeckEntryView StandardFrom(RemoteDeckEntry entry, bool inDeck)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        return new ArchidektFullDeckEntryView(
+        return new ArchidektStandardDeckEntryView(
             entry.CardName,
             entry.Quantity,
             entry.Zone,
@@ -284,12 +274,12 @@ internal sealed record ArchidektFullDeckEntryView(
 /// <summary>
 /// Returns one deck with a leading summary and one size-limited page of its entries, from the zones the read asked
 /// for (<see cref="ShownEntryCount"/> counts them; the summary counts the whole deck). The categories and the unknown
-/// provider fields, and the description, come with the first page (offset 0) only. When <see cref="NextOffset"/> is
-/// set, call again with that offset for the following entries.
+/// provider fields, and the description, come with the first page only. When <see cref="NextCursor"/> is set, call
+/// again with that cursor for the following entries.
 /// </summary>
 internal sealed record ArchidektDeckView(
     ArchidektDeckSummary Summary,
-    string RemoteId,
+    string RemoteDeckId,
     string RemoteUri,
     string Name,
     string Description,
@@ -299,7 +289,6 @@ internal sealed record ArchidektDeckView(
     string ContentFingerprint,
     string RemoteFingerprint,
     ArchidektRetrievalEvidence Evidence,
-    int Offset,
     int ShownEntryCount,
     IReadOnlyList<RemoteDeckCategory> Categories,
     IReadOnlyList<ArchidektDeckEntryView> Entries,
@@ -316,9 +305,9 @@ internal sealed record ArchidektDeckView(
     public string? Narrow { get; init; }
 
     /// <summary>
-    /// Gets the <c>offset</c> that returns the next page of entries, or null on the last page.
+    /// Gets the <c>cursor</c> that returns the next page of entries, or null on the last page.
     /// </summary>
-    public int? NextOffset { get; init; }
+    public string? NextCursor { get; init; }
 
     /// <summary>
     /// Gets true when the deck's unknown provider fields were too large to include.
@@ -355,8 +344,7 @@ internal sealed record ArchidektPreviewSummary(
 /// <summary>
 /// Returns one synchronization preview with a leading summary and size-limited pages of its operations and
 /// differences. Every guard and the preview fingerprint describe the whole preview, whichever page was read, so the
-/// apply tool needs no page. When <see cref="NextOperationOffset"/> or <see cref="NextDifferenceOffset"/> is set,
-/// call again with those offsets for the rest.
+/// apply tool needs no page. When <see cref="NextCursor"/> is set, call again with that <c>cursor</c> for the rest.
 /// </summary>
 internal sealed record ArchidektSyncPreviewView(
     string Direction,
@@ -364,15 +352,13 @@ internal sealed record ArchidektSyncPreviewView(
     bool ApplyAvailable,
     string? ApplyNotice,
     Guid? LocalDeckId,
-    long? LocalRevision,
+    long? Revision,
     string RemoteDeckId,
     string RemoteFingerprint,
     string ContentFingerprint,
     string PreviewFingerprint,
     bool HasConflicts,
     int PredictedProviderRequests,
-    int OperationOffset,
-    int DifferenceOffset,
     IReadOnlyList<ArchidektRemoteOperation> Operations,
     IReadOnlyList<ArchidektDifferenceRow> Differences)
 {
@@ -398,14 +384,8 @@ internal sealed record ArchidektSyncPreviewView(
     public string? Narrow { get; init; }
 
     /// <summary>
-    /// Gets the <c>operationOffset</c> that returns the next page of operations, or null on the last page. When the
-    /// operations ended but the differences did not, it is the number of operations.
+    /// Gets the <c>cursor</c> that returns the next page of rows, or null on the last page. It holds both list
+    /// positions and the preview it was read from.
     /// </summary>
-    public int? NextOperationOffset { get; init; }
-
-    /// <summary>
-    /// Gets the <c>differenceOffset</c> that returns the next page of differences, or null on the last page. When the
-    /// differences ended but the operations did not, it is the number of differences.
-    /// </summary>
-    public int? NextDifferenceOffset { get; init; }
+    public string? NextCursor { get; init; }
 }

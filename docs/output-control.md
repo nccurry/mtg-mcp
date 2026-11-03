@@ -34,23 +34,30 @@ offline fixtures and fails on any result, successful or not, over 50,000 charact
 its data but never pages or cuts a result with those fixtures. It has one explicit list of tools it cannot drive
 offline (Playgroup, Commander Spellbook, and the Archidekt writes the fake has no route for). A newly registered
 tool fails the test until it is driven or in that list. `local_deck_import_preview`,
-`local_deck_identity_reconcile_preview`, and `local_deck_category_rules_preview` page with `offset` (the
+`local_deck_identity_reconcile_preview`, and `local_deck_category_rules_preview` page with `cursor` (the
 fingerprint and apply token cover the whole preview), `local_deck_export_bundle` returns one chunk of one artifact by
-character `offset`, and the Scryfall card tools cut a page to the limit in every format. A paged deck result (the
+UTF-16 code unit (`pageSize` counts code units and a chunk never splits a surrogate pair), and the Scryfall card
+tools cut a page to the limit in every format. A paged deck result (the
 local and Archidekt deck reads and the import preview) also cuts its free text: the name to 1,000 UTF-8 bytes on every
 page (`nameTruncated`), and the description to 8,000 UTF-8 bytes on the first page only (`descriptionTruncated` and
 `descriptionLength`), so a long description cannot push every page over the limit.
 
-Every paged result follows one offset rule: an `offset` from 0 up to the number of rows is valid (at the number of
-rows the page holds no row), and a negative offset or one past the end is refused with `invalid-offset` and the size
-of the list. A result with two lists (operations and differences) has one offset for each list, and the next offsets
-are given for both. The three local previews, the push and pull previews, and the snapshot restore preview take an
-optional `expectedPreviewFingerprint` on later pages; pass the fingerprint of the first page and a preview that
-changed in between is refused with `preview-changed` instead of paging a different preview.
+Every paged result follows one cursor rule: pass `nextCursor` as `cursor` with the same other arguments and the same
+`pageSize`-bounded request; `nextCursor` is null on the last page. The cursor is opaque. It records the position (one
+position for each list, so a result with two lists, such as operations and differences, still has one `nextCursor`;
+a two-list preview shows all operations before any differences) and what the page depends on: the request, the local
+deck revision, the preview fingerprint, the Archidekt fingerprint, or the export artifact and its checksum. The
+cursor is tied to that state. Its checksum detects accidental edits only, and every reader bounds the position
+again, so a forged position is `invalid-cursor`. A cursor whose data changed since the first page is refused
+with `cursor-stale` and the current state in `current`; a malformed, edited, out-of-range, or foreign cursor is refused with
+`invalid-cursor` and `path` `cursor`. A page size outside the tool's range is `invalid-page-size` with `path`
+`pageSize`. The paged previews therefore take no fingerprint argument on later pages. See
+[MCP surface](architecture/mcp-surface.md#paging).
 
-`card_lists_compare` takes the same `responseFormat` and `fields`, and pages its result with a `nextCursor`; a page
+`card_lists_compare` takes the same `responseFormat` and `fields`, and pages its result with `cursor` and `nextCursor`; a page
 that would pass the size limit keeps the leading cards that fit and sets `truncated` and `narrow`. `card_list_query`
-returns groups and, when `rows` is asked for, a page of rows. Groups are cut first to a fixed share of the limit
+returns groups and, when `rows` is asked for, a page of rows, paged with the top-level `pageSize`, `cursor`, and
+`nextCursor`. Groups are cut first to a fixed share of the limit
 when rows are present, rows are cut to fit the rest, and a cut result sets `truncated` with a `narrow` hint that says
 what to change. `local_deck_duplicates_preview`, `stats_castability`, and `spellbook_deck_bracket_facts_get` cut their
 lists the same way and say how many items they left out (`unmatchedOmitted`, `skippedOmitted`,
@@ -73,19 +80,21 @@ bytes per card on the page, the card where `nextCursor` continues (no card is sk
 
 ### Archidekt deck reads
 
-`archidekt_deck_get` and `archidekt_snapshots_get` (kind `get`) take `zones` and `responseFormat`.
+`archidekt_deck_get` and `archidekt_snapshots_get` (kind `get`) take `zones`, `pageSize` (up to 200, default 100),
+`cursor`, and `responseFormat`.
 
 | `responseFormat` | Entry fields |
 | --- | --- |
-| `concise` (default) | `cardName`, `quantity`, `zone`, `categoryNames`, `setCode`, `collectorNumber`, `oracleId`, `inDeck`. |
-| `full` or `standard` | The concise fields plus every other entry field: `providerRelationId`, `providerCardId`, `printingId`, `language`, `finish`, `primaryCategoryName`, `sortOrder`. |
+| `standard` (default) | The concise fields plus every other entry field: `providerRelationId`, `providerCardId`, `printingId`, `language`, `finish`, `primaryCategoryName`, `sortOrder`. |
+| `concise` | `cardName`, `quantity`, `zone`, `categoryNames`, `setCode`, `collectorNumber`, `oracleId`, `inDeck`. |
 
 `zones` (`commander`, `main`, `sideboard`, `maybeboard`) limits the entries; omit it for every zone. Entries are
-ordered by zone in that order, then card name, then relation ID. `offset` and `nextOffset` count the chosen entries,
-`shownEntryCount` says how many there are, and a bad offset is refused with `invalid-offset` naming that count. The
+ordered by zone in that order, then card name, then relation ID. `pageSize` and `nextCursor` count the chosen entries,
+and `shownEntryCount` says how many there are. A deck that changed between pages is refused with `cursor-stale`. The
 summary on every page covers the whole deck whatever `zones` asks for (entry, card, and category counts,
 `cardsByZone`, `duplicates`, `repeatsOutsideMain`, and the Commander `size` fact). A cut page's `narrow` says
-which entries are shown, how to read the rest, and to pass `responseFormat: "full"` for every field.
+which entries are shown, how to read the rest, and to pass a smaller `pageSize` or `responseFormat: "concise"` to fit
+more.
 
 ### Local deck pages
 
@@ -94,14 +103,14 @@ Every `local_deck_get` page carries deck-wide totals: `entryCount`, `cardCount`,
 get smaller pages (a smaller `pageSize`, or fewer `fields` when the page has card data). The
 `local_deck_apply_changes` summary carries the same totals.
 
-`responseFormat` is `full` or `standard` (default `full`; both give every stored entry field plus the category
-assignment rows) or `concise` (`entryId`, `cardName`, `quantity`, `zone`, and `categoryNames` only). With `include`, concise entries still add
+`responseFormat` is `standard` (the default; every stored entry field plus the category assignment rows) or
+`concise` (`entryId`, `cardName`, `quantity`, `zone`, and `categoryNames` only). With `include`, concise entries still add
 `cardData`, `card`, and `tags`. `cardNames` (1 to 100 names) returns only the matching entries and lists the names with
 no match in `cardNamesNotFound`. `totalEntries` and `nextCursor` count the matching entries; `entryCount`,
-`cardCount`, and `cardsByZone` always cover the whole deck. The cursor binds `cardNames`
+`cardCount`, and `cardsByZone` always cover the whole deck. The cursor is tied to `cardNames`
 and `responseFormat` along with `include` and `fields`, so a cursor with a changed filter or format is refused.
 
-`zones` and `categoryNames` filter the same way and join the cursor binding (`DeckCardViewCoordinator`):
+`zones` and `categoryNames` filter the same way and are tied into the cursor too (`DeckCardViewCoordinator`):
 
 - `zones` takes zone codes (`commander`, `main`, `sideboard`, `maybeboard`). Any non-empty code is accepted; a code that matches no
   entry is listed in `zonesNotFound`. An empty list or a blank code is refused as `invalid-zones`.
@@ -117,20 +126,20 @@ and `responseFormat` along with `include` and `fields`, so a cursor with a chang
 ### Archidekt difference rows
 
 `archidekt_sync_diff`, `archidekt_pull_preview`, and `archidekt_push_preview` take `responseFormat`, which is
-`full` (the default) or `concise`; `standard` is accepted as `full`, and any other value is refused with
-`invalid-response-format`. `archidekt_snapshot_restore_preview` does not take it, because its one difference row holds
-two content fingerprints, not entry JSON.
+`standard` (the default) or `concise`; any other value is refused with `invalid-response-format`.
+`archidekt_snapshot_restore_preview` does not take it, because its one difference row holds two content
+fingerprints, not entry JSON.
 
 | `responseFormat` | Difference row |
 | --- | --- |
-| `full` or `standard` | `path`, `state`, and the whole `baselineValue`, `localValue`, and `remoteValue` (the JSON of one entry, category, or text value). |
+| `standard` | `path`, `state`, and the whole `baselineValue`, `localValue`, and `remoteValue` (the JSON of one entry, category, or text value). |
 | `concise` | `path`, `state`, and `fields`: one `{ name, baseline, local, remote }` per field whose values differ. For an added or removed row, the fields of the side that exists. A row for one text value, such as the deck name, lists that value under its last path segment. |
 
 The format changes only how rows are shown. The `previewFingerprint`, the guards, the summary, the operations, and
 `applyAvailable` are computed before formatting and are the same in both formats. Paging measures the rows of the
-format returned, so a concise page holds more rows; `nextDifferenceOffset` keeps its meaning, and the `narrow` text
+format returned, so a concise page holds more rows; `nextCursor` keeps its meaning, and the `narrow` text
 says to pass `responseFormat: "concise"` again on the next page. An 18-edit push preview on a 347-entry fake deck is
-36,996 characters in `full` (cut at 17 of 19 rows) and 6,923 in `concise` (all 19 rows)
+36,996 characters in `standard` (cut at 17 of 19 rows) and 6,923 in `concise` (all 19 rows)
 (`ArchidektConciseDifference.cs`, `ArchidektResultPaging.cs`). The pull and push previews also return `applyOptions`, the
 options the apply must repeat, and `archidekt_push_preview` returns `providerRequestLimit` beside
 `predictedProviderRequests` (see [MCP surface](architecture/mcp-surface.md)).

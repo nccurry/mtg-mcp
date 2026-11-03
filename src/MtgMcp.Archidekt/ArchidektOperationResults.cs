@@ -36,16 +36,19 @@ internal static class ArchidektOperationResults
             {
                 ArchidektFailureKind.InvalidInput => new OperationInvalidInput(
                     exception.ReasonCode,
-                    exception.Message),
+                    exception.Message,
+                    exception.Path),
                 ArchidektFailureKind.NotFound => new OperationNotFound(
                     exception.ReasonCode,
                     exception.Message),
                 ArchidektFailureKind.Conflict => new OperationConflict(
                     exception.ReasonCode,
                     exception.Message,
-                    exception.CurrentRemoteFingerprint is { } current
-                        ? new ConflictState(RemoteFingerprint: current)
-                        : null),
+                    exception.CurrentRemoteFingerprint is null && exception.CurrentPreviewFingerprint is null
+                        ? null
+                        : new ConflictState(
+                            RemoteFingerprint: exception.CurrentRemoteFingerprint,
+                            PreviewFingerprint: exception.CurrentPreviewFingerprint)),
                 ArchidektFailureKind.Unsupported => new OperationUnsupported(
                     exception.ReasonCode,
                     exception.Message),
@@ -57,11 +60,12 @@ internal static class ArchidektOperationResults
                     "Archidekt could not complete the operation."),
             };
         }
-        catch (ArgumentException)
+        catch (ArgumentException exception)
         {
             return new OperationInvalidInput(
                 "invalid-archidekt-input",
-                "The Archidekt operation input is invalid.");
+                "The Archidekt operation input is invalid.",
+                ArgumentPath(exception.ParamName));
         }
         catch (InvalidDataException)
         {
@@ -72,16 +76,46 @@ internal static class ArchidektOperationResults
     }
 
     /// <summary>
-    /// Requires an exact non-case-folded confirmation phrase, and refuses with the phrase to pass when it differs.
+    /// Names the tool argument for the parameter an adapter check refused, in the camelCase the tools publish.
     /// </summary>
-    internal static void RequireConfirmation(string actual, string expected)
+    private static string? ArgumentPath(string? parameterName)
     {
-        if (!string.Equals(actual, expected, StringComparison.Ordinal))
+        return string.IsNullOrEmpty(parameterName)
+            ? null
+            : char.ToLowerInvariant(parameterName[0]) + parameterName[1..];
+    }
+
+    /// <summary>
+    /// Requires an exact non-case-folded confirmation phrase, and refuses with the phrase to pass when it differs.
+    /// An ID that is not numeric is refused first, so a refusal never echoes arbitrary caller text.
+    /// </summary>
+    internal static void RequireConfirmation(
+        string actual,
+        string action,
+        string targetKind,
+        string id,
+        string idPath)
+    {
+        if (id.Length == 0 || !id.All(char.IsAsciiDigit))
         {
             throw new ArchidektProviderException(
                 ArchidektFailureKind.InvalidInput,
-                "confirmation-required",
-                $"Pass confirmation exactly as: {expected}");
+                "invalid-id",
+                "The Archidekt ID must be numeric.")
+            {
+                Path = idPath,
+            };
+        }
+
+        if (Confirmation.Check(actual, Confirmation.Phrase(action, targetKind, id)) is { } refused)
+        {
+            throw new ArchidektProviderException(
+                ArchidektFailureKind.InvalidInput,
+                refused.ReasonCode,
+                refused.Message)
+            {
+                Path = refused.Path,
+            };
         }
     }
 }

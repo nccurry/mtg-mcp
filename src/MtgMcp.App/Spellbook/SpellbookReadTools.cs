@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Hosting;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 using MtgMcp.Spellbook;
 
@@ -11,6 +12,13 @@ namespace MtgMcp.App.Spellbook;
 /// </summary>
 internal sealed class SpellbookReadTools
 {
+    /// <summary>
+    /// Describes the cursor argument of both paged tools.
+    /// </summary>
+    private const string CursorHelp =
+        "The nextCursor of the previous page; omitted starts at the first page. nextCursor is null on the last page, " +
+        "and no cursor goes past source offset 1000.";
+
     /// <summary>
     /// Acquires unchanged source evidence through the adapter's cache and pacing boundary.
     /// </summary>
@@ -36,20 +44,41 @@ internal sealed class SpellbookReadTools
     [McpServerTool(Name = "spellbook_variant_search", Title = "Search Commander Spellbook Variants", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
     [Description(
         "Commander Spellbook: returns one bounded variant page for an exact source query. It does " +
-        "not rank results or recommend cards." +
+        "not rank results or recommend cards. Pass nextCursor from the result as cursor for the next page; " +
+        "nextCursor ends at source offset 1000 and is null on the last page. A page cut to the result size limit " +
+        "says truncated true; the cursor then continues after the last row shown." +
         UntrustedTextNotes.Spellbook)]
-    internal Task<OperationResult<SpellbookEvidence>> SearchVariantsAsync(
+    internal async Task<OperationResult<SpellbookVariantPage>> SearchVariantsAsync(
         [Description("Exact Commander Spellbook query sent unchanged except for URL escaping.")] string sourceQuery,
-        [Description("Source page size from 1 through 25; omitted uses 20.")] int? limit = null,
-        [Description("Source page offset from 0 through 1000; omitted uses 0.")] int? offset = null,
+        [Description("Source page size from 1 through 25; omitted uses 20.")] int? pageSize = null,
+        [Description(CursorHelp)] string? cursor = null,
         [Description("Whether the source groups variants by combo; omitted uses true.")] bool? groupByCombo = null,
         CancellationToken cancellationToken = default)
     {
-        return service.SearchVariantsAsync(
-            new SpellbookVariantSearchRequest(
-                sourceQuery,
-                new SpellbookPageOptions(limit, offset, groupByCombo)),
-            cancellationToken);
+        PageCursorBinding binding = PageCursorBinding.ForRequest(RequestHash.Of(
+            (sourceQuery, typeof(string)),
+            (groupByCombo, typeof(bool?))));
+        OperationResult<int> offset = SpellbookPaging.Offset(cursor, binding);
+        if (offset is not OperationSuccess<int> start)
+        {
+            return OperationFailure.Forward<int, SpellbookVariantPage>(offset);
+        }
+
+        OperationResult<SpellbookEvidence> source = InvalidInputPath.Default(
+            await service.SearchVariantsAsync(
+                new SpellbookVariantSearchRequest(
+                    sourceQuery,
+                    new SpellbookPageOptions(pageSize, start.Data, groupByCombo)),
+                cancellationToken).ConfigureAwait(false),
+            "sourceQuery");
+        if (source is not OperationSuccess<SpellbookEvidence> success)
+        {
+            return OperationFailure.Forward<SpellbookEvidence, SpellbookVariantPage>(source);
+        }
+
+        SpellbookShapedPage page = SpellbookPaging.ShapeVariants(success.Data, binding);
+        return new OperationSuccess<SpellbookVariantPage>(
+            new SpellbookVariantPage(page.Source, page.NextCursor, page.Truncated));
     }
 
     /// <summary>
@@ -64,7 +93,7 @@ internal sealed class SpellbookReadTools
         [Description("Exact Commander Spellbook variant identifier.")] string variantId,
         CancellationToken cancellationToken = default)
     {
-        return service.GetVariantAsync(variantId, cancellationToken);
+        return InvalidInputPath.DefaultAsync(service.GetVariantAsync(variantId, cancellationToken), "variantId");
     }
 
     /// <summary>
@@ -73,66 +102,57 @@ internal sealed class SpellbookReadTools
     [McpServerTool(Name = "spellbook_deck_combos_find", Title = "Find Commander Spellbook Deck Combos", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true, UseStructuredContent = true)]
     [Description(
         "Commander Spellbook: sends only commander and main entries from one exact local deck revision to Commander " +
-        "Spellbook and reports skipped zones. It does not decide whether a result fits the deck." +
+        "Spellbook and reports skipped zones. It does not decide whether a result fits the deck. Pass nextCursor " +
+        "from the result as cursor for the next page; nextCursor ends at source offset 1000 and is null on the " +
+        "last page. A page cut to the result size limit says truncated true and has no nextCursor; repeat the " +
+        "call with a smaller pageSize." +
         UntrustedTextNotes.Spellbook)]
     internal async Task<OperationResult<SpellbookDeckComboEvidence>> FindDeckCombosAsync(
         [Description("Local deck identifier.")] Guid deckId,
         [Description("Exact local deck revision to read before the source request.")] long expectedRevision,
         [Description("Optional exact Commander Spellbook query sent unchanged except for URL escaping.")] string? sourceQuery = null,
-        [Description("Source page size from 1 through 25; omitted uses 20.")] int? limit = null,
-        [Description("Source page offset from 0 through 1000; omitted uses 0.")] int? offset = null,
+        [Description("Source page size from 1 through 25; omitted uses 20.")] int? pageSize = null,
+        [Description(CursorHelp)] string? cursor = null,
         [Description("Whether the source groups variants by combo; omitted uses true.")] bool? groupByCombo = null,
         CancellationToken cancellationToken = default)
     {
+        PageCursorBinding binding = PageCursorBinding.ForRequest(RequestHash.Of(
+                (sourceQuery, typeof(string)),
+                (groupByCombo, typeof(bool?))))
+            .And(PageCursorBinding.ForDeck(deckId, expectedRevision));
+        OperationResult<int> offset = SpellbookPaging.Offset(cursor, binding);
+        if (offset is not OperationSuccess<int> start)
+        {
+            return OperationFailure.Forward<int, SpellbookDeckComboEvidence>(offset);
+        }
+
         OperationResult<SpellbookDeckComboSelection> selection = await resolver.ResolveAsync(
             deckId,
             expectedRevision,
             cancellationToken).ConfigureAwait(false);
-        return selection switch
+        if (selection is not OperationSuccess<SpellbookDeckComboSelection> selected)
         {
-            OperationSuccess<SpellbookDeckComboSelection> success => await FindDeckCombosAsync(
-                success.Data,
-                sourceQuery,
-                limit,
-                offset,
-                groupByCombo,
-                cancellationToken).ConfigureAwait(false),
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-        };
-    }
+            return OperationFailure.Forward<SpellbookDeckComboSelection, SpellbookDeckComboEvidence>(selection);
+        }
 
-    /// <summary>
-    /// Acquires source evidence and keeps source data separate from local deck-selection evidence.
-    /// </summary>
-    private async Task<OperationResult<SpellbookDeckComboEvidence>> FindDeckCombosAsync(
-        SpellbookDeckComboSelection selection,
-        string? sourceQuery,
-        int? limit,
-        int? offset,
-        bool? groupByCombo,
-        CancellationToken cancellationToken)
-    {
-        OperationResult<SpellbookEvidence> source = await service.FindDeckCombosAsync(
-            new SpellbookDeckComboRequest(
-                selection.Request,
-                sourceQuery,
-                new SpellbookPageOptions(limit, offset, groupByCombo)),
-            cancellationToken).ConfigureAwait(false);
-        return source switch
+        OperationResult<SpellbookEvidence> source = InvalidInputPath.Default(
+            await service.FindDeckCombosAsync(
+                new SpellbookDeckComboRequest(
+                    selected.Data.Request,
+                    sourceQuery,
+                    new SpellbookPageOptions(pageSize, start.Data, groupByCombo)),
+                cancellationToken).ConfigureAwait(false),
+            sourceQuery is null ? "deckId" : "sourceQuery");
+        if (source is not OperationSuccess<SpellbookEvidence> success)
         {
-            OperationSuccess<SpellbookEvidence> success => new OperationSuccess<SpellbookDeckComboEvidence>(
-                new SpellbookDeckComboEvidence(selection.Evidence, success.Data)),
-            OperationNotFound value => value,
-            OperationNotCached value => value,
-            OperationUnsupported value => value,
-            OperationUnavailable value => value,
-            OperationConflict value => value,
-            OperationInvalidInput value => value,
-        };
+            return OperationFailure.Forward<SpellbookEvidence, SpellbookDeckComboEvidence>(source);
+        }
+
+        SpellbookShapedPage page = SpellbookPaging.ShapeDeckCombos(
+            success.Data,
+            ResultSize.Measure(selected.Data.Evidence),
+            binding);
+        return new OperationSuccess<SpellbookDeckComboEvidence>(
+            new SpellbookDeckComboEvidence(selected.Data.Evidence, page.Source, page.NextCursor, page.Truncated));
     }
 }

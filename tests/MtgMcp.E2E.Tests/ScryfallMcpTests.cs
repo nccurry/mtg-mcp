@@ -81,23 +81,20 @@ public sealed class ScryfallMcpTests
 
         Dictionary<string, string[]> expectedProperties = new(StringComparer.Ordinal)
         {
-            ["card_list_query"] = ["cursor", "groupBy", "metrics", "rows", "source", "where"],
+            ["card_list_query"] = ["cursor", "groupBy", "metrics", "pageSize", "rows", "source", "where"],
             ["card_lists_compare"] =
                 ["cursor", "fields", "left", "matchBy", "operation", "pageSize", "responseFormat", "right"],
             ["scryfall_autocomplete"] = ["cursor", "freshnessPolicy", "includeExtras", "pageSize", "query"],
             ["scryfall_cards_get"] = ["cursor", "fields", "freshnessPolicy", "lookups", "pageSize", "responseFormat"],
             ["scryfall_card_details"] =
-                [
-                    "freshnessPolicy", "include", "includeRaw", "lookup", "pageSize", "printsCursor",
-                    "rulingsCursor",
-                ],
+                ["cursor", "freshnessPolicy", "include", "includeRaw", "lookup", "pageSize"],
             ["scryfall_installed_cards_by_tag"] =
                 ["cursor", "fields", "includeDescendants", "minimumWeight", "pageSize", "responseFormat", "tagIdentity", "tagType"],
-            ["scryfall_card_data_delete"] = ["acknowledgeDataLoss", "expectedActiveGeneration"],
+            ["scryfall_card_data_delete"] = ["confirmation", "expectedActiveGeneration"],
             ["scryfall_card_data_rollback"] =
-                ["acknowledgeActivationChange", "expectedActiveGeneration", "expectedPreviousGeneration"],
+                ["confirmation", "expectedActiveGeneration", "expectedPreviousGeneration"],
             ["scryfall_card_data_status"] = [],
-            ["scryfall_card_data_sync"] = ["expectedActiveGeneration", "metadataPolicy"],
+            ["scryfall_card_data_sync"] = ["expectedActiveGeneration", "freshnessPolicy"],
             ["scryfall_search"] =
                 [
                     "cursor", "direction", "fields", "freshnessPolicy", "includeExtras", "includeMultilingual",
@@ -105,11 +102,11 @@ public sealed class ScryfallMcpTests
                 ],
             ["scryfall_reference_get"] =
                 ["catalogName", "codeOrId", "cursor", "freshnessPolicy", "includeRaw", "kind", "pageSize"],
-            ["scryfall_request_snapshot_delete"] = ["acknowledgeDataLoss", "expectedChecksum", "snapshotId"],
+            ["scryfall_request_snapshot_delete"] = ["confirmation", "expectedChecksum", "requestSnapshotId"],
             ["scryfall_request_snapshots_get"] =
                 [
-                    "cursor", "includeRaw", "kind", "operation", "pageSize", "retrievedAfterUtc",
-                    "retrievedBeforeUtc", "snapshotId",
+                    "cursor", "includeRaw", "kind", "operation", "pageSize",
+                    "requestSnapshotId", "retrievedAfterUtc", "retrievedBeforeUtc",
                 ],
             ["scryfall_tags_search"] = ["cursor", "includeRaw", "pageSize", "query", "tagType"],
         };
@@ -248,7 +245,7 @@ public sealed class ScryfallMcpTests
                 new Dictionary<string, object?>
                 {
                     ["lookups"] = commanderLookups,
-                    ["freshnessPolicy"] = "refresh",
+                    ["freshnessPolicy"] = "cache-only",
                     ["cursor"] = commanderCursor,
                     ["pageSize"] = 100,
                 }).ConfigureAwait(false);
@@ -288,7 +285,7 @@ public sealed class ScryfallMcpTests
         Assert.False(rulings.TryGetProperty("prints", out _));
         Assert.Equal(
             "Fixture ruling.",
-            rulings.GetProperty("rulings").GetProperty("page").GetProperty("items")[0]
+            rulings.GetProperty("rulings").GetProperty("items")[0]
                 .GetProperty("comment").GetString());
 
         JsonElement search = await CallSuccessAsync(
@@ -300,7 +297,7 @@ public sealed class ScryfallMcpTests
                 ["freshnessPolicy"] = "cache-only",
                 ["pageSize"] = 1,
             }).ConfigureAwait(false);
-        Guid snapshotId = search.GetProperty("snapshot").GetProperty("snapshotId").GetGuid();
+        Guid snapshotId = search.GetProperty("snapshot").GetProperty("requestSnapshotId").GetGuid();
         string checksum = search.GetProperty("snapshot").GetProperty("checksum").GetString()!;
         Assert.Equal(2, search.GetProperty("page").GetProperty("totalCount").GetInt32());
 
@@ -310,12 +307,12 @@ public sealed class ScryfallMcpTests
             new Dictionary<string, object?>
             {
                 ["kind"] = "get",
-                ["snapshotId"] = snapshotId,
+                ["requestSnapshotId"] = snapshotId,
                 ["includeRaw"] = true,
             }).ConfigureAwait(false);
         Assert.Equal("get", replay.GetProperty("kind").GetString());
         replay = replay.GetProperty("snapshot");
-        Assert.Equal(snapshotId, replay.GetProperty("summary").GetProperty("snapshotId").GetGuid());
+        Assert.Equal(snapshotId, replay.GetProperty("summary").GetProperty("requestSnapshotId").GetGuid());
         Assert.Equal(2, replay.GetProperty("items").GetArrayLength());
         Assert.Equal(0, replay.GetProperty("items")[0].GetProperty("ordinal").GetInt32());
         Assert.True(replay.GetProperty("items")[0].TryGetProperty("raw", out _));
@@ -323,7 +320,7 @@ public sealed class ScryfallMcpTests
         JsonElement compactReplay = await CallSuccessAsync(
             session,
             "scryfall_request_snapshots_get",
-            new Dictionary<string, object?> { ["kind"] = "get", ["snapshotId"] = snapshotId }).ConfigureAwait(false);
+            new Dictionary<string, object?> { ["kind"] = "get", ["requestSnapshotId"] = snapshotId }).ConfigureAwait(false);
         compactReplay = compactReplay.GetProperty("snapshot");
         Assert.Equal(2, compactReplay.GetProperty("items").GetArrayLength());
         Assert.False(compactReplay.GetProperty("items")[0].TryGetProperty("raw", out _));
@@ -334,14 +331,14 @@ public sealed class ScryfallMcpTests
             "scryfall_request_snapshot_delete",
             new Dictionary<string, object?>
             {
-                ["snapshotId"] = snapshotId,
+                ["requestSnapshotId"] = snapshotId,
                 ["expectedChecksum"] = checksum,
-                ["acknowledgeDataLoss"] = true,
+                ["confirmation"] = "delete request-snapshot " + snapshotId.ToString("D"),
             }).ConfigureAwait(false);
         JsonElement deleted = await CallAsync(
             session,
             "scryfall_request_snapshots_get",
-            new Dictionary<string, object?> { ["kind"] = "get", ["snapshotId"] = snapshotId }).ConfigureAwait(false);
+            new Dictionary<string, object?> { ["kind"] = "get", ["requestSnapshotId"] = snapshotId }).ConfigureAwait(false);
         Assert.Equal("not-found", deleted.GetProperty("kind").GetString());
     }
 

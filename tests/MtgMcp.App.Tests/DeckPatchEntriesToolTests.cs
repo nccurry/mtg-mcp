@@ -32,7 +32,8 @@ public sealed class DeckPatchEntriesToolTests
             ],
             out IReadOnlyList<DeckChange> changes,
             out _,
-            out string failure);
+            out string failure,
+            out _);
 
         Assert.True(mapped);
         Assert.Equal(string.Empty, failure);
@@ -52,7 +53,8 @@ public sealed class DeckPatchEntriesToolTests
             [new UpdateDeckMetadataInput("Deck", null, "custom"), new PatchDeckEntriesInput([Guid.CreateVersion7()])],
             out IReadOnlyList<DeckChange> changes,
             out _,
-            out string failure);
+            out string failure,
+            out _);
 
         Assert.False(mapped);
         Assert.Empty(changes);
@@ -75,6 +77,7 @@ public sealed class DeckPatchEntriesToolTests
             [new RemoveDeckEntryInput(EntryIds: ids)],
             out IReadOnlyList<DeckChange> changes,
             out IReadOnlyList<int> origins,
+            out _,
             out _));
         Assert.Equal([0, 0, 0], origins);
         Assert.Equal(ids, changes.Select(value => Assert.IsType<RemoveDeckEntryChange>(value.Value).EntryId));
@@ -93,7 +96,8 @@ public sealed class DeckPatchEntriesToolTests
                 [invalid],
                 out IReadOnlyList<DeckChange> none,
                 out _,
-                out string failure));
+                out string failure,
+                out _));
             Assert.Empty(none);
             Assert.StartsWith("Deck change at index 0 with kind 'remove-entry' requires ", failure, StringComparison.Ordinal);
         }

@@ -1,5 +1,6 @@
 using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 using MtgMcp.Scryfall;
 
@@ -11,9 +12,8 @@ namespace MtgMcp.App.Decks;
 /// </summary>
 internal sealed record DeckIdentityReconciliationPreviewView(
     Guid DeckId,
-    long DeckRevision,
+    long Revision,
     int RowCount,
-    int Offset,
     IReadOnlyList<DeckIdentityReconciliationRow> Rows,
     bool IsComplete,
     int ProposedChangeCount,
@@ -32,9 +32,9 @@ internal sealed record DeckIdentityReconciliationPreviewView(
     public string? Narrow { get; init; }
 
     /// <summary>
-    /// Gets the <c>offset</c> that returns the next page of rows, or null on the last page.
+    /// Gets the <c>cursor</c> that returns the next page of rows, or null on the last page.
     /// </summary>
-    public int? NextOffset { get; init; }
+    public string? NextCursor { get; init; }
 }
 
 /// <summary>
@@ -82,9 +82,8 @@ internal sealed record DeckImportProposalView(
 internal sealed record DeckImportPreviewView(
     string FormatId,
     string Completeness,
-    string? Fingerprint,
+    string? PreviewFingerprint,
     int EntryCount,
-    int Offset,
     DeckImportProposalView? Proposal,
     IReadOnlyList<DeckInterchangeDiagnostic> Diagnostics,
     int OmittedDiagnosticCount,
@@ -126,9 +125,9 @@ internal sealed record DeckImportPreviewView(
     public string? Narrow { get; init; }
 
     /// <summary>
-    /// Gets the <c>offset</c> that returns the next page of entries, or null on the last page.
+    /// Gets the <c>cursor</c> that returns the next page of entries, or null on the last page.
     /// </summary>
-    public int? NextOffset { get; init; }
+    public string? NextCursor { get; init; }
 }
 
 /// <summary>
@@ -137,11 +136,10 @@ internal sealed record DeckImportPreviewView(
 /// </summary>
 internal sealed record DeckCategoryRulesPreviewView(
     Guid DeckId,
-    long DeckRevision,
+    long Revision,
     CategoryRuleSource Source,
     CategoryRuleSet ExpandedRules,
     int DecisionCount,
-    int Offset,
     IReadOnlyList<CategoryDecision> Decisions,
     bool IsComplete,
     string PreviewFingerprint,
@@ -159,9 +157,9 @@ internal sealed record DeckCategoryRulesPreviewView(
     public string? Narrow { get; init; }
 
     /// <summary>
-    /// Gets the <c>offset</c> that returns the next page of decisions, or null on the last page.
+    /// Gets the <c>cursor</c> that returns the next page of decisions, or null on the last page.
     /// </summary>
-    public int? NextOffset { get; init; }
+    public string? NextCursor { get; init; }
 }
 
 /// <summary>
@@ -182,68 +180,90 @@ internal static class DeckPreviewPaging
     private sealed record ImportRow(DeckEntry Entry, IReadOnlyList<DeckCategoryAssignment> Assignments);
 
     /// <summary>
-    /// Builds the page of an identity reconciliation preview that starts at <paramref name="offset"/>; every page has
+    /// Builds the page of an identity reconciliation preview that <paramref name="cursor"/> names; every page has
     /// the fingerprint and apply token of the whole preview.
     /// </summary>
     internal static OperationResult<DeckIdentityReconciliationPreviewView> PageIdentity(
         DeckIdentityReconciliationPreview preview,
-        int offset,
-        string? expectedPreviewFingerprint)
+        string? cursor,
+        int pageSize)
     {
         ArgumentNullException.ThrowIfNull(preview);
-        if (Check<DeckIdentityReconciliationPreviewView>(
-            offset,
-            preview.Rows.Count,
-            "rows",
-            expectedPreviewFingerprint,
-            preview.PreviewFingerprint) is { } refused)
+        if (ResultPage.CheckPageSize(pageSize, MaximumPageSize) is { } badSize)
         {
-            return refused;
+            return badSize;
         }
+
+        OperationResult<PageCursorPosition> start = ReadStart(
+            "local_deck_identity_reconcile_preview",
+            cursor,
+            preview.PreviewFingerprint,
+            preview.DeckId,
+            preview.DeckRevision,
+            preview.Rows.Count);
+        if (start is not OperationSuccess<PageCursorPosition> position)
+        {
+            return OperationFailure.Forward<PageCursorPosition, DeckIdentityReconciliationPreviewView>(start);
+        }
+
+        int offset = position.Data.Offset;
 
         DeckIdentityReconciliationPreviewView header = new(
             preview.DeckId,
             preview.DeckRevision,
             preview.Rows.Count,
-            offset,
             [],
             preview.IsComplete,
             preview.ProposedChangeCount,
             preview.Evidence,
             preview.PreviewFingerprint,
             preview.ApplyToken);
-        ResultPageSlice slice = ResultPage.Take(preview.Rows, offset, ResultSize.Measure(header));
+        ResultPageSlice slice = ResultPage.Take(preview.Rows, offset, ResultSize.Measure(header)).Limit(pageSize);
         return new OperationSuccess<DeckIdentityReconciliationPreviewView>(header with
         {
             Rows = slice.Rows(preview.Rows),
             Truncated = slice.More ? true : null,
-            NextOffset = slice.NextOffset,
+            NextCursor = NextCursor(
+                "local_deck_identity_reconcile_preview",
+                slice,
+                preview.PreviewFingerprint,
+                preview.DeckId,
+                preview.DeckRevision),
             Narrow = slice.More
-                ? Narrow("Rows", offset, slice, "local_deck_identity_reconcile_preview", "previewFingerprint")
+                ? Narrow("Rows", offset, slice, "local_deck_identity_reconcile_preview")
                 : null,
         });
     }
 
     /// <summary>
-    /// Builds the page of a manual import preview that starts at <paramref name="offset"/>; the first page also has
+    /// Builds the page of a manual import preview that <paramref name="cursor"/> names; the first page also has
     /// the diagnostics, identities, categories, and bindings, and every page has the fingerprint of the whole import.
     /// </summary>
     internal static OperationResult<DeckImportPreviewView> PageImport(
         DeckImportPreview preview,
-        int offset,
-        string? expectedPreviewFingerprint)
+        string? cursor,
+        int pageSize)
     {
         ArgumentNullException.ThrowIfNull(preview);
-        IReadOnlyList<DeckEntry> entries = preview.Proposal?.Entries ?? [];
-        if (Check<DeckImportPreviewView>(
-            offset,
-            entries.Count,
-            "entries",
-            expectedPreviewFingerprint,
-            preview.Fingerprint) is { } refused)
+        if (ResultPage.CheckPageSize(pageSize, MaximumPageSize) is { } badSize)
         {
-            return refused;
+            return badSize;
         }
+
+        IReadOnlyList<DeckEntry> entries = preview.Proposal?.Entries ?? [];
+        OperationResult<PageCursorPosition> start = ReadStart(
+            "local_deck_import_preview",
+            cursor,
+            preview.PreviewFingerprint ?? "none",
+            null,
+            null,
+            entries.Count);
+        if (start is not OperationSuccess<PageCursorPosition> position)
+        {
+            return OperationFailure.Forward<PageCursorPosition, DeckImportPreviewView>(start);
+        }
+
+        int offset = position.Data.Offset;
 
         bool first = offset == 0;
         DeckImportProposal? proposal = preview.Proposal;
@@ -293,9 +313,8 @@ internal static class DeckPreviewPaging
         DeckImportPreviewView header = new(
             preview.FormatId,
             preview.Completeness,
-            preview.Fingerprint,
+            preview.PreviewFingerprint,
             entries.Count,
-            offset,
             shell,
             diagnostics,
             first ? preview.OmittedDiagnosticCount : 0,
@@ -308,7 +327,7 @@ internal static class DeckPreviewPaging
             HeaderListsCut = cut ? true : null,
         };
         List<ImportRow> rows = ImportRows(proposal, entries);
-        ResultPageSlice slice = ResultPage.Take(rows, offset, ResultSize.Measure(header));
+        ResultPageSlice slice = ResultPage.Take(rows, offset, ResultSize.Measure(header)).Limit(pageSize);
         List<ImportRow> shown = slice.Rows(rows);
         return new OperationSuccess<DeckImportPreviewView>(header with
         {
@@ -320,32 +339,41 @@ internal static class DeckPreviewPaging
                     CategoryAssignments = [.. shown.SelectMany(row => row.Assignments)],
                 },
             Truncated = slice.More ? true : null,
-            NextOffset = slice.NextOffset,
+            NextCursor = NextCursor("local_deck_import_preview", slice, preview.PreviewFingerprint ?? "none", null, null),
             Narrow = slice.More
-                ? Narrow("Entries", offset, slice, "local_deck_import_preview", "fingerprint")
+                ? Narrow("Entries", offset, slice, "local_deck_import_preview")
                 : null,
         });
     }
 
     /// <summary>
-    /// Builds the page of a category rules preview that starts at <paramref name="offset"/>; every page has the
+    /// Builds the page of a category rules preview that <paramref name="cursor"/> names; every page has the
     /// fingerprint and apply token of the whole preview.
     /// </summary>
     internal static OperationResult<DeckCategoryRulesPreviewView> PageCategoryRules(
         DeckCategoryRulesPreview preview,
-        int offset,
-        string? expectedPreviewFingerprint)
+        string? cursor,
+        int pageSize)
     {
         ArgumentNullException.ThrowIfNull(preview);
-        if (Check<DeckCategoryRulesPreviewView>(
-            offset,
-            preview.Decisions.Count,
-            "decisions",
-            expectedPreviewFingerprint,
-            preview.PreviewFingerprint) is { } refused)
+        if (ResultPage.CheckPageSize(pageSize, MaximumPageSize) is { } badSize)
         {
-            return refused;
+            return badSize;
         }
+
+        OperationResult<PageCursorPosition> start = ReadStart(
+            "local_deck_category_rules_preview",
+            cursor,
+            preview.PreviewFingerprint,
+            preview.DeckId,
+            preview.DeckRevision,
+            preview.Decisions.Count);
+        if (start is not OperationSuccess<PageCursorPosition> position)
+        {
+            return OperationFailure.Forward<PageCursorPosition, DeckCategoryRulesPreviewView>(start);
+        }
+
+        int offset = position.Data.Offset;
 
         DeckCategoryRulesPreviewView header = new(
             preview.DeckId,
@@ -353,20 +381,24 @@ internal static class DeckPreviewPaging
             preview.Source,
             preview.ExpandedRules,
             preview.Decisions.Count,
-            offset,
             [],
             preview.IsComplete,
             preview.PreviewFingerprint,
             preview.ApplyToken,
             preview.CorpusGenerationId);
-        ResultPageSlice slice = ResultPage.Take(preview.Decisions, offset, ResultSize.Measure(header));
+        ResultPageSlice slice = ResultPage.Take(preview.Decisions, offset, ResultSize.Measure(header)).Limit(pageSize);
         return new OperationSuccess<DeckCategoryRulesPreviewView>(header with
         {
             Decisions = slice.Rows(preview.Decisions),
             Truncated = slice.More ? true : null,
-            NextOffset = slice.NextOffset,
+            NextCursor = NextCursor(
+                "local_deck_category_rules_preview",
+                slice,
+                preview.PreviewFingerprint,
+                preview.DeckId,
+                preview.DeckRevision),
             Narrow = slice.More
-                ? Narrow("Decisions", offset, slice, "local_deck_category_rules_preview", "previewFingerprint")
+                ? Narrow("Decisions", offset, slice, "local_deck_category_rules_preview")
                 : null,
         });
     }
@@ -397,31 +429,67 @@ internal static class DeckPreviewPaging
         return rows;
     }
 
+
     /// <summary>
-    /// Refuses an offset outside the rows, or a later page of a preview that is not the one the earlier pages came
-    /// from.
+    /// Gives the most rows a preview page may hold, and the page size when the caller names none.
     /// </summary>
-    private static OperationResult<T>? Check<T>(
-        int offset,
-        int count,
-        string list,
-        string? expectedPreviewFingerprint,
-        string? previewFingerprint)
+    internal const int MaximumPageSize = 100;
+
+    /// <summary>
+    /// Builds the binding of a preview cursor: the tool that issued it, the preview fingerprint, and the deck when the preview belongs to one.
+    /// </summary>
+    private static PageCursorBinding Bind(string tool, string previewFingerprint, Guid? deckId, long? revision)
     {
-        return ResultPage.CheckPage<T>(
-            expectedPreviewFingerprint,
-            previewFingerprint,
-            new PageList("offset", offset, count, list));
+        PageCursorBinding binding = PageCursorBinding.ForRequest(RequestHash.Of((tool, typeof(string))))
+            .And(PageCursorBinding.ForPreview(previewFingerprint));
+        return deckId is Guid id && revision is long value
+            ? binding.And(PageCursorBinding.ForDeck(id, value))
+            : binding;
     }
 
     /// <summary>
-    /// Names the rows shown, how to read the rest, and that every page must come from the same preview.
+    /// Reads the position of a page from its cursor. A cursor of a preview that no longer matches is stale and carries
+    /// the preview fingerprint as it is now; a position past the <paramref name="total"/> rows is invalid.
     /// </summary>
-    private static string Narrow(string what, int offset, ResultPageSlice slice, string tool, string fingerprint)
+    private static OperationResult<PageCursorPosition> ReadStart(
+        string tool,
+        string? cursor,
+        string previewFingerprint,
+        Guid? deckId,
+        long? revision,
+        int total)
     {
-        return $"{what} {offset} to {slice.Next - 1} of {slice.Total} are shown to stay under the size limit; the " +
-            $"fingerprint covers the whole preview. Call {tool} again with offset {slice.Next} and " +
-            $"expectedPreviewFingerprint set to the {fingerprint} of this page, so every page comes from the same " +
-            "preview.";
+        OperationResult<PageCursorPosition> start = PageCursor.Decode(
+            cursor,
+            Bind(tool, previewFingerprint, deckId, revision),
+            current: new ConflictState(revision, PreviewFingerprint: previewFingerprint));
+        return start is OperationSuccess<PageCursorPosition> position && position.Data.Offset > total
+            ? PageCursor.Invalid()
+            : start;
+    }
+
+    /// <summary>
+    /// Writes the cursor of the page after a slice, or null when the slice reaches the end of the list.
+    /// </summary>
+    private static string? NextCursor(
+        string tool,
+        ResultPageSlice slice,
+        string previewFingerprint,
+        Guid? deckId,
+        long? revision)
+    {
+        return slice.More
+            ? PageCursor.Encode(PageCursorPosition.AtOffset(slice.Next), Bind(tool, previewFingerprint, deckId, revision))
+            : null;
+    }
+
+    /// <summary>
+    /// Names the rows shown and how to read the rest.
+    /// </summary>
+    private static string Narrow(string what, int offset, ResultPageSlice slice, string tool)
+    {
+        return $"{what} {offset} to {slice.Next - 1} of {slice.Total} are shown to stay under the size limit. Call " +
+            $"{tool} again with cursor set to nextCursor and the same arguments; the previewFingerprint covers the " +
+            "whole preview.";
     }
 }

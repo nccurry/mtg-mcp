@@ -42,19 +42,18 @@ public sealed class ToolPagingTests
         {
             string name = artifact.GetProperty("fileName").GetString()!;
             StringBuilder joined = new();
-            int offset = 0;
+            string? cursor = null;
             while (true)
             {
-                ToolBudgetWorld.ToolOutcome page = await world.CallAsync(
-                    "local_deck_export_bundle",
-                    new JsonObject
-                    {
-                        ["deckId"] = deck.DeckId.ToString(),
-                        ["formatId"] = format,
-                        ["artifact"] = name,
-                        ["offset"] = offset,
-                    },
-                    token);
+                JsonObject arguments = new()
+                {
+                    ["deckId"] = deck.DeckId.ToString(),
+                    ["formatId"] = format,
+                    ["artifact"] = name,
+                    ["cursor"] = cursor,
+                };
+                ToolBudgetWorld.ToolOutcome page = await world.CallAsync("local_deck_export_bundle", arguments, token);
+                int offset = joined.Length;
                 JsonElement chunk = page.Data.GetProperty("chunk");
                 Assert.Equal(offset, chunk.GetProperty("offset").GetInt32());
                 string text = chunk.GetProperty("content").GetString()!;
@@ -64,13 +63,13 @@ public sealed class ToolPagingTests
                     $"{name} chunk at {offset} takes {chunkBytes} bytes, over {DeckExportPaging.MaximumChunkBytes}.");
                 Assert.True(page.Characters < 40_000, $"{name} chunk at {offset} is {page.Characters} characters");
                 joined.Append(text);
-                if (!chunk.TryGetProperty("nextOffset", out JsonElement next) || next.ValueKind != JsonValueKind.Number)
+                if (!page.Data.TryGetProperty("nextCursor", out JsonElement next) || next.ValueKind != JsonValueKind.String)
                 {
                     break;
                 }
 
                 anyPaged = true;
-                offset = next.GetInt32();
+                cursor = next.GetString();
             }
 
             string content = joined.ToString();
@@ -83,13 +82,16 @@ public sealed class ToolPagingTests
         Assert.True(
             anyPaged || format != "mtg-mcp-json-v1",
             "The JSON export of 300 entries should take several chunks.");
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
-    /// Verifies an unknown artifact name and an offset outside the content are refused with the argument name.
+    /// Verifies an unknown artifact name, a cursor that was edited, and a page size over the limit are refused with the argument
+    /// name.
     /// </summary>
     [Fact]
-    public async Task ExportBundle_UnknownArtifactOrOffset_IsRefused()
+    public async Task ExportBundle_UnknownArtifactCursorOrPageSize_IsRefused()
     {
         CancellationToken token = TestContext.Current.CancellationToken;
         await using ToolBudgetWorld world = await ToolBudgetWorld.CreateAsync(token, remoteDeckSize: 1);
@@ -104,18 +106,30 @@ public sealed class ToolPagingTests
                 ["artifact"] = "nope.txt",
             },
             token);
-        ToolBudgetWorld.ToolOutcome outside = await world.CallAsync(
+        ToolBudgetWorld.ToolOutcome edited = await world.CallAsync(
             "local_deck_export_bundle",
             new JsonObject
             {
                 ["deckId"] = deck.DeckId.ToString(),
                 ["formatId"] = "generic-text-v1",
-                ["offset"] = 10_000_000,
+                ["cursor"] = "not-a-cursor",
+            },
+            token);
+        ToolBudgetWorld.ToolOutcome large = await world.CallAsync(
+            "local_deck_export_bundle",
+            new JsonObject
+            {
+                ["deckId"] = deck.DeckId.ToString(),
+                ["formatId"] = "generic-text-v1",
+                ["pageSize"] = 30_001,
             },
             token);
 
         Assert.Equal("artifact", unknown.Structured.GetProperty("path").GetString());
-        Assert.Equal("offset", outside.Structured.GetProperty("path").GetString());
+        Assert.Equal("cursor", edited.Structured.GetProperty("path").GetString());
+        Assert.Equal("pageSize", large.Structured.GetProperty("path").GetString());
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -173,6 +187,8 @@ public sealed class ToolPagingTests
         DeckDocument after = Assert.IsType<OperationSuccess<DeckDocument>>(
             (await world.Store.GetAsync(deck.DeckId, token)).Value).Data;
         Assert.Equal(150, after.Entries.Count(entry => entry.OracleId is not null));
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -233,7 +249,7 @@ public sealed class ToolPagingTests
             {
                 ["deckId"] = deck.DeckId.ToString(),
                 ["expectedRevision"] = deck.Revision,
-                ["expectedCorpusGeneration"] = guards.GetProperty("corpusGenerationId").GetString(),
+                ["expectedActiveGeneration"] = guards.GetProperty("corpusGenerationId").GetString(),
                 ["source"] = source.DeepClone(),
                 ["freshnessPolicy"] = "cache-only",
                 ["previewFingerprint"] = fingerprint,
@@ -246,6 +262,16 @@ public sealed class ToolPagingTests
             Apply("0" + guards.GetProperty("previewFingerprint").GetString()),
             token);
         Assert.NotEqual("success", stale.Kind);
+        JsonObject changedSource = Apply(guards.GetProperty("previewFingerprint").GetString()!);
+        changedSource["source"]!["ruleSet"]!["rules"]![0]!["categoryId"] =
+            deck.Categories.Single(value => value.Name == "Ramp").CategoryId.ToString();
+        ToolBudgetWorld.ToolOutcome changed = await world.CallAsync(
+            "local_deck_category_rules_apply",
+            changedSource,
+            token);
+        Assert.Equal("conflict", changed.Kind);
+        Assert.Equal("preview-changed", changed.Structured.GetProperty("reasonCode").GetString());
+        Assert.True(changed.Structured.GetProperty("current").TryGetProperty("previewFingerprint", out _));
         _ = (await world.CallAsync(
             "local_deck_category_rules_apply",
             Apply(guards.GetProperty("previewFingerprint").GetString()!),
@@ -255,6 +281,8 @@ public sealed class ToolPagingTests
             (await world.Store.GetAsync(deck.DeckId, token)).Value).Data;
         int tagged = after.CategoryAssignments.Count(value => value.CategoryId == category);
         Assert.True(tagged >= 100, $"{tagged} assignments were added in the category.");
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -283,7 +311,9 @@ public sealed class ToolPagingTests
             world.Cards.Take(300).Select(card => card["name"]!.GetValue<string>()),
             entries.Select(entry => entry.GetProperty("cardName").GetString()));
         Assert.All(pages, page => Assert.Equal(300, page.Data.GetProperty("entryCount").GetInt32()));
-        Assert.Single(pages.Select(page => page.Data.GetProperty("fingerprint").GetString()).Distinct());
+        Assert.Single(pages.Select(page => page.Data.GetProperty("previewFingerprint").GetString()).Distinct());
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
@@ -321,120 +351,84 @@ public sealed class ToolPagingTests
         Assert.Equal(175, ids.Distinct().Count());
         Assert.Equal(175, ids.Count);
         Assert.True(sawTruncated);
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
-    /// Verifies the three local previews follow the one offset rule: a negative offset or one past the last row is
-    /// refused with the argument name and the size of the list, and an offset equal to the number of rows returns an
-    /// empty last page.
+    /// Verifies the three local previews hand out a cursor that serves the next page of a preview that is still the
+    /// same, refuse a cursor of a preview that changed as stale with the current previewFingerprint, and refuse a page
+    /// size outside 1 through 100 and an edited cursor with the argument path.
     /// </summary>
     [Fact]
-    public async Task LocalPreviews_WithOffsetsOutsideTheRows_FollowTheOneOffsetRule()
+    public async Task LocalPreviews_Cursors_AreBoundToThePreview()
     {
         CancellationToken token = TestContext.Current.CancellationToken;
         await using ToolBudgetWorld world = await ToolBudgetWorld.CreateAsync(token, remoteDeckSize: 1);
         DeckDocument unresolved = await world.CreateLocalDeckAsync("Unresolved", resolved: false, token);
         DeckDocument resolved = await world.CreateLocalDeckAsync("Resolved", resolved: true, token);
-        (string Tool, JsonObject Arguments, int Count, string List)[] previews =
+        JsonObject otherRules = RulesArguments(resolved);
+        otherRules["source"]!["ruleSet"]!["rules"]![0]!["categoryId"] =
+            resolved.Categories.Single(value => value.Name == "Ramp").CategoryId.ToString();
+        (string Tool, JsonObject Arguments, JsonObject Changed)[] previews =
         [
             (
                 "local_deck_identity_reconcile_preview",
                 IdentityArguments(unresolved),
-                150,
-                "rows"),
-            (
-                "local_deck_category_rules_preview",
-                RulesArguments(resolved),
-                ToolBudgetWorld.DeckSize,
-                "decisions"),
-            (
-                "local_deck_import_preview",
-                ImportArguments(world),
-                300,
-                "entries"),
+                IdentityArguments(unresolved, take: 149)),
+            ("local_deck_category_rules_preview", RulesArguments(resolved), otherRules),
+            ("local_deck_import_preview", ImportArguments(world), ImportArguments(world, take: 299)),
         ];
 
-        foreach ((string tool, JsonObject arguments, int count, string list) in previews)
+        foreach ((string tool, JsonObject arguments, JsonObject changed) in previews)
         {
-            JsonObject past = (JsonObject)arguments.DeepClone();
-            past["offset"] = count + 1;
-            JsonObject negative = (JsonObject)arguments.DeepClone();
-            negative["offset"] = -1;
-            JsonObject atEnd = (JsonObject)arguments.DeepClone();
-            atEnd["offset"] = count;
-
-            ToolBudgetWorld.ToolOutcome refusedPast = await world.CallAsync(tool, past, token);
-            ToolBudgetWorld.ToolOutcome refusedNegative = await world.CallAsync(tool, negative, token);
-            ToolBudgetWorld.ToolOutcome empty = await world.CallAsync(tool, atEnd, token);
-
-            Assert.Equal("invalid-input", refusedPast.Kind);
-            Assert.Equal("offset", refusedPast.Structured.GetProperty("path").GetString());
-            string message = refusedPast.Structured.GetProperty("message").GetString()!;
-            Assert.Contains($"from 0 to {count}", message, StringComparison.Ordinal);
-            Assert.Contains($"{count} {list}", message, StringComparison.Ordinal);
-            Assert.Equal("invalid-input", refusedNegative.Kind);
-            Assert.False(empty.Data.TryGetProperty("nextOffset", out JsonElement next) &&
-                next.ValueKind == JsonValueKind.Number);
-        }
-    }
-
-    /// <summary>
-    /// Verifies a later page of each local preview is refused when the caller passes the fingerprint of another
-    /// preview, and is served when it passes the fingerprint of the page it read first.
-    /// </summary>
-    [Fact]
-    public async Task LocalPreviews_LaterPageWithAnotherFingerprint_IsRefused()
-    {
-        CancellationToken token = TestContext.Current.CancellationToken;
-        await using ToolBudgetWorld world = await ToolBudgetWorld.CreateAsync(token, remoteDeckSize: 1);
-        DeckDocument unresolved = await world.CreateLocalDeckAsync("Unresolved", resolved: false, token);
-        DeckDocument resolved = await world.CreateLocalDeckAsync("Resolved", resolved: true, token);
-        (string Tool, JsonObject Arguments, string Fingerprint)[] previews =
-        [
-            ("local_deck_identity_reconcile_preview", IdentityArguments(unresolved), "previewFingerprint"),
-            ("local_deck_category_rules_preview", RulesArguments(resolved), "previewFingerprint"),
-            ("local_deck_import_preview", ImportArguments(world), "fingerprint"),
-        ];
-
-        foreach ((string tool, JsonObject arguments, string fingerprint) in previews)
-        {
-            ToolBudgetWorld.ToolOutcome first = await world.CallAsync(tool, arguments, token);
-            Assert.Contains(
-                "expectedPreviewFingerprint",
-                first.Data.GetProperty("narrow").GetString(),
-                StringComparison.Ordinal);
-            JsonObject later = (JsonObject)arguments.DeepClone();
-            later["offset"] = first.Data.GetProperty("nextOffset").GetInt32();
-            later["expectedPreviewFingerprint"] = first.Data.GetProperty(fingerprint).GetString();
-            JsonObject stale = (JsonObject)later.DeepClone();
-            stale["expectedPreviewFingerprint"] = "0" + first.Data.GetProperty(fingerprint).GetString();
-            JsonObject onFirstPage = (JsonObject)arguments.DeepClone();
-            onFirstPage["expectedPreviewFingerprint"] = "not-checked-on-the-first-page";
-
-            ToolBudgetWorld.ToolOutcome served = await world.CallAsync(tool, later, token);
-            ToolBudgetWorld.ToolOutcome refused = await world.CallAsync(tool, stale, token);
-            ToolBudgetWorld.ToolOutcome firstAgain = await world.CallAsync(tool, onFirstPage, token);
+            JsonObject small = (JsonObject)arguments.DeepClone();
+            small["pageSize"] = 2;
+            ToolBudgetWorld.ToolOutcome first = await world.CallAsync(tool, small, token);
+            string cursor = first.Data.GetProperty("nextCursor").GetString()!;
+            small["cursor"] = cursor;
+            ToolBudgetWorld.ToolOutcome second = await world.CallAsync(tool, small, token);
+            JsonObject other = (JsonObject)changed.DeepClone();
+            other["pageSize"] = 2;
+            other["cursor"] = cursor;
+            ToolBudgetWorld.ToolOutcome stale = await world.CallAsync(tool, other, token);
 
             Assert.Equal(
-                first.Data.GetProperty(fingerprint).GetString(),
-                served.Data.GetProperty(fingerprint).GetString());
-            Assert.Equal("conflict", refused.Kind);
-            Assert.Equal("preview-changed", refused.Structured.GetProperty("reasonCode").GetString());
-            _ = firstAgain.Data;
+                first.Data.GetProperty("previewFingerprint").GetString(),
+                second.Data.GetProperty("previewFingerprint").GetString());
+            Assert.Equal("conflict", stale.Kind);
+            Assert.Equal("cursor-stale", stale.Structured.GetProperty("reasonCode").GetString());
+            Assert.True(stale.Structured.GetProperty("current").TryGetProperty("previewFingerprint", out _));
+            foreach ((string name, object value, string path, string reason) in new[]
+            {
+                ("pageSize", (object)0, "pageSize", "invalid-page-size"),
+                ("pageSize", 101, "pageSize", "invalid-page-size"),
+                ("cursor", cursor + "x", "cursor", "invalid-cursor"),
+            })
+            {
+                JsonObject bad = (JsonObject)arguments.DeepClone();
+                bad[name] = JsonValue.Create(value);
+                ToolBudgetWorld.ToolOutcome refused = await world.CallAsync(tool, bad, token);
+                Assert.Equal("invalid-input", refused.Kind);
+                Assert.Equal(path, refused.Structured.GetProperty("path").GetString());
+                Assert.Equal(reason, refused.Structured.GetProperty("reasonCode").GetString());
+            }
         }
+
+        world.AssertNoPathlessRefusals();
     }
 
     /// <summary>
-    /// Builds the arguments of an identity preview over the first 150 entries of a deck.
+    /// Builds the arguments of an identity preview over the first entries of a deck.
     /// </summary>
-    private static JsonObject IdentityArguments(DeckDocument deck)
+    private static JsonObject IdentityArguments(DeckDocument deck, int take = 150)
     {
         return new JsonObject
         {
             ["deckId"] = deck.DeckId.ToString(),
             ["expectedRevision"] = deck.Revision,
             ["entryIds"] = new JsonArray(
-                [.. deck.Entries.Take(150).Select(value => (JsonNode?)value.EntryId.ToString())]),
+                [.. deck.Entries.Take(take).Select(value => (JsonNode?)value.EntryId.ToString())]),
         };
     }
 
@@ -468,21 +462,21 @@ public sealed class ToolPagingTests
     }
 
     /// <summary>
-    /// Builds the arguments of an import preview of 300 plain text lines.
+    /// Builds the arguments of an import preview of plain text lines.
     /// </summary>
-    private static JsonObject ImportArguments(ToolBudgetWorld world)
+    private static JsonObject ImportArguments(ToolBudgetWorld world, int take = 300)
     {
         return new JsonObject
         {
             ["formatId"] = "generic-text-v1",
             ["content"] = string.Join(
                 '\n',
-                world.Cards.Take(300).Select(card => "1 " + card["name"]!.GetValue<string>())),
+                world.Cards.Take(take).Select(card => "1 " + card["name"]!.GetValue<string>())),
         };
     }
 
     /// <summary>
-    /// Reads every page of a tool that pages one list with <c>nextOffset</c>, and returns the pages.
+    /// Reads every page of a tool that pages one list with <c>nextCursor</c>, and returns the pages.
     /// </summary>
     private static async Task<List<ToolBudgetWorld.ToolOutcome>> ReadPagesAsync(
         ToolBudgetWorld world,
@@ -499,13 +493,13 @@ public sealed class ToolPagingTests
             Assert.True(outcome.Characters < 40_000, $"{tool} page {page} is {outcome.Characters} characters");
             pages.Add(outcome);
             if (!outcome.Data.TryGetProperty(
-                "nextOffset",
-                out JsonElement next) || next.ValueKind != JsonValueKind.Number)
+                "nextCursor",
+                out JsonElement next) || next.ValueKind != JsonValueKind.String)
             {
                 return pages;
             }
 
-            arguments["offset"] = next.GetInt32();
+            arguments["cursor"] = next.GetString();
         }
 
         Assert.Fail($"{tool} did not finish.");

@@ -83,6 +83,11 @@ internal sealed class FakeArchidekt : HttpMessageHandler
     internal string DeckName { get; set; } = "Fake deck";
 
     /// <summary>
+    /// Gets or sets the name the fake folder read reports.
+    /// </summary>
+    internal string FolderName { get; set; } = "Tests";
+
+    /// <summary>
     /// Gets or sets the description the fake deck reports.
     /// </summary>
     internal string Description { get; set; } = string.Empty;
@@ -715,7 +720,7 @@ internal sealed class FakeArchidekt : HttpMessageHandler
         return new JsonObject
         {
             ["id"] = 9,
-            ["name"] = "Tests",
+            ["name"] = FolderName,
             ["parentFolder"] = new JsonObject { ["id"] = 1, ["name"] = "Home" },
             ["private"] = true,
             ["owner"] = new JsonObject { ["id"] = 0 },

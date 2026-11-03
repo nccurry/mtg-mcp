@@ -124,7 +124,7 @@ public sealed class DeckInterchangeMcpTests
             {
                 ["formatId"] = "generic-text-v1",
                 ["content"] = genericContent,
-                ["expectedFingerprint"] = previews["generic-text-v1"].GetProperty("fingerprint").GetString(),
+                ["previewFingerprint"] = previews["generic-text-v1"].GetProperty("previewFingerprint").GetString(),
                 ["options"] = new { deckName = "Imported Dummy Commander", format = "commander" },
             }).ConfigureAwait(false);
         Guid genericId = genericImported.GetProperty("summary").GetProperty("deckId").GetGuid();
@@ -132,6 +132,7 @@ public sealed class DeckInterchangeMcpTests
         _ = await CallSuccessAsync(session, "local_deck_delete", new Dictionary<string, object?>
         {
             ["deckId"] = originalId,
+            ["confirmation"] = $"delete deck {originalId}",
             ["expectedRevision"] = originalRevision,
         }).ConfigureAwait(false);
         string nativeContent = Artifact(bundles["mtg-mcp-json-v1"], "deck.mtg-mcp.json");
@@ -142,7 +143,7 @@ public sealed class DeckInterchangeMcpTests
             {
                 ["formatId"] = "mtg-mcp-json-v1",
                 ["content"] = nativeContent,
-                ["expectedFingerprint"] = previews["mtg-mcp-json-v1"].GetProperty("fingerprint").GetString(),
+                ["previewFingerprint"] = previews["mtg-mcp-json-v1"].GetProperty("previewFingerprint").GetString(),
                 ["options"] = new { },
                 ["returnDeck"] = true,
             }).ConfigureAwait(false);
@@ -172,11 +173,13 @@ public sealed class DeckInterchangeMcpTests
         _ = await CallSuccessAsync(session, "local_deck_delete", new Dictionary<string, object?>
         {
             ["deckId"] = genericId,
+            ["confirmation"] = $"delete deck {genericId}",
             ["expectedRevision"] = genericImported.GetProperty("summary").GetProperty("revision").GetInt64(),
         }).ConfigureAwait(false);
         _ = await CallSuccessAsync(session, "local_deck_delete", new Dictionary<string, object?>
         {
             ["deckId"] = originalId,
+            ["confirmation"] = $"delete deck {originalId}",
             ["expectedRevision"] = restored.GetProperty("revision").GetInt64(),
         }).ConfigureAwait(false);
         JsonElement decks = await CallSuccessAsync(
@@ -204,7 +207,7 @@ public sealed class DeckInterchangeMcpTests
         {
             string name = artifact!["fileName"]!.GetValue<string>();
             StringBuilder content = new();
-            int offset = 0;
+            string? cursor = null;
             while (true)
             {
                 JsonElement page = await CallSuccessAsync(
@@ -215,16 +218,15 @@ public sealed class DeckInterchangeMcpTests
                         ["deckId"] = deckId,
                         ["formatId"] = formatId,
                         ["artifact"] = name,
-                        ["offset"] = offset,
+                        ["cursor"] = cursor,
                     }).ConfigureAwait(false);
-                JsonElement chunk = page.GetProperty("chunk");
-                content.Append(chunk.GetProperty("content").GetString());
-                if (!chunk.TryGetProperty("nextOffset", out JsonElement next))
+                content.Append(page.GetProperty("chunk").GetProperty("content").GetString());
+                if (!page.TryGetProperty("nextCursor", out JsonElement next) || next.ValueKind != JsonValueKind.String)
                 {
                     break;
                 }
 
-                offset = next.GetInt32();
+                cursor = next.GetString();
             }
 
             artifact["content"] = content.ToString();

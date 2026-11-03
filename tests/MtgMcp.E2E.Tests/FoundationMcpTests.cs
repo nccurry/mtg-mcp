@@ -497,28 +497,28 @@ public sealed class FoundationMcpTests
         {
             ["local_deck_apply_changes"] = ["changes", "deckId", "expectedRevision", "returnDeck", "whenCardPresent"],
             ["local_deck_backup_create"] = [],
-            ["local_deck_backup_delete"] = ["backupId"],
+            ["local_deck_backup_delete"] = ["backupId", "confirmation"],
             ["local_deck_backup_list"] = [],
-            ["local_deck_backup_restore"] = ["backupId", "expectedDatabaseFingerprint"],
+            ["local_deck_backup_restore"] = ["backupId", "confirmation", "expectedDatabaseFingerprint"],
             ["local_deck_category_rules_apply"] =
             [
-                "applyToken", "deckId", "expectedCorpusGeneration", "expectedRevision", "freshnessPolicy",
+                "applyToken", "deckId", "expectedActiveGeneration", "expectedRevision", "freshnessPolicy",
                 "previewFingerprint", "returnDeck", "source",
             ],
             ["local_deck_category_rules_preview"] =
-                ["deckId", "expectedPreviewFingerprint", "expectedRevision", "freshnessPolicy", "offset", "source"],
+                ["cursor", "deckId", "expectedRevision", "freshnessPolicy", "pageSize", "source"],
             ["local_deck_create"] = ["request", "returnDeck"],
-            ["local_deck_delete"] = ["deckId", "expectedRevision"],
+            ["local_deck_delete"] = ["confirmation", "deckId", "expectedRevision"],
             ["local_deck_duplicates_preview"] = ["deckId", "exempt", "expectedRevision", "keepPriority", "matchBy"],
-            ["local_deck_export_bundle"] = ["artifact", "deckId", "formatId", "offset", "options"],
+            ["local_deck_export_bundle"] = ["artifact", "cursor", "deckId", "formatId", "options", "pageSize"],
             ["local_deck_get"] =
                 ["cardNames", "categoryNames", "cursor", "deckId", "fields", "include", "pageSize", "responseFormat", "zones"],
             ["local_deck_identity_reconcile_apply"] =
                 ["allowPartial", "applyToken", "deckId", "expectedRevision", "previewFingerprint", "returnDeck"],
             ["local_deck_identity_reconcile_preview"] =
-                ["deckId", "entryIds", "expectedPreviewFingerprint", "expectedRevision", "freshnessPolicy", "offset"],
-            ["local_deck_import_create"] = ["content", "expectedFingerprint", "formatId", "options", "returnDeck"],
-            ["local_deck_import_preview"] = ["content", "expectedPreviewFingerprint", "formatId", "offset", "options"],
+                ["cursor", "deckId", "entryIds", "expectedRevision", "freshnessPolicy", "pageSize"],
+            ["local_deck_import_create"] = ["content", "formatId", "options", "previewFingerprint", "returnDeck"],
+            ["local_deck_import_preview"] = ["content", "cursor", "formatId", "options", "pageSize"],
             ["local_deck_interchange_formats"] = [],
             ["local_deck_list"] = ["cursor", "pageSize"],
             ["local_deck_validate"] = ["deckId", "rules"],
@@ -573,35 +573,47 @@ public sealed class FoundationMcpTests
         Dictionary<string, string[]> expectedProperties = new(StringComparer.Ordinal)
         {
             ["archidekt_auth_status"] = [],
-            ["archidekt_deck_create"] = ["expectedLocalRevision", "localDeckId", "request"],
-            ["archidekt_deck_delete"] = ["request"],
-            ["archidekt_deck_get"] = ["deckId", "offset", "responseFormat", "zones"],
+            ["archidekt_deck_create"] =
+                [
+                    "description", "expectedRevision", "format", "localDeckId", "name", "parentFolderId", "visibility",
+                ],
+            ["archidekt_deck_delete"] = ["confirmation", "expectedRemoteFingerprint", "remoteDeckId"],
+            ["archidekt_deck_get"] = ["cursor", "pageSize", "remoteDeckId", "responseFormat", "zones"],
             ["archidekt_deck_list"] = ["cursor", "pageSize"],
-            ["archidekt_folder_create"] = ["request"],
-            ["archidekt_folder_delete"] = ["request"],
-            ["archidekt_folders_get"] = ["folderId", "kind", "offset"],
-            ["archidekt_folder_move_items"] = ["request"],
-            ["archidekt_folder_update"] = ["request"],
-            ["archidekt_pull_apply"] = ["request"],
+            ["archidekt_folder_create"] = ["name", "parentFolderId", "visibility"],
+            ["archidekt_folder_delete"] = ["confirmation", "expectedName", "expectedTreeFingerprint", "folderId"],
+            ["archidekt_folders_get"] = ["cursor", "folderId", "kind", "pageSize"],
+            ["archidekt_folder_move_items"] = ["destinationFolderId", "expectedTreeFingerprint", "items"],
+            ["archidekt_folder_update"] =
+                ["expectedTreeFingerprint", "folderId", "name", "parentFolderId", "updateParent", "visibility"],
+            ["archidekt_pull_apply"] =
+                [
+                    "confirmation", "discardLocalChanges", "expectedRemoteFingerprint", "expectedRevision",
+                    "localDeckId", "previewFingerprint", "remoteDeckId",
+                ],
             ["archidekt_pull_preview"] =
                 [
-                    "differenceOffset", "discardLocalChanges", "expectedPreviewFingerprint", "localDeckId",
-                    "operationOffset", "remoteDeckId", "responseFormat",
+                    "cursor", "discardLocalChanges", "localDeckId", "pageSize", "remoteDeckId", "responseFormat",
                 ],
-            ["archidekt_push_apply"] = ["request"],
-            ["archidekt_push_preview"] =
+            ["archidekt_push_apply"] =
                 [
-                    "confirmRemovals", "differenceOffset", "expectedPreviewFingerprint", "localDeckId", "operationOffset",
-                    "responseFormat",
+                    "confirmRemovals", "expectedRemoteFingerprint", "expectedRevision", "localDeckId",
+                    "previewFingerprint",
                 ],
-            ["archidekt_snapshot_create"] = ["request"],
-            ["archidekt_snapshot_delete"] = ["request"],
-            ["archidekt_snapshots_get"] = ["deckId", "kind", "offset", "responseFormat", "snapshotId", "zones"],
-            ["archidekt_snapshot_restore_apply"] = ["request"],
-            ["archidekt_snapshot_restore_preview"] =
-                ["deckId", "differenceOffset", "expectedPreviewFingerprint", "operationOffset", "snapshotId"],
-            ["archidekt_snapshot_update"] = ["request"],
-            ["archidekt_sync_diff"] = ["differenceOffset", "localDeckId", "responseFormat"],
+            ["archidekt_push_preview"] =
+                ["confirmRemovals", "cursor", "localDeckId", "pageSize", "responseFormat"],
+            ["archidekt_snapshot_create"] = ["description", "expectedRemoteFingerprint", "name", "remoteDeckId"],
+            ["archidekt_snapshot_delete"] = ["confirmation", "expectedChecksum", "remoteDeckId", "snapshotId"],
+            ["archidekt_snapshots_get"] =
+                ["cursor", "kind", "pageSize", "remoteDeckId", "responseFormat", "snapshotId", "zones"],
+            ["archidekt_snapshot_restore_apply"] =
+                [
+                    "confirmation", "expectedRemoteFingerprint", "expectedSnapshotChecksum",
+                    "expectedSnapshotContentFingerprint", "previewFingerprint", "remoteDeckId", "snapshotId",
+                ],
+            ["archidekt_snapshot_restore_preview"] = ["cursor", "pageSize", "remoteDeckId", "snapshotId"],
+            ["archidekt_snapshot_update"] = ["expectedChecksum", "name", "remoteDeckId", "snapshotId"],
+            ["archidekt_sync_diff"] = ["cursor", "localDeckId", "pageSize", "responseFormat"],
         };
         HashSet<string> reads = [.. ArchidektReadToolNames];
         HashSet<string> destructive =
@@ -653,14 +665,14 @@ public sealed class FoundationMcpTests
             ["playgroup_commander_get"] = ["commanderId"],
             ["playgroup_commander_get_by_name"] = ["name"],
             ["playgroup_commander_turn_damage_get"] = ["commanderId"],
-            ["playgroup_deck_elo_history_get"] = ["deckId", "includeArchived", "leagueId", "playgroupId"],
-            ["playgroup_deck_get"] = ["deckId", "includeArchived"],
+            ["playgroup_deck_elo_history_get"] = ["includeArchived", "leagueId", "playgroupDeckId", "playgroupId"],
+            ["playgroup_deck_get"] = ["includeArchived", "playgroupDeckId"],
             ["playgroup_games_stats_get"] = ["from", "groupBy", "maxGames", "playgroupId", "to"],
             ["playgroup_game_events_batch_create"] = ["events", "gameId"],
-            ["playgroup_live_session_create"] = ["request"],
+            ["playgroup_live_session_create"] = ["bracket", "clientIdentifier", "discoverable", "languageIds", "leagueId", "lifeAmount", "playerAmount", "playgroupId"],
             ["playgroup_me_get"] = [],
             ["playgroup_playgroup_game_get"] = ["gameId", "includeEvents", "playgroupId"],
-            ["playgroup_playgroup_games_list"] = ["includeEvents", "limit", "page", "playgroupId"],
+            ["playgroup_playgroup_games_list"] = ["cursor", "includeEvents", "pageSize", "playgroupId"],
             ["playgroup_playgroup_members_list"] = ["playgroupId"],
             ["playgroup_user_decks_list"] = ["includeArchived", "userId"],
             ["playgroup_user_get"] = ["userId"],

@@ -1,5 +1,227 @@
 # Changelog
 
+## 0.15.0 - Unreleased
+
+This release fixes eight inconsistencies in the MCP surface that an audit of `0.14.0` found: five ways to page, three
+meanings of `responseFormat`, three names for the preview fingerprint, two styles of apply arguments, several revision
+and "changed since" codes, `invalid-input` results with no `path`, and one concept under several names. Each one made
+an agent learn more than one way to do the same thing, so it guessed and a wrong guess cost a failed call. Now there is
+one form for each, written down in [MCP surface](docs/architecture/mcp-surface.md) and enforced by tests.
+
+The owner approved a clean break (see [versioning](docs/versioning.md#approved-0150-clean-break-exception)): there are no
+compatibility aliases and no deprecation release. An old argument name is refused with `invalid-input`, `path` set to
+that name, and "Property '<name>' is not accepted here." An old reason code is never returned. Every client prompt or
+script that names an old argument, result field, or reason code must change. The tables below are the migration
+guide; the tool count (86 in `remote` mode) and the tool names do not change.
+
+Upgrade note: An MCP client keeps the mtg-mcp process it started. After upgrading, restart or reconnect mtg-mcp in the
+client (in Claude Code, /mcp or a new session) before relying on new behavior.
+
+### Breaking
+
+#### Paging: `cursor`, `pageSize`, `nextCursor`
+
+Every paged tool takes `cursor` and `pageSize` and returns `nextCursor`, which is null on the last page. A cursor is tied to
+what its page depends on, so one `cursor` replaces the offsets and the fingerprint argument of later pages. These go:
+`offset`, `operationOffset`, `differenceOffset`, `expectedPreviewFingerprint`, `limit`, `page`, `printsCursor`,
+`rulingsCursor`, and every `next*Offset` field. A stale cursor is `cursor-stale`; a malformed cursor is `invalid-cursor`
+with `path` `cursor`.
+
+| Tool | Old | New (default and most for `pageSize`) |
+| --- | --- | --- |
+| `local_deck_import_preview`, `local_deck_identity_reconcile_preview`, `local_deck_category_rules_preview` | `offset`, `expectedPreviewFingerprint`; result `nextOffset` | `cursor`, `pageSize` (100, 100); `nextCursor` |
+| `local_deck_export_bundle` | `offset` (UTF-16 code units); result `chunk.nextOffset` | `cursor`, `pageSize` (30,000 UTF-16 code units, 30,000); top-level `nextCursor` |
+| `archidekt_deck_get`, `archidekt_folders_get`, `archidekt_snapshots_get` (kind `get`) | `offset`; result `nextOffset` | `cursor`, `pageSize` (100, 200); `nextCursor` |
+| `archidekt_deck_list` | `cursor` | `cursor`, and a new `pageSize` (50, 100) |
+| `archidekt_sync_diff` | `differenceOffset`; result `nextDifferenceOffset` | `cursor`, `pageSize` (50, 100); `nextCursor` |
+| `archidekt_pull_preview`, `archidekt_push_preview`, `archidekt_snapshot_restore_preview` | `operationOffset`, `differenceOffset`, `expectedPreviewFingerprint`; results `nextOperationOffset`, `nextDifferenceOffset` | `cursor`, `pageSize` (50, 100, operations and differences together); `nextCursor` |
+| `scryfall_card_details` | `printsCursor`, `rulingsCursor`; results `prints.nextCursor`, `rulings.nextCursor` | one `cursor`; one top-level `nextCursor`. A section with no more items is left out of later pages. |
+| `card_list_query` | `rows.pageSize`; result `rows.nextCursor` | top-level `pageSize` and `nextCursor`. The `rows` object keeps only `fields` and `sortBy`. |
+| `spellbook_variant_search`, `spellbook_deck_combos_find` | `limit`, `offset` (and no next-page field) | `pageSize` (20, 25), `cursor`; the cursor ends at the source offset cap of 1,000 |
+| `playgroup_playgroup_games_list` | `page`, `limit` (and no next-page field) | `pageSize` (10, 100), `cursor`; `nextCursor` follows every full page, so a total that is an exact multiple of `pageSize` ends with an empty page |
+
+#### Fingerprints
+
+| Where | Old | New |
+| --- | --- | --- |
+| `local_deck_import_preview` result | `fingerprint` | `previewFingerprint` |
+| `local_deck_import_create` argument | `expectedFingerprint` | `previewFingerprint` |
+| The three local previews, the pull, push, and restore previews, and `local_deck_import_preview` | `expectedPreviewFingerprint` on later pages | removed; the cursor is tied to the preview |
+
+`applyToken` stays on the identity and category previews. The `fingerprint` in `card_list_query` and
+`card_lists_compare` results stays: it identifies the analyzed list, not a preview.
+
+#### Flat arguments
+
+The 12 Archidekt write tools no longer take one `request` object. They take the same fields as top-level arguments,
+and an error `path` has no `request.` prefix. `playgroup_live_session_create` also takes its fields flat.
+`archidekt_deck_create` took a mix and now takes only flat arguments.
+
+| Tool | Arguments (required first) |
+| --- | --- |
+| `archidekt_deck_create` | `name`, `format`, `description`, `visibility` (default `private`), `parentFolderId`, `localDeckId`, `expectedRevision` |
+| `archidekt_deck_delete` | `remoteDeckId`, `expectedRemoteFingerprint`, `confirmation` |
+| `archidekt_pull_apply` | `remoteDeckId`, `expectedRemoteFingerprint`, `previewFingerprint`, `localDeckId`, `expectedRevision`, `discardLocalChanges`, `confirmation` |
+| `archidekt_push_apply` | `localDeckId`, `expectedRevision`, `expectedRemoteFingerprint`, `previewFingerprint`, `confirmRemovals` |
+| `archidekt_folder_create` | `name`, `visibility`, `parentFolderId` |
+| `archidekt_folder_update` | `folderId`, `expectedTreeFingerprint`, `name`, `visibility`, `parentFolderId`, `updateParent` |
+| `archidekt_folder_move_items` | `expectedTreeFingerprint`, `items`, `destinationFolderId` |
+| `archidekt_folder_delete` | `folderId`, `expectedName`, `expectedTreeFingerprint`, `confirmation` |
+| `archidekt_snapshot_create` | `remoteDeckId`, `expectedRemoteFingerprint`, `name`, `description` |
+| `archidekt_snapshot_update` | `remoteDeckId`, `snapshotId`, `expectedChecksum`, `name` |
+| `archidekt_snapshot_delete` | `remoteDeckId`, `snapshotId`, `expectedChecksum`, `confirmation` |
+| `archidekt_snapshot_restore_apply` | `remoteDeckId`, `snapshotId`, `expectedSnapshotChecksum`, `expectedSnapshotContentFingerprint`, `expectedRemoteFingerprint`, `previewFingerprint`, `confirmation` |
+| `playgroup_live_session_create` | `playerAmount`, `lifeAmount`, `bracket`, `playgroupId`, `leagueId`, `discoverable`, `languageIds`, `clientIdentifier` |
+
+A write tool keeps a nested argument only where the body is a document: the deck graph of `local_deck_create`
+(`request`), `changes`, the import `options`, the category rule `source`, folder move `items`, Playgroup `events`, and
+the statistics requests.
+
+#### Identifiers
+
+`deckId` now names a local deck in every tool. Archidekt tools take `localDeckId` and `remoteDeckId`, Playgroup tools take
+`playgroupDeckId`, and a saved Scryfall request is `requestSnapshotId`. An Archidekt snapshot keeps `snapshotId`.
+
+| Where | Old | New |
+| --- | --- | --- |
+| `archidekt_deck_get`, `archidekt_snapshots_get`, `archidekt_snapshot_restore_preview` arguments | `deckId` | `remoteDeckId` |
+| The Archidekt delete, snapshot, and restore apply tools (formerly inside `request`) | `deckId` | `remoteDeckId` |
+| `archidekt_snapshots_get` and restore preview results | `deckId` | `remoteDeckId` |
+| `archidekt_deck_list`, `archidekt_deck_get` results, the `archidekt_deck_create` result, and folder deck rows | `remoteId` | `remoteDeckId` |
+| `card_lists_compare` and `card_list_query` sources `archidekt-deck` and `archidekt-snapshot` | `archidektDeckId` | `remoteDeckId` |
+| `playgroup_deck_get`, `playgroup_deck_elo_history_get` | `deckId` | `playgroupDeckId` |
+| `scryfall_request_snapshots_get`, `scryfall_request_snapshot_delete` arguments | `snapshotId` | `requestSnapshotId` |
+| Card list source `scryfall-snapshot` | `snapshotId` | `requestSnapshotId` |
+| Scryfall results (snapshot references, summaries, the delete result, and list cards) | `snapshotId` | `requestSnapshotId` |
+
+#### Revision
+
+A guard on a local deck revision is `expectedRevision` and a result reports `revision`.
+
+| Where | Old | New |
+| --- | --- | --- |
+| `archidekt_deck_create`, `archidekt_pull_apply`, `archidekt_push_apply` | `expectedLocalRevision` | `expectedRevision` |
+| `archidekt_pull_preview`, `archidekt_push_preview`, `archidekt_sync_diff`, and the Archidekt apply and sync results | `localRevision` | `revision` |
+| `local_deck_category_rules_preview`, `local_deck_identity_reconcile_preview`, `local_deck_export_bundle` results | `deckRevision` | `revision` |
+
+`sourceRevision` of an import proposal stays: it is where the source deck was, not the current revision.
+
+#### Reason codes
+
+A conflict says what is current in `current`, which can now hold `previewFingerprint` beside `revision` and
+`remoteFingerprint`. Three codes cover every change of state, and a code that names a distinct cause stays.
+
+| Old | New | Where |
+| --- | --- | --- |
+| `deck-revision-conflict` | `stale-deck-revision` | Card lists, category rules, duplicates, identity, Commander Spellbook, statistics |
+| `local-deck-changed` | `stale-deck-revision` | `archidekt_deck_create` |
+| `pull-preview-changed`, `push-preview-changed` | `stale-deck-revision` when the local revision moved, else `preview-changed` | Pull and push apply. The revision is checked first; a changed Archidekt deck is still `remote-deck-changed`. |
+| `restore-preview-changed`, `import-preview-changed`, `category-preview-mismatch`, `identity-preview-mismatch` | `preview-changed` | The restore, import, category, and identity applies |
+| `source-changed-between-pages`, `deck-changed-between-pages`, `deck-list-changed` | `cursor-stale` | Paged reads of card lists, `local_deck_get`, and `archidekt_deck_list` |
+| `preview-changed` returned by a later page of a preview | `cursor-stale` | Paged previews |
+| `invalid-cursor` for a cursor whose card-data checksum no longer matches | `cursor-stale` | Scryfall reads |
+| `category-corpus-conflict` | `stale-scryfall-generation` | `local_deck_category_rules_apply` |
+| `invalid-deck-list-cursor` | `invalid-cursor` | `local_deck_list` |
+| `invalid-offset` | `invalid-cursor` | Paged previews, deck reads, and exports |
+| `invalid-page-options` | `invalid-page-size` (`path` `pageSize`) or `invalid-cursor` (`path` `cursor`) | Commander Spellbook |
+| `invalid-page-boundary` | `invalid-cursor` (`path` `cursor`) or `invalid-page-size` (`path` `pageSize`) | `playgroup_playgroup_games_list` |
+| `request-limit-exceeded` as `invalid-input` | `request-limit-exceeded` as `unsupported` | Archidekt, since no argument is at fault |
+| `data-loss-not-acknowledged`, `activation-change-not-acknowledged`, `evidence-loss-not-acknowledged` | `confirmation-required` | The Scryfall destructive tools |
+| A confirmation refusal with a message of its own per tool | `confirmation-required` with the one message `confirmation must be exactly "<phrase>".` | Every tool that takes `confirmation` |
+| (new) a non-numeric Archidekt ID, so a refusal never echoes arbitrary caller text | `invalid-id` (`path` the ID argument), checked before the phrase | `archidekt_deck_delete`, `archidekt_folder_delete`, `archidekt_snapshot_delete`, `archidekt_snapshot_restore_apply` |
+
+`remote-deck-changed`, `snapshot-changed`, `snapshot-content-changed`, `folder-tree-changed`, and
+`pull-discard-option-mismatch` stay, because each names a specific cause. A remote fingerprint mismatch on pull and push
+apply is `remote-deck-changed`. A Commander Spellbook `400` (`source-request-rejected`) and a Playgroup `400` or `422`
+(`provider-request-rejected`) stay `invalid-input`, now with the `path` of the tool argument that carried the value (such
+as `sourceQuery` or `events`).
+
+#### `responseFormat`
+
+Every tool that takes `responseFormat` now defaults to `standard`, and `standard` is never an alias of another value. A tool
+offers only the values it has: `full` only where raw provider objects exist.
+
+| Tool | Old default and values | New default and values |
+| --- | --- | --- |
+| `local_deck_get` | `full` (`standard` the same), `concise` | `standard`, `concise` |
+| `archidekt_sync_diff`, `archidekt_pull_preview`, `archidekt_push_preview` | `full` (`standard` the same), `concise` | `standard`, `concise` |
+| `archidekt_deck_get`, `archidekt_snapshots_get` (kind `get`) | `concise` (`full` and `standard` the same) | `standard`, `concise`. A default read now returns every entry field, so pass `concise` or a smaller `pageSize` to fit more entries in a page. |
+| `scryfall_search`, `scryfall_cards_get`, `scryfall_installed_cards_by_tag`, `card_lists_compare` | `standard`; `concise`, `full` | unchanged |
+
+#### Confirmation phrases
+
+An operation that destroys or replaces data takes `confirmation`, an exact phrase `<action> <target kind> <id>` that
+names the target. The `acknowledgeActivationChange` and `acknowledgeDataLoss` booleans are gone.
+
+| Tool | Phrase | Old |
+| --- | --- | --- |
+| `local_deck_delete` | `delete deck <deckId>` | no confirmation |
+| `local_deck_backup_restore` | `restore backup <backupId>` | no confirmation |
+| `local_deck_backup_delete` | `delete backup <backupId>` | no confirmation |
+| `archidekt_deck_delete` | `delete deck <remoteDeckId>` | `delete <deckId>` |
+| `archidekt_folder_delete` | `delete folder <folderId>` | same phrase |
+| `archidekt_snapshot_delete` | `delete snapshot <snapshotId>` | same phrase |
+| `archidekt_snapshot_restore_apply` | `restore snapshot <snapshotId>` | same phrase |
+| `archidekt_pull_apply` with `discardLocalChanges` true | `discard local changes <localDeckId>` | no confirmation |
+| `scryfall_card_data_delete` | `delete card-data <expectedActiveGeneration>` | `acknowledgeDataLoss` |
+| `scryfall_card_data_rollback` | `rollback card-data <expectedPreviousGeneration>` | `acknowledgeActivationChange` |
+| `scryfall_request_snapshot_delete` | `delete request-snapshot <requestSnapshotId>` | `acknowledgeDataLoss` |
+
+`confirmRemovals` on `archidekt_push_apply` stays a count, because it restates a number the preview showed, not a target.
+A wrong phrase is `confirmation-required` with `path` `confirmation` and the message `confirmation must be exactly "<phrase>".`
+
+#### Policy and generation names
+
+| Where | Old | New |
+| --- | --- | --- |
+| `scryfall_card_data_sync` | `metadataPolicy` | `freshnessPolicy` (`default` or `refresh`) |
+| `local_deck_category_rules_apply` | `expectedCorpusGeneration` | `expectedActiveGeneration` |
+
+#### Output shape
+
+- `spellbook_variant_search` and `playgroup_playgroup_games_list` return `{ source, nextCursor, truncated }`, where `source`
+  is the evidence they returned directly before (`spellbook_deck_combos_find` returned `{ deck, source }`). `spellbook_deck_combos_find` returns `{ deck, source, nextCursor, truncated }`. A Spellbook combos page cut to the result size limit sets `truncated` and has no `nextCursor`; repeat
+  the call with a smaller `pageSize`.
+- `scryfall_card_details` returns `prints` and `rulings` as sections of `{ items, totalCount, snapshot,
+  corpusGenerationId }` and one top-level `nextCursor`.
+- `card_list_query` returns `pageSize` and `nextCursor` at the top level, not inside `rows`.
+- `local_deck_export_bundle` returns a top-level `nextCursor`, not `chunk.nextOffset`.
+
+### Changed
+
+- **Archidekt reads are guarded between pages.** `archidekt_deck_get`, `archidekt_folders_get`, `archidekt_snapshots_get`
+  (kind `get`), `archidekt_sync_diff`, and the pull, push, and restore previews paged by a bare offset, so a deck that
+  changed between pages gave rows out of line. The cursor is now tied to the remote fingerprint, tree fingerprint, or
+  preview, and a changed source returns `cursor-stale`. `archidekt_deck_list` reads the whole list and pages it, and a
+  changed list is `cursor-stale`.
+- `local_deck_list` ties its cursor to the deck list, so a deck created, edited, or deleted between pages gives
+  `cursor-stale` instead of a shifted page.
+- Every refusal names its argument. An `invalid-input` result always carries a `path`: Scryfall queries, lookups,
+  cursors, policies, tag selectors, and confirmations; Spellbook; Playgroup; statistics; local deck store refusals;
+  and the Archidekt tools. A reason that covered several arguments now names the one at fault. A test drives each
+  value through its tool and fails on a missing path.
+- The raw modes of `scryfall_tags_search` and `scryfall_request_snapshots_get`, and the pages of
+  `local_deck_list`, `archidekt_deck_list`, Spellbook, and Playgroup games, are cut to the 40,000-byte result limit. A cut
+  page says `truncated` and its `nextCursor` continues where it stopped. A Spellbook combos page cut to the limit is the
+  one exception (see Output shape).
+- `scryfall_cards_get` continues a later page from local data and makes no provider call. A card-data sync or a deleted
+  request snapshot between pages gives `cursor-stale`, and a later page that sends a different `freshnessPolicy` than the
+  first is refused as `invalid-cursor`.
+- `local_deck_import_preview` still takes `content` on every call, because the server stores no import. The cursor
+  replaces only the offset and the fingerprint.
+- Tool descriptions use the new names. The docs state the one form for each rule in
+  [MCP surface](docs/architecture/mcp-surface.md): paging, `responseFormat`, `previewFingerprint`, flat arguments, change
+  codes, error paths, identifiers, and confirmation phrases.
+
+### Fixed
+
+- `local_deck_category_rules_preview` of an empty deck with tag selectors returned `invalid-card-lookup`. It now returns a
+  preview with no decisions.
+- A local deck revision mismatch was reported under several codes depending on the tool. It is `stale-deck-revision`
+  everywhere, with `current.revision`.
+- A paged preview whose source changed between pages reported `preview-changed`, the code of a failed apply. It is
+  `cursor-stale`.
+
 ## 0.14.0 - 2026-11-01
 
 Four agent sessions reported real Archidekt deck work on `0.13.0` and `0.13.1`: finding entries meant paging through

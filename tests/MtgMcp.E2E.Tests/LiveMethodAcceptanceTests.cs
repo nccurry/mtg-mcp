@@ -85,7 +85,7 @@ public sealed class LiveMethodAcceptanceTests
                 {
                     ["formatId"] = "generic-text-v1",
                     ["content"] = importedText,
-                    ["expectedFingerprint"] = preview.GetProperty("fingerprint").GetString(),
+                    ["previewFingerprint"] = preview.GetProperty("previewFingerprint").GetString(),
                     ["options"] = new { deckName = "Obeka Acceptance Import", format = "commander" },
                 },
                 token).ConfigureAwait(false);
@@ -220,7 +220,7 @@ public sealed class LiveMethodAcceptanceTests
                 {
                     ["deckId"] = rulesDeckId,
                     ["expectedRevision"] = rulesRevision,
-                    ["expectedCorpusGeneration"] = (Guid?)null,
+                    ["expectedActiveGeneration"] = (Guid?)null,
                     ["source"] = categoryRules,
                     ["freshnessPolicy"] = "cache-only",
                     ["previewFingerprint"] = categoryPreview.GetProperty("previewFingerprint").GetString(),
@@ -581,6 +581,7 @@ public sealed class LiveMethodAcceptanceTests
                 {
                     ["backupId"] = backupId,
                     ["expectedDatabaseFingerprint"] = changedInventory.GetProperty("currentDatabaseFingerprint").GetString(),
+                    ["confirmation"] = $"restore backup {backupId}",
                 },
                 token).ConfigureAwait(false);
             Guid rollbackBackupId = restored.GetProperty("rollbackBackupId").GetGuid();
@@ -606,7 +607,11 @@ public sealed class LiveMethodAcceptanceTests
                     environment,
                     session,
                     "local_deck_backup_delete",
-                    new Dictionary<string, object?> { ["backupId"] = id },
+                    new Dictionary<string, object?>
+                    {
+                        ["backupId"] = id,
+                        ["confirmation"] = $"delete backup {id}",
+                    },
                     token).ConfigureAwait(false);
             }
 
@@ -618,13 +623,19 @@ public sealed class LiveMethodAcceptanceTests
                 {
                     ["deckId"] = importedDeckId,
                     ["expectedRevision"] = importedRevision,
+                    ["confirmation"] = $"delete deck {importedDeckId}",
                 },
                 token).ConfigureAwait(false);
             _ = await CallSuccessAsync(
                 environment,
                 session,
                 "local_deck_delete",
-                new Dictionary<string, object?> { ["deckId"] = deckId, ["expectedRevision"] = revision },
+                new Dictionary<string, object?>
+                {
+                    ["deckId"] = deckId,
+                    ["expectedRevision"] = revision,
+                    ["confirmation"] = $"delete deck {deckId}",
+                },
                 token).ConfigureAwait(false);
             listed = await CallSuccessAsync(
                 environment,
@@ -744,7 +755,7 @@ public sealed class LiveMethodAcceptanceTests
                     ["pageSize"] = 2,
                 },
                 token).ConfigureAwait(false);
-            Assert.NotEmpty(prints.GetProperty("prints").GetProperty("page").GetProperty("items").EnumerateArray());
+            Assert.NotEmpty(prints.GetProperty("prints").GetProperty("items").EnumerateArray());
 
             JsonElement rulings = await CallSuccessAsync(
                 environment,
@@ -848,7 +859,7 @@ public sealed class LiveMethodAcceptanceTests
                 },
                 token).ConfigureAwait(false);
             Assert.NotEmpty(searchRest.GetProperty("page").GetProperty("items").EnumerateArray());
-            Guid searchSnapshotId = searchFirst.GetProperty("snapshot").GetProperty("snapshotId").GetGuid();
+            Guid searchSnapshotId = searchFirst.GetProperty("snapshot").GetProperty("requestSnapshotId").GetGuid();
             string searchSnapshotChecksum = searchFirst.GetProperty("snapshot").GetProperty("checksum").GetString()!;
 
             JsonElement tags = await CallSuccessAsync(
@@ -888,7 +899,7 @@ public sealed class LiveMethodAcceptanceTests
                 token).ConfigureAwait(false);
             Assert.Contains(
                 snapshots.GetProperty("snapshots").GetProperty("items").EnumerateArray(),
-                value => value.GetProperty("snapshotId").GetGuid() == searchSnapshotId);
+                value => value.GetProperty("requestSnapshotId").GetGuid() == searchSnapshotId);
             JsonElement replay = await CallSuccessAsync(
                 environment,
                 session,
@@ -896,13 +907,13 @@ public sealed class LiveMethodAcceptanceTests
                 new Dictionary<string, object?>
                 {
                     ["kind"] = "get",
-                    ["snapshotId"] = searchSnapshotId,
+                    ["requestSnapshotId"] = searchSnapshotId,
                     ["includeRaw"] = true,
                     ["pageSize"] = 25,
                 },
                 token).ConfigureAwait(false);
             JsonElement replayPage = replay.GetProperty("snapshot");
-            Assert.Equal(searchSnapshotId, replayPage.GetProperty("summary").GetProperty("snapshotId").GetGuid());
+            Assert.Equal(searchSnapshotId, replayPage.GetProperty("summary").GetProperty("requestSnapshotId").GetGuid());
             Assert.NotEmpty(replayPage.GetProperty("items").EnumerateArray());
 
             _ = await CallSuccessAsync(
@@ -911,15 +922,15 @@ public sealed class LiveMethodAcceptanceTests
                 "scryfall_request_snapshot_delete",
                 new Dictionary<string, object?>
                 {
-                    ["snapshotId"] = searchSnapshotId,
+                    ["requestSnapshotId"] = searchSnapshotId,
                     ["expectedChecksum"] = searchSnapshotChecksum,
-                    ["acknowledgeDataLoss"] = true,
+                    ["confirmation"] = "delete request-snapshot " + searchSnapshotId.ToString("D"),
                 },
                 token).ConfigureAwait(false);
             JsonElement deleted = await CallResultAsync(
                 session,
                 "scryfall_request_snapshots_get",
-                new Dictionary<string, object?> { ["kind"] = "get", ["snapshotId"] = searchSnapshotId },
+                new Dictionary<string, object?> { ["kind"] = "get", ["requestSnapshotId"] = searchSnapshotId },
                 token).ConfigureAwait(false);
             Assert.Equal("not-found", deleted.GetProperty("kind").GetString());
         }
@@ -966,7 +977,7 @@ public sealed class LiveMethodAcceptanceTests
             "scryfall_card_data_sync",
             new Dictionary<string, object?>
             {
-                ["metadataPolicy"] = "refresh",
+                ["freshnessPolicy"] = "refresh",
                 ["expectedActiveGeneration"] = expectedActive,
             },
             token).ConfigureAwait(false);
@@ -992,7 +1003,7 @@ public sealed class LiveMethodAcceptanceTests
             {
                 ["expectedActiveGeneration"] = activeGeneration,
                 ["expectedPreviousGeneration"] = previousGeneration,
-                ["acknowledgeActivationChange"] = true,
+                ["confirmation"] = "rollback card-data " + previousGeneration.ToString("D"),
             },
             token).ConfigureAwait(false);
         JsonElement restored = await CallSuccessAsync(
@@ -1003,7 +1014,8 @@ public sealed class LiveMethodAcceptanceTests
             {
                 ["expectedActiveGeneration"] = rolledBack.GetProperty("activeGenerationId").GetGuid(),
                 ["expectedPreviousGeneration"] = rolledBack.GetProperty("previousGenerationId").GetGuid(),
-                ["acknowledgeActivationChange"] = true,
+                ["confirmation"] = "rollback card-data " + rolledBack.GetProperty("previousGenerationId").GetGuid()
+                    .ToString("D"),
             },
             token).ConfigureAwait(false);
         Assert.Equal(activeGeneration, restored.GetProperty("activeGenerationId").GetGuid());
@@ -1015,7 +1027,7 @@ public sealed class LiveMethodAcceptanceTests
             new Dictionary<string, object?>
             {
                 ["expectedActiveGeneration"] = activeGeneration,
-                ["acknowledgeDataLoss"] = true,
+                ["confirmation"] = "delete card-data " + activeGeneration.ToString("D"),
             },
             token).ConfigureAwait(false);
         JsonElement after = await CallSuccessAsync(
@@ -1062,10 +1074,10 @@ public sealed class LiveMethodAcceptanceTests
                 environment,
                 session,
                 "archidekt_deck_get",
-                new Dictionary<string, object?> { ["deckId"] = ArchidektDeckId },
+                new Dictionary<string, object?> { ["remoteDeckId"] = ArchidektDeckId },
                 token).ConfigureAwait(false);
             baselineCaptured = true;
-            Assert.Equal(ArchidektDeckId, baseline.GetProperty("remoteId").GetString());
+            Assert.Equal(ArchidektDeckId, baseline.GetProperty("remoteDeckId").GetString());
             string baselineContentFingerprint = baseline.GetProperty("contentFingerprint").GetString()!;
             baselineRestored = true;
             await CleanupStaleArchidektRecoverySnapshotsAsync(
@@ -1080,7 +1092,7 @@ public sealed class LiveMethodAcceptanceTests
                 token).ConfigureAwait(false);
             Assert.Contains(
                 decks.GetProperty("items").EnumerateArray(),
-                value => value.GetProperty("remoteId").GetString() == ArchidektDeckId);
+                value => value.GetProperty("remoteDeckId").GetString() == ArchidektDeckId);
 
             auth = await CallSuccessAsync(
                 environment,
@@ -1097,13 +1109,10 @@ public sealed class LiveMethodAcceptanceTests
                 "archidekt_snapshot_create",
                 new Dictionary<string, object?>
                 {
-                    ["request"] = new
-                    {
-                        deckId = ArchidektDeckId,
-                        expectedRemoteFingerprint = baseline.GetProperty("remoteFingerprint").GetString(),
-                        name = $"mtg-mcp acceptance recovery {suffix}",
-                        description = "Retain until method acceptance restores the original deck.",
-                    },
+                    ["remoteDeckId"] = ArchidektDeckId,
+                    ["expectedRemoteFingerprint"] = baseline.GetProperty("remoteFingerprint").GetString(),
+                    ["name"] = $"mtg-mcp acceptance recovery {suffix}",
+                    ["description"] = "Retain until method acceptance restores the original deck.",
                 },
                 token).ConfigureAwait(false);
             recoverySnapshotId = snapshot.GetProperty("snapshotId").GetString();
@@ -1112,7 +1121,7 @@ public sealed class LiveMethodAcceptanceTests
                 environment,
                 session,
                 "archidekt_snapshots_get",
-                new Dictionary<string, object?> { ["kind"] = "list", ["deckId"] = ArchidektDeckId },
+                new Dictionary<string, object?> { ["kind"] = "list", ["remoteDeckId"] = ArchidektDeckId },
                 token).ConfigureAwait(false);
             Assert.Contains(
                 snapshots.GetProperty("snapshots").GetProperty("items").EnumerateArray(),
@@ -1125,7 +1134,7 @@ public sealed class LiveMethodAcceptanceTests
                 new Dictionary<string, object?>
                 {
                     ["kind"] = "get",
-                    ["deckId"] = ArchidektDeckId,
+                    ["remoteDeckId"] = ArchidektDeckId,
                     ["snapshotId"] = recoverySnapshotId,
                 },
                 token).ConfigureAwait(false);
@@ -1135,7 +1144,7 @@ public sealed class LiveMethodAcceptanceTests
                 "archidekt_snapshot_restore_preview",
                 new Dictionary<string, object?>
                 {
-                    ["deckId"] = ArchidektDeckId,
+                    ["remoteDeckId"] = ArchidektDeckId,
                     ["snapshotId"] = recoverySnapshotId,
                 },
                 token).ConfigureAwait(false));
@@ -1148,13 +1157,10 @@ public sealed class LiveMethodAcceptanceTests
                 "archidekt_snapshot_update",
                 new Dictionary<string, object?>
                 {
-                    ["request"] = new
-                    {
-                        deckId = ArchidektDeckId,
-                        snapshotId = recoverySnapshotId,
-                        expectedChecksum = fullSnapshot.GetProperty("summary").GetProperty("checksum").GetString(),
-                        name = $"mtg-mcp recovery {suffix}",
-                    },
+                    ["remoteDeckId"] = ArchidektDeckId,
+                    ["snapshotId"] = recoverySnapshotId,
+                    ["expectedChecksum"] = fullSnapshot.GetProperty("summary").GetProperty("checksum").GetString(),
+                    ["name"] = $"mtg-mcp recovery {suffix}",
                 },
                 token).ConfigureAwait(false);
 
@@ -1170,18 +1176,15 @@ public sealed class LiveMethodAcceptanceTests
                 "archidekt_pull_apply",
                 new Dictionary<string, object?>
                 {
-                    ["request"] = new
-                    {
-                        remoteDeckId = ArchidektDeckId,
-                        localDeckId = (Guid?)null,
-                        expectedLocalRevision = (long?)null,
-                        expectedRemoteFingerprint = pullPreview.GetProperty("remoteFingerprint").GetString(),
-                        previewFingerprint = pullPreview.GetProperty("previewFingerprint").GetString(),
-                    },
+                    ["remoteDeckId"] = ArchidektDeckId,
+                    ["localDeckId"] = (Guid?)null,
+                    ["expectedRevision"] = (long?)null,
+                    ["expectedRemoteFingerprint"] = pullPreview.GetProperty("remoteFingerprint").GetString(),
+                    ["previewFingerprint"] = pullPreview.GetProperty("previewFingerprint").GetString(),
                 },
                 token).ConfigureAwait(false);
             Guid localDeckId = pull.GetProperty("localDeckId").GetGuid();
-            long localRevision = pull.GetProperty("localRevision").GetInt64();
+            long localRevision = pull.GetProperty("revision").GetInt64();
 
             JsonElement initialDiff = await CallSuccessAsync(
                 environment,
@@ -1329,13 +1332,10 @@ public sealed class LiveMethodAcceptanceTests
                 "archidekt_push_apply",
                 new Dictionary<string, object?>
                 {
-                    ["request"] = new
-                    {
-                        localDeckId,
-                        expectedLocalRevision = localRevision,
-                        expectedRemoteFingerprint = new string('0', 64),
-                        previewFingerprint = pushPreview.GetProperty("previewFingerprint").GetString(),
-                    },
+                    ["localDeckId"] = localDeckId,
+                    ["expectedRevision"] = localRevision,
+                    ["expectedRemoteFingerprint"] = new string('0', 64),
+                    ["previewFingerprint"] = pushPreview.GetProperty("previewFingerprint").GetString(),
                 },
                 token).ConfigureAwait(false);
             Assert.Equal("conflict", stalePush.GetProperty("kind").GetString());
@@ -1346,13 +1346,10 @@ public sealed class LiveMethodAcceptanceTests
                 "archidekt_push_apply",
                 new Dictionary<string, object?>
                 {
-                    ["request"] = new
-                    {
-                        localDeckId,
-                        expectedLocalRevision = localRevision,
-                        expectedRemoteFingerprint = pushPreview.GetProperty("remoteFingerprint").GetString(),
-                        previewFingerprint = pushPreview.GetProperty("previewFingerprint").GetString(),
-                    },
+                    ["localDeckId"] = localDeckId,
+                    ["expectedRevision"] = localRevision,
+                    ["expectedRemoteFingerprint"] = pushPreview.GetProperty("remoteFingerprint").GetString(),
+                    ["previewFingerprint"] = pushPreview.GetProperty("previewFingerprint").GetString(),
                 },
                 token).ConfigureAwait(false));
             if (!string.Equals(pushed.GetProperty("outcome").GetString(), "applied", StringComparison.Ordinal))
@@ -1365,7 +1362,7 @@ public sealed class LiveMethodAcceptanceTests
                 JsonElement observedRemote = RequireSuccess(await CallResultAsync(
                     session,
                     "archidekt_deck_get",
-                    new Dictionary<string, object?> { ["deckId"] = ArchidektDeckId },
+                    new Dictionary<string, object?> { ["remoteDeckId"] = ArchidektDeckId },
                     token).ConfigureAwait(false));
                 JsonElement observedLocal = RequireSuccess(await CallResultAsync(
                     session,
@@ -1421,7 +1418,7 @@ public sealed class LiveMethodAcceptanceTests
                 new Dictionary<string, object?>
                 {
                     ["kind"] = "get",
-                    ["deckId"] = ArchidektDeckId,
+                    ["remoteDeckId"] = ArchidektDeckId,
                     ["snapshotId"] = recoverySnapshotId,
                 },
                 token).ConfigureAwait(false);
@@ -1432,13 +1429,10 @@ public sealed class LiveMethodAcceptanceTests
                 "archidekt_snapshot_delete",
                 new Dictionary<string, object?>
                 {
-                    ["request"] = new
-                    {
-                        deckId = ArchidektDeckId,
-                        snapshotId = recoverySnapshotId,
-                        expectedChecksum = fullSnapshot.GetProperty("summary").GetProperty("checksum").GetString(),
-                        confirmation = $"delete snapshot {recoverySnapshotId}",
-                    },
+                    ["remoteDeckId"] = ArchidektDeckId,
+                    ["snapshotId"] = recoverySnapshotId,
+                    ["expectedChecksum"] = fullSnapshot.GetProperty("summary").GetProperty("checksum").GetString(),
+                    ["confirmation"] = $"delete snapshot {recoverySnapshotId}",
                 },
                 token).ConfigureAwait(false);
             recoverySnapshotId = null;
@@ -1449,16 +1443,13 @@ public sealed class LiveMethodAcceptanceTests
                 "archidekt_deck_create",
                 new Dictionary<string, object?>
                 {
-                    ["request"] = new
-                    {
-                        name = $"mtg-mcp disposable method acceptance {suffix}",
-                        format = "commander",
-                        description = "Safe to delete after method acceptance.",
-                        visibility = "private",
-                    },
+                    ["name"] = $"mtg-mcp disposable method acceptance {suffix}",
+                    ["format"] = "commander",
+                    ["description"] = "Safe to delete after method acceptance.",
+                    ["visibility"] = "private",
                 },
                 token).ConfigureAwait(false);
-            temporaryDeckId = temporaryDeck.GetProperty("remoteId").GetString();
+            temporaryDeckId = temporaryDeck.GetProperty("remoteDeckId").GetString();
             temporaryDeckInitialFolderId = temporaryDeck.TryGetProperty(
                 "parentFolderId",
                 out JsonElement initialParentFolder)
@@ -1473,7 +1464,8 @@ public sealed class LiveMethodAcceptanceTests
                 "archidekt_folder_create",
                 new Dictionary<string, object?>
                 {
-                    ["request"] = new { name = temporaryFolderName, visibility = "private" },
+                    ["name"] = temporaryFolderName,
+                    ["visibility"] = "private",
                 },
                 token).ConfigureAwait(false);
             temporaryFolderId = temporaryFolder.GetProperty("folderId").GetString();
@@ -1502,12 +1494,9 @@ public sealed class LiveMethodAcceptanceTests
                 "archidekt_folder_update",
                 new Dictionary<string, object?>
                 {
-                    ["request"] = new
-                    {
-                        folderId = temporaryFolderId,
-                        expectedTreeFingerprint = folderTree.GetProperty("treeFingerprint").GetString(),
-                        name = temporaryFolderName,
-                    },
+                    ["folderId"] = temporaryFolderId,
+                    ["expectedTreeFingerprint"] = folderTree.GetProperty("treeFingerprint").GetString(),
+                    ["name"] = temporaryFolderName,
                 },
                 token).ConfigureAwait(false);
 
@@ -1523,20 +1512,17 @@ public sealed class LiveMethodAcceptanceTests
                 "archidekt_folder_move_items",
                 new Dictionary<string, object?>
                 {
-                    ["request"] = new
+                    ["expectedTreeFingerprint"] = folderTree.GetProperty("treeFingerprint").GetString(),
+                    ["items"] = new[]
                     {
-                        expectedTreeFingerprint = folderTree.GetProperty("treeFingerprint").GetString(),
-                        items = new[]
+                        new
                         {
-                            new
-                            {
-                                kind = "deck",
-                                id = temporaryDeckId,
-                                expectedParentFolderId = temporaryDeckInitialFolderId,
-                            },
+                            kind = "deck",
+                            id = temporaryDeckId,
+                            expectedParentFolderId = temporaryDeckInitialFolderId,
                         },
-                        destinationFolderId = temporaryFolderId,
                     },
+                    ["destinationFolderId"] = temporaryFolderId,
                 },
                 token).ConfigureAwait(false);
             Assert.Equal("applied", moved.GetProperty("items")[0].GetProperty("status").GetString());
@@ -1545,7 +1531,7 @@ public sealed class LiveMethodAcceptanceTests
                 environment,
                 session,
                 "archidekt_deck_get",
-                new Dictionary<string, object?> { ["deckId"] = temporaryDeckId },
+                new Dictionary<string, object?> { ["remoteDeckId"] = temporaryDeckId },
                 token).ConfigureAwait(false);
             folderTree = await CallSuccessAsync(
                 environment,
@@ -1559,20 +1545,17 @@ public sealed class LiveMethodAcceptanceTests
                 "archidekt_folder_move_items",
                 new Dictionary<string, object?>
                 {
-                    ["request"] = new
+                    ["expectedTreeFingerprint"] = folderTree.GetProperty("treeFingerprint").GetString(),
+                    ["items"] = new[]
                     {
-                        expectedTreeFingerprint = folderTree.GetProperty("treeFingerprint").GetString(),
-                        items = new[]
+                        new
                         {
-                            new
-                            {
-                                kind = "deck",
-                                id = temporaryDeckId,
-                                expectedParentFolderId = temporaryFolderId,
-                            },
+                            kind = "deck",
+                            id = temporaryDeckId,
+                            expectedParentFolderId = temporaryFolderId,
                         },
-                        destinationFolderId = (string?)null,
                     },
+                    ["destinationFolderId"] = (string?)null,
                 },
                 token).ConfigureAwait(false);
             Assert.Equal("applied", moved.GetProperty("items")[0].GetProperty("status").GetString());
@@ -1581,7 +1564,7 @@ public sealed class LiveMethodAcceptanceTests
                 environment,
                 session,
                 "archidekt_deck_get",
-                new Dictionary<string, object?> { ["deckId"] = temporaryDeckId },
+                new Dictionary<string, object?> { ["remoteDeckId"] = temporaryDeckId },
                 token).ConfigureAwait(false);
             _ = await CallSuccessAsync(
                 environment,
@@ -1589,12 +1572,9 @@ public sealed class LiveMethodAcceptanceTests
                 "archidekt_deck_delete",
                 new Dictionary<string, object?>
                 {
-                    ["request"] = new
-                    {
-                        deckId = temporaryDeckId,
-                        expectedRemoteFingerprint = temporaryDeck.GetProperty("remoteFingerprint").GetString(),
-                        confirmation = $"delete {temporaryDeckId}",
-                    },
+                    ["remoteDeckId"] = temporaryDeckId,
+                    ["expectedRemoteFingerprint"] = temporaryDeck.GetProperty("remoteFingerprint").GetString(),
+                    ["confirmation"] = $"delete deck {temporaryDeckId}",
                 },
                 token).ConfigureAwait(false);
             temporaryDeckId = null;
@@ -1611,13 +1591,10 @@ public sealed class LiveMethodAcceptanceTests
                 "archidekt_folder_delete",
                 new Dictionary<string, object?>
                 {
-                    ["request"] = new
-                    {
-                        folderId = temporaryFolderId,
-                        expectedName = temporaryFolderName,
-                        expectedTreeFingerprint = folderTree.GetProperty("treeFingerprint").GetString(),
-                        confirmation = $"delete folder {temporaryFolderId}",
-                    },
+                    ["folderId"] = temporaryFolderId,
+                    ["expectedName"] = temporaryFolderName,
+                    ["expectedTreeFingerprint"] = folderTree.GetProperty("treeFingerprint").GetString(),
+                    ["confirmation"] = $"delete folder {temporaryFolderId}",
                 },
                 token).ConfigureAwait(false);
             temporaryFolderId = null;
@@ -1737,12 +1714,11 @@ public sealed class LiveMethodAcceptanceTests
                 new Dictionary<string, object?>
                 {
                     ["playgroupId"] = PlaygroupId,
-                    ["page"] = 1,
-                    ["limit"] = 100,
+                    ["pageSize"] = 100,
                     ["includeEvents"] = false,
                 },
                 token).ConfigureAwait(false);
-            JsonElement games = ProviderData(gamesEvidence, "listPlaygroupGames");
+            JsonElement games = ProviderData(gamesEvidence.GetProperty("source"), "listPlaygroupGames");
             (int GameId, int DeckId, int LinkedUserId)? fixture = FindPlaygroupFixture(games);
             if (fixture is null)
             {
@@ -1793,7 +1769,7 @@ public sealed class LiveMethodAcceptanceTests
                 environment,
                 session,
                 "playgroup_deck_get",
-                new Dictionary<string, object?> { ["deckId"] = fixture.Value.DeckId, ["includeArchived"] = true },
+                new Dictionary<string, object?> { ["playgroupDeckId"] = fixture.Value.DeckId, ["includeArchived"] = true },
                 token).ConfigureAwait(false);
             JsonElement deck = ProviderData(deckEvidence, "getDeckById");
             Assert.Equal(fixture.Value.DeckId, deck.GetProperty("id").GetInt32());
@@ -1804,7 +1780,7 @@ public sealed class LiveMethodAcceptanceTests
                 "playgroup_deck_elo_history_get",
                 new Dictionary<string, object?>
                 {
-                    ["deckId"] = fixture.Value.DeckId,
+                    ["playgroupDeckId"] = fixture.Value.DeckId,
                     ["playgroupId"] = PlaygroupId,
                     ["includeArchived"] = true,
                 },
@@ -1933,7 +1909,7 @@ public sealed class LiveMethodAcceptanceTests
         JsonElement page = RequireSuccess(await CallResultAsync(
             session,
             "archidekt_snapshots_get",
-            new Dictionary<string, object?> { ["kind"] = "list", ["deckId"] = ArchidektDeckId },
+            new Dictionary<string, object?> { ["kind"] = "list", ["remoteDeckId"] = ArchidektDeckId },
             cancellationToken).ConfigureAwait(false));
         foreach (JsonElement summary in page.GetProperty("snapshots").GetProperty("items").EnumerateArray())
         {
@@ -1951,7 +1927,7 @@ public sealed class LiveMethodAcceptanceTests
                 new Dictionary<string, object?>
                 {
                     ["kind"] = "get",
-                    ["deckId"] = ArchidektDeckId,
+                    ["remoteDeckId"] = ArchidektDeckId,
                     ["snapshotId"] = snapshotId,
                 },
                 cancellationToken).ConfigureAwait(false));
@@ -1961,13 +1937,10 @@ public sealed class LiveMethodAcceptanceTests
                 "archidekt_snapshot_delete",
                 new Dictionary<string, object?>
                 {
-                    ["request"] = new
-                    {
-                        deckId = ArchidektDeckId,
-                        snapshotId,
-                        expectedChecksum = snapshot.GetProperty("summary").GetProperty("checksum").GetString(),
-                        confirmation = $"delete snapshot {snapshotId}",
-                    },
+                    ["remoteDeckId"] = ArchidektDeckId,
+                    ["snapshotId"] = snapshotId,
+                    ["expectedChecksum"] = snapshot.GetProperty("summary").GetProperty("checksum").GetString(),
+                    ["confirmation"] = $"delete snapshot {snapshotId}",
                 },
                 cancellationToken).ConfigureAwait(false));
         }
@@ -1989,52 +1962,49 @@ public sealed class LiveMethodAcceptanceTests
                 environment,
                 session,
                 "archidekt_snapshot_restore_preview",
-                new Dictionary<string, object?> { ["deckId"] = ArchidektDeckId, ["snapshotId"] = snapshotId },
+                new Dictionary<string, object?> { ["remoteDeckId"] = ArchidektDeckId, ["snapshotId"] = snapshotId },
                 cancellationToken).ConfigureAwait(false)
             : RequireSuccess(await CallResultAsync(
                 session,
                 "archidekt_snapshot_restore_preview",
-                new Dictionary<string, object?> { ["deckId"] = ArchidektDeckId, ["snapshotId"] = snapshotId },
+                new Dictionary<string, object?> { ["remoteDeckId"] = ArchidektDeckId, ["snapshotId"] = snapshotId },
                 cancellationToken).ConfigureAwait(false));
         JsonElement applied = recordMethods
             ? await CallSuccessAsync(
                 environment,
                 session,
                 "archidekt_snapshot_restore_apply",
-                new Dictionary<string, object?>
-                {
-                    ["request"] = SnapshotRestoreRequest(preview, snapshotId),
-                },
+                SnapshotRestoreArguments(preview, snapshotId),
                 cancellationToken).ConfigureAwait(false)
             : RequireSuccess(await CallResultAsync(
                 session,
                 "archidekt_snapshot_restore_apply",
-                new Dictionary<string, object?> { ["request"] = SnapshotRestoreRequest(preview, snapshotId) },
+                SnapshotRestoreArguments(preview, snapshotId),
                 cancellationToken).ConfigureAwait(false));
         Assert.Equal("applied", applied.GetProperty("outcome").GetString());
 
         JsonElement current = RequireSuccess(await CallResultAsync(
             session,
             "archidekt_deck_get",
-            new Dictionary<string, object?> { ["deckId"] = ArchidektDeckId },
+            new Dictionary<string, object?> { ["remoteDeckId"] = ArchidektDeckId },
             cancellationToken).ConfigureAwait(false));
         Assert.Equal(baselineContentFingerprint, current.GetProperty("contentFingerprint").GetString());
     }
 
     /// <summary>
-    /// Builds the complete guarded snapshot-restore request from a fresh preview.
+    /// Builds the complete guarded snapshot-restore arguments from a fresh preview.
     /// </summary>
-    private static object SnapshotRestoreRequest(JsonElement preview, string snapshotId)
+    private static Dictionary<string, object?> SnapshotRestoreArguments(JsonElement preview, string snapshotId)
     {
-        return new
+        return new Dictionary<string, object?>
         {
-            deckId = ArchidektDeckId,
-            snapshotId,
-            expectedSnapshotChecksum = preview.GetProperty("snapshotChecksum").GetString(),
-            expectedSnapshotContentFingerprint = preview.GetProperty("snapshotContentFingerprint").GetString(),
-            expectedRemoteFingerprint = preview.GetProperty("remoteFingerprint").GetString(),
-            previewFingerprint = preview.GetProperty("previewFingerprint").GetString(),
-            confirmation = $"restore snapshot {snapshotId}",
+            ["remoteDeckId"] = ArchidektDeckId,
+            ["snapshotId"] = snapshotId,
+            ["expectedSnapshotChecksum"] = preview.GetProperty("snapshotChecksum").GetString(),
+            ["expectedSnapshotContentFingerprint"] = preview.GetProperty("snapshotContentFingerprint").GetString(),
+            ["expectedRemoteFingerprint"] = preview.GetProperty("remoteFingerprint").GetString(),
+            ["previewFingerprint"] = preview.GetProperty("previewFingerprint").GetString(),
+            ["confirmation"] = $"restore snapshot {snapshotId}",
         };
     }
 
@@ -2055,7 +2025,7 @@ public sealed class LiveMethodAcceptanceTests
             JsonElement current = await CallResultAsync(
                 session,
                 "archidekt_deck_get",
-                new Dictionary<string, object?> { ["deckId"] = temporaryDeckId },
+                new Dictionary<string, object?> { ["remoteDeckId"] = temporaryDeckId },
                 cancellationToken).ConfigureAwait(false);
             if (current.GetProperty("kind").GetString() == "success")
             {
@@ -2065,12 +2035,9 @@ public sealed class LiveMethodAcceptanceTests
                     "archidekt_deck_delete",
                     new Dictionary<string, object?>
                     {
-                        ["request"] = new
-                        {
-                            deckId = temporaryDeckId,
-                            expectedRemoteFingerprint = deck.GetProperty("remoteFingerprint").GetString(),
-                            confirmation = $"delete {temporaryDeckId}",
-                        },
+                        ["remoteDeckId"] = temporaryDeckId,
+                        ["expectedRemoteFingerprint"] = deck.GetProperty("remoteFingerprint").GetString(),
+                        ["confirmation"] = $"delete deck {temporaryDeckId}",
                     },
                     cancellationToken).ConfigureAwait(false);
             }
@@ -2096,13 +2063,10 @@ public sealed class LiveMethodAcceptanceTests
                         "archidekt_folder_delete",
                         new Dictionary<string, object?>
                         {
-                            ["request"] = new
-                            {
-                                folderId = temporaryFolderId,
-                                expectedName = temporaryFolderName,
-                                expectedTreeFingerprint = tree.GetProperty("treeFingerprint").GetString(),
-                                confirmation = $"delete folder {temporaryFolderId}",
-                            },
+                            ["folderId"] = temporaryFolderId,
+                            ["expectedName"] = temporaryFolderName,
+                            ["expectedTreeFingerprint"] = tree.GetProperty("treeFingerprint").GetString(),
+                            ["confirmation"] = $"delete folder {temporaryFolderId}",
                         },
                         cancellationToken).ConfigureAwait(false);
                 }
@@ -2117,7 +2081,7 @@ public sealed class LiveMethodAcceptanceTests
                 new Dictionary<string, object?>
                 {
                     ["kind"] = "get",
-                    ["deckId"] = ArchidektDeckId,
+                    ["remoteDeckId"] = ArchidektDeckId,
                     ["snapshotId"] = snapshotId,
                 },
                 cancellationToken).ConfigureAwait(false);
@@ -2129,13 +2093,10 @@ public sealed class LiveMethodAcceptanceTests
                     "archidekt_snapshot_delete",
                     new Dictionary<string, object?>
                     {
-                        ["request"] = new
-                        {
-                            deckId = ArchidektDeckId,
-                            snapshotId,
-                            expectedChecksum = snapshot.GetProperty("summary").GetProperty("checksum").GetString(),
-                            confirmation = $"delete snapshot {snapshotId}",
-                        },
+                        ["remoteDeckId"] = ArchidektDeckId,
+                        ["snapshotId"] = snapshotId,
+                        ["expectedChecksum"] = snapshot.GetProperty("summary").GetProperty("checksum").GetString(),
+                        ["confirmation"] = $"delete snapshot {snapshotId}",
                     },
                     cancellationToken).ConfigureAwait(false);
             }

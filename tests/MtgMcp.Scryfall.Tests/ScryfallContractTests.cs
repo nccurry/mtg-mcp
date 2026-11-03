@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MtgMcp.Core.Evidence;
+using MtgMcp.Core.Results;
 
 namespace MtgMcp.Scryfall.Tests;
 
@@ -158,42 +159,36 @@ public sealed class ScryfallContractTests
     }
 
     /// <summary>
-    /// Verifies cursor payloads are scope/checksum bound and malformed text fails without throwing.
+    /// Verifies a page cursor binds its scope and checksum, bounds its offset, and ends at the last row.
     /// </summary>
     [Fact]
-    public void Cursor_BindsScopeChecksumAndOrdinal()
+    public void Paging_BindsScopeChecksumAndBoundsOffset()
     {
-        string cursor = ScryfallCursor.Encode("scope", "checksum", 25);
+        string cursor = ScryfallPaging.NextCursor("scope", "checksum", 25, 100)!;
 
-        Assert.True(ScryfallCursor.TryDecode(cursor, "scope", "checksum", out int offset));
-        Assert.Equal(25, offset);
-        Assert.False(ScryfallCursor.TryDecode(cursor, "other", "checksum", out _));
-        Assert.False(ScryfallCursor.TryDecode(cursor, "scope", "other", out _));
-        Assert.False(ScryfallCursor.TryDecode("%%%", "scope", "checksum", out _));
-        Assert.True(ScryfallCursor.TryDecode(null, "scope", "checksum", out int initial));
-        Assert.Equal(0, initial);
-        Assert.Throws<ArgumentOutOfRangeException>(() => ScryfallCursor.Encode("scope", "checksum", -1));
-
-        ScryfallCollectionCursorState collectionState = new(
+        Assert.Equal(
+            25,
+            Assert.IsType<OperationSuccess<int>>(
+                ScryfallPaging.ReadOffset(cursor, "scope", "checksum", 100).Value).Data);
+        OperationInvalidInput otherScope = Assert.IsType<OperationInvalidInput>(
+            ScryfallPaging.ReadOffset(cursor, "other", "checksum", 100).Value);
+        Assert.Equal("invalid-cursor", otherScope.ReasonCode);
+        Assert.Equal("cursor", otherScope.Path);
+        Assert.Equal(
+            "cursor-stale",
+            Assert.IsType<OperationConflict>(
+                ScryfallPaging.ReadOffset(cursor, "scope", "other", 100).Value).ReasonCode);
+        Assert.IsType<OperationInvalidInput>(ScryfallPaging.ReadOffset("%%%", "scope", "checksum", 100).Value);
+        Assert.IsType<OperationInvalidInput>(ScryfallPaging.ReadOffset(cursor, "scope", "checksum", 24).Value);
+        Assert.Equal(
+            25,
+            Assert.IsType<OperationSuccess<int>>(
+                ScryfallPaging.ReadOffset(cursor, "scope", "checksum", 25).Value).Data);
+        Assert.Equal(
             0,
-            "request-hash",
-            Guid.Parse("15151515-1515-4515-8515-151515151515"),
-            Guid.Parse("16161616-1616-4616-8616-161616161616"),
-            "snapshot-checksum",
-            "result-checksum",
-            "not-found",
-            25);
-        string collectionCursor = ScryfallCursor.EncodeCollection(collectionState);
-        Assert.True(ScryfallCursor.TryDecodeCollection(
-            collectionCursor,
-            "request-hash",
-            out ScryfallCollectionCursorState? decoded));
-        Assert.Equal(1, decoded!.SchemaVersion);
-        Assert.Equal(25, decoded.Offset);
-        Assert.False(ScryfallCursor.TryDecodeCollection(collectionCursor, "other-request", out _));
-        Assert.False(ScryfallCursor.TryDecodeCollection("%%%", "request-hash", out _));
-        Assert.Throws<ArgumentException>(() => ScryfallCursor.EncodeCollection(
-            collectionState with { SnapshotChecksum = null }));
+            Assert.IsType<OperationSuccess<int>>(
+                ScryfallPaging.ReadOffset(null, "scope", "checksum", 100).Value).Data);
+        Assert.Null(ScryfallPaging.NextCursor("scope", "checksum", 100, 100));
     }
 
     /// <summary>

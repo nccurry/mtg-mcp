@@ -630,7 +630,8 @@ internal sealed class ScryfallCardDataStore
         {
             return new OperationInvalidInput(
                 "invalid-scryfall-tag-identity",
-                "At least one exact Scryfall tag identity is required.");
+                "At least one exact Scryfall tag identity is required.",
+                "source");
         }
 
         await using SqliteConnection? connection = await database.OpenReadAsync(cancellationToken).ConfigureAwait(false);
@@ -693,7 +694,7 @@ internal sealed class ScryfallCardDataStore
     {
         if (lookups is null)
         {
-            return new OperationInvalidInput("invalid-card-lookup", "Deck card lookups are required.");
+            return new OperationInvalidInput("invalid-card-lookup", "Deck card lookups are required.", "deckId");
         }
 
         foreach (ScryfallCardLookup lookup in lookups)
@@ -865,6 +866,7 @@ internal sealed class ScryfallCardDataStore
         bool includeRaw,
         string? cursor,
         int pageSize,
+        ScryfallRowFit<ScryfallTag>? countFitting,
         CancellationToken cancellationToken)
     {
         await using SqliteConnection? connection = await database.OpenReadAsync(cancellationToken).ConfigureAwait(false);
@@ -880,19 +882,22 @@ internal sealed class ScryfallCardDataStore
             return new OperationNotCached("scryfall-corpus-missing", "Scryfall corpus data is not installed.");
         }
 
-        string scope = $"tags:{generationId:D}:{tagType ?? "all"}:{query}";
-        string checksum = ScryfallHash.Compute(scope);
-        if (!ScryfallCursor.TryDecode(cursor, scope, checksum, out int offset))
-        {
-            return new OperationInvalidInput("invalid-cursor", "The tag cursor is invalid for this request.");
-        }
-
+        string scope = $"tags:{tagType ?? "all"}:{ScryfallHash.Compute(query)}";
+        string checksum = ScryfallHash.Compute($"{generationId:D}|{scope}");
         await using SqliteCommand countCommand = connection.CreateCommand();
         ConfigureTagSearch(countCommand, generationId.Value, query, tagType);
         countCommand.CommandText = "SELECT COUNT(*) FROM tags t " + countCommand.CommandText;
         int total = Convert.ToInt32(
             await countCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
             CultureInfo.InvariantCulture);
+        OperationResult<int> read = ScryfallPaging.ReadOffset(cursor, scope, checksum, total);
+        if (read is not OperationSuccess<int> start)
+        {
+            return OperationFailure.Forward<int, ScryfallPage<ScryfallTag>>(read);
+        }
+
+        int offset = start.Data;
+
         await using SqliteCommand command = connection.CreateCommand();
         ConfigureTagSearch(command, generationId.Value, query, tagType);
         command.CommandText =
@@ -908,10 +913,16 @@ internal sealed class ScryfallCardDataStore
             tags.Add(ScryfallMapper.Tag(document.RootElement, generationId.Value, includeRaw));
         }
 
-        string? next = offset + tags.Count < total
-            ? ScryfallCursor.Encode(scope, checksum, offset + tags.Count)
-            : null;
-        return new OperationSuccess<ScryfallPage<ScryfallTag>>(new ScryfallPage<ScryfallTag>(tags, total, next));
+        int fitting = countFitting?.Invoke(tags) ?? tags.Count;
+        bool cut = fitting < tags.Count;
+        if (cut)
+        {
+            tags.RemoveRange(fitting, tags.Count - fitting);
+        }
+
+        string? next = ScryfallPaging.NextCursor(scope, checksum, offset + tags.Count, total);
+        return new OperationSuccess<ScryfallPage<ScryfallTag>>(
+            new ScryfallPage<ScryfallTag>(tags, total, next) { Truncated = cut ? true : null });
     }
 
     /// <summary>
@@ -1137,7 +1148,9 @@ internal sealed class ScryfallCardDataStore
             if (await generation.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
             {
                 await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-                return new OperationConflict("stale-scryfall-generation", "The staging corpus generation is no longer activatable.");
+                return new OperationConflict(
+                    SharedReasonCodes.StaleScryfallGeneration,
+                    "The staging corpus generation is no longer activatable.");
             }
         }
 
@@ -1229,12 +1242,14 @@ internal sealed class ScryfallCardDataStore
     internal async Task<OperationResult<ScryfallCorpusMutationResult>> RollbackAsync(
         Guid expectedActive,
         Guid expectedPrevious,
-        bool acknowledgeActivationChange,
+        string? confirmation,
         CancellationToken cancellationToken)
     {
-        if (!acknowledgeActivationChange)
+        OperationInvalidInput? unconfirmed = Confirmation.Check(
+            confirmation, Confirmation.Phrase("rollback", "card-data", expectedPrevious));
+        if (unconfirmed is not null)
         {
-            return new OperationInvalidInput("activation-change-not-acknowledged", "Corpus rollback requires explicit acknowledgement.");
+            return unconfirmed;
         }
 
         await using SqliteConnection connection = await database.OpenWriteAsync(cancellationToken).ConfigureAwait(false);
@@ -1244,7 +1259,9 @@ internal sealed class ScryfallCardDataStore
             .ConfigureAwait(false);
         if (active != expectedActive || previous != expectedPrevious)
         {
-            return new OperationConflict("stale-scryfall-generation", "The active corpus generation changed before rollback.");
+            return new OperationConflict(
+                SharedReasonCodes.StaleScryfallGeneration,
+                "The active corpus generation changed before rollback.");
         }
 
         await using SqliteCommand command = connection.CreateCommand();
@@ -1263,12 +1280,14 @@ internal sealed class ScryfallCardDataStore
     /// </summary>
     internal async Task<OperationResult<ScryfallCorpusMutationResult>> DeleteAsync(
         Guid expectedActive,
-        bool acknowledgeDataLoss,
+        string? confirmation,
         CancellationToken cancellationToken)
     {
-        if (!acknowledgeDataLoss)
+        OperationInvalidInput? unconfirmed = Confirmation.Check(
+            confirmation, Confirmation.Phrase("delete", "card-data", expectedActive));
+        if (unconfirmed is not null)
         {
-            return new OperationInvalidInput("data-loss-not-acknowledged", "Corpus deletion requires explicit acknowledgement.");
+            return unconfirmed;
         }
 
         await using SqliteConnection connection = await database.OpenWriteAsync(cancellationToken).ConfigureAwait(false);
@@ -1278,7 +1297,9 @@ internal sealed class ScryfallCardDataStore
             .ConfigureAwait(false);
         if (active != expectedActive)
         {
-            return new OperationConflict("stale-scryfall-generation", "The active corpus generation changed before deletion.");
+            return new OperationConflict(
+                SharedReasonCodes.StaleScryfallGeneration,
+                "The active corpus generation changed before deletion.");
         }
 
         await using SqliteTransaction transaction = connection.BeginTransaction();
@@ -1787,7 +1808,8 @@ internal sealed class ScryfallCardDataStore
     {
         if (identity is null || identity.TagType is not ("oracle" or "art"))
         {
-            return new OperationInvalidInput("invalid-scryfall-tag-identity", "Scryfall tag type must be oracle or art.");
+            return new OperationInvalidInput(
+                "invalid-scryfall-tag-identity", "Scryfall tag type must be oracle or art.", "source");
         }
 
         bool hasId = identity.TagId is Guid id && id != Guid.Empty;
@@ -1795,7 +1817,8 @@ internal sealed class ScryfallCardDataStore
         return hasId == hasSlug
             ? new OperationInvalidInput(
                 "invalid-scryfall-tag-identity",
-                "A Scryfall tag identity requires exactly one non-empty tag ID or exact slug.")
+                "A Scryfall tag identity requires exactly one non-empty tag ID or exact slug.",
+                "source")
             : null;
     }
 
