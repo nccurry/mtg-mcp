@@ -431,9 +431,11 @@ internal sealed class CardListResolver
                         path + ".ids")
                     : null;
             case ArchidektDeckSourceInput { RemoteDeckId: var deckId } when string.IsNullOrWhiteSpace(deckId):
-                return new OperationInvalidInput("invalid-source", "remoteDeckId cannot be blank.", path + ".remoteDeckId");
+                return new OperationInvalidInput(
+                    "invalid-source", "remoteDeckId cannot be blank.", path + ".remoteDeckId");
             case ArchidektSnapshotSourceInput remote when string.IsNullOrWhiteSpace(remote.RemoteDeckId):
-                return new OperationInvalidInput("invalid-source", "remoteDeckId cannot be blank.", path + ".remoteDeckId");
+                return new OperationInvalidInput(
+                    "invalid-source", "remoteDeckId cannot be blank.", path + ".remoteDeckId");
             case ArchidektSnapshotSourceInput remote when string.IsNullOrWhiteSpace(remote.SnapshotId):
                 return new OperationInvalidInput("invalid-source", "snapshotId cannot be blank.", path + ".snapshotId");
             case CompareSourceInput compare:

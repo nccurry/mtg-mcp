@@ -11,22 +11,6 @@ namespace MtgMcp.App.CardLists;
 internal static class CardListCursors
 {
     /// <summary>
-    /// Fingerprints the parts of a request that must stay the same from page to page.
-    /// </summary>
-    internal static string Fingerprint(params (object? Value, Type Type)[] parts)
-    {
-        return RequestHash.Of(parts);
-    }
-
-    /// <summary>
-    /// Encodes the cursor for the page that starts at an offset.
-    /// </summary>
-    internal static string Encode(string fingerprint, int offset, IReadOnlyList<CardListSourceInfo> sources)
-    {
-        return PageCursor.Encode(PageCursorPosition.AtOffset(offset), Binding(fingerprint, sources));
-    }
-
-    /// <summary>
     /// Reads the offset of a cursor against the sources read now. A missing cursor starts at the first item. A
     /// cursor that is malformed or belongs to another request is invalid input at <c>cursor</c>, and one whose source
     /// changed is a stale-cursor conflict that carries the new revision or remote fingerprint of the source.
@@ -48,7 +32,7 @@ internal static class CardListCursors
     /// <summary>
     /// Binds the request and the state of every source.
     /// </summary>
-    private static PageCursorBinding Binding(string fingerprint, IReadOnlyList<CardListSourceInfo> sources)
+    internal static PageCursorBinding Binding(string fingerprint, IReadOnlyList<CardListSourceInfo> sources)
     {
         string markers = RequestHash.Of((sources.Select(source => source.Marker).ToArray(), typeof(string[])));
         return PageCursorBinding.ForRequest(fingerprint).And(PageCursorBinding.ForSource(markers));
