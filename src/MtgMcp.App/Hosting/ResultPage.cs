@@ -14,25 +14,9 @@ internal readonly record struct ResultPageSlice(int Offset, int Count, int Total
     internal int Next => Offset + Count;
 
     /// <summary>
-    /// Gets the offset of the next page while the result goes on, even when this list has ended, in which case the
-    /// offset is the list's row count. A result with two lists needs both next offsets on every page that is not the
-    /// last, or a caller that leaves one out starts that list again from row 0.
-    /// </summary>
-    /// <param name="resultContinues">True when any list of the result has rows left.</param>
-    internal int? NextOffsetIf(bool resultContinues)
-    {
-        return resultContinues ? Next : null;
-    }
-
-    /// <summary>
     /// Gets true when rows of the list come after this page.
     /// </summary>
     internal bool More => Next < Total;
-
-    /// <summary>
-    /// Gets the offset of the next page, or null when this page reaches the end of the list.
-    /// </summary>
-    internal int? NextOffset => More ? Next : null;
 
     /// <summary>
     /// Copies the rows this page shows out of the whole list.
@@ -50,99 +34,11 @@ internal readonly record struct ResultPageSlice(int Offset, int Count, int Total
 }
 
 /// <summary>
-/// Names one list of a paged result for <see cref="ResultPage.CheckPage{T}"/>: the offset argument that pages it, the
-/// offset the caller passed, how many rows it has, and what the rows are called, in the plural.
-/// </summary>
-internal readonly record struct PageList(string Parameter, int Offset, int Count, string Name);
-
-/// <summary>
 /// Pages the lists of a result by the shared size limit with one offset rule and one progress rule, so every paged
 /// tool treats an offset, a row that is bigger than the page, and the end of a list the same way.
 /// </summary>
 internal static class ResultPage
 {
-    /// <summary>
-    /// Describes the optional guard that keeps the pages of one preview together, for the argument every paged
-    /// preview takes.
-    /// </summary>
-    internal const string FingerprintHelp =
-        "When you read a page after the first, pass the fingerprint of the first page (previewFingerprint, or " +
-        "fingerprint for an import preview); the call is refused if the preview changed, so every page comes from " +
-        "the same preview.";
-
-    /// <summary>
-    /// Refuses an offset outside its list. An offset from 0 up to the number of rows is valid: an offset equal to the
-    /// number of rows is how a caller keeps a list that already ended while it pages another list of the same result,
-    /// and it shows no rows of that list.
-    /// </summary>
-    /// <param name="parameter">The name of the offset argument.</param>
-    /// <param name="offset">The offset the caller passed.</param>
-    /// <param name="count">The number of rows in the list.</param>
-    /// <param name="list">What the rows are, in the plural, such as "entries".</param>
-    private static OperationInvalidInput? CheckOffset(string parameter, int offset, int count, string list)
-    {
-        return offset < 0 || offset > count
-            ? new OperationInvalidInput(
-                "invalid-offset",
-                $"{parameter} must be from 0 to {count} for this result, which has {count} {list}.",
-                parameter)
-            : null;
-    }
-
-    /// <summary>
-    /// Checks a request for one page of a result with one or more lists and returns the first failure, or null when
-    /// the page may be built. A later page of a changed result is refused first, so a caller whose preview shrank is
-    /// told the preview changed rather than that an offset is out of range.
-    /// </summary>
-    /// <param name="expectedFingerprint">The fingerprint the caller read from an earlier page, or null.</param>
-    /// <param name="currentFingerprint">The fingerprint of the result as it is now.</param>
-    /// <param name="lists">The offset argument, offset, row count, and plural name of each list in the result.</param>
-    internal static OperationResult<T>? CheckPage<T>(
-        string? expectedFingerprint,
-        string? currentFingerprint,
-        params PageList[] lists)
-    {
-        ArgumentNullException.ThrowIfNull(lists);
-        OperationConflict? changed = CheckSameResult(
-            expectedFingerprint,
-            currentFingerprint,
-            lists.Any(list => list.Offset > 0));
-        if (changed is not null)
-        {
-            return changed;
-        }
-
-        foreach (PageList list in lists)
-        {
-            OperationInvalidInput? invalid = CheckOffset(list.Parameter, list.Offset, list.Count, list.Name);
-            if (invalid is not null)
-            {
-                return invalid;
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Refuses a request for a later page of a result that is no longer the one the earlier pages came from.
-    /// </summary>
-    /// <param name="expected">The fingerprint the caller read from an earlier page, or null to skip the check.</param>
-    /// <param name="current">The fingerprint of the result as it is now.</param>
-    /// <param name="laterPage">True when the request starts after the first row of any list.</param>
-    private static OperationConflict? CheckSameResult(string? expected, string? current, bool laterPage)
-    {
-        return laterPage &&
-            expected is not null &&
-            current is not null &&
-            !string.Equals(expected, current, StringComparison.Ordinal)
-                ? new OperationConflict(
-                    "preview-changed",
-                    "The result changed since the earlier page was read, so this page would not line up with it. " +
-                    "Call again without an offset to start from the first page.")
-                : null;
-    }
-
     /// <summary>
     /// Counts the rows of one list, from <paramref name="offset"/>, that fit the bytes the page has left. A page
     /// shows at least one row when the list has one left, so a caller that follows the next offset never loops on the
