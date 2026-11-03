@@ -8,7 +8,6 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
-using MtgMcp.Archidekt;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.App.Hosting;
@@ -609,28 +608,7 @@ internal static partial class ToolCallPolicy
             AllowOutOfOrderMetadataProperties = true,
             UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         };
-        options.TypeInfoResolver = options.TypeInfoResolver!.WithAddedModifier(NameRemoteDeckId);
         options.MakeReadOnly();
         return options;
-    }
-
-    /// <summary>
-    /// Shows the adapter's deck identifier as <c>remoteDeckId</c> in tool results. The adapter records keep their own
-    /// property name because the stored sync baseline is written with them.
-    /// </summary>
-    private static void NameRemoteDeckId(JsonTypeInfo info)
-    {
-        if (info.Type != typeof(RemoteDeckSummary) && info.Type != typeof(RemoteDeckSnapshot))
-        {
-            return;
-        }
-
-        foreach (JsonPropertyInfo property in info.Properties)
-        {
-            if (property.Name == "remoteId")
-            {
-                property.Name = "remoteDeckId";
-            }
-        }
     }
 }

@@ -105,7 +105,11 @@ public sealed partial class ArchidektWorkflowTests
             [.. local.Entries.Select(value => new UpdateDeckEntryChange(value with { Quantity = value.Quantity + 1 }))],
             token));
 
-        List<ArchidektSyncPreviewView> fullPages = await ReadEveryPreviewPageAsync(world, localDeckId, "standard", token);
+        List<ArchidektSyncPreviewView> fullPages = await ReadEveryPreviewPageAsync(
+            world,
+            localDeckId,
+            "standard",
+            token);
         List<ArchidektSyncPreviewView> concisePages = await ReadEveryPreviewPageAsync(
             world,
             localDeckId,

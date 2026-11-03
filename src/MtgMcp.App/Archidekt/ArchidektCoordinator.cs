@@ -317,7 +317,8 @@ internal sealed class ArchidektSynchronizationContext
                     ? null
                     : $"archidekt_pull_apply would refuse this pull: {conflictReason}",
                 ApplyOptionsNotice = discardLocalChanges
-                    ? "archidekt_pull_apply must repeat discardLocalChanges: true, the value this preview used, and pass " +
+                    ? "archidekt_pull_apply must repeat discardLocalChanges: true, the value this preview used, and " +
+                        "pass " +
                         $"confirmation: \"discard local changes {local.Data.DeckId:D}\"."
                     : null,
             },
@@ -1355,12 +1356,12 @@ internal sealed class ArchidektSynchronizationContext
         ArchidektOperationScope operationScope,
         CancellationToken cancellationToken)
     {
-        OperationResult<RemoteDeckPage> pageResult = await Service.ListDecksAsync(
+        OperationResult<RemoteDeckList> pageResult = await Service.ListDecksAsync(
             operationScope,
             cancellationToken).ConfigureAwait(false);
-        if (pageResult is not OperationSuccess<RemoteDeckPage> page)
+        if (pageResult is not OperationSuccess<RemoteDeckList> page)
         {
-            return OperationFailure.Forward<RemoteDeckPage, RemoteDeckSnapshot>(pageResult);
+            return OperationFailure.Forward<RemoteDeckList, RemoteDeckSnapshot>(pageResult);
         }
 
         if (page.Data.Items.Any(value => string.Equals(value.RemoteId, remoteDeckId, StringComparison.Ordinal)))

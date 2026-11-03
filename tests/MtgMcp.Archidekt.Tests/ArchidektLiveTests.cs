@@ -31,7 +31,7 @@ public sealed class ArchidektLiveTests
         using ArchidektService service = new(
             ArchidektOptions.CreateDefault(credentialsFile: credentialsFile),
             "0.9.0-preview.1");
-        RemoteDeckPage page = Success(await service.ListDecksAsync(TestContext.Current.CancellationToken));
+        RemoteDeckList page = Success(await service.ListDecksAsync(TestContext.Current.CancellationToken));
 
         Assert.True(page.Items.Count <= 1);
         Assert.Equal("archidekt", page.Evidence.Source);
@@ -80,7 +80,7 @@ public sealed class ArchidektLiveTests
             Assert.Equal("private", deck.Visibility);
             Assert.Equal(deckName, deck.Name);
 
-            RemoteDeckPage listed = Success(await service.ListDecksAsync(TestContext.Current.CancellationToken));
+            RemoteDeckList listed = Success(await service.ListDecksAsync(TestContext.Current.CancellationToken));
             Assert.Contains(listed.Items, value => value.RemoteId == deck.RemoteId);
 
             folder = Success(await service.CreateFolderAsync(

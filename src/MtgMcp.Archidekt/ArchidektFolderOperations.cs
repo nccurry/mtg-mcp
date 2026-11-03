@@ -268,7 +268,8 @@ internal sealed class ArchidektFolderOperations
                     request.Confirmation,
                     "delete",
                     "folder",
-                    request.FolderId);
+                    request.FolderId,
+                    "folderId");
                 RemoteFolderTree before = await folderTransport.ListAsync(
                     budget,
                     cancellationToken).ConfigureAwait(false);
@@ -342,7 +343,7 @@ internal sealed class ArchidektFolderOperations
         CancellationToken cancellationToken)
     {
         List<RemoteDeckSummary> deckSummaries = [];
-        RemoteDeckPage page = await deckTransport.ListAsync(budget, cancellationToken).ConfigureAwait(false);
+        RemoteDeckList page = await deckTransport.ListAsync(budget, cancellationToken).ConfigureAwait(false);
         deckSummaries.AddRange(page.Items);
 
         string? rootFolderId = tree.Items.Count(value => value.ParentFolderId is null) == 1

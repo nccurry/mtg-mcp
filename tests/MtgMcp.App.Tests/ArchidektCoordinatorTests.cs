@@ -2070,17 +2070,56 @@ public sealed class ArchidektCoordinatorTests
                 token));
 
             ArchidektRemoteWriteTools writes = new(coordinator, OperationMode.Remote);
-            AssertPermitted(await writes.CreateDeckAsync(new(" ", "commander"), cancellationToken: token));
-            AssertPermitted(await writes.DeleteDeckAsync(new("1", "f", "wrong"), token));
+            AssertPermitted(await writes.CreateDeckAsync(name: " ", format: "commander", cancellationToken: token));
+            AssertPermitted(await writes.DeleteDeckAsync(
+                remoteDeckId: "1",
+                expectedRemoteFingerprint: "f",
+                confirmation: "wrong",
+                cancellationToken: token));
             AssertPermitted(await writes.ApplyPushAsync(new(Guid.NewGuid(), 1, "f", "p"), token));
-            AssertPermitted(await writes.CreateFolderAsync(new(" ", "private"), token));
-            AssertPermitted(await writes.UpdateFolderAsync(new(" ", "f"), token));
-            AssertPermitted(await writes.MoveFolderItemsAsync(new("f", [], null), token));
-            AssertPermitted(await writes.DeleteFolderAsync(new("1", "x", "f", "wrong"), token));
-            AssertPermitted(await writes.CreateSnapshotAsync(new(" ", "f", "x"), token));
-            AssertPermitted(await writes.UpdateSnapshotAsync(new(" ", " ", "f", "x"), token));
-            AssertPermitted(await writes.DeleteSnapshotAsync(new("1", "2", "f", "wrong"), token));
-            AssertPermitted(await writes.ApplySnapshotRestoreAsync(new("1", "2", "s", "c", "r", "p", "wrong"), token));
+            AssertPermitted(await writes.CreateFolderAsync(name: " ", visibility: "private", cancellationToken: token));
+            AssertPermitted(await writes.UpdateFolderAsync(
+                folderId: " ",
+                expectedTreeFingerprint: "f",
+                cancellationToken: token));
+            AssertPermitted(await writes.MoveFolderItemsAsync(
+                expectedTreeFingerprint: "f",
+                items: [],
+                destinationFolderId: null,
+                cancellationToken: token));
+            AssertPermitted(await writes.DeleteFolderAsync(
+                folderId: "1",
+                expectedName: "x",
+                expectedTreeFingerprint: "f",
+                confirmation: "wrong",
+                cancellationToken: token));
+            AssertPermitted(await writes.CreateSnapshotAsync(
+                remoteDeckId: " ",
+                expectedRemoteFingerprint: "f",
+                name: "x",
+                description: null,
+                cancellationToken: token));
+            AssertPermitted(await writes.UpdateSnapshotAsync(
+                remoteDeckId: " ",
+                snapshotId: " ",
+                expectedChecksum: "f",
+                name: "x",
+                cancellationToken: token));
+            AssertPermitted(await writes.DeleteSnapshotAsync(
+                remoteDeckId: "1",
+                snapshotId: "2",
+                expectedChecksum: "f",
+                confirmation: "wrong",
+                cancellationToken: token));
+            AssertPermitted(await writes.ApplySnapshotRestoreAsync(
+                remoteDeckId: "1",
+                snapshotId: "2",
+                expectedSnapshotChecksum: "s",
+                expectedSnapshotContentFingerprint: "c",
+                expectedRemoteFingerprint: "r",
+                previewFingerprint: "p",
+                confirmation: "wrong",
+                cancellationToken: token));
         }
         finally
         {
@@ -2097,17 +2136,58 @@ public sealed class ArchidektCoordinatorTests
     private static async Task AssertEveryRemoteWriteIsDeniedAsync(ArchidektRemoteWriteTools tools)
     {
         CancellationToken token = TestContext.Current.CancellationToken;
-        Assert.IsType<OperationUnsupported>((await tools.CreateDeckAsync(new("x", "commander"), cancellationToken: token)).Value);
-        Assert.IsType<OperationUnsupported>((await tools.DeleteDeckAsync(new("1", "f", "delete deck 1"), token)).Value);
+        Assert.IsType<OperationUnsupported>(
+            (await tools.CreateDeckAsync(name: "x", format: "commander", cancellationToken: token)).Value);
+        Assert.IsType<OperationUnsupported>((await tools.DeleteDeckAsync(
+            remoteDeckId: "1",
+            expectedRemoteFingerprint: "f",
+            confirmation: "delete deck 1",
+            cancellationToken: token)).Value);
         Assert.IsType<OperationUnsupported>((await tools.ApplyPushAsync(new(Guid.NewGuid(), 1, "f", "p"), token)).Value);
-        Assert.IsType<OperationUnsupported>((await tools.CreateFolderAsync(new("x", "private"), token)).Value);
-        Assert.IsType<OperationUnsupported>((await tools.UpdateFolderAsync(new("1", "f"), token)).Value);
-        Assert.IsType<OperationUnsupported>((await tools.MoveFolderItemsAsync(new("f", [new("deck", "1", null)], null), token)).Value);
-        Assert.IsType<OperationUnsupported>((await tools.DeleteFolderAsync(new("1", "x", "f", "delete folder 1"), token)).Value);
-        Assert.IsType<OperationUnsupported>((await tools.CreateSnapshotAsync(new("1", "f", "x"), token)).Value);
-        Assert.IsType<OperationUnsupported>((await tools.UpdateSnapshotAsync(new("1", "2", "f", "x"), token)).Value);
-        Assert.IsType<OperationUnsupported>((await tools.DeleteSnapshotAsync(new("1", "2", "f", "delete snapshot 2"), token)).Value);
-        Assert.IsType<OperationUnsupported>((await tools.ApplySnapshotRestoreAsync(new("1", "2", "s", "c", "r", "p", "restore snapshot 2"), token)).Value);
+        Assert.IsType<OperationUnsupported>(
+            (await tools.CreateFolderAsync(name: "x", visibility: "private", cancellationToken: token)).Value);
+        Assert.IsType<OperationUnsupported>((await tools.UpdateFolderAsync(
+            folderId: "1",
+            expectedTreeFingerprint: "f",
+            cancellationToken: token)).Value);
+        Assert.IsType<OperationUnsupported>((await tools.MoveFolderItemsAsync(
+            expectedTreeFingerprint: "f",
+            items: [new("deck", "1", null)],
+            destinationFolderId: null,
+            cancellationToken: token)).Value);
+        Assert.IsType<OperationUnsupported>((await tools.DeleteFolderAsync(
+            folderId: "1",
+            expectedName: "x",
+            expectedTreeFingerprint: "f",
+            confirmation: "delete folder 1",
+            cancellationToken: token)).Value);
+        Assert.IsType<OperationUnsupported>((await tools.CreateSnapshotAsync(
+            remoteDeckId: "1",
+            expectedRemoteFingerprint: "f",
+            name: "x",
+            description: null,
+            cancellationToken: token)).Value);
+        Assert.IsType<OperationUnsupported>((await tools.UpdateSnapshotAsync(
+            remoteDeckId: "1",
+            snapshotId: "2",
+            expectedChecksum: "f",
+            name: "x",
+            cancellationToken: token)).Value);
+        Assert.IsType<OperationUnsupported>((await tools.DeleteSnapshotAsync(
+            remoteDeckId: "1",
+            snapshotId: "2",
+            expectedChecksum: "f",
+            confirmation: "delete snapshot 2",
+            cancellationToken: token)).Value);
+        Assert.IsType<OperationUnsupported>((await tools.ApplySnapshotRestoreAsync(
+            remoteDeckId: "1",
+            snapshotId: "2",
+            expectedSnapshotChecksum: "s",
+            expectedSnapshotContentFingerprint: "c",
+            expectedRemoteFingerprint: "r",
+            previewFingerprint: "p",
+            confirmation: "restore snapshot 2",
+            cancellationToken: token)).Value);
     }
 
     /// <summary>

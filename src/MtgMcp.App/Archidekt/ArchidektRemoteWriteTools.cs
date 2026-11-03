@@ -40,7 +40,7 @@ internal sealed class ArchidektRemoteWriteTools
         "preview/apply. Pass localDeckId with its current expectedRevision to bind the new deck to an unchanged " +
         "local deck; a changed local deck is refused with stale-deck-revision." +
         UntrustedTextNotes.Archidekt)]
-    internal Task<OperationResult<RemoteDeckSnapshot>> CreateDeckAsync(
+    internal Task<OperationResult<ArchidektCreatedDeckView>> CreateDeckAsync(
         [Description("The deck name.")] string name,
         [Description("The deck format."), DeckFormatValues] string format,
         [Description("The deck description; omit for none.")] string? description = null,
@@ -52,11 +52,11 @@ internal sealed class ArchidektRemoteWriteTools
         [Description("Required current local revision when localDeckId is provided.")] long? expectedRevision = null,
         CancellationToken cancellationToken = default)
     {
-        return ExecuteAsync(() => coordinator.CreateRemoteDeckAsync(
+        return ExecuteAsync(async () => ArchidektCreatedDeckView.Show(await coordinator.CreateRemoteDeckAsync(
             localDeckId,
             expectedRevision,
             new ArchidektDeckCreateRequest(name, format, description, visibility, parentFolderId),
-            cancellationToken));
+            cancellationToken).ConfigureAwait(false)));
     }
 
     /// <summary>
@@ -120,15 +120,15 @@ internal sealed class ArchidektRemoteWriteTools
         "Archidekt: creates and verifies one explicitly named Archidekt folder without same-name inference or " +
         "recursive creation." +
         UntrustedTextNotes.Archidekt)]
-    internal Task<OperationResult<RemoteFolderRecord>> CreateFolderAsync(
+    internal Task<OperationResult<ArchidektFolderView>> CreateFolderAsync(
         [Description("The folder name.")] string name,
         [Description("Who can see the folder."), FolderVisibilityValues] string visibility,
         [Description("The parent folder ID; omit for the root.")] string? parentFolderId = null,
         CancellationToken cancellationToken = default)
     {
-        return ExecuteAsync(() => coordinator.Service.CreateFolderAsync(
+        return ExecuteAsync(async () => ArchidektFolderView.Show(await coordinator.Service.CreateFolderAsync(
             new ArchidektFolderCreateRequest(name, visibility, parentFolderId),
-            cancellationToken));
+            cancellationToken).ConfigureAwait(false)));
     }
 
     /// <summary>
@@ -139,7 +139,7 @@ internal sealed class ArchidektRemoteWriteTools
         "Archidekt: updates one exact folder only when its fresh tree fingerprint and optional destination remain " +
         "valid." +
         UntrustedTextNotes.Archidekt)]
-    internal Task<OperationResult<RemoteFolderRecord>> UpdateFolderAsync(
+    internal Task<OperationResult<ArchidektFolderView>> UpdateFolderAsync(
         [Description("The folder to update.")] string folderId,
         [Description("The treeFingerprint from a fresh archidekt_folders_get.")] string expectedTreeFingerprint,
         [Description("The new name; omit to keep it.")] string? name = null,
@@ -151,7 +151,7 @@ internal sealed class ArchidektRemoteWriteTools
         bool updateParent = false,
         CancellationToken cancellationToken = default)
     {
-        return ExecuteAsync(() => coordinator.Service.UpdateFolderAsync(
+        return ExecuteAsync(async () => ArchidektFolderView.Show(await coordinator.Service.UpdateFolderAsync(
             new ArchidektFolderUpdateRequest(
                 folderId,
                 expectedTreeFingerprint,
@@ -159,7 +159,7 @@ internal sealed class ArchidektRemoteWriteTools
                 visibility,
                 parentFolderId,
                 updateParent),
-            cancellationToken));
+            cancellationToken).ConfigureAwait(false)));
     }
 
     /// <summary>

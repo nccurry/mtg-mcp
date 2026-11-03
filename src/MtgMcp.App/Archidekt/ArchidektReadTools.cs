@@ -99,7 +99,7 @@ internal sealed class ArchidektReadTools
         "changed. A page stops early when it would pass the result size limit, and long descriptions are cut " +
         "(descriptionTruncated)." +
         UntrustedTextNotes.Archidekt)]
-    internal async Task<OperationResult<RemoteDeckPage>> ListDecksAsync(
+    internal async Task<OperationResult<ArchidektDeckListView>> ListDecksAsync(
         [Description(CursorDescription)] string? cursor = null,
         [Description("Remote deck summaries to return, from 1 through 100; default 50.")] int pageSize = 50,
         CancellationToken cancellationToken = default)
@@ -109,11 +109,15 @@ internal sealed class ArchidektReadTools
             return invalid;
         }
 
-        OperationResult<RemoteDeckPage> list = await coordinator.Service
+        OperationResult<RemoteDeckList> list = await coordinator.Service
             .ListDecksAsync(cancellationToken).ConfigureAwait(false);
-        return list is OperationSuccess<RemoteDeckPage> success
-            ? ArchidektResultPaging.PageDeckList(success.Data, cursor, pageSize)
-            : list;
+        return list is OperationSuccess<RemoteDeckList> success
+            ? ArchidektResultPaging.PageDeckList(
+                success.Data,
+                cursor,
+                pageSize,
+                PageCursorBinding.ForRequest(RequestHash.Of(("archidekt_deck_list", typeof(string)))))
+            : OperationFailure.Forward<RemoteDeckList, ArchidektDeckListView>(list);
     }
 
     /// <summary>
@@ -325,6 +329,7 @@ internal sealed class ArchidektReadTools
             pageSize,
             PageCursorBinding.ForRequest(RequestHash.Of(
                 ("archidekt_push_preview", typeof(string)),
+                (localDeckId, typeof(Guid)),
                 (confirmRemovals, typeof(int?)),
                 (chosen.Data.ToString(), typeof(string)))),
             ArchidektApplyAvailability.PushNotice(mode, ReadAuthStatus()),

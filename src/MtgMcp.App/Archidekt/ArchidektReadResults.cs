@@ -59,7 +59,7 @@ internal sealed record ArchidektFolderGetResult(
 /// </summary>
 internal sealed record ArchidektFolderTreeView(
     int FolderCount,
-    IReadOnlyList<RemoteFolderRecord> Items,
+    IReadOnlyList<ArchidektFolderView> Items,
     ArchidektRetrievalEvidence Evidence,
     string TreeFingerprint)
 {

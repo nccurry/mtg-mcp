@@ -141,7 +141,7 @@ public sealed class ArchidektContractMapperTests
     {
         using JsonDocument document = JsonDocument.Parse(ArchidektTestPayloads.DeckList);
 
-        RemoteDeckPage page = ArchidektDeckContractMapper.MapDeckPage(
+        RemoteDeckList page = ArchidektDeckContractMapper.MapDeckList(
             document.RootElement,
             ArchidektTestPayloads.DeckList,
             DateTimeOffset.UtcNow,
@@ -152,7 +152,6 @@ public sealed class ArchidektContractMapperTests
         Assert.Equal("9", item.ParentFolderId);
         Assert.Equal("Root/Tests", item.ParentFolderPath);
         Assert.Equal(4, item.CardCount);
-        Assert.Equal("opaque-next", page.NextCursor);
     }
 
     /// <summary>

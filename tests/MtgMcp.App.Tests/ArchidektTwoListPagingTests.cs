@@ -12,9 +12,9 @@ namespace MtgMcp.App.Tests;
 public sealed class ArchidektTwoListPagingTests
 {
     /// <summary>
-    /// Builds a push preview with three operations and many large differences.
+    /// Builds a push preview with the given number of operations and many large differences.
     /// </summary>
-    private static ArchidektSyncPreview BuildPreview(string fingerprint, int differenceCount)
+    private static ArchidektSyncPreview BuildPreview(string fingerprint, int differenceCount, int operationCount = 3)
     {
         List<ArchidektDifference> differences =
         [
@@ -27,10 +27,10 @@ public sealed class ArchidektTwoListPagingTests
         ];
         List<ArchidektRemoteOperation> operations =
         [
-            .. Enumerable.Range(1, 3).Select(index => new ArchidektRemoteOperation(index, "entry-update", "x", "y")),
+            .. Enumerable.Range(1, operationCount).Select(index => new ArchidektRemoteOperation(index, "entry-update", "x", "y")),
         ];
         return new ArchidektSyncPreview(
-            "push", Guid.NewGuid(), 1, "42", "remote", "content", fingerprint, false, differences, operations, 3);
+            "push", Guid.NewGuid(), 1, "42", "remote", "content", fingerprint, false, differences, operations, operationCount);
     }
 
     /// <summary>
@@ -74,6 +74,52 @@ public sealed class ArchidektTwoListPagingTests
         Assert.True(pages > 2);
         Assert.Equal([1, 2, 3], sequences);
         Assert.Equal(preview.Differences.Select(value => value.Path), paths);
+    }
+
+    /// <summary>
+    /// Verifies a caller that passes only nextCursor reads every operation and every difference exactly once when the
+    /// operations alone span several pages, when a page ends exactly where the operations end, and when the operations
+    /// fill the first page with no difference after them.
+    /// </summary>
+    [Theory]
+    [InlineData(7, 10, 3)]
+    [InlineData(6, 9, 3)]
+    [InlineData(3, 6, 3)]
+    [InlineData(3, 0, 3)]
+    [InlineData(9, 2, 4)]
+    public void PushPreview_FollowingNextCursor_ReadsEveryOperationAndDifferenceExactlyOnce(
+        int operationCount,
+        int differenceCount,
+        int pageSize)
+    {
+        ArchidektSyncPreview preview = BuildPreview("preview", differenceCount, operationCount);
+        List<string> paths = [];
+        List<int> sequences = [];
+        string? cursor = null;
+        int pages = 0;
+
+        do
+        {
+            ArchidektSyncPreviewView page = Assert.IsType<OperationSuccess<ArchidektSyncPreviewView>>(
+                ArchidektResultPaging.PagePreview(
+                    preview,
+                    cursor,
+                    pageSize,
+                    PageCursorBinding.None,
+                    null,
+                    ArchidektResponseFormat.Standard).Value).Data;
+            Assert.True(page.Operations.Count + page.Differences.Count <= pageSize);
+            paths.AddRange(page.Differences.Select(value => value.Path));
+            sequences.AddRange(page.Operations.Select(value => value.Sequence));
+            cursor = page.NextCursor;
+            pages++;
+            Assert.True(pages < 100, "the pages never ended");
+        }
+        while (cursor is not null);
+
+        Assert.Equal(Enumerable.Range(1, operationCount), sequences);
+        Assert.Equal(preview.Differences.Select(value => value.Path), paths);
+        Assert.Equal((operationCount + differenceCount + pageSize - 1) / pageSize, pages);
     }
 
     /// <summary>

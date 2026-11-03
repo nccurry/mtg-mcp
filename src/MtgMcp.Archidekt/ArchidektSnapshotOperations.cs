@@ -164,7 +164,8 @@ internal sealed class ArchidektSnapshotOperations
                     request.Confirmation,
                     "delete",
                     "snapshot",
-                    request.SnapshotId);
+                    request.SnapshotId,
+                    "snapshotId");
                 RemoteNamedSnapshot current = await snapshotTransport.GetAsync(
                     request.RemoteDeckId,
                     request.SnapshotId,
@@ -256,7 +257,8 @@ internal sealed class ArchidektSnapshotOperations
                     request.Confirmation,
                     "restore",
                     "snapshot",
-                    request.SnapshotId);
+                    request.SnapshotId,
+                    "snapshotId");
                 (RemoteDeckSnapshot current, RemoteNamedSnapshot snapshot) = await GetRestoreSourcesAsync(
                     request.RemoteDeckId,
                     request.SnapshotId,

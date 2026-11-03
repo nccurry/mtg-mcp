@@ -78,9 +78,9 @@ internal static class ArchidektJsonContract
     }
 
     /// <summary>
-    /// Maps one page of deck summaries while preserving the provider continuation as an opaque cursor.
+    /// Maps the deck-list response into canonically ordered summaries.
     /// </summary>
-    internal static RemoteDeckPage MapDeckPage(
+    internal static RemoteDeckList MapDeckList(
         JsonElement root,
         string sourceJson,
         DateTimeOffset retrievedAtUtc,
@@ -97,10 +97,8 @@ internal static class ArchidektJsonContract
             int name = StringComparer.OrdinalIgnoreCase.Compare(left.Name, right.Name);
             return name != 0 ? name : StringComparer.Ordinal.Compare(left.RemoteId, right.RemoteId);
         });
-        string? next = GetString(root, "next");
-        return new RemoteDeckPage(
+        return new RemoteDeckList(
             items,
-            next,
             Evidence(method, retrievedAtUtc, ArchidektContract.Hash(sourceJson)));
     }
 

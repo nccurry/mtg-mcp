@@ -145,14 +145,18 @@ internal static class ArchidektResultPaging
     /// <summary>
     /// Builds one page of the deck list: the summaries from the cursor that fit, each with its description cut.
     /// </summary>
-    internal static OperationResult<RemoteDeckPage> PageDeckList(RemoteDeckPage list, string? cursor, int pageSize)
+    internal static OperationResult<ArchidektDeckListView> PageDeckList(
+        RemoteDeckList list,
+        string? cursor,
+        int pageSize,
+        PageCursorBinding request)
     {
         ArgumentNullException.ThrowIfNull(list);
-        PageCursorBinding binding = PageCursorBinding.ForSource(list.Evidence.SourceChecksum);
+        PageCursorBinding binding = request.And(PageCursorBinding.ForSource(list.Evidence.SourceChecksum));
         OperationResult<PageCursorPosition> decoded = PageCursor.Decode(cursor, binding);
         if (decoded is not OperationSuccess<PageCursorPosition> start)
         {
-            return OperationFailure.Forward<PageCursorPosition, RemoteDeckPage>(decoded);
+            return OperationFailure.Forward<PageCursorPosition, ArchidektDeckListView>(decoded);
         }
 
         int offset = start.Data.Offset;
@@ -161,10 +165,10 @@ internal static class ArchidektResultPaging
             return PageCursor.Invalid();
         }
 
-        List<RemoteDeckSummary> cut = [.. list.Items.Select(CutDescription)];
-        RemoteDeckPage header = new([], null, list.Evidence);
+        List<ArchidektDeckRowView> cut = [.. list.Items.Select(CutDescription)];
+        ArchidektDeckListView header = new([], null, list.Evidence);
         ResultPageSlice slice = ResultPage.Take(cut, offset, ResultSize.Measure(header)).Limit(pageSize);
-        return new OperationSuccess<RemoteDeckPage>(header with
+        return new OperationSuccess<ArchidektDeckListView>(header with
         {
             Items = slice.Rows(cut),
             NextCursor = slice.More ? PageCursor.Encode(PageCursorPosition.AtOffset(slice.Next), binding) : null,
@@ -174,8 +178,9 @@ internal static class ArchidektResultPaging
     /// <summary>
     /// Cuts the description of a listed deck, and says so when it cuts.
     /// </summary>
-    private static RemoteDeckSummary CutDescription(RemoteDeckSummary deck)
+    private static ArchidektDeckRowView CutDescription(RemoteDeckSummary summary)
     {
+        ArchidektDeckRowView deck = ArchidektDeckRowView.From(summary);
         if (deck.Description is null)
         {
             return deck;
@@ -308,11 +313,12 @@ internal static class ArchidektResultPaging
             return PageCursor.Invalid();
         }
 
+        List<ArchidektFolderView> folders = [.. tree.Items.Select(ArchidektFolderView.From)];
         ArchidektFolderTreeView header = new(tree.Items.Count, [], tree.Evidence, tree.TreeFingerprint);
-        ResultPageSlice slice = ResultPage.Take(tree.Items, offset, ResultSize.Measure(header)).Limit(pageSize);
+        ResultPageSlice slice = ResultPage.Take(folders, offset, ResultSize.Measure(header)).Limit(pageSize);
         return new OperationSuccess<ArchidektFolderTreeView>(header with
         {
-            Items = slice.Rows(tree.Items),
+            Items = slice.Rows(folders),
             Truncated = slice.More ? true : null,
             NextCursor = slice.More ? PageCursor.Encode(PageCursorPosition.AtOffset(slice.Next), binding) : null,
             Narrow = slice.More
