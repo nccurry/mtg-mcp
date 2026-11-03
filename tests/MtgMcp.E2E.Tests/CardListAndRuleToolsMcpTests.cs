@@ -236,7 +236,7 @@ public sealed class CardListAndRuleToolsMcpTests
             new Dictionary<string, object?> { ["deckId"] = deckId, ["expectedRevision"] = revision + 5 })
             .ConfigureAwait(false);
 
-        AssertFailure(result, "conflict", "deck-revision-conflict");
+        AssertFailure(result, "conflict", "stale-deck-revision");
     }
 
     /// <summary>
