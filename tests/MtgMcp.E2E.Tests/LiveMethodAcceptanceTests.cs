@@ -1092,7 +1092,7 @@ public sealed class LiveMethodAcceptanceTests
                 token).ConfigureAwait(false);
             Assert.Contains(
                 decks.GetProperty("items").EnumerateArray(),
-                value => value.GetProperty("remoteId").GetString() == ArchidektDeckId);
+                value => value.GetProperty("remoteDeckId").GetString() == ArchidektDeckId);
 
             auth = await CallSuccessAsync(
                 environment,
@@ -1449,7 +1449,7 @@ public sealed class LiveMethodAcceptanceTests
                     ["visibility"] = "private",
                 },
                 token).ConfigureAwait(false);
-            temporaryDeckId = temporaryDeck.GetProperty("remoteId").GetString();
+            temporaryDeckId = temporaryDeck.GetProperty("remoteDeckId").GetString();
             temporaryDeckInitialFolderId = temporaryDeck.TryGetProperty(
                 "parentFolderId",
                 out JsonElement initialParentFolder)

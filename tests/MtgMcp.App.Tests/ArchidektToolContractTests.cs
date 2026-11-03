@@ -85,7 +85,7 @@ public sealed class ArchidektToolContractTests
             pageSizes.Add(items.GetArrayLength());
             foreach (JsonElement item in items.EnumerateArray())
             {
-                Assert.True(ids.Add(item.GetProperty("remoteId").GetString()!));
+                Assert.True(ids.Add(item.GetProperty("remoteDeckId").GetString()!));
             }
 
             if (!page.TryGetProperty("nextCursor", out JsonElement next) || next.ValueKind == JsonValueKind.Null)

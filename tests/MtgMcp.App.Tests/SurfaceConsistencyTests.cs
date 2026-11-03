@@ -9,11 +9,9 @@ namespace MtgMcp.App.Tests;
 
 /// <summary>
 /// States what the published tool surface must look like once every tool family follows the shared paging rule, and
-/// runs every tool driven by the budget script to prove each refusal of a value names its path. The tests carry the
-/// <c>SurfaceConsistencyTarget</c> category, so <c>task test</c> skips them; <c>task test:surface-target</c> runs them,
-/// and they fail until the last tool family is converted.
+/// runs every tool driven by the budget script to prove each refusal of a value names its path.
 /// </summary>
-public sealed partial class SurfaceConsistencyTargetTests
+public sealed partial class SurfaceConsistencyTests
 {
     /// <summary>
     /// Names the only paging arguments a tool may take.
@@ -25,7 +23,6 @@ public sealed partial class SurfaceConsistencyTargetTests
     /// offset, page, or limit argument.
     /// </summary>
     [Fact]
-    [Trait("Category", "SurfaceConsistencyTarget")]
     public void PagedTools_TakeOnlyCursorAndPageSize()
     {
         using RegisteredToolSet registered = new(OperationMode.Remote);
@@ -48,7 +45,6 @@ public sealed partial class SurfaceConsistencyTargetTests
     /// next-position property.
     /// </summary>
     [Fact]
-    [Trait("Category", "SurfaceConsistencyTarget")]
     public void PagedTools_ReturnNextCursorAndNoOtherNextPosition()
     {
         using RegisteredToolSet registered = new(OperationMode.Remote);
@@ -78,7 +74,6 @@ public sealed partial class SurfaceConsistencyTargetTests
     /// refused.
     /// </summary>
     [Fact]
-    [Trait("Category", "SurfaceConsistencyTarget")]
     public async Task EveryInvalidInputResult_NamesItsPath()
     {
         CancellationToken token = TestContext.Current.CancellationToken;

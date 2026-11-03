@@ -9,11 +9,6 @@ namespace MtgMcp.App.Decks;
 internal static class DeckConfirmation
 {
     /// <summary>
-    /// Names the reason code of a missing or wrong confirmation phrase.
-    /// </summary>
-    internal const string ReasonCode = "confirmation-required";
-
-    /// <summary>
     /// Builds the exact phrase for an action on one target, such as <c>delete deck</c> and the deck ID.
     /// </summary>
     internal static string Phrase(string action, Guid target)
@@ -28,6 +23,6 @@ internal static class DeckConfirmation
     {
         return string.Equals(confirmation, phrase, StringComparison.Ordinal)
             ? null
-            : new OperationInvalidInput(ReasonCode, $"Pass confirmation exactly as: {phrase}", "confirmation");
+            : new OperationInvalidInput(SharedReasonCodes.ConfirmationRequired, $"Pass confirmation exactly as: {phrase}", "confirmation");
     }
 }

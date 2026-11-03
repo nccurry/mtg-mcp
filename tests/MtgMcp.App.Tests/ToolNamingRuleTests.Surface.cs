@@ -6,8 +6,7 @@ namespace MtgMcp.App.Tests;
 
 /// <summary>
 /// Holds the argument naming rules of the surface-consistency end state: flat write arguments, one identifier name per
-/// family, one confirmation form, and one preview guard name. The tests carry the <c>SurfaceConsistencyTarget</c>
-/// category, so <c>task test</c> skips them until every tool family follows the rules.
+/// family, one confirmation form, and one preview guard name.
 /// </summary>
 public sealed partial class ToolNamingRuleTests
 {
@@ -41,7 +40,6 @@ public sealed partial class ToolNamingRuleTests
     /// <c>events</c> of the Playgroup event batch, and statistics requests.
     /// </summary>
     [Fact]
-    [Trait("Category", "SurfaceConsistencyTarget")]
     public void WriteTools_TakeNoObjectArgumentOutsideTheAllowlist()
     {
         using RegisteredToolSet registered = new(OperationMode.Remote);
@@ -77,14 +75,13 @@ public sealed partial class ToolNamingRuleTests
     /// their deck identifiers <c>localDeckId</c>, <c>remoteDeckId</c>, and <c>playgroupDeckId</c>.
     /// </summary>
     [Fact]
-    [Trait("Category", "SurfaceConsistencyTarget")]
     public void DeckIdentifiers_AreNamedByTheDeckTheyIdentify()
     {
         using RegisteredToolSet registered = new(OperationMode.Remote);
         List<string> offenders = [];
-        foreach ((string tool, MethodInfo method) in SurfaceConsistencyTargetTests.Ordered(registered))
+        foreach ((string tool, MethodInfo method) in SurfaceConsistencyTests.Ordered(registered))
         {
-            foreach (string argument in SurfaceConsistencyTargetTests.ArgumentNames(method))
+            foreach (string argument in SurfaceConsistencyTests.ArgumentNames(method))
             {
                 bool badArchidekt = tool.StartsWith("archidekt_", StringComparison.Ordinal) &&
                     (argument == "deckId" || (argument.EndsWith("DeckId", StringComparison.Ordinal) &&
@@ -107,7 +104,6 @@ public sealed partial class ToolNamingRuleTests
     /// tool takes a bare <c>snapshotId</c>.
     /// </summary>
     [Fact]
-    [Trait("Category", "SurfaceConsistencyTarget")]
     public void ScryfallRequestSnapshots_AreIdentifiedByRequestSnapshotId()
     {
         using RegisteredToolSet registered = new(OperationMode.Remote);
@@ -116,10 +112,10 @@ public sealed partial class ToolNamingRuleTests
         [
             .. methods
                 .Where(pair => pair.Key.StartsWith("scryfall_", StringComparison.Ordinal))
-                .Where(pair => SurfaceConsistencyTargetTests.ArgumentNames(pair.Value).Contains("snapshotId"))
+                .Where(pair => SurfaceConsistencyTests.ArgumentNames(pair.Value).Contains("snapshotId"))
                 .Select(pair => $"{pair.Key}: snapshotId"),
         ];
-        if (!SurfaceConsistencyTargetTests.ArgumentNames(methods["scryfall_request_snapshot_delete"])
+        if (!SurfaceConsistencyTests.ArgumentNames(methods["scryfall_request_snapshot_delete"])
             .Contains("requestSnapshotId"))
         {
             offenders.Add("scryfall_request_snapshot_delete: no requestSnapshotId");
@@ -134,12 +130,11 @@ public sealed partial class ToolNamingRuleTests
     /// <c>acknowledge</c> argument, and <c>confirmRemovals</c> stays a count.
     /// </summary>
     [Fact]
-    [Trait("Category", "SurfaceConsistencyTarget")]
     public void DestructiveOperations_TakeAConfirmationPhrase_AndNoAcknowledgeBooleans()
     {
         using RegisteredToolSet registered = new(OperationMode.Remote);
         List<string> offenders = [];
-        foreach ((string tool, MethodInfo method) in SurfaceConsistencyTargetTests.Ordered(registered))
+        foreach ((string tool, MethodInfo method) in SurfaceConsistencyTests.Ordered(registered))
         {
             ParameterInfo[] arguments = [.. ArgumentParameters(method)];
             foreach (ParameterInfo parameter in arguments)
@@ -181,14 +176,13 @@ public sealed partial class ToolNamingRuleTests
     /// Verifies the argument that guards a preview is always named <c>previewFingerprint</c>.
     /// </summary>
     [Fact]
-    [Trait("Category", "SurfaceConsistencyTarget")]
     public void FingerprintArguments_AreAllNamedPreviewFingerprint()
     {
         using RegisteredToolSet registered = new(OperationMode.Remote);
         List<string> offenders = [];
-        foreach ((string tool, MethodInfo method) in SurfaceConsistencyTargetTests.Ordered(registered))
+        foreach ((string tool, MethodInfo method) in SurfaceConsistencyTests.Ordered(registered))
         {
-            offenders.AddRange(SurfaceConsistencyTargetTests.ArgumentNames(method)
+            offenders.AddRange(SurfaceConsistencyTests.ArgumentNames(method)
                 .Where(name => name.Contains("ingerprint", StringComparison.Ordinal) && name != "previewFingerprint" &&
                     !NonPreviewFingerprintGuards.Contains(name))
                 .Select(name => $"{tool}: {name}"));

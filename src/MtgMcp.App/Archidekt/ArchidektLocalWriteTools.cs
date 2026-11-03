@@ -72,7 +72,7 @@ internal sealed class ArchidektLocalWriteTools
             if (!string.Equals(confirmation, expected, StringComparison.Ordinal))
             {
                 return Task.FromResult<OperationResult<ArchidektApplyResult>>(new OperationInvalidInput(
-                    "confirmation-required",
+                    SharedReasonCodes.ConfirmationRequired,
                     $"Pass confirmation exactly as: {expected}",
                     "confirmation"));
             }
