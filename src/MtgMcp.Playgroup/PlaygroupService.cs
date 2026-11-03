@@ -201,7 +201,7 @@ public sealed class PlaygroupService : IDisposable
 
             if (limit is < 1 or > 100)
             {
-                throw Invalid("invalid-page-size", "pageSize must be between 1 and 100.", "pageSize");
+                throw Invalid(SharedReasonCodes.InvalidPageSize, "pageSize must be between 1 and 100.", "pageSize");
             }
 
             string query = Query(

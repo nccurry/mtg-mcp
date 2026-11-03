@@ -1,5 +1,6 @@
 using MtgMcp.App.Hosting;
 using MtgMcp.Core.Decks;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
 
@@ -34,7 +35,7 @@ internal static class DeckListPaging
             return OperationFailure.Forward<PageCursorPosition, DeckPage>(start);
         }
 
-        OperationResult<DeckListSlice> read = await store.ListAsync(position.Data.First, pageSize, cancellationToken)
+        OperationResult<DeckListSlice> read = await store.ListAsync(position.Data.Offset, pageSize, cancellationToken)
             .ConfigureAwait(false);
         if (read is not OperationSuccess<DeckListSlice> slice)
         {
@@ -44,7 +45,7 @@ internal static class DeckListPaging
         List<DeckSummary> summaries = [.. slice.Data.Items.Select(ShortDescription)];
         ResultPageSlice kept = ResultPage.Take(summaries, 0, ResultSize.Measure(new DeckPage([], null)));
         string? next = kept.More || slice.Data.HasMore
-            ? PageCursor.Encode(new PageCursorPosition(position.Data.First + kept.Count), binding)
+            ? PageCursor.Encode(PageCursorPosition.AtOffset(position.Data.Offset + kept.Count), binding)
             : null;
         return new OperationSuccess<DeckPage>(new DeckPage(kept.Rows(summaries), next));
     }

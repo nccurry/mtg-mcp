@@ -1,4 +1,5 @@
 using MtgMcp.App.Hosting;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 
 namespace MtgMcp.App.CardLists;
@@ -14,7 +15,7 @@ internal static class CardListCursors
     /// </summary>
     internal static string Fingerprint(params (object? Value, Type Type)[] parts)
     {
-        return PageCursor.RequestHash(parts);
+        return RequestHash.Of(parts);
     }
 
     /// <summary>
@@ -22,7 +23,7 @@ internal static class CardListCursors
     /// </summary>
     internal static string Encode(string fingerprint, int offset, IReadOnlyList<CardListSourceInfo> sources)
     {
-        return PageCursor.Encode(new PageCursorPosition(offset), Binding(fingerprint, sources));
+        return PageCursor.Encode(PageCursorPosition.AtOffset(offset), Binding(fingerprint, sources));
     }
 
     /// <summary>
@@ -40,7 +41,7 @@ internal static class CardListCursors
             Binding(fingerprint, sources),
             current: Current(sources));
         return decoded is OperationSuccess<PageCursorPosition> position
-            ? new OperationSuccess<int>(position.Data.First)
+            ? new OperationSuccess<int>(position.Data.Offset)
             : OperationFailure.Forward<PageCursorPosition, int>(decoded);
     }
 
@@ -49,7 +50,7 @@ internal static class CardListCursors
     /// </summary>
     private static PageCursorBinding Binding(string fingerprint, IReadOnlyList<CardListSourceInfo> sources)
     {
-        string markers = PageCursor.RequestHash((sources.Select(source => source.Marker).ToArray(), typeof(string[])));
+        string markers = RequestHash.Of((sources.Select(source => source.Marker).ToArray(), typeof(string[])));
         return PageCursorBinding.ForRequest(fingerprint).And(PageCursorBinding.ForSource(markers));
     }
 

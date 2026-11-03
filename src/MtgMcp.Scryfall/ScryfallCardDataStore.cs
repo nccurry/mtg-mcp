@@ -1147,7 +1147,9 @@ internal sealed class ScryfallCardDataStore
             if (await generation.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
             {
                 await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-                return new OperationConflict("stale-scryfall-generation", "The staging corpus generation is no longer activatable.");
+                return new OperationConflict(
+                    SharedReasonCodes.StaleScryfallGeneration,
+                    "The staging corpus generation is no longer activatable.");
             }
         }
 
@@ -1242,8 +1244,8 @@ internal sealed class ScryfallCardDataStore
         string? confirmation,
         CancellationToken cancellationToken)
     {
-        OperationInvalidInput? unconfirmed = ScryfallConfirmation.Require(
-            confirmation, ScryfallConfirmation.Phrase("rollback card-data", expectedPrevious));
+        OperationInvalidInput? unconfirmed = Confirmation.Check(
+            confirmation, Confirmation.Phrase("rollback", "card-data", expectedPrevious));
         if (unconfirmed is not null)
         {
             return unconfirmed;
@@ -1256,7 +1258,9 @@ internal sealed class ScryfallCardDataStore
             .ConfigureAwait(false);
         if (active != expectedActive || previous != expectedPrevious)
         {
-            return new OperationConflict("stale-scryfall-generation", "The active corpus generation changed before rollback.");
+            return new OperationConflict(
+                SharedReasonCodes.StaleScryfallGeneration,
+                "The active corpus generation changed before rollback.");
         }
 
         await using SqliteCommand command = connection.CreateCommand();
@@ -1278,8 +1282,8 @@ internal sealed class ScryfallCardDataStore
         string? confirmation,
         CancellationToken cancellationToken)
     {
-        OperationInvalidInput? unconfirmed = ScryfallConfirmation.Require(
-            confirmation, ScryfallConfirmation.Phrase("delete card-data", expectedActive));
+        OperationInvalidInput? unconfirmed = Confirmation.Check(
+            confirmation, Confirmation.Phrase("delete", "card-data", expectedActive));
         if (unconfirmed is not null)
         {
             return unconfirmed;
@@ -1292,7 +1296,9 @@ internal sealed class ScryfallCardDataStore
             .ConfigureAwait(false);
         if (active != expectedActive)
         {
-            return new OperationConflict("stale-scryfall-generation", "The active corpus generation changed before deletion.");
+            return new OperationConflict(
+                SharedReasonCodes.StaleScryfallGeneration,
+                "The active corpus generation changed before deletion.");
         }
 
         await using SqliteTransaction transaction = connection.BeginTransaction();

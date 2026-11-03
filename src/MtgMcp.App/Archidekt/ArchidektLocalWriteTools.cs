@@ -33,7 +33,14 @@ internal sealed class ArchidektLocalWriteTools
     /// <summary>
     /// Applies one unchanged pull preview transactionally to local storage.
     /// </summary>
-    [McpServerTool(Name = "archidekt_pull_apply", Title = "Apply Archidekt Pull", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true, UseStructuredContent = true)]
+    [McpServerTool(
+        Name = "archidekt_pull_apply",
+        Title = "Apply Archidekt Pull",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = false,
+        OpenWorld = true,
+        UseStructuredContent = true)]
     [Description(
         "Archidekt: refetches the remote deck, verifies all preview guards, then creates or replaces one local " +
         "deck in a single transaction. The guards are checked in order: a changed local deck is refused with " +
@@ -66,16 +73,10 @@ internal sealed class ArchidektLocalWriteTools
                     "The effective operation mode does not permit local writes."));
         }
 
-        if (discardLocalChanges && localDeckId is { } discarded)
+        if (discardLocalChanges && localDeckId is { } discarded &&
+            Confirmation.Check(confirmation, Confirmation.Phrase("discard", "local changes", discarded)) is { } refused)
         {
-            string expected = $"discard local changes {discarded:D}";
-            if (!string.Equals(confirmation, expected, StringComparison.Ordinal))
-            {
-                return Task.FromResult<OperationResult<ArchidektApplyResult>>(new OperationInvalidInput(
-                    SharedReasonCodes.ConfirmationRequired,
-                    $"Pass confirmation exactly as: {expected}",
-                    "confirmation"));
-            }
+            return Task.FromResult<OperationResult<ArchidektApplyResult>>(refused);
         }
 
         return coordinator.ApplyPullAsync(

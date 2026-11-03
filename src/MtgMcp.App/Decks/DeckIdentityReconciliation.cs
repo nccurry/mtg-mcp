@@ -347,7 +347,8 @@ internal sealed class DeckIdentityReconciliationCoordinator
         {
             return new OperationConflict(
                 SharedReasonCodes.PreviewChanged,
-                "The retained evidence no longer reproduces the accepted identity preview.",
+                "The identity evidence changed since the preview. " +
+                "Run the preview again and pass its previewFingerprint.",
                 new ConflictState(deck.Revision, PreviewFingerprint: preview.PreviewFingerprint));
         }
 

@@ -1,10 +1,10 @@
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
-using MtgMcp.App.Hosting;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 
-namespace MtgMcp.App.Tests;
+namespace MtgMcp.Core.Tests;
 
 /// <summary>
 /// Verifies the shared page cursor codec: what it writes reads back, and every cursor that was edited, cut, issued for
@@ -21,7 +21,8 @@ public sealed class PageCursorTests
     /// Gives each kind of binding, built twice with the same values, so a test can read a cursor against an equal
     /// binding.
     /// </summary>
-    public static TheoryData<string> BindingKinds => ["deck", "preview", "remote", "artifact", "source", "request", "none"];
+    public static TheoryData<string> BindingKinds =>
+        ["deck", "preview", "remote", "artifact", "source", "request", "none"];
 
     /// <summary>
     /// Verifies a position written for each kind of binding reads back unchanged against an equal binding.
@@ -30,11 +31,11 @@ public sealed class PageCursorTests
     [MemberData(nameof(BindingKinds))]
     public void Decode_ACursorOfEachBindingKind_ReadsBackItsPosition(string kind)
     {
-        string cursor = PageCursor.Encode(new PageCursorPosition(42), Binding(kind, "a"));
+        string cursor = PageCursor.Encode(PageCursorPosition.AtOffset(42), Binding(kind, "a"));
 
         OperationResult<PageCursorPosition> read = PageCursor.Decode(cursor, Binding(kind, "a"));
 
-        Assert.Equal(new PageCursorPosition(42), Position(read));
+        Assert.Equal(PageCursorPosition.AtOffset(42), Position(read));
     }
 
     /// <summary>
@@ -46,12 +47,12 @@ public sealed class PageCursorTests
         PageCursorBinding binding = PageCursorBinding.ForDeck(DeckId, 7)
             .And(PageCursorBinding.ForRequest("hash"))
             .And(PageCursorBinding.ForPreview("fp"));
-        string cursor = PageCursor.Encode(new PageCursorPosition(3, int.MaxValue), binding);
+        string cursor = PageCursor.Encode(PageCursorPosition.AtOffsets(3, int.MaxValue), binding);
 
-        OperationResult<PageCursorPosition> read = PageCursor.Decode(cursor, binding, twoLists: true);
+        OperationResult<PageCursorPosition> read = PageCursor.Decode(cursor, binding, PageCursorShape.TwoOffsets);
 
         Assert.Equal(
-            new PageCursorPosition(3, int.MaxValue),
+            PageCursorPosition.AtOffsets(3, int.MaxValue),
             Position(read));
     }
 
@@ -64,11 +65,11 @@ public sealed class PageCursorTests
         PageCursorBinding binding = PageCursorBinding.None;
 
         Assert.Equal(
-            new PageCursorPosition(0),
+            PageCursorPosition.AtOffset(0),
             Position(PageCursor.Decode(null, binding)));
         Assert.Equal(
-            new PageCursorPosition(0, 0),
-            Position(PageCursor.Decode(null, binding, twoLists: true)));
+            PageCursorPosition.AtOffsets(0, 0),
+            Position(PageCursor.Decode(null, binding, PageCursorShape.TwoOffsets)));
     }
 
     /// <summary>
@@ -78,7 +79,7 @@ public sealed class PageCursorTests
     public void Encode_UsesOnlyUrlSafeCharacters()
     {
         string cursor = PageCursor.Encode(
-            new PageCursorPosition(1_000_000, 2),
+            PageCursorPosition.AtOffsets(1_000_000, 2),
             PageCursorBinding.ForSource("???>>>~~~~"));
 
         Assert.All(cursor, character => Assert.True(
@@ -109,8 +110,8 @@ public sealed class PageCursorTests
     public void Decode_AnEditedCursor_IsInvalidCursor()
     {
         PageCursorBinding binding = PageCursorBinding.ForSource("abc");
-        string original = PageCursor.Encode(new PageCursorPosition(10), binding);
-        string other = PageCursor.Encode(new PageCursorPosition(99), binding);
+        string original = PageCursor.Encode(PageCursorPosition.AtOffset(10), binding);
+        string other = PageCursor.Encode(PageCursorPosition.AtOffset(99), binding);
         string[] parts = original.Split('.');
         string otherPayload = other.Split('.')[0];
 
@@ -125,13 +126,13 @@ public sealed class PageCursorTests
     /// refused, so only what the codec itself writes is accepted.
     /// </summary>
     [Theory]
-    [InlineData("""{"v":2,"p":[1],"b":{}}""")]
-    [InlineData("""{"v":1,"p":[-1],"b":{}}""")]
-    [InlineData("""{"v":1,"p":[],"b":{}}""")]
-    [InlineData("""{"v":1,"p":[1,2,3],"b":{}}""")]
-    [InlineData("""{"v":1,"p":["x"],"b":{}}""")]
-    [InlineData("""{"v":1,"p":[1],"b":{"source":5}}""")]
-    [InlineData("""{"v":1,"p":[1]}""")]
+    [InlineData("""{"v":2,"s":0,"p":[1],"b":{}}""")]
+    [InlineData("""{"v":1,"s":0,"p":[-1],"b":{}}""")]
+    [InlineData("""{"v":1,"s":0,"p":[],"b":{}}""")]
+    [InlineData("""{"v":1,"s":0,"p":[1,2,3],"b":{}}""")]
+    [InlineData("""{"v":1,"s":0,"p":["x"],"b":{}}""")]
+    [InlineData("""{"v":1,"s":0,"p":[1],"b":{"source":5}}""")]
+    [InlineData("""{"v":1,"s":0,"p":[1]}""")]
     [InlineData("[]")]
     public void Decode_AWellSignedPayloadOfTheWrongShape_IsInvalidCursor(string json)
     {
@@ -150,8 +151,12 @@ public sealed class PageCursorTests
     {
         PageCursorBinding binding = PageCursorBinding.ForSource("abc");
 
-        AssertInvalid(PageCursor.Decode(PageCursor.Encode(new PageCursorPosition(1), binding), binding, twoLists: true));
-        AssertInvalid(PageCursor.Decode(PageCursor.Encode(new PageCursorPosition(1, 2), binding), binding));
+        AssertInvalid(
+            PageCursor.Decode(
+                PageCursor.Encode(PageCursorPosition.AtOffset(1), binding),
+                binding,
+                PageCursorShape.TwoOffsets));
+        AssertInvalid(PageCursor.Decode(PageCursor.Encode(PageCursorPosition.AtOffsets(1, 2), binding), binding));
     }
 
     /// <summary>
@@ -164,7 +169,7 @@ public sealed class PageCursorTests
     [InlineData("artifact")]
     public void Decode_AnotherRequestOrSubject_IsInvalidCursor(string kind)
     {
-        string cursor = PageCursor.Encode(new PageCursorPosition(5), Binding(kind, "a"));
+        string cursor = PageCursor.Encode(PageCursorPosition.AtOffset(5), Binding(kind, "a"));
 
         AssertInvalid(PageCursor.Decode(cursor, Binding(kind, "b")));
         AssertInvalid(PageCursor.Decode(cursor, PageCursorBinding.None));
@@ -183,7 +188,7 @@ public sealed class PageCursorTests
     [InlineData("source")]
     public void Decode_ChangedState_IsCursorStaleWithTheCurrentState(string kind)
     {
-        string cursor = PageCursor.Encode(new PageCursorPosition(5), Binding(kind, "a", revision: 1));
+        string cursor = PageCursor.Encode(PageCursorPosition.AtOffset(5), Binding(kind, "a", revision: 1));
         ConflictState current = new(Revision: 2, RemoteFingerprint: "now");
 
         OperationResult<PageCursorPosition> read = PageCursor.Decode(
@@ -205,28 +210,61 @@ public sealed class PageCursorTests
     {
         PageCursorBinding large = PageCursorBinding.ForSource(new string('x', PageCursor.MaximumLength));
 
-        Assert.Throws<ArgumentException>(() => PageCursor.Encode(new PageCursorPosition(1), large));
-        Assert.Throws<ArgumentException>(() => PageCursor.Encode(new PageCursorPosition(-1), PageCursorBinding.None));
-        Assert.Throws<ArgumentException>(() => PageCursor.Encode(new PageCursorPosition(1, -1), PageCursorBinding.None));
+        Assert.Throws<ArgumentException>(() => PageCursor.Encode(PageCursorPosition.AtOffset(1), large));
+        Assert.Throws<ArgumentException>(
+            () => PageCursor.Encode(PageCursorPosition.AtOffset(-1), PageCursorBinding.None));
+        Assert.Throws<ArgumentException>(
+            () => PageCursor.Encode(PageCursorPosition.AtOffsets(1, -1), PageCursorBinding.None));
         AssertInvalid(PageCursor.Decode(new string('A', PageCursor.MaximumLength + 1), PageCursorBinding.None));
         Assert.True(
             PageCursor.Encode(
-                new PageCursorPosition(1),
+                PageCursorPosition.AtOffset(1),
                 PageCursorBinding.ForSource(new string('x', 512))).Length <= PageCursor.MaximumLength);
     }
 
     /// <summary>
-    /// Verifies the request hash depends on the parts and their order, and is stable.
+    /// Verifies a provider-page position keeps its page and rows shown, and a cursor of one shape is refused by a
+    /// reader of another.
     /// </summary>
     [Fact]
-    public void RequestHash_IsStable_AndDependsOnThePartsAndTheirOrder()
+    public void Decode_EachShape_ReadsBackItsOwnNumbersAndRefusesOtherShapes()
     {
-        string first = PageCursor.RequestHash(("a", typeof(string)), (1, typeof(int)));
+        PageCursorBinding binding = PageCursorBinding.ForSource("abc");
+        string provider = PageCursor.Encode(PageCursorPosition.AtProviderPage(4, 7), binding);
+        string offsets = PageCursor.Encode(PageCursorPosition.AtOffsets(4, 7), binding);
 
-        Assert.Equal(first, PageCursor.RequestHash(("a", typeof(string)), (1, typeof(int))));
-        Assert.NotEqual(first, PageCursor.RequestHash((1, typeof(int)), ("a", typeof(string))));
-        Assert.NotEqual(first, PageCursor.RequestHash(("a", typeof(string)), (2, typeof(int))));
-        Assert.Equal(32, first.Length);
+        PageCursorPosition read = Position(PageCursor.Decode(provider, binding, PageCursorShape.ProviderPage));
+
+        Assert.Equal(4, read.Page);
+        Assert.Equal(7, read.RowsShown);
+        AssertInvalid(PageCursor.Decode(provider, binding, PageCursorShape.TwoOffsets));
+        AssertInvalid(PageCursor.Decode(offsets, binding, PageCursorShape.ProviderPage));
+        Assert.Equal(
+            PageCursorPosition.AtProviderPage(0, 0),
+            Position(PageCursor.Decode(null, binding, PageCursorShape.ProviderPage)));
+    }
+
+    /// <summary>
+    /// Verifies a scope binding refuses another scope as another request and a changed checksum as stale.
+    /// </summary>
+    [Fact]
+    public void Decode_ScopeBinding_SeparatesAnotherScopeFromChangedData()
+    {
+        string cursor = PageCursor.Encode(
+            PageCursorPosition.AtOffset(3),
+            PageCursorBinding.ForScope("tags", "sum-1"));
+
+        Assert.Equal(
+            PageCursorPosition.AtOffset(3),
+            Position(PageCursor.Decode(cursor, PageCursorBinding.ForScope("tags", "sum-1"))));
+        AssertInvalid(PageCursor.Decode(cursor, PageCursorBinding.ForScope("cards", "sum-1")));
+        OperationConflict stale = Assert.IsType<OperationConflict>(
+            PageCursor.Decode(cursor, PageCursorBinding.ForScope("tags", "sum-2")).Value);
+        Assert.Equal(SharedReasonCodes.CursorStale, stale.ReasonCode);
+        Assert.Equal(
+            "The data behind this cursor changed since the first page. Call again without cursor to read the " +
+            "current data.",
+            stale.Message);
     }
 
     /// <summary>

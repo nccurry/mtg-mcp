@@ -1,5 +1,6 @@
 using MtgMcp.App.Hosting;
 using MtgMcp.App.Scryfall;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 using MtgMcp.Scryfall;
 
@@ -96,12 +97,9 @@ internal sealed class CardListCoordinator
         }
 
         int maximum = parsed.Data.IncludeRaw ? 25 : MaximumPageSize;
-        if (pageSize < 1 || pageSize > maximum)
+        if (ResultPage.CheckPageSize(pageSize, maximum) is { } badSize)
         {
-            return new OperationInvalidInput(
-                "invalid-page-size",
-                $"pageSize must be from 1 through {maximum}.",
-                "pageSize");
+            return badSize;
         }
 
         int idCount = 0;
@@ -224,12 +222,9 @@ internal sealed class CardListCoordinator
         CancellationToken cancellationToken)
     {
         int rowSize = pageSize ?? DefaultPageSize;
-        if (rowSize < 1 || rowSize > MaximumPageSize)
+        if (ResultPage.CheckPageSize(rowSize, MaximumPageSize) is { } badSize)
         {
-            return new OperationInvalidInput(
-                "invalid-page-size",
-                $"pageSize must be from 1 through {MaximumPageSize}.",
-                "pageSize");
+            return badSize;
         }
 
         if (rows is null && (cursor is not null || pageSize is not null))

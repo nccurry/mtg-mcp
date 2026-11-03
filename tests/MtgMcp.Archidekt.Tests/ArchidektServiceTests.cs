@@ -248,7 +248,7 @@ public sealed class ArchidektServiceTests
         {
             OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(results[index].Value);
             Assert.Equal("confirmation-required", invalid.ReasonCode);
-            Assert.Equal($"Pass confirmation exactly as: {expected[index]}", invalid.Message);
+            Assert.Equal($"confirmation must be exactly \"{expected[index]}\".", invalid.Message);
         }
 
         Assert.Empty(handler.Requests);

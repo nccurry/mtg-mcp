@@ -149,9 +149,9 @@ public sealed class DeckWriteToolsTests
             Assert.Equal("confirmation-required", refusal.ReasonCode);
             Assert.Equal("confirmation", refusal.Path);
         });
-        Assert.EndsWith($"delete deck {deck.DeckId:D}", refusals[0].Message, StringComparison.Ordinal);
-        Assert.EndsWith($"delete backup {backup.BackupId:D}", refusals[2].Message, StringComparison.Ordinal);
-        Assert.EndsWith($"restore backup {backup.BackupId:D}", refusals[3].Message, StringComparison.Ordinal);
+        Assert.Equal($"confirmation must be exactly \"delete deck {deck.DeckId:D}\".", refusals[0].Message);
+        Assert.Equal($"confirmation must be exactly \"delete backup {backup.BackupId:D}\".", refusals[2].Message);
+        Assert.Equal($"confirmation must be exactly \"restore backup {backup.BackupId:D}\".", refusals[3].Message);
         Assert.Single(RequireSuccess(await store.ListAsync(0, 10, token)).Items);
         Assert.Single(RequireSuccess(await store.Backups.ListAsync(token)).Items);
     }

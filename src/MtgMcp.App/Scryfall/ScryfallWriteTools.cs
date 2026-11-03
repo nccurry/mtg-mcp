@@ -1,7 +1,7 @@
 using System.ComponentModel;
-using System.ComponentModel.DataAnnotations;
 using ModelContextProtocol.Server;
 using MtgMcp.App.Configuration;
+using MtgMcp.App.Hosting;
 using MtgMcp.Core.Results;
 using MtgMcp.Scryfall;
 
@@ -147,11 +147,3 @@ internal sealed class ScryfallWriteTools
         return ScryfallToolExecution.RunAsync(operation);
     }
 }
-
-/// <summary>
-/// Publishes the bulk metadata cache policies a card-data sync accepts as a schema enum. A sync has no cache-only
-/// value because it cannot install anything without the network.
-/// </summary>
-[AttributeUsage(AttributeTargets.Parameter | AttributeTargets.Property)]
-internal sealed class SyncFreshnessPolicyValuesAttribute()
-    : AllowedValuesAttribute("default", "refresh");

@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using MtgMcp.App.Hosting;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 using MtgMcp.Spellbook;
 
@@ -41,7 +42,7 @@ internal static class SpellbookPaging
         OperationResult<PageCursorPosition> decoded = PageCursor.Decode(cursor, binding);
         return decoded switch
         {
-            OperationSuccess<PageCursorPosition> success => new OperationSuccess<int>(success.Data.First),
+            OperationSuccess<PageCursorPosition> success => new OperationSuccess<int>(success.Data.Offset),
             _ => OperationFailure.Forward<PageCursorPosition, int>(decoded),
         };
     }
@@ -62,7 +63,8 @@ internal static class SpellbookPaging
             next.ValueKind == JsonValueKind.String;
         if (ResultSize.Measure(source) <= budget)
         {
-            return new SpellbookShapedPage(source, providerHasMore ? Next(page.Offset + page.Limit, binding) : null, false);
+            string? following = providerHasMore ? Next(page.Offset + page.Limit, binding) : null;
+            return new SpellbookShapedPage(source, following, false);
         }
 
         JsonNode root = JsonNode.Parse(source.Data.GetRawText())!;
@@ -79,7 +81,8 @@ internal static class SpellbookPaging
         int firstKept = 0;
         for (int index = 0; index < lists.Count; index++)
         {
-            IEnumerable<int> sizes = rows[index].Select(row => Encoding.UTF8.GetByteCount(row?.ToJsonString() ?? "null") + 1);
+            IEnumerable<int> sizes = rows[index]
+                .Select(row => Encoding.UTF8.GetByteCount(row?.ToJsonString() ?? "null") + 1);
             int kept = ResultSizeLimit.CountWithin(sizes, allowance, out int used);
             kept = Math.Max(kept, single && rows[index].Count > 0 ? 1 : 0);
             allowance -= used;
@@ -92,7 +95,9 @@ internal static class SpellbookPaging
         }
 
         SpellbookEvidence cut = source with { Data = JsonSerializer.SerializeToElement(root) };
-        string? nextCursor = single && (firstKept < rows[0].Count || providerHasMore) ? Next(page.Offset + firstKept, binding) : null;
+        string? nextCursor = single && (firstKept < rows[0].Count || providerHasMore)
+            ? Next(page.Offset + firstKept, binding)
+            : null;
         return new SpellbookShapedPage(cut, nextCursor, true);
     }
 
@@ -101,7 +106,7 @@ internal static class SpellbookPaging
     /// </summary>
     private static string? Next(int offset, PageCursorBinding binding)
     {
-        return offset > MaximumOffset ? null : PageCursor.Encode(new PageCursorPosition(offset), binding);
+        return offset > MaximumOffset ? null : PageCursor.Encode(PageCursorPosition.AtOffset(offset), binding);
     }
 
     /// <summary>

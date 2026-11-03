@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MtgMcp.App.Hosting;
+using MtgMcp.Core.Paging;
 using MtgMcp.Core.Results;
 using MtgMcp.Playgroup;
 
@@ -27,7 +28,7 @@ internal static class PlaygroupGamesPaging
     /// </summary>
     internal static OperationResult<PageCursorPosition> Position(string? cursor, PageCursorBinding binding)
     {
-        return PageCursor.Decode(cursor, binding, twoLists: true);
+        return PageCursor.Decode(cursor, binding, PageCursorShape.ProviderPage);
     }
 
     /// <summary>
@@ -50,15 +51,24 @@ internal static class PlaygroupGamesPaging
         }
 
         List<JsonElement> rows = [.. evidence.Data.EnumerateArray()];
-        int skip = Math.Min(position.Second ?? 0, rows.Count);
+        int skip = Math.Min(position.RowsShown, rows.Count);
         PlaygroupEvidence skeleton = evidence with { Data = JsonSerializer.SerializeToElement(Array.Empty<int>()) };
-        int allowance = ResultSizeLimit.MaximumBytes - ResultSizeLimit.EnvelopeReserveBytes - ResultSize.Measure(skeleton);
+        int allowance = ResultSizeLimit.MaximumBytes - ResultSizeLimit.EnvelopeReserveBytes -
+            ResultSize.Measure(skeleton);
         IEnumerable<int> sizes = rows.Skip(skip).Select(row => Encoding.UTF8.GetByteCount(row.GetRawText()) + 1);
         int kept = Math.Max(ResultSizeLimit.CountWithin(sizes, allowance, out _), rows.Count > skip ? 1 : 0);
         bool cut = skip + kept < rows.Count;
-        string? next = cut
-            ? PageCursor.Encode(new PageCursorPosition(position.First, skip + kept), binding)
-            : rows.Count >= pageSize ? PageCursor.Encode(new PageCursorPosition(position.First + 1, 0), binding) : null;
+        string? next = null;
+        if (cut)
+        {
+            next = PageCursor.Encode(PageCursorPosition.AtProviderPage(position.Page, skip + kept), binding);
+        }
+        else if (rows.Count >= pageSize)
+        {
+            next = PageCursor.Encode(PageCursorPosition.AtProviderPage(position.Page + 1, 0), binding);
+        }
+
+
         PlaygroupEvidence shown = skip == 0 && !cut
             ? evidence
             : evidence with { Data = JsonSerializer.SerializeToElement(rows.Skip(skip).Take(kept)) };

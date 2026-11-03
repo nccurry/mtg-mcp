@@ -218,7 +218,11 @@ internal sealed class ArchidektDeckOperations
             maximumRequestsPerOperation,
             async budget =>
             {
-                ArchidektOperationResults.RequireConfirmation(request.Confirmation, $"delete deck {request.RemoteDeckId}");
+                ArchidektOperationResults.RequireConfirmation(
+                    request.Confirmation,
+                    "delete",
+                    "deck",
+                    request.RemoteDeckId);
                 RemoteDeckSnapshot current = await transport.GetAsync(
                     request.RemoteDeckId,
                     requireAuthentication: true,
@@ -995,7 +999,13 @@ internal sealed class ArchidektDeckOperations
     {
         if (!string.Equals(expected, actual, StringComparison.Ordinal))
         {
-            throw Conflict(reasonCode, "Provider evidence changed after the preview.", currentRemoteFingerprint);
+            throw Conflict(
+                reasonCode,
+                reasonCode == SharedReasonCodes.PreviewChanged
+                    ? "Provider evidence changed after the preview. " +
+                        "Run the preview again and pass its previewFingerprint."
+                    : "Provider evidence changed after the preview.",
+                currentRemoteFingerprint);
         }
     }
 
