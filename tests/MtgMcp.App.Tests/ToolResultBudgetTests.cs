@@ -133,10 +133,10 @@ public sealed class ToolResultBudgetTests
         const string playgroup =
             "Playgroup HTTP transport takes no injected handler, so no offline fixture can fill it; its list " +
             "results are " +
-            "cut by the provider's own page and limit arguments.";
+            "cut by cursor and pageSize.";
         const string spellbook =
             "Commander Spellbook HTTP transport takes no injected handler, so no offline fixture can fill it; its " +
-            "results are cut by the limit and offset arguments.";
+            "results are cut to the result limit and paged by cursor and pageSize.";
         const string archidektWrite =
             "The fake Archidekt has no route for this write, and the result is one fixed-size outcome that does " +
             "not grow " +
