@@ -153,35 +153,6 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
     }
 
     /// <summary>
-    /// Calls a tool that pages two lists, operations and differences, until neither has a next page, and returns the
-    /// last page.
-    /// </summary>
-    private async Task<ToolBudgetWorld.ToolOutcome> PageTwoListsAsync(string tool, JsonObject arguments)
-    {
-        for (int page = 0; page < MaximumPages; page++)
-        {
-            ToolBudgetWorld.ToolOutcome outcome = await CallAsync(tool, arguments);
-            JsonElement data = outcome.Data;
-            bool moreOperations = TryReadOffset(data, "nextOperationOffset", out int operations);
-            bool moreDifferences = TryReadOffset(data, "nextDifferenceOffset", out int differences);
-            if (!moreOperations && !moreDifferences)
-            {
-                return outcome;
-            }
-
-            // A page that is not the last carries both next offsets; a missing one is a defect, not a cue to guess.
-            Assert.True(
-                moreOperations && moreDifferences,
-                $"{tool} left out a next offset on a page that is not the last.");
-            arguments["operationOffset"] = operations;
-            arguments["differenceOffset"] = differences;
-        }
-
-        Assert.Fail($"{tool} did not finish after {MaximumPages} pages.");
-        return null!;
-    }
-
-    /// <summary>
     /// Reads a whole-number property that is present and not null.
     /// </summary>
     private static bool TryReadOffset(JsonElement data, string name, out int value)
@@ -419,22 +390,24 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
     {
         _ = await CallAsync("archidekt_auth_status", []);
         await PageAsync("archidekt_deck_list", [], "nextCursor", "cursor");
-        await PageAsync("archidekt_deck_get", new JsonObject { ["deckId"] = "42" }, "nextOffset", "offset");
-        await PageAsync("archidekt_folders_get", new JsonObject { ["kind"] = "list" }, "folders.nextOffset", "offset");
+        await PageAsync("archidekt_deck_get", new JsonObject { ["remoteDeckId"] = "42" }, "nextCursor", "cursor");
+        await PageAsync("archidekt_folders_get", new JsonObject { ["kind"] = "list" }, "folders.nextCursor", "cursor");
         await PageAsync(
             "archidekt_folders_get",
             new JsonObject { ["kind"] = "get", ["folderId"] = "9" },
-            "folder.nextOffset",
-            "offset");
-        _ = await CallAsync("archidekt_snapshots_get", new JsonObject { ["kind"] = "list", ["deckId"] = "42" });
+            "folder.nextCursor",
+            "cursor");
+        _ = await CallAsync("archidekt_snapshots_get", new JsonObject { ["kind"] = "list", ["remoteDeckId"] = "42" });
         await PageAsync(
             "archidekt_snapshots_get",
-            new JsonObject { ["kind"] = "get", ["deckId"] = "42", ["snapshotId"] = "77" },
-            "snapshot.deck.nextOffset",
-            "offset");
-        _ = await PageTwoListsAsync(
+            new JsonObject { ["kind"] = "get", ["remoteDeckId"] = "42", ["snapshotId"] = "77" },
+            "snapshot.deck.nextCursor",
+            "cursor");
+        _ = await PageAsync(
             "archidekt_snapshot_restore_preview",
-            new JsonObject { ["deckId"] = "42", ["snapshotId"] = "77" });
+            new JsonObject { ["remoteDeckId"] = "42", ["snapshotId"] = "77" },
+            "nextCursor",
+            "cursor");
 
         ToolBudgetWorld.ToolOutcome pull = await CallAsync(
             "archidekt_pull_preview",
@@ -444,21 +417,16 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
             "archidekt_pull_apply",
             new JsonObject
             {
-                ["request"] = new JsonObject
-                {
-                    ["remoteDeckId"] = "42",
-                    ["localDeckId"] = null,
-                    ["expectedRevision"] = null,
-                    ["expectedRemoteFingerprint"] = pulled.GetProperty("remoteFingerprint").GetString(),
-                    ["previewFingerprint"] = pulled.GetProperty("previewFingerprint").GetString(),
-                },
+                ["remoteDeckId"] = "42",
+                ["expectedRemoteFingerprint"] = pulled.GetProperty("remoteFingerprint").GetString(),
+                ["previewFingerprint"] = pulled.GetProperty("previewFingerprint").GetString(),
             });
         Guid localId = applied.Data.GetProperty("localDeckId").GetGuid();
         await PageAsync(
             "archidekt_pull_preview",
             new JsonObject { ["remoteDeckId"] = "42", ["localDeckId"] = localId.ToString() },
-            "nextDifferenceOffset",
-            "differenceOffset");
+            "nextCursor",
+            "cursor");
 
         DeckDocument local = Assert.IsType<MtgMcp.Core.Results.OperationSuccess<DeckDocument>>(
             (await world.Store.GetAsync(localId, token)).Value).Data;
@@ -473,23 +441,22 @@ internal sealed class ToolBudgetScript(ToolBudgetWorld world, CancellationToken 
         await PageAsync(
             "archidekt_sync_diff",
             new JsonObject { ["localDeckId"] = localId.ToString() },
-            "nextDifferenceOffset",
-            "differenceOffset");
-        ToolBudgetWorld.ToolOutcome last = await PageTwoListsAsync(
+            "nextCursor",
+            "cursor");
+        ToolBudgetWorld.ToolOutcome last = await PageAsync(
             "archidekt_push_preview",
-            new JsonObject { ["localDeckId"] = localId.ToString() });
+            new JsonObject { ["localDeckId"] = localId.ToString() },
+            "nextCursor",
+            "cursor");
         JsonElement preview = last.Data;
         _ = await CallAsync(
             "archidekt_push_apply",
             new JsonObject
             {
-                ["request"] = new JsonObject
-                {
-                    ["localDeckId"] = localId.ToString(),
-                    ["expectedRevision"] = edited.Revision,
-                    ["expectedRemoteFingerprint"] = preview.GetProperty("remoteFingerprint").GetString(),
-                    ["previewFingerprint"] = preview.GetProperty("previewFingerprint").GetString(),
-                },
+                ["localDeckId"] = localId.ToString(),
+                ["expectedRevision"] = edited.Revision,
+                ["expectedRemoteFingerprint"] = preview.GetProperty("remoteFingerprint").GetString(),
+                ["previewFingerprint"] = preview.GetProperty("previewFingerprint").GetString(),
             });
     }
 
