@@ -79,6 +79,46 @@ public sealed class ScryfallStoreTests
     }
 
     /// <summary>
+    /// Verifies a page cut to the size limit says so and the next cursor continues after the last member shown.
+    /// </summary>
+    [Fact]
+    public async Task SnapshotStore_CutPage_SetsTruncatedAndContinuesAfterTheLastMemberShown()
+    {
+        using TemporaryScryfallDirectory temporary = new();
+        using ScryfallDatabase database = new(temporary.Path);
+        ScryfallSnapshotStore store = new(database);
+        StoredSnapshot saved = await store.SaveAsync(
+            "search",
+            "{\"q\":\"cut\"}",
+            "search:cut",
+            ["{\"object\":\"list\"}"],
+            ["{\"id\":\"first\"}", "{\"id\":\"second\"}", "{\"id\":\"third\"}"],
+            new DateTimeOffset(2026, 7, 4, 12, 0, 0, TimeSpan.Zero),
+            TestContext.Current.CancellationToken);
+
+        ScryfallSnapshotPage cut = RequireSuccess(await store.GetAsync(
+            saved.Header.SnapshotId,
+            null,
+            pageSize: 3,
+            includeRaw: true,
+            countFitting: members => 2,
+            cancellationToken: TestContext.Current.CancellationToken));
+        ScryfallSnapshotPage rest = RequireSuccess(await store.GetAsync(
+            saved.Header.SnapshotId,
+            cut.NextCursor,
+            pageSize: 3,
+            includeRaw: true,
+            countFitting: members => members.Count,
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.True(cut.Truncated);
+        Assert.Equal([0, 1], cut.Items.Select(member => member.Ordinal));
+        Assert.Equal([2], rest.Items.Select(member => member.Ordinal));
+        Assert.Null(rest.Truncated);
+        Assert.Null(rest.NextCursor);
+    }
+
+    /// <summary>
     /// Verifies the snapshot store preserves one immutable request record through its named operations.
     /// </summary>
     [Fact]
