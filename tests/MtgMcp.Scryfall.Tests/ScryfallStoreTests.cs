@@ -54,7 +54,7 @@ public sealed class ScryfallStoreTests
         _ = RequireSuccess(await store.RollbackAsync(
             secondGeneration,
             firstGeneration,
-            acknowledgeActivationChange: true,
+            confirmation: $"rollback card-data {firstGeneration:D}",
             cancellationToken: TestContext.Current.CancellationToken));
         ScryfallCorpusStatus rolledBack = RequireSuccess(await store.GetStatusAsync(
             metadataCheck,
@@ -66,7 +66,7 @@ public sealed class ScryfallStoreTests
 
         _ = RequireSuccess(await store.DeleteAsync(
             firstGeneration,
-            acknowledgeDataLoss: true,
+            confirmation: $"delete card-data {firstGeneration:D}",
             cancellationToken: TestContext.Current.CancellationToken));
         ScryfallCorpusStatus deleted = RequireSuccess(await store.GetStatusAsync(
             metadataCheck,
@@ -122,6 +122,7 @@ public sealed class ScryfallStoreTests
             null,
             pageSize: 1,
             includeRaw: true,
+            countFitting: null,
             cancellationToken: TestContext.Current.CancellationToken));
         Assert.Single(replay.Items);
         Assert.Equal("first", replay.Items[0].Raw!.Value.GetProperty("id").GetString());
@@ -130,7 +131,7 @@ public sealed class ScryfallStoreTests
         ScryfallSnapshotDeleteResult deleted = RequireSuccess(await store.DeleteAsync(
             saved.Header.SnapshotId,
             saved.Header.Checksum,
-            acknowledgeDataLoss: true,
+            confirmation: $"delete request-snapshot {saved.Header.SnapshotId:D}",
             cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(saved.Header.SnapshotId, deleted.SnapshotId);
         Assert.Null(await store.FindByIdAsync(saved.Header.SnapshotId, TestContext.Current.CancellationToken));

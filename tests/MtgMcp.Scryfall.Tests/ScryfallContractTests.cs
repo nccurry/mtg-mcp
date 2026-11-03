@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MtgMcp.Core.Evidence;
+using MtgMcp.Core.Results;
 
 namespace MtgMcp.Scryfall.Tests;
 
@@ -165,13 +166,17 @@ public sealed class ScryfallContractTests
     {
         string cursor = ScryfallCursor.Encode("scope", "checksum", 25);
 
-        Assert.True(ScryfallCursor.TryDecode(cursor, "scope", "checksum", out int offset));
-        Assert.Equal(25, offset);
-        Assert.False(ScryfallCursor.TryDecode(cursor, "other", "checksum", out _));
-        Assert.False(ScryfallCursor.TryDecode(cursor, "scope", "other", out _));
-        Assert.False(ScryfallCursor.TryDecode("%%%", "scope", "checksum", out _));
-        Assert.True(ScryfallCursor.TryDecode(null, "scope", "checksum", out int initial));
-        Assert.Equal(0, initial);
+        Assert.Equal(25, Assert.IsType<OperationSuccess<int>>(ScryfallCursor.Decode(cursor, "scope", "checksum").Value).Data);
+        OperationInvalidInput otherScope = Assert.IsType<OperationInvalidInput>(
+            ScryfallCursor.Decode(cursor, "other", "checksum").Value);
+        Assert.Equal("invalid-cursor", otherScope.ReasonCode);
+        Assert.Equal("cursor", otherScope.Path);
+        Assert.Equal(
+            "cursor-stale",
+            Assert.IsType<OperationConflict>(ScryfallCursor.Decode(cursor, "scope", "other").Value).ReasonCode);
+        Assert.IsType<OperationInvalidInput>(ScryfallCursor.Decode("%%%", "scope", "checksum").Value);
+        Assert.IsType<OperationInvalidInput>(ScryfallCursor.Decode(cursor, "scope", "checksum", total: 24).Value);
+        Assert.Equal(0, Assert.IsType<OperationSuccess<int>>(ScryfallCursor.Decode(null, "scope", "checksum").Value).Data);
         Assert.Throws<ArgumentOutOfRangeException>(() => ScryfallCursor.Encode("scope", "checksum", -1));
 
         ScryfallCollectionCursorState collectionState = new(

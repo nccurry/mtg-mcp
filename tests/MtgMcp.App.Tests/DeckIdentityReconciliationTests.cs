@@ -268,7 +268,7 @@ public sealed class DeckIdentityReconciliationTests
         _ = RequireSuccess(await scryfall.DeleteSnapshotAsync(
             snapshot.SnapshotId,
             snapshot.Checksum,
-            true,
+            $"delete request-snapshot {snapshot.SnapshotId:D}",
             TestContext.Current.CancellationToken));
 
         OperationUnavailable unavailable = Assert.IsType<OperationUnavailable>((await coordinator.ApplyAsync(
