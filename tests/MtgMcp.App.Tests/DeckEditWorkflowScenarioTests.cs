@@ -188,13 +188,10 @@ public sealed class DeckEditWorkflowScenarioTests
             "archidekt_push_apply",
             new JsonObject
             {
-                ["request"] = new JsonObject
-                {
-                    ["localDeckId"] = localDeckId,
-                    ["expectedLocalRevision"] = summary.GetProperty("revision").GetInt64(),
-                    ["expectedRemoteFingerprint"] = preview.GetProperty("remoteFingerprint").GetString(),
-                    ["previewFingerprint"] = preview.GetProperty("previewFingerprint").GetString(),
-                },
+                ["localDeckId"] = localDeckId,
+                ["expectedRevision"] = summary.GetProperty("revision").GetInt64(),
+                ["expectedRemoteFingerprint"] = preview.GetProperty("remoteFingerprint").GetString(),
+                ["previewFingerprint"] = preview.GetProperty("previewFingerprint").GetString(),
             },
             token)).Data;
         return (preview, applied);

@@ -36,16 +36,19 @@ internal static class ArchidektOperationResults
             {
                 ArchidektFailureKind.InvalidInput => new OperationInvalidInput(
                     exception.ReasonCode,
-                    exception.Message),
+                    exception.Message,
+                    exception.Path),
                 ArchidektFailureKind.NotFound => new OperationNotFound(
                     exception.ReasonCode,
                     exception.Message),
                 ArchidektFailureKind.Conflict => new OperationConflict(
                     exception.ReasonCode,
                     exception.Message,
-                    exception.CurrentRemoteFingerprint is { } current
-                        ? new ConflictState(RemoteFingerprint: current)
-                        : null),
+                    exception.CurrentRemoteFingerprint is null && exception.CurrentPreviewFingerprint is null
+                        ? null
+                        : new ConflictState(
+                            RemoteFingerprint: exception.CurrentRemoteFingerprint,
+                            PreviewFingerprint: exception.CurrentPreviewFingerprint)),
                 ArchidektFailureKind.Unsupported => new OperationUnsupported(
                     exception.ReasonCode,
                     exception.Message),
@@ -57,11 +60,12 @@ internal static class ArchidektOperationResults
                     "Archidekt could not complete the operation."),
             };
         }
-        catch (ArgumentException)
+        catch (ArgumentException exception)
         {
             return new OperationInvalidInput(
                 "invalid-archidekt-input",
-                "The Archidekt operation input is invalid.");
+                "The Archidekt operation input is invalid.",
+                ArgumentPath(exception.ParamName));
         }
         catch (InvalidDataException)
         {
@@ -69,6 +73,16 @@ internal static class ArchidektOperationResults
                 "baseline-unavailable",
                 "The stored Archidekt synchronization baseline is unavailable.");
         }
+    }
+
+    /// <summary>
+    /// Names the tool argument for the parameter an adapter check refused, in the camelCase the tools publish.
+    /// </summary>
+    private static string? ArgumentPath(string? parameterName)
+    {
+        return string.IsNullOrEmpty(parameterName)
+            ? null
+            : char.ToLowerInvariant(parameterName[0]) + parameterName[1..];
     }
 
     /// <summary>
@@ -81,7 +95,10 @@ internal static class ArchidektOperationResults
             throw new ArchidektProviderException(
                 ArchidektFailureKind.InvalidInput,
                 "confirmation-required",
-                $"Pass confirmation exactly as: {expected}");
+                $"Pass confirmation exactly as: {expected}")
+            {
+                Path = "confirmation",
+            };
         }
     }
 }

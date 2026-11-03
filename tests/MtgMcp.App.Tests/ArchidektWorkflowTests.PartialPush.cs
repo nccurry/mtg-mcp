@@ -64,7 +64,7 @@ public sealed partial class ArchidektWorkflowTests
                 .. Enumerable.Repeat("not-attempted", 3 - failing),
             ],
             applied.Operations.Select(value => value.Status));
-        Assert.NotNull(applied.LocalRevision);
+        Assert.NotNull(applied.Revision);
         Assert.True(next.ApplyAvailable, next.ApplyNotice);
         Assert.Equal(
             preview.Operations.Skip(failing).Select(value => (value.Kind, value.Subject)),
@@ -74,7 +74,7 @@ public sealed partial class ArchidektWorkflowTests
         ArchidektApplyResult finished = Success(await world.Writes.ApplyPushAsync(
             new ArchidektPushApplyRequest(
                 localDeckId,
-                Assert.IsType<long>(applied.LocalRevision),
+                Assert.IsType<long>(applied.Revision),
                 next.RemoteFingerprint,
                 next.PreviewFingerprint),
             token));
@@ -181,7 +181,7 @@ public sealed partial class ArchidektWorkflowTests
         ArchidektApplyResult finished = Success(await world.Writes.ApplyPushAsync(
             new ArchidektPushApplyRequest(
                 localDeckId,
-                Assert.IsType<long>(applied.LocalRevision),
+                Assert.IsType<long>(applied.Revision),
                 next.RemoteFingerprint,
                 next.PreviewFingerprint),
             token));
@@ -249,7 +249,7 @@ public sealed partial class ArchidektWorkflowTests
         ArchidektApplyResult finished = Success(await world.Writes.ApplyPushAsync(
             new ArchidektPushApplyRequest(
                 localDeckId,
-                Assert.IsType<long>(applied.LocalRevision),
+                Assert.IsType<long>(applied.Revision),
                 next.RemoteFingerprint,
                 next.PreviewFingerprint),
             token));
@@ -302,7 +302,7 @@ public sealed partial class ArchidektWorkflowTests
             await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
 
         Assert.Equal(outcome, applied.Outcome);
-        Assert.NotNull(applied.LocalRevision);
+        Assert.NotNull(applied.Revision);
         Assert.Null(applied.UnlinkedLocalIds);
         Assert.EndsWith(ArchidektSynchronizationContext.ChangedDuringPushNotice, applied.Notice, StringComparison.Ordinal);
         Assert.False(next.ApplyAvailable);
@@ -320,7 +320,7 @@ public sealed partial class ArchidektWorkflowTests
             new ArchidektPullApplyRequest(
                 "42",
                 localDeckId,
-                pull.LocalRevision,
+                pull.Revision,
                 pull.RemoteFingerprint,
                 pull.PreviewFingerprint),
             token));

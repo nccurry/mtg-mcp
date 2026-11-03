@@ -89,23 +89,18 @@ public sealed class ArchidektService : IDisposable
         return new ArchidektOperationScope(maximumRequestsPerOperation);
     }
 
-    /// <inheritdoc cref="ArchidektDeckOperations.ListAsync(string?, int, CancellationToken)"/>
-    public Task<OperationResult<RemoteDeckPage>> ListDecksAsync(
-        string? cursor,
-        int pageSize,
-        CancellationToken cancellationToken)
+    /// <inheritdoc cref="ArchidektDeckOperations.ListAsync(CancellationToken)"/>
+    public Task<OperationResult<RemoteDeckPage>> ListDecksAsync(CancellationToken cancellationToken)
     {
-        return decks.ListAsync(cursor, pageSize, cancellationToken);
+        return decks.ListAsync(cancellationToken);
     }
 
-    /// <inheritdoc cref="ArchidektDeckOperations.ListAsync(string?, int, ArchidektOperationScope, CancellationToken)"/>
+    /// <inheritdoc cref="ArchidektDeckOperations.ListAsync(ArchidektOperationScope, CancellationToken)"/>
     public Task<OperationResult<RemoteDeckPage>> ListDecksAsync(
-        string? cursor,
-        int pageSize,
         ArchidektOperationScope operationScope,
         CancellationToken cancellationToken)
     {
-        return decks.ListAsync(cursor, pageSize, operationScope, cancellationToken);
+        return decks.ListAsync(operationScope, cancellationToken);
     }
 
     /// <inheritdoc cref="ArchidektDeckOperations.GetAsync(string, CancellationToken)"/>

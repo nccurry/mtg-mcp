@@ -168,8 +168,17 @@ public sealed partial class ToolNamingRuleTests
     }
 
     /// <summary>
-    /// Verifies the argument that guards a preview is always named <c>previewFingerprint</c>. The database fingerprint of a
-    /// backup restore guards the whole decks.db file, not a preview.
+    /// Names the guards of remote or stored state that are not preview fingerprints, so they keep their own names. The
+    /// database fingerprint of a backup restore guards the whole decks.db file.
+    /// </summary>
+    private static readonly string[] NonPreviewFingerprintGuards =
+    [
+        "expectedRemoteFingerprint", "expectedTreeFingerprint", "expectedSnapshotContentFingerprint",
+        "expectedDatabaseFingerprint",
+    ];
+
+    /// <summary>
+    /// Verifies the argument that guards a preview is always named <c>previewFingerprint</c>.
     /// </summary>
     [Fact]
     [Trait("Category", "SurfaceConsistencyTarget")]
@@ -180,8 +189,8 @@ public sealed partial class ToolNamingRuleTests
         foreach ((string tool, MethodInfo method) in SurfaceConsistencyTargetTests.Ordered(registered))
         {
             offenders.AddRange(SurfaceConsistencyTargetTests.ArgumentNames(method)
-                .Where(name => name.Contains("ingerprint", StringComparison.Ordinal) &&
-                    name is not ("previewFingerprint" or "expectedDatabaseFingerprint"))
+                .Where(name => name.Contains("ingerprint", StringComparison.Ordinal) && name != "previewFingerprint" &&
+                    !NonPreviewFingerprintGuards.Contains(name))
                 .Select(name => $"{tool}: {name}"));
         }
 

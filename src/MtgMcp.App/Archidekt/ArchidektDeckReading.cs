@@ -5,7 +5,7 @@ using MtgMcp.Core.Results;
 namespace MtgMcp.App.Archidekt;
 
 /// <summary>
-/// Names how much of each row a read shows: the concise fields, or every field.
+/// Names how much of each row a read shows: the concise fields, or every field this server shapes.
 /// </summary>
 internal enum ArchidektResponseFormat
 {
@@ -17,7 +17,7 @@ internal enum ArchidektResponseFormat
     /// <summary>
     /// Shows every field of an entry, or the whole value of each side of a difference row.
     /// </summary>
-    Full,
+    Standard,
 }
 
 /// <summary>
@@ -28,14 +28,14 @@ internal enum ArchidektResponseFormat
 internal sealed record ArchidektDeckReadOptions(IReadOnlyList<string> Zones, ArchidektResponseFormat Format)
 {
     /// <summary>
-    /// Gets the default read: every zone, concise entries.
+    /// Gets the default read: every zone, standard entries.
     /// </summary>
-    internal static ArchidektDeckReadOptions Default { get; } = new([], ArchidektResponseFormat.Concise);
+    internal static ArchidektDeckReadOptions Default { get; } = new([], ArchidektResponseFormat.Standard);
 
     /// <summary>
     /// Gets whether every entry field is shown.
     /// </summary>
-    internal bool Full => Format == ArchidektResponseFormat.Full;
+    internal bool Standard => Format == ArchidektResponseFormat.Standard;
 
     /// <summary>
     /// Gets the zone names a read may ask for, in the order entries are shown.
@@ -43,22 +43,20 @@ internal sealed record ArchidektDeckReadOptions(IReadOnlyList<string> Zones, Arc
     internal static IReadOnlyList<string> ZoneOrder => DeckZoneCounts.ZoneOrder;
 
     /// <summary>
-    /// Reads the responseFormat a caller passed: concise, or full or its alias standard, ignoring case and surrounding
-    /// space. A missing value is <paramref name="whenOmitted"/>. Any other text is refused with the name of the
+    /// Reads the responseFormat a caller passed: concise or standard, ignoring case and surrounding
+    /// space. A missing value is standard. Any other text is refused with the name of the
     /// argument.
     /// </summary>
-    internal static OperationResult<ArchidektResponseFormat> ParseFormat(
-        string? responseFormat,
-        ArchidektResponseFormat whenOmitted)
+    internal static OperationResult<ArchidektResponseFormat> ParseFormat(string? responseFormat)
     {
         return responseFormat?.Trim().ToLowerInvariant() switch
         {
-            null => new OperationSuccess<ArchidektResponseFormat>(whenOmitted),
+            null => new OperationSuccess<ArchidektResponseFormat>(ArchidektResponseFormat.Standard),
             "concise" => new OperationSuccess<ArchidektResponseFormat>(ArchidektResponseFormat.Concise),
-            "standard" or "full" => new OperationSuccess<ArchidektResponseFormat>(ArchidektResponseFormat.Full),
+            "standard" => new OperationSuccess<ArchidektResponseFormat>(ArchidektResponseFormat.Standard),
             _ => new OperationInvalidInput(
                 "invalid-response-format",
-                "responseFormat must be concise, standard, or full.",
+                "responseFormat must be concise or standard.",
                 "responseFormat"),
         };
     }
@@ -71,7 +69,7 @@ internal sealed record ArchidektDeckReadOptions(IReadOnlyList<string> Zones, Arc
         IReadOnlyList<string>? zones,
         string? responseFormat)
     {
-        OperationResult<ArchidektResponseFormat> parsed = ParseFormat(responseFormat, ArchidektResponseFormat.Concise);
+        OperationResult<ArchidektResponseFormat> parsed = ParseFormat(responseFormat);
         if (parsed is not OperationSuccess<ArchidektResponseFormat> format)
         {
             return OperationFailure.Forward<ArchidektResponseFormat, ArchidektDeckReadOptions>(parsed);

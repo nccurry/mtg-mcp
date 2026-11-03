@@ -24,8 +24,6 @@ public sealed class ArchidektNamedOwnerTests
         ArchidektDeckTransport decks = new(session);
 
         RemoteDeckPage page = await decks.ListAsync(
-            cursor: null,
-            pageSize: 50,
             new ArchidektOperationBudget(10),
             TestContext.Current.CancellationToken);
 

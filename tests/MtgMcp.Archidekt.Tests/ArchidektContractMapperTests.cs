@@ -205,7 +205,7 @@ public sealed class ArchidektContractMapperTests
         RemoteNamedSnapshotSummary summary = Assert.Single(page.Items);
         Assert.Equal("77", summary.SnapshotId);
         Assert.Contains("extra", summary.Extensions.Keys);
-        Assert.Equal("42", snapshot.Summary.DeckId);
+        Assert.Equal("42", snapshot.Summary.RemoteDeckId);
         Assert.Equal(2, snapshot.Deck.Entries.Count);
         Assert.Equal("Before test", snapshot.Summary.Name);
     }

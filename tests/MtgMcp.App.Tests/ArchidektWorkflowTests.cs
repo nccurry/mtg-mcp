@@ -267,7 +267,7 @@ public sealed partial class ArchidektWorkflowTests
         using World world = new(OperationMode.Remote, CreateDeckWithExcludedCategories());
         CancellationToken token = TestContext.Current.CancellationToken;
 
-        List<ArchidektFullDeckEntryView> entries = await ReadEveryEntryAsync(world, token);
+        List<ArchidektStandardDeckEntryView> entries = await ReadEveryEntryAsync(world, token);
         Guid localDeckId = await world.PullAsync();
         DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
         ArchidektSyncPreviewView push = Success(
@@ -275,14 +275,14 @@ public sealed partial class ArchidektWorkflowTests
         ArchidektSyncPreviewView pull = Success(
             await world.Reads.PreviewPullAsync("42", localDeckId, cancellationToken: token));
 
-        List<ArchidektFullDeckEntryView> outOfDeck = [.. entries.Where(value => value.Zone == "maybeboard")];
+        List<ArchidektStandardDeckEntryView> outOfDeck = [.. entries.Where(value => value.Zone == "maybeboard")];
         Assert.Equal(
             ["Bloodthirsty Blade", "Osteomancer Adept", "Revival // Revenge"],
             outOfDeck.Select(value => value.CardName).Order(StringComparer.Ordinal));
         Assert.All(outOfDeck, value => Assert.False(value.InDeck));
         Assert.All(entries.Where(value => value.Zone != "maybeboard"), value => Assert.True(value.InDeck));
         Assert.Equal(100, entries.Where(value => value.Zone is "main" or "commander").Sum(value => value.Quantity));
-        ArchidektFullDeckEntryView blade = Assert.Single(
+        ArchidektStandardDeckEntryView blade = Assert.Single(
             entries,
             value => value.CardName == "Bloodthirsty Blade" && value.Zone == "main");
         Assert.Equal("Removal", blade.PrimaryCategoryName);
@@ -554,6 +554,7 @@ public sealed partial class ArchidektWorkflowTests
         CancellationToken token = TestContext.Current.CancellationToken;
         List<string> relationIds = [];
         List<string> names = [];
+        string? cursor = null;
         int offset = 0;
         int pages = 0;
 
@@ -561,21 +562,19 @@ public sealed partial class ArchidektWorkflowTests
         {
             OperationResult<ArchidektDeckView> result = await world.Reads.GetDeckAsync(
                 "42",
-                offset,
-                responseFormat: "full",
+                cursor,
                 cancellationToken: token);
             ArchidektDeckView page = Success(result);
             Assert.True(
                 JsonLength(result) < MaximumResultCharacters,
                 $"page {pages} is {JsonLength(result)} characters");
             Assert.Equal(300, page.Summary.EntryCount);
-            Assert.Equal(offset, page.Offset);
             Assert.Equal(offset == 0, page.Categories.Count > 0);
             relationIds.AddRange(
-                page.Entries.Cast<ArchidektFullDeckEntryView>().Select(value => value.ProviderRelationId));
+                page.Entries.Cast<ArchidektStandardDeckEntryView>().Select(value => value.ProviderRelationId));
             names.AddRange(page.Entries.Select(value => value.CardName));
             pages++;
-            if (page.NextOffset is null)
+            if (page.NextCursor is null)
             {
                 Assert.Null(page.Truncated);
                 Assert.Null(page.Narrow);
@@ -583,13 +582,13 @@ public sealed partial class ArchidektWorkflowTests
             }
 
             Assert.True(page.Truncated);
-            Assert.Contains("offset", page.Narrow, StringComparison.Ordinal);
+            Assert.Contains("nextCursor", page.Narrow, StringComparison.Ordinal);
             Assert.Contains(
-                $"Entries {offset + 1} to {page.NextOffset} of 300 are shown",
+                $"Entries {offset + 1} to {offset + page.Entries.Count} of 300 are shown",
                 page.Narrow,
                 StringComparison.Ordinal);
-            Assert.Contains($"with offset {page.NextOffset} for the rest", page.Narrow, StringComparison.Ordinal);
-            offset = page.NextOffset.Value;
+            offset += page.Entries.Count;
+            cursor = page.NextCursor;
         }
 
         Assert.True(pages > 1);
@@ -611,23 +610,23 @@ public sealed partial class ArchidektWorkflowTests
         using World world = new(OperationMode.Remote, fake);
         CancellationToken token = TestContext.Current.CancellationToken;
         List<ArchidektDeckView> pages = [];
-        int offset = 0;
+        string? cursor = null;
 
         while (true)
         {
             OperationResult<ArchidektDeckView> result = await world.Reads.GetDeckAsync(
                 "42",
-                offset,
+                cursor,
                 cancellationToken: token);
             Assert.True(JsonLength(result) < MaximumResultCharacters, $"page {pages.Count} is too large");
             ArchidektDeckView page = Success(result);
             pages.Add(page);
-            if (page.NextOffset is not int next)
+            if (page.NextCursor is null)
             {
                 break;
             }
 
-            offset = next;
+            cursor = page.NextCursor;
         }
 
         Assert.True(pages.Count > 1);
@@ -640,24 +639,22 @@ public sealed partial class ArchidektWorkflowTests
     }
 
     /// <summary>
-    /// Verifies an offset outside the deck is refused, and a deck whose unknown fields are huge still fits.
+    /// Verifies a cursor that is not one the server wrote is refused, and a deck whose unknown fields are huge still fits.
     /// </summary>
     [Fact]
-    public void DeckGet_BadOffsetAndHugeExtensions_AreHandled()
+    public void DeckGet_BadCursorAndHugeExtensions_AreHandled()
     {
         RemoteDeckSnapshot deck = ParseDeck(
             """{ "id": 1, "name": "Big", "deckFormat": 3, "categories": [], "cards": [], "blob": "__BLOB__" }"""
                 .Replace("__BLOB__", new string('x', 20_000), StringComparison.Ordinal));
 
-        OperationResult<ArchidektDeckView> bad = ArchidektResultPaging.PageDeck(deck, 5);
-        OperationResult<ArchidektDeckView> negative = ArchidektResultPaging.PageDeck(deck, -1);
-        ArchidektDeckView page = Success(ArchidektResultPaging.PageDeck(deck, 0));
+        OperationResult<ArchidektDeckView> bad = PageWhole(deck, "not-a-cursor");
+        ArchidektDeckView page = Success(PageWhole(deck, null));
 
-        Assert.IsType<OperationInvalidInput>(bad.Value);
-        Assert.IsType<OperationInvalidInput>(negative.Value);
+        Assert.Equal("cursor", Assert.IsType<OperationInvalidInput>(bad.Value).Path);
         Assert.True(page.ExtensionsOmitted);
         Assert.Empty(page.Extensions);
-        Assert.True(JsonLength(ArchidektResultPaging.PageDeck(deck, 0)) < MaximumResultCharacters);
+        Assert.True(JsonLength(PageWhole(deck, null)) < MaximumResultCharacters);
     }
 
     /// <summary>
@@ -679,14 +676,12 @@ public sealed partial class ArchidektWorkflowTests
             token));
 
         List<ArchidektSyncPreviewView> pages = [];
-        int operationOffset = 0;
-        int differenceOffset = 0;
+        string? cursor = null;
         while (true)
         {
             OperationResult<ArchidektSyncPreviewView> result = await world.Reads.PreviewPushAsync(
                 localDeckId,
-                operationOffset,
-                differenceOffset,
+                cursor: cursor,
                 cancellationToken: token);
             ArchidektSyncPreviewView page = Success(result);
             Assert.True(
@@ -698,9 +693,9 @@ public sealed partial class ArchidektWorkflowTests
                 break;
             }
 
-            Assert.Contains("operationOffset", page.Narrow, StringComparison.Ordinal);
-            operationOffset = Assert.NotNull(page.NextOperationOffset);
-            differenceOffset = Assert.NotNull(page.NextDifferenceOffset);
+            Assert.Contains("nextCursor", page.Narrow, StringComparison.Ordinal);
+            Assert.NotNull(page.NextCursor);
+            cursor = page.NextCursor!;
         }
 
         Assert.True(pages.Count > 1);
@@ -754,58 +749,63 @@ public sealed partial class ArchidektWorkflowTests
             new ArchidektPushApplyRequest(localDeckId, edited.Revision, preview.RemoteFingerprint, "not-the-preview"),
             token);
 
-        Assert.Equal("push-preview-changed", Assert.IsType<OperationConflict>(refused.Value).ReasonCode);
+        OperationConflict changedPreview = Assert.IsType<OperationConflict>(refused.Value);
+        Assert.Equal("preview-changed", changedPreview.ReasonCode);
+        Assert.Equal(preview.PreviewFingerprint, changedPreview.Current?.PreviewFingerprint);
         Assert.Equal(0, world.Fake.Mutations);
     }
 
     /// <summary>
-    /// Verifies the one offset rule on the deck read and the preview: an offset from 0 up to the number of rows is
-    /// valid (at the number of rows the page holds no row), and a negative offset or one past the end is refused with
-    /// a message that names the list and its size.
+    /// Verifies the one cursor rule on the deck read and the preview: a deck that fits one page has no next cursor, a
+    /// cursor of another read is refused with the cursor argument, and the pages of a deck read cover every entry once.
     /// </summary>
     [Fact]
-    public async Task Offsets_FollowOneRule_ForTheDeckReadAndThePreview()
+    public async Task Cursors_FollowOneRule_ForTheDeckReadAndThePreview()
     {
         using World world = new(OperationMode.Remote, CreateSmallDeck());
         CancellationToken token = TestContext.Current.CancellationToken;
         Guid localDeckId = await world.PullAsync();
 
-        ArchidektDeckView atEnd = Success(await world.Reads.GetDeckAsync("42", 4, cancellationToken: token));
-        OperationResult<ArchidektDeckView> pastEnd = await world.Reads.GetDeckAsync("42", 5, cancellationToken: token);
-        OperationResult<ArchidektDeckView> negative = await world.Reads.GetDeckAsync(
+        ArchidektDeckView whole = Success(await world.Reads.GetDeckAsync("42", cancellationToken: token));
+        ArchidektDeckView firstOfTwo = Success(await world.Reads.GetDeckAsync("42", pageSize: 2, cancellationToken: token));
+        ArchidektDeckView secondOfTwo = Success(await world.Reads.GetDeckAsync(
             "42",
-            -1,
-            cancellationToken: token);
-        ArchidektSyncPreviewView previewAtEnd = Success(await world.Reads.PreviewPushAsync(
-            localDeckId,
-            operationOffset: 0,
-            differenceOffset: 0,
+            firstOfTwo.NextCursor,
+            pageSize: 2,
             cancellationToken: token));
-        OperationResult<ArchidektSyncPreviewView> previewPast = await world.Reads.PreviewPushAsync(
+        OperationResult<ArchidektDeckView> otherSize = await world.Reads.GetDeckAsync(
+            "42",
+            firstOfTwo.NextCursor,
+            pageSize: 1,
+            responseFormat: "concise",
+            cancellationToken: token);
+        ArchidektSyncPreviewView preview = Success(await world.Reads.PreviewPushAsync(
             localDeckId,
-            operationOffset: 1,
+            cancellationToken: token));
+        OperationResult<ArchidektSyncPreviewView> previewOtherCursor = await world.Reads.PreviewPushAsync(
+            localDeckId,
+            cursor: firstOfTwo.NextCursor,
             cancellationToken: token);
 
-        Assert.Empty(atEnd.Entries);
-        Assert.Equal(4, atEnd.Summary.EntryCount);
-        Assert.Null(atEnd.NextOffset);
-        OperationInvalidInput refused = Assert.IsType<OperationInvalidInput>(pastEnd.Value);
-        Assert.Equal("offset", refused.Path);
-        Assert.Contains("from 0 to 4", refused.Message, StringComparison.Ordinal);
-        Assert.Contains("4 entries", refused.Message, StringComparison.Ordinal);
-        Assert.IsType<OperationInvalidInput>(negative.Value);
-        Assert.Empty(previewAtEnd.Operations);
-        OperationInvalidInput previewRefused = Assert.IsType<OperationInvalidInput>(previewPast.Value);
-        Assert.Equal("operationOffset", previewRefused.Path);
-        Assert.Contains("0 operations", previewRefused.Message, StringComparison.Ordinal);
+        Assert.Null(whole.NextCursor);
+        Assert.Equal(4, whole.Entries.Count);
+        Assert.NotNull(firstOfTwo.NextCursor);
+        Assert.Equal(2, firstOfTwo.Entries.Count);
+        Assert.Equal(2, secondOfTwo.Entries.Count);
+        Assert.Null(secondOfTwo.NextCursor);
+        Assert.Equal(whole.Entries.Select(value => value.CardName), firstOfTwo.Entries.Concat(secondOfTwo.Entries).Select(value => value.CardName));
+        Assert.Equal("cursor", Assert.IsType<OperationInvalidInput>(otherSize.Value).Path);
+        Assert.Empty(preview.Operations);
+        Assert.Null(preview.NextCursor);
+        Assert.Equal("cursor", Assert.IsType<OperationInvalidInput>(previewOtherCursor.Value).Path);
     }
 
     /// <summary>
-    /// Verifies a later page of a push preview is refused when the preview changed since the earlier page, and is
-    /// served when the fingerprint is the same.
+    /// Verifies a later page of a push preview is refused as stale, carrying the current preview fingerprint, when
+    /// the preview changed since the earlier page, and is served while it has not.
     /// </summary>
     [Fact]
-    public async Task PushPreview_LaterPageWithAnotherFingerprint_IsRefused()
+    public async Task PushPreview_CursorAfterThePreviewChanged_IsStale()
     {
         FakeArchidekt fake = CreateLargeDeck(300);
         using World world = new(OperationMode.Remote, fake);
@@ -819,15 +819,13 @@ public sealed partial class ArchidektWorkflowTests
             token));
         ArchidektSyncPreviewView first = Success(
             await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
-        Assert.Contains("expectedPreviewFingerprint", first.Narrow, StringComparison.Ordinal);
-        int nextOperation = Assert.NotNull(first.NextOperationOffset);
-        int nextDifference = Assert.NotNull(first.NextDifferenceOffset);
+        Assert.Contains("nextCursor", first.Narrow, StringComparison.Ordinal);
+        Assert.NotNull(first.NextCursor);
+        string cursor = first.NextCursor!;
 
         ArchidektSyncPreviewView same = Success(await world.Reads.PreviewPushAsync(
             localDeckId,
-            operationOffset: nextOperation,
-            differenceOffset: nextDifference,
-            expectedPreviewFingerprint: first.PreviewFingerprint,
+            cursor: cursor,
             cancellationToken: token));
         DeckEntry changed = edited.Entries[0];
         _ = Success(await world.Store.ApplyChangesAsync(
@@ -837,26 +835,25 @@ public sealed partial class ArchidektWorkflowTests
             token));
         OperationResult<ArchidektSyncPreviewView> stale = await world.Reads.PreviewPushAsync(
             localDeckId,
-            operationOffset: nextOperation,
-            differenceOffset: nextDifference,
-            expectedPreviewFingerprint: first.PreviewFingerprint,
+            cursor: cursor,
             cancellationToken: token);
         ArchidektSyncPreviewView firstAgain = Success(await world.Reads.PreviewPushAsync(
             localDeckId,
-            expectedPreviewFingerprint: "not-checked-on-the-first-page",
             cancellationToken: token));
 
         Assert.Equal(first.PreviewFingerprint, same.PreviewFingerprint);
-        Assert.Equal("preview-changed", Assert.IsType<OperationConflict>(stale.Value).ReasonCode);
+        OperationConflict conflict = Assert.IsType<OperationConflict>(stale.Value);
+        Assert.Equal("cursor-stale", conflict.ReasonCode);
+        Assert.Equal(firstAgain.PreviewFingerprint, conflict.Current?.PreviewFingerprint);
         Assert.NotEqual(first.PreviewFingerprint, firstAgain.PreviewFingerprint);
     }
 
     /// <summary>
-    /// Verifies a later page of a pull preview is refused when the fingerprint is not the one of the preview, and is
-    /// served when it is.
+    /// Verifies a later page of a pull preview is served with its cursor, and a cursor made without the discard option
+    /// is refused as invalid for this request.
     /// </summary>
     [Fact]
-    public async Task PullPreview_LaterPageWithAnotherFingerprint_IsRefused()
+    public async Task PullPreview_CursorOfAnotherPreview_IsRefused()
     {
         FakeArchidekt fake = CreateLargeDeck(300);
         using World world = new(OperationMode.Remote, fake);
@@ -874,36 +871,31 @@ public sealed partial class ArchidektWorkflowTests
             discardLocalChanges: true,
             cancellationToken: token));
         Assert.True(first.Truncated);
-        int nextOperation = Assert.NotNull(first.NextOperationOffset);
-        int nextDifference = Assert.NotNull(first.NextDifferenceOffset);
+        Assert.NotNull(first.NextCursor);
+        string cursor = first.NextCursor!;
 
         ArchidektSyncPreviewView same = Success(await world.Reads.PreviewPullAsync(
             "42",
             localDeckId,
             discardLocalChanges: true,
-            operationOffset: nextOperation,
-            differenceOffset: nextDifference,
-            expectedPreviewFingerprint: first.PreviewFingerprint,
+            cursor: cursor,
             cancellationToken: token));
         OperationResult<ArchidektSyncPreviewView> other = await world.Reads.PreviewPullAsync(
             "42",
             localDeckId,
-            discardLocalChanges: true,
-            operationOffset: nextOperation,
-            differenceOffset: nextDifference,
-            expectedPreviewFingerprint: "another-preview",
+            discardLocalChanges: false,
+            cursor: cursor,
             cancellationToken: token);
 
         Assert.Equal(first.PreviewFingerprint, same.PreviewFingerprint);
-        Assert.Equal("preview-changed", Assert.IsType<OperationConflict>(other.Value).ReasonCode);
+        Assert.Equal("cursor", Assert.IsType<OperationInvalidInput>(other.Value).Path);
     }
 
     /// <summary>
-    /// Verifies a later page of a snapshot restore preview is refused when the fingerprint is not the one of the
-    /// preview, and is served when it is.
+    /// Verifies a later page of a snapshot restore preview is served with its cursor, and an edited cursor is refused.
     /// </summary>
     [Fact]
-    public async Task SnapshotRestorePreview_LaterPageWithAnotherFingerprint_IsRefused()
+    public async Task SnapshotRestorePreview_FollowingNextCursor_ServesThePreviewAndRefusesAnEditedCursor()
     {
         FakeArchidekt fake = CreateLargeDeck(700);
         using World world = new(OperationMode.Remote, fake);
@@ -911,26 +903,22 @@ public sealed partial class ArchidektWorkflowTests
         ArchidektSnapshotRestorePreviewView first = Success(
             await world.Reads.PreviewSnapshotRestoreAsync("42", "77", cancellationToken: token));
         Assert.True(first.Truncated);
-        int nextOperation = Assert.NotNull(first.NextOperationOffset);
-        int nextDifference = Assert.NotNull(first.NextDifferenceOffset);
+        Assert.NotNull(first.NextCursor);
+        string cursor = first.NextCursor!;
 
         ArchidektSnapshotRestorePreviewView same = Success(await world.Reads.PreviewSnapshotRestoreAsync(
             "42",
             "77",
-            nextOperation,
-            nextDifference,
-            first.PreviewFingerprint,
-            token));
+            cursor,
+            cancellationToken: token));
         OperationResult<ArchidektSnapshotRestorePreviewView> other = await world.Reads.PreviewSnapshotRestoreAsync(
             "42",
             "77",
-            nextOperation,
-            nextDifference,
-            "another-preview",
-            token);
+            cursor[..^2] + "AA",
+            cancellationToken: token);
 
         Assert.Equal(first.PreviewFingerprint, same.PreviewFingerprint);
-        Assert.Equal("preview-changed", Assert.IsType<OperationConflict>(other.Value).ReasonCode);
+        Assert.Equal("invalid-cursor", Assert.IsType<OperationInvalidInput>(other.Value).ReasonCode);
     }
 
     /// <summary>
@@ -952,13 +940,13 @@ public sealed partial class ArchidektWorkflowTests
             token));
         List<string> paths = [];
         int pages = 0;
-        int offset = 0;
+        string? cursor = null;
 
         while (true)
         {
             OperationResult<ArchidektSyncDiffView> result = await world.Reads.DiffAsync(
                 localDeckId,
-                offset,
+                cursor,
                 cancellationToken: token);
             ArchidektSyncDiffView page = Success(result);
             Assert.True(
@@ -967,14 +955,14 @@ public sealed partial class ArchidektWorkflowTests
             Assert.Equal(300, page.DifferenceCount);
             paths.AddRange(page.Differences.Select(value => value.Path));
             pages++;
-            if (page.NextDifferenceOffset is not int next)
+            if (page.NextCursor is null)
             {
                 break;
             }
 
             Assert.True(page.Truncated);
-            Assert.Contains("differenceOffset", page.Narrow, StringComparison.Ordinal);
-            offset = next;
+            Assert.Contains("nextCursor", page.Narrow, StringComparison.Ordinal);
+            cursor = page.NextCursor;
         }
 
         Assert.True(pages > 1);
@@ -998,7 +986,7 @@ public sealed partial class ArchidektWorkflowTests
         CancellationToken token = TestContext.Current.CancellationToken;
         List<string> ids = [];
         int pages = 0;
-        int offset = 0;
+        string? cursor = null;
         int total;
 
         while (true)
@@ -1006,8 +994,8 @@ public sealed partial class ArchidektWorkflowTests
             OperationResult<ArchidektFoldersResult> result = await world.Reads.GetFoldersAsync(
                 kind,
                 folderId,
-                offset,
-                token);
+                cursor,
+                cancellationToken: token);
             ArchidektFoldersResult data = Success(result);
             ArchidektFolderTreeView page = data switch
             {
@@ -1021,14 +1009,14 @@ public sealed partial class ArchidektWorkflowTests
             total = page.FolderCount;
             ids.AddRange(page.Items.Select(value => value.FolderId));
             pages++;
-            if (page.NextOffset is not int next)
+            if (page.NextCursor is null)
             {
                 break;
             }
 
             Assert.True(page.Truncated);
-            Assert.Contains("offset", page.Narrow, StringComparison.Ordinal);
-            offset = next;
+            Assert.Contains("nextCursor", page.Narrow, StringComparison.Ordinal);
+            cursor = page.NextCursor;
         }
 
         OperationResult<RemoteFolderTree> whole = kind == "list"
@@ -1051,7 +1039,7 @@ public sealed partial class ArchidektWorkflowTests
         CancellationToken token = TestContext.Current.CancellationToken;
         List<string> names = [];
         int pages = 0;
-        int offset = 0;
+        string? cursor = null;
 
         while (true)
         {
@@ -1059,7 +1047,7 @@ public sealed partial class ArchidektWorkflowTests
                 "get",
                 "42",
                 "77",
-                offset,
+                cursor,
                 cancellationToken: token);
             ArchidektSnapshotView snapshot = Assert.IsType<ArchidektSnapshotGetResult>(Success(result)).Snapshot;
             Assert.True(
@@ -1068,13 +1056,13 @@ public sealed partial class ArchidektWorkflowTests
             Assert.Equal(300, snapshot.Deck.Summary.EntryCount);
             names.AddRange(snapshot.Deck.Entries.Select(value => value.CardName));
             pages++;
-            if (snapshot.Deck.NextOffset is not int next)
+            if (snapshot.Deck.NextCursor is null)
             {
                 break;
             }
 
             Assert.Contains("archidekt_snapshots_get", snapshot.Deck.Narrow, StringComparison.Ordinal);
-            offset = next;
+            cursor = snapshot.Deck.NextCursor;
         }
 
         Assert.True(pages > 1);
@@ -1092,18 +1080,15 @@ public sealed partial class ArchidektWorkflowTests
         using World world = new(OperationMode.Remote, fake);
         CancellationToken token = TestContext.Current.CancellationToken;
         List<ArchidektSnapshotRestorePreviewView> pages = [];
-        int operationOffset = 0;
-        int differenceOffset = 0;
+        string? cursor = null;
 
         while (true)
         {
             OperationResult<ArchidektSnapshotRestorePreviewView> result = await world.Reads.PreviewSnapshotRestoreAsync(
                 "42",
                 "77",
-                operationOffset,
-                differenceOffset,
-                pages.Count == 0 ? null : pages[0].PreviewFingerprint,
-                token);
+                cursor,
+                cancellationToken: token);
             ArchidektSnapshotRestorePreviewView page = Success(result);
             Assert.True(
                 JsonLength(result) < MaximumResultCharacters,
@@ -1114,9 +1099,9 @@ public sealed partial class ArchidektWorkflowTests
                 break;
             }
 
-            Assert.Contains("expectedPreviewFingerprint", page.Narrow, StringComparison.Ordinal);
-            operationOffset = Assert.NotNull(page.NextOperationOffset);
-            differenceOffset = Assert.NotNull(page.NextDifferenceOffset);
+            Assert.Contains("nextCursor", page.Narrow, StringComparison.Ordinal);
+            Assert.NotNull(page.NextCursor);
+            cursor = page.NextCursor;
         }
 
         List<int> sequences = [.. pages.SelectMany(page => page.Operations).Select(value => value.Sequence)];
@@ -1300,7 +1285,7 @@ public sealed partial class ArchidektWorkflowTests
         using World world = new(OperationMode.Remote, fake);
         CancellationToken token = TestContext.Current.CancellationToken;
 
-        List<ArchidektFullDeckEntryView> entries = await ReadEveryEntryAsync(world, token);
+        List<ArchidektStandardDeckEntryView> entries = await ReadEveryEntryAsync(world, token);
         Guid localDeckId = await world.PullAsync();
         DeckDocument local = Success(await world.Store.GetAsync(localDeckId, token));
         ArchidektSyncPreviewView push = Success(
@@ -1560,7 +1545,7 @@ public sealed partial class ArchidektWorkflowTests
         ArchidektSyncPreviewView preview = Success(
             await world.Reads.PreviewPushAsync(localDeckId, cancellationToken: token));
         Assert.True(preview.ApplyAvailable);
-        Assert.Equal(fixedDeck.Revision, preview.LocalRevision);
+        Assert.Equal(fixedDeck.Revision, preview.Revision);
     }
 
     /// <summary>
@@ -1612,7 +1597,7 @@ public sealed partial class ArchidektWorkflowTests
         Assert.Equal(6, writes);
         Assert.True(writes <= PlannedWrites(preview));
         Assert.True(fake.Requests.Count - before <= preview.PredictedProviderRequests);
-        Assert.NotNull(applied.LocalRevision);
+        Assert.NotNull(applied.Revision);
         Assert.NotNull(applied.FinalRemoteFingerprint);
         Assert.True(after.ApplyAvailable);
         Assert.Equal(
@@ -1663,7 +1648,7 @@ public sealed partial class ArchidektWorkflowTests
             new ArchidektPullApplyRequest(
                 "42",
                 localDeckId,
-                pull.LocalRevision,
+                pull.Revision,
                 pull.RemoteFingerprint,
                 pull.PreviewFingerprint),
             token));
@@ -1676,7 +1661,7 @@ public sealed partial class ArchidektWorkflowTests
         ArchidektRemoteOperation only = Assert.Single(next.Operations);
         Assert.Equal(("entry-add", "Side Card 13"), (only.Kind, only.Subject));
 
-        long revision = Assert.IsType<long>(pulled.LocalRevision);
+        long revision = Assert.IsType<long>(pulled.Revision);
         if (removeTheCard)
         {
             revision = Success(await world.Store.ApplyChangesAsync(
@@ -1735,7 +1720,7 @@ public sealed partial class ArchidektWorkflowTests
 
         Assert.Equal("partial", applied.Outcome);
         Assert.Equal(["applied", "unknown", "applied"], applied.Operations.Select(value => value.Status));
-        Assert.NotNull(applied.LocalRevision);
+        Assert.NotNull(applied.Revision);
         Assert.True(next.ApplyAvailable, next.ApplyNotice);
         Assert.Equal(
             [("entry-add", "Side Card 02"), ("entry-remove", "Side Card 02")],
@@ -1744,7 +1729,7 @@ public sealed partial class ArchidektWorkflowTests
         ArchidektApplyResult finished = Success(await world.Writes.ApplyPushAsync(
             new ArchidektPushApplyRequest(
                 localDeckId,
-                Assert.IsType<long>(applied.LocalRevision),
+                Assert.IsType<long>(applied.Revision),
                 next.RemoteFingerprint,
                 next.PreviewFingerprint),
             token));
@@ -1780,7 +1765,7 @@ public sealed partial class ArchidektWorkflowTests
 
         Assert.Equal("partial", applied.Outcome);
         Assert.Equal(["applied", "not-applied", "applied"], applied.Operations.Select(value => value.Status));
-        Assert.Null(applied.LocalRevision);
+        Assert.Null(applied.Revision);
         Assert.Equal(ArchidektApplyResult.UnverifiedNotice, applied.Notice);
         Assert.Equal(edited.Revision, Success(await world.Store.GetAsync(localDeckId, token)).Revision);
         fake.DeckReadsThatSucceedAfterWrites = null;
@@ -1871,7 +1856,7 @@ public sealed partial class ArchidektWorkflowTests
                 preview.RemoteFingerprint,
                 preview.PreviewFingerprint),
             token);
-        Assert.Equal("request-limit-exceeded", Assert.IsType<OperationInvalidInput>(refused.Value).ReasonCode);
+        Assert.Equal("request-limit-exceeded", Assert.IsType<OperationUnsupported>(refused.Value).ReasonCode);
         Assert.Equal(0, world.Fake.Mutations);
     }
 
@@ -2673,7 +2658,7 @@ public sealed partial class ArchidektWorkflowTests
                 preview.PreviewFingerprint),
             token);
 
-        Assert.Equal("push-preview-changed", Assert.IsType<OperationConflict>(refused.Value).ReasonCode);
+        Assert.Equal("stale-deck-revision", Assert.IsType<OperationConflict>(refused.Value).ReasonCode);
         Assert.True(searchesBefore > 0);
         Assert.Equal(searchesBefore, CountSearches(world.Fake));
         Assert.Equal(0, world.Fake.Mutations);
@@ -2723,7 +2708,7 @@ public sealed partial class ArchidektWorkflowTests
             token);
 
         Assert.True(changed);
-        Assert.Equal("push-preview-changed", Assert.IsType<OperationConflict>(refused.Value).ReasonCode);
+        Assert.Equal("stale-deck-revision", Assert.IsType<OperationConflict>(refused.Value).ReasonCode);
         Assert.Equal(0, world.Fake.Mutations);
         Assert.Equal(edited.Revision + 1, Success(await world.Store.GetAsync(localDeckId, token)).Revision);
     }
@@ -2966,26 +2951,25 @@ public sealed partial class ArchidektWorkflowTests
     /// <summary>
     /// Reads every page of the deck in the full format and returns its entries.
     /// </summary>
-    private static async Task<List<ArchidektFullDeckEntryView>> ReadEveryEntryAsync(
+    private static async Task<List<ArchidektStandardDeckEntryView>> ReadEveryEntryAsync(
         World world,
         CancellationToken token)
     {
-        List<ArchidektFullDeckEntryView> entries = [];
-        int offset = 0;
+        List<ArchidektStandardDeckEntryView> entries = [];
+        string? cursor = null;
         while (true)
         {
             ArchidektDeckView page = Success(await world.Reads.GetDeckAsync(
                 "42",
-                offset,
-                responseFormat: "full",
+                cursor,
                 cancellationToken: token));
-            entries.AddRange(page.Entries.Cast<ArchidektFullDeckEntryView>());
-            if (page.NextOffset is null)
+            entries.AddRange(page.Entries.Cast<ArchidektStandardDeckEntryView>());
+            if (page.NextCursor is null)
             {
                 return entries;
             }
 
-            offset = page.NextOffset.Value;
+            cursor = page.NextCursor;
         }
     }
 
@@ -3012,6 +2996,20 @@ public sealed partial class ArchidektWorkflowTests
         }
 
         return fake;
+    }
+
+    /// <summary>
+    /// Pages a deck with the default options, one page size, and no request binding.
+    /// </summary>
+    private static OperationResult<ArchidektDeckView> PageWhole(RemoteDeckSnapshot deck, string? cursor)
+    {
+        return ArchidektResultPaging.PageDeck(
+            deck,
+            cursor,
+            100,
+            PageCursorBinding.None,
+            PageCursorBinding.None,
+            ArchidektDeckReadOptions.Default);
     }
 
     /// <summary>

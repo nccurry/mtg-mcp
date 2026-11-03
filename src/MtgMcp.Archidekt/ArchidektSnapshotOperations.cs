@@ -79,7 +79,7 @@ internal sealed class ArchidektSnapshotOperations
             async budget =>
             {
                 RemoteDeckSnapshot deck = await deckTransport.GetAsync(
-                    request.DeckId,
+                    request.RemoteDeckId,
                     requireAuthentication: true,
                     budget,
                     cancellationToken).ConfigureAwait(false);
@@ -90,12 +90,12 @@ internal sealed class ArchidektSnapshotOperations
                     deck.RemoteFingerprint);
                 string name = ArchidektContract.Required(request.Name, nameof(request.Name));
                 await snapshotTransport.SendCreateAsync(
-                    request.DeckId,
+                    request.RemoteDeckId,
                     new { name, description = ArchidektContract.Optional(request.Description) },
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 RemoteNamedSnapshotPage after = await snapshotTransport.ListAsync(
-                    request.DeckId,
+                    request.RemoteDeckId,
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 RemoteNamedSnapshotSummary[] matches = after.Items
@@ -120,7 +120,7 @@ internal sealed class ArchidektSnapshotOperations
             async budget =>
             {
                 RemoteNamedSnapshot current = await snapshotTransport.GetAsync(
-                    request.DeckId,
+                    request.RemoteDeckId,
                     request.SnapshotId,
                     budget,
                     cancellationToken).ConfigureAwait(false);
@@ -135,7 +135,7 @@ internal sealed class ArchidektSnapshotOperations
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 RemoteNamedSnapshot updated = await snapshotTransport.GetAsync(
-                    request.DeckId,
+                    request.RemoteDeckId,
                     request.SnapshotId,
                     budget,
                     cancellationToken).ConfigureAwait(false);
@@ -164,7 +164,7 @@ internal sealed class ArchidektSnapshotOperations
                     request.Confirmation,
                     $"delete snapshot {request.SnapshotId}");
                 RemoteNamedSnapshot current = await snapshotTransport.GetAsync(
-                    request.DeckId,
+                    request.RemoteDeckId,
                     request.SnapshotId,
                     budget,
                     cancellationToken).ConfigureAwait(false);
@@ -187,11 +187,11 @@ internal sealed class ArchidektSnapshotOperations
                 catch (ArchidektProviderException exception)
                     when (exception.Kind == ArchidektFailureKind.Unavailable)
                 {
-                    return PartialResult(request.DeckId, operation, exception.Message);
+                    return PartialResult(request.RemoteDeckId, operation, exception.Message);
                 }
 
                 RemoteNamedSnapshotPage after = await snapshotTransport.ListAsync(
-                    request.DeckId,
+                    request.RemoteDeckId,
                     budget,
                     cancellationToken).ConfigureAwait(false);
                 if (after.Items.Any(value =>
@@ -202,7 +202,7 @@ internal sealed class ArchidektSnapshotOperations
                         "Archidekt still lists the snapshot after deletion.");
                 }
 
-                return AppliedResult(request.DeckId, operation, after.CollectionChecksum);
+                return AppliedResult(request.RemoteDeckId, operation, after.CollectionChecksum);
             });
     }
 
@@ -254,7 +254,7 @@ internal sealed class ArchidektSnapshotOperations
                     request.Confirmation,
                     $"restore snapshot {request.SnapshotId}");
                 (RemoteDeckSnapshot current, RemoteNamedSnapshot snapshot) = await GetRestoreSourcesAsync(
-                    request.DeckId,
+                    request.RemoteDeckId,
                     request.SnapshotId,
                     budget,
                     cancellationToken).ConfigureAwait(false);
@@ -276,8 +276,9 @@ internal sealed class ArchidektSnapshotOperations
                 RequireFingerprint(
                     request.PreviewFingerprint,
                     RestorePreviewFingerprint(current, snapshot, plan),
-                    "restore-preview-changed",
-                    current.RemoteFingerprint);
+                    SharedReasonCodes.PreviewChanged,
+                    current.RemoteFingerprint,
+                    RestorePreviewFingerprint(current, snapshot, plan));
                 return await deckOperations.ApplyPlanAsync(
                     current,
                     target,
@@ -374,11 +375,16 @@ internal sealed class ArchidektSnapshotOperations
         string expected,
         string actual,
         string reasonCode,
-        string? currentRemoteFingerprint = null)
+        string? currentRemoteFingerprint = null,
+        string? currentPreviewFingerprint = null)
     {
         if (!string.Equals(expected, actual, StringComparison.Ordinal))
         {
-            throw Conflict(reasonCode, "Provider evidence changed after the preview.", currentRemoteFingerprint);
+            throw Conflict(
+                reasonCode,
+                "Provider evidence changed after the preview.",
+                currentRemoteFingerprint,
+                currentPreviewFingerprint);
         }
     }
 
@@ -409,7 +415,7 @@ internal sealed class ArchidektSnapshotOperations
         return new ArchidektApplyResult(
             "applied",
             LocalDeckId: null,
-            LocalRevision: null,
+            Revision: null,
             remoteId,
             finalFingerprint,
             [Status(operation, "applied", "Provider absence was verified.")]);
@@ -426,7 +432,7 @@ internal sealed class ArchidektSnapshotOperations
         return new ArchidektApplyResult(
             "partial",
             LocalDeckId: null,
-            LocalRevision: null,
+            Revision: null,
             remoteId,
             FinalRemoteFingerprint: null,
             [Status(operation, "unknown", message)]);
@@ -438,7 +444,8 @@ internal sealed class ArchidektSnapshotOperations
     private static ArchidektProviderException Conflict(
         string reasonCode,
         string message,
-        string? currentRemoteFingerprint = null)
+        string? currentRemoteFingerprint = null,
+        string? currentPreviewFingerprint = null)
     {
         return new ArchidektProviderException(
             ArchidektFailureKind.Conflict,
@@ -446,6 +453,7 @@ internal sealed class ArchidektSnapshotOperations
             message)
         {
             CurrentRemoteFingerprint = currentRemoteFingerprint,
+            CurrentPreviewFingerprint = currentPreviewFingerprint,
         };
     }
 }

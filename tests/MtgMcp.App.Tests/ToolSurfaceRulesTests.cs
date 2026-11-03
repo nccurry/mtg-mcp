@@ -41,7 +41,7 @@ public sealed class ToolSurfaceRulesTests : IClassFixture<ToolCatalogFixture>
         new("scryfall_request_snapshots_get", false, ["kind"], "kind",
             ["snapshotId", "operation", "retrievedAfterUtc", "retrievedBeforeUtc", "includeRaw"]),
         new("archidekt_folders_get", true, ["kind"], "kind", ["folderId"]),
-        new("archidekt_snapshots_get", true, ["deckId", "kind"], "kind", ["snapshotId"]),
+        new("archidekt_snapshots_get", true, ["kind", "remoteDeckId"], "kind", ["snapshotId"]),
     ];
 
     /// <summary>

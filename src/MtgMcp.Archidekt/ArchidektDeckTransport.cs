@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 
 namespace MtgMcp.Archidekt;
@@ -30,15 +29,12 @@ internal sealed class ArchidektDeckTransport
     }
 
     /// <summary>
-    /// Lists one authenticated deck page.
+    /// Lists every deck the configured account owns.
     /// </summary>
     internal async Task<RemoteDeckPage> ListAsync(
-        string? cursor,
-        int pageSize,
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
-        (int offset, string? expectedChecksum) = ParseDeckListCursor(cursor, pageSize);
         string username = session.GetConfiguredUsername();
         string path = $"api/decks/v3/?ownerUsername={Uri.EscapeDataString(username)}";
         ArchidektSession.ProviderResponse response = await session.SendAsync(
@@ -50,36 +46,11 @@ internal sealed class ArchidektDeckTransport
             budget,
             cancellationToken).ConfigureAwait(false);
         using JsonDocument document = ArchidektSession.ParseJson(response.Json);
-        RemoteDeckPage complete = ArchidektDeckContractMapper.MapDeckPage(
+        return ArchidektDeckContractMapper.MapDeckPage(
             document.RootElement,
             response.Json,
             response.RetrievedAtUtc,
             "GET /api/decks/v3/");
-        if (expectedChecksum is not null && !string.Equals(
-                expectedChecksum,
-                complete.Evidence.SourceChecksum,
-                StringComparison.Ordinal))
-        {
-            throw new ArchidektProviderException(
-                ArchidektFailureKind.Conflict,
-                "deck-list-changed",
-                "The Archidekt deck list changed after the previous page.");
-        }
-
-        if (offset > complete.Items.Count)
-        {
-            throw new ArchidektProviderException(
-                ArchidektFailureKind.InvalidInput,
-                "invalid-deck-list-cursor",
-                "The Archidekt deck-list cursor is invalid.");
-        }
-
-        RemoteDeckSummary[] items = complete.Items.Skip(offset).Take(pageSize).ToArray();
-        int nextOffset = offset + items.Length;
-        string? nextCursor = nextOffset < complete.Items.Count
-            ? FormatDeckListCursor(nextOffset, complete.Evidence.SourceChecksum)
-            : null;
-        return new RemoteDeckPage(items, nextCursor, complete.Evidence);
     }
 
     /// <summary>
@@ -91,7 +62,7 @@ internal sealed class ArchidektDeckTransport
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
-        deckId = ArchidektContract.Required(deckId, nameof(deckId));
+        deckId = ArchidektContract.Required(deckId, "remoteDeckId");
         ArchidektSession.ProviderResponse response = await session.SendAsync(
             HttpMethod.Get,
             $"api/decks/{Uri.EscapeDataString(deckId)}/",
@@ -163,7 +134,7 @@ internal sealed class ArchidektDeckTransport
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
-        deckId = ArchidektContract.Required(deckId, nameof(deckId));
+        deckId = ArchidektContract.Required(deckId, "remoteDeckId");
         await session.SendMutationAsync(
             HttpMethod.Delete,
             $"api/decks/{Uri.EscapeDataString(deckId)}/",
@@ -369,7 +340,7 @@ internal sealed class ArchidektDeckTransport
     /// </summary>
     internal static int MapFormatId(string value)
     {
-        return ArchidektContract.Required(value, nameof(value)).ToLowerInvariant() switch
+        return ArchidektContract.Required(value, "format").ToLowerInvariant() switch
         {
             "standard" => 1,
             "modern" => 2,
@@ -384,66 +355,10 @@ internal sealed class ArchidektDeckTransport
             _ => throw new ArchidektProviderException(
                 ArchidektFailureKind.InvalidInput,
                 "unsupported-deck-format",
-                "The requested deck format is not mapped to Archidekt."),
+                "The requested deck format is not mapped to Archidekt.")
+            {
+                Path = "format",
+            },
         };
     }
-
-    /// <summary>
-    /// Builds one bounded authenticated list route without accepting an arbitrary URL.
-    /// </summary>
-    private static (int Offset, string? ExpectedChecksum) ParseDeckListCursor(
-        string? cursor,
-        int pageSize)
-    {
-        if (pageSize is < 1 or > 100)
-        {
-            throw new ArchidektProviderException(
-                ArchidektFailureKind.InvalidInput,
-                "invalid-page-size",
-                "Archidekt deck page size must be between 1 and 100.");
-        }
-
-        if (string.IsNullOrWhiteSpace(cursor))
-        {
-            return (0, null);
-        }
-
-        try
-        {
-            string json = Encoding.UTF8.GetString(Convert.FromBase64String(cursor.Trim()));
-            DeckListCursor? parsed = JsonSerializer.Deserialize<DeckListCursor>(
-                json,
-                ArchidektContract.JsonOptions);
-            if (parsed is null || parsed.Offset <= 0 || parsed.Checksum.Length != 64)
-            {
-                throw new FormatException("Invalid cursor payload.");
-            }
-
-            return (parsed.Offset, parsed.Checksum);
-        }
-        catch (Exception exception) when (
-            exception is FormatException or JsonException or ArgumentException)
-        {
-            throw new ArchidektProviderException(
-                ArchidektFailureKind.InvalidInput,
-                "invalid-deck-list-cursor",
-                "The Archidekt deck-list cursor is invalid.");
-        }
-    }
-
-    /// <summary>
-    /// Creates one opaque offset bound to the exact provider list bytes observed on the first page.
-    /// </summary>
-    private static string FormatDeckListCursor(int offset, string checksum)
-    {
-        string json = JsonSerializer.Serialize(
-            new DeckListCursor(offset, checksum),
-            ArchidektContract.JsonOptions);
-        return Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
-    }
-
-    /// <summary>
-    /// Carries a local page offset and immutable source checksum inside the opaque continuation.
-    /// </summary>
-    private sealed record DeckListCursor(int Offset, string Checksum);
 }

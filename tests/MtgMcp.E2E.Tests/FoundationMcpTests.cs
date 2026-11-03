@@ -573,35 +573,47 @@ public sealed class FoundationMcpTests
         Dictionary<string, string[]> expectedProperties = new(StringComparer.Ordinal)
         {
             ["archidekt_auth_status"] = [],
-            ["archidekt_deck_create"] = ["expectedLocalRevision", "localDeckId", "request"],
-            ["archidekt_deck_delete"] = ["request"],
-            ["archidekt_deck_get"] = ["deckId", "offset", "responseFormat", "zones"],
+            ["archidekt_deck_create"] =
+                [
+                    "description", "expectedRevision", "format", "localDeckId", "name", "parentFolderId", "visibility",
+                ],
+            ["archidekt_deck_delete"] = ["confirmation", "expectedRemoteFingerprint", "remoteDeckId"],
+            ["archidekt_deck_get"] = ["cursor", "pageSize", "remoteDeckId", "responseFormat", "zones"],
             ["archidekt_deck_list"] = ["cursor", "pageSize"],
-            ["archidekt_folder_create"] = ["request"],
-            ["archidekt_folder_delete"] = ["request"],
-            ["archidekt_folders_get"] = ["folderId", "kind", "offset"],
-            ["archidekt_folder_move_items"] = ["request"],
-            ["archidekt_folder_update"] = ["request"],
-            ["archidekt_pull_apply"] = ["request"],
+            ["archidekt_folder_create"] = ["name", "parentFolderId", "visibility"],
+            ["archidekt_folder_delete"] = ["confirmation", "expectedName", "expectedTreeFingerprint", "folderId"],
+            ["archidekt_folders_get"] = ["cursor", "folderId", "kind", "pageSize"],
+            ["archidekt_folder_move_items"] = ["destinationFolderId", "expectedTreeFingerprint", "items"],
+            ["archidekt_folder_update"] =
+                ["expectedTreeFingerprint", "folderId", "name", "parentFolderId", "updateParent", "visibility"],
+            ["archidekt_pull_apply"] =
+                [
+                    "confirmation", "discardLocalChanges", "expectedRemoteFingerprint", "expectedRevision",
+                    "localDeckId", "previewFingerprint", "remoteDeckId",
+                ],
             ["archidekt_pull_preview"] =
                 [
-                    "differenceOffset", "discardLocalChanges", "expectedPreviewFingerprint", "localDeckId",
-                    "operationOffset", "remoteDeckId", "responseFormat",
+                    "cursor", "discardLocalChanges", "localDeckId", "pageSize", "remoteDeckId", "responseFormat",
                 ],
-            ["archidekt_push_apply"] = ["request"],
-            ["archidekt_push_preview"] =
+            ["archidekt_push_apply"] =
                 [
-                    "confirmRemovals", "differenceOffset", "expectedPreviewFingerprint", "localDeckId", "operationOffset",
-                    "responseFormat",
+                    "confirmRemovals", "expectedRemoteFingerprint", "expectedRevision", "localDeckId",
+                    "previewFingerprint",
                 ],
-            ["archidekt_snapshot_create"] = ["request"],
-            ["archidekt_snapshot_delete"] = ["request"],
-            ["archidekt_snapshots_get"] = ["deckId", "kind", "offset", "responseFormat", "snapshotId", "zones"],
-            ["archidekt_snapshot_restore_apply"] = ["request"],
-            ["archidekt_snapshot_restore_preview"] =
-                ["deckId", "differenceOffset", "expectedPreviewFingerprint", "operationOffset", "snapshotId"],
-            ["archidekt_snapshot_update"] = ["request"],
-            ["archidekt_sync_diff"] = ["differenceOffset", "localDeckId", "responseFormat"],
+            ["archidekt_push_preview"] =
+                ["confirmRemovals", "cursor", "localDeckId", "pageSize", "responseFormat"],
+            ["archidekt_snapshot_create"] = ["description", "expectedRemoteFingerprint", "name", "remoteDeckId"],
+            ["archidekt_snapshot_delete"] = ["confirmation", "expectedChecksum", "remoteDeckId", "snapshotId"],
+            ["archidekt_snapshots_get"] =
+                ["cursor", "kind", "pageSize", "remoteDeckId", "responseFormat", "snapshotId", "zones"],
+            ["archidekt_snapshot_restore_apply"] =
+                [
+                    "confirmation", "expectedRemoteFingerprint", "expectedSnapshotChecksum",
+                    "expectedSnapshotContentFingerprint", "previewFingerprint", "remoteDeckId", "snapshotId",
+                ],
+            ["archidekt_snapshot_restore_preview"] = ["cursor", "pageSize", "remoteDeckId", "snapshotId"],
+            ["archidekt_snapshot_update"] = ["expectedChecksum", "name", "remoteDeckId", "snapshotId"],
+            ["archidekt_sync_diff"] = ["cursor", "localDeckId", "pageSize", "responseFormat"],
         };
         HashSet<string> reads = [.. ArchidektReadToolNames];
         HashSet<string> destructive =

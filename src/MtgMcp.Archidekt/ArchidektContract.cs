@@ -50,7 +50,7 @@ internal static class ArchidektContract
     /// </summary>
     internal static string NormalizeVisibility(string value)
     {
-        return Required(value, nameof(value)).ToLowerInvariant() switch
+        return Required(value, "visibility").ToLowerInvariant() switch
         {
             "private" => "private",
             "unlisted" => "unlisted",
@@ -58,7 +58,10 @@ internal static class ArchidektContract
             _ => throw new ArchidektProviderException(
                 ArchidektFailureKind.InvalidInput,
                 "invalid-visibility",
-                "Archidekt visibility must be private, unlisted, or public."),
+                "Archidekt visibility must be private, unlisted, or public.")
+            {
+                Path = "visibility",
+            },
         };
     }
 

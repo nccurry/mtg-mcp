@@ -183,7 +183,7 @@ internal static class ArchidektJsonContract
         string checksum = ArchidektContract.Fingerprint(items.Select(value => new
         {
             value.SnapshotId,
-            value.DeckId,
+            DeckId = value.RemoteDeckId,
             value.Name,
             value.Description,
             value.CreatedAtUtc,
@@ -208,7 +208,7 @@ internal static class ArchidektJsonContract
     {
         JsonElement snapshot = UnwrapObject(root, "snapshot", "data");
         RemoteNamedSnapshotSummary summary = MapSnapshotSummary(snapshot, expectedDeckId);
-        if (!string.Equals(summary.DeckId, expectedDeckId, StringComparison.Ordinal))
+        if (!string.Equals(summary.RemoteDeckId, expectedDeckId, StringComparison.Ordinal))
         {
             throw Unsupported("Archidekt snapshot belongs to a different deck.");
         }

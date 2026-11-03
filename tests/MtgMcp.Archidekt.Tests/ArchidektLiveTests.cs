@@ -31,10 +31,7 @@ public sealed class ArchidektLiveTests
         using ArchidektService service = new(
             ArchidektOptions.CreateDefault(credentialsFile: credentialsFile),
             "0.9.0-preview.1");
-        RemoteDeckPage page = Success(await service.ListDecksAsync(
-            cursor: null,
-            pageSize: 1,
-            TestContext.Current.CancellationToken));
+        RemoteDeckPage page = Success(await service.ListDecksAsync(TestContext.Current.CancellationToken));
 
         Assert.True(page.Items.Count <= 1);
         Assert.Equal("archidekt", page.Evidence.Source);
@@ -83,10 +80,7 @@ public sealed class ArchidektLiveTests
             Assert.Equal("private", deck.Visibility);
             Assert.Equal(deckName, deck.Name);
 
-            RemoteDeckPage listed = Success(await service.ListDecksAsync(
-                cursor: null,
-                pageSize: 100,
-                TestContext.Current.CancellationToken));
+            RemoteDeckPage listed = Success(await service.ListDecksAsync(TestContext.Current.CancellationToken));
             Assert.Contains(listed.Items, value => value.RemoteId == deck.RemoteId);
 
             folder = Success(await service.CreateFolderAsync(
@@ -274,7 +268,7 @@ public sealed class ArchidektLiveTests
             new ArchidektDeckDeleteRequest(
                 deck.RemoteId,
                 exact.RemoteFingerprint,
-                $"delete {deck.RemoteId}"),
+                $"delete deck {deck.RemoteId}"),
             cancellationToken));
         Assert.Equal("applied", deleted.Outcome);
         return null;

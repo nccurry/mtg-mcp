@@ -88,13 +88,13 @@ internal sealed class ArchidektCoordinator
     /// <summary>Creates one remote deck and optionally binds it to unchanged local state.</summary>
     internal Task<OperationResult<RemoteDeckSnapshot>> CreateRemoteDeckAsync(
         Guid? localDeckId,
-        long? expectedLocalRevision,
+        long? expectedRevision,
         ArchidektDeckCreateRequest request,
         CancellationToken cancellationToken)
     {
         return bindings.CreateRemoteDeckAsync(
             localDeckId,
-            expectedLocalRevision,
+            expectedRevision,
             request,
             cancellationToken);
     }
@@ -190,13 +190,13 @@ internal sealed class ArchidektBindingWorkflow
     /// <summary>Creates one remote deck and optionally binds it to unchanged local state.</summary>
     internal Task<OperationResult<RemoteDeckSnapshot>> CreateRemoteDeckAsync(
         Guid? localDeckId,
-        long? expectedLocalRevision,
+        long? expectedRevision,
         ArchidektDeckCreateRequest request,
         CancellationToken cancellationToken)
     {
         return context.CreateRemoteDeckAsync(
             localDeckId,
-            expectedLocalRevision,
+            expectedRevision,
             request,
             cancellationToken);
     }
