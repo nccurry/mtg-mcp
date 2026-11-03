@@ -46,12 +46,13 @@ internal sealed class DeckInterchangeWriteTools
     [Description(
         "Local deck store: creates one local deck from an accepted import preview without provider calls. The " +
         "result is a deck summary (deck ID, revision, counts, entry IDs) with the accepted diagnostics; pass " +
-        "returnDeck true to also get the whole deck.")]
+        "returnDeck true to also get the whole deck. Content or options that no longer match the previewFingerprint " +
+        "return preview-changed with the current previewFingerprint.")]
     internal async Task<OperationResult<DeckImportCreateView>> CreateAsync(
         [Description("Exact format ID used for the accepted preview."), InterchangeFormatValues]
         string formatId,
         [Description("Exact content used for the accepted preview.")] string content,
-        [Description("Fingerprint returned by local_deck_import_preview.")] string expectedFingerprint,
+        [Description("previewFingerprint returned by local_deck_import_preview.")] string previewFingerprint,
         [Description("The same parsing defaults and explicit opt-ins used for preview.")]
         DeckImportOptions? options = null,
         [Description("Set true to also return the whole deck after the write. The default summary is much smaller.")]
@@ -66,7 +67,7 @@ internal sealed class DeckInterchangeWriteTools
         }
 
         OperationResult<DeckImportCreateResult> created = await service
-            .CreateAsync(formatId, content, expectedFingerprint, options, cancellationToken).ConfigureAwait(false);
+            .CreateAsync(formatId, content, previewFingerprint, options, cancellationToken).ConfigureAwait(false);
         return created is OperationSuccess<DeckImportCreateResult> success
             ? new OperationSuccess<DeckImportCreateView>(DeckImportCreateView.From(success.Data, returnDeck))
             : OperationFailure.Forward<DeckImportCreateResult, DeckImportCreateView>(created);

@@ -131,16 +131,18 @@ internal sealed class DeckBatchWriteTools
         {
             return new OperationInvalidInput(
                 "invalid-when-card-present",
-                "whenCardPresent must be \"add\" or \"skip\".");
+                "whenCardPresent must be \"add\" or \"skip\".",
+                "whenCardPresent");
         }
 
         if (!DeckChangeInputMapper.TryMap(
             changes,
             out IReadOnlyList<DeckChange> mapped,
             out IReadOnlyList<int> callerIndexes,
-            out string failure))
+            out string failure,
+            out string failurePath))
         {
-            return new OperationInvalidInput(DeckReasonCodes.InvalidDeckChange, failure);
+            return new OperationInvalidInput(DeckReasonCodes.InvalidDeckChange, failure, failurePath);
         }
 
         OperationResult<DeckDocument> read = await store.GetAsync(deckId, cancellationToken).ConfigureAwait(false);
@@ -162,7 +164,8 @@ internal sealed class DeckBatchWriteTools
                 return new OperationInvalidInput(
                     DeckReasonCodes.InvalidDeckChange,
                     $"Change {callerIndexes[resolution.Refusal.Position] + 1} is a patch-entries whose printing " +
-                    $"cannot be applied: {resolution.Refusal.Message} Nothing was written.");
+                    $"cannot be applied: {resolution.Refusal.Message} Nothing was written.",
+                    $"changes[{callerIndexes[resolution.Refusal.Position]}]");
             }
 
             DeckAddPresenceResult presence = DeckAddPresence.Check(
@@ -172,7 +175,10 @@ internal sealed class DeckBatchWriteTools
                 whenCardPresent == DeckAddPresence.Skip);
             if (presence.Refusal is not null)
             {
-                return new OperationInvalidInput(DeckReasonCodes.InvalidDeckChange, presence.Refusal);
+                return new OperationInvalidInput(
+                    DeckReasonCodes.InvalidDeckChange,
+                    presence.Refusal,
+                    $"changes[{presence.RefusalIndex}]");
             }
 
             issues = [.. resolution.Issues, .. presence.Issues];
