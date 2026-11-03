@@ -123,8 +123,11 @@ public sealed class DeckInterchangeServiceTests
 
         Assert.Equal("partial", preview.Completeness);
         Assert.Equal(2, preview.Diagnostics[0].Line);
-        Assert.IsType<OperationInvalidInput>(refused.Value);
-        Assert.IsType<OperationConflict>(stale.Value);
+        Assert.Equal("options.allowPartial", Assert.IsType<OperationInvalidInput>(refused.Value).Path);
+        OperationConflict changed = Assert.IsType<OperationConflict>(stale.Value);
+        Assert.Equal("preview-changed", changed.ReasonCode);
+        Assert.NotNull(changed.Current?.PreviewFingerprint);
+        Assert.NotEqual(preview.PreviewFingerprint, changed.Current.PreviewFingerprint);
         Assert.Single(accepted.Deck.Entries);
     }
 

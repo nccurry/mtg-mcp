@@ -202,7 +202,7 @@ public sealed class DeckCategoryRuleSourceTests
             new DeckCategoryAssignment(entryId, categoryId, false),
             Assert.Single(applied.CategoryAssignments));
         Assert.Equal(applied.Revision + 1, edited.Revision);
-        Assert.Equal("deck-revision-conflict", Assert.IsType<OperationConflict>(stale.Value).ReasonCode);
+        Assert.Equal("stale-deck-revision", Assert.IsType<OperationConflict>(stale.Value).ReasonCode);
     }
 
     /// <summary>

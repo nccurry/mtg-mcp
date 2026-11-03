@@ -152,7 +152,7 @@ public sealed class DeckApplySummaryToolTests
             {
                 ["deckId"] = deck.DeckId.ToString(),
                 ["expectedRevision"] = deck.Revision,
-                ["expectedCorpusGeneration"] = guards.GetProperty("corpusGenerationId").GetString(),
+                ["expectedActiveGeneration"] = guards.GetProperty("corpusGenerationId").GetString(),
                 ["source"] = source.DeepClone(),
                 ["freshnessPolicy"] = "cache-only",
                 ["previewFingerprint"] = guards.GetProperty("previewFingerprint").GetString(),

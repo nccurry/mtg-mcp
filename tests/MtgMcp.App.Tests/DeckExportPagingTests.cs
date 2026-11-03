@@ -37,24 +37,45 @@ public sealed class DeckExportPagingTests
     }
 
     /// <summary>
-    /// Verifies an offset between the two halves of a pair is refused as an invalid offset, and an offset on the
-    /// whole pair is accepted.
+    /// Verifies a page size of one code unit on a pair returns the whole pair, and the next cursor starts after it.
     /// </summary>
     [Fact]
-    public void Page_WithAnOffsetInsideAPair_IsRefused()
+    public void Page_WithPageSizeOneOnAPair_ReturnsTheWholePair()
     {
-        DeckExportBundle bundle = Bundle(new string('a', 29_999) + Emoji + new string('b', 100));
+        DeckExportBundle bundle = Bundle(Emoji + "ab");
 
-        OperationResult<DeckExportBundleView> inside = DeckExportPaging.Page(bundle, null, 30_000);
-        OperationResult<DeckExportBundleView> onPair = DeckExportPaging.Page(bundle, null, 29_999);
+        DeckExportBundleView first = Success(DeckExportPaging.Page(bundle, null, null, 1));
+        DeckExportBundleView second = Success(DeckExportPaging.Page(bundle, null, first.NextCursor, 1));
 
-        OperationInvalidInput refused = Assert.IsType<OperationInvalidInput>(inside.Value);
-        Assert.Equal("invalid-offset", refused.ReasonCode);
-        Assert.Equal("offset", refused.Path);
-        Assert.StartsWith(
-            Emoji,
-            Assert.IsType<OperationSuccess<DeckExportBundleView>>(onPair.Value).Data.Chunk.Content,
-            StringComparison.Ordinal);
+        Assert.Equal(Emoji, first.Chunk.Content);
+        Assert.Equal("a", second.Chunk.Content);
+        Assert.Equal(2, second.Chunk.Offset);
+    }
+
+    /// <summary>
+    /// Verifies a cursor is refused after the artifact content or the deck revision changed, as stale with the current
+    /// revision, and for another artifact or a changed cursor as an invalid cursor at the cursor path.
+    /// </summary>
+    [Fact]
+    public void Page_WithACursorOfOtherState_IsRefused()
+    {
+        DeckExportBundle bundle = Bundle(new string('a', 70_000));
+        string cursor = Success(DeckExportPaging.Page(bundle, null, null, 30_000)).NextCursor!;
+
+        OperationConflict stale = Assert.IsType<OperationConflict>(
+            DeckExportPaging.Page(Bundle(new string('b', 70_000), bundle.DeckId, 1), null, cursor, 30_000).Value);
+        OperationConflict newRevision = Assert.IsType<OperationConflict>(
+            DeckExportPaging.Page(bundle with { DeckRevision = 2 }, null, cursor, 30_000).Value);
+        OperationInvalidInput edited = Assert.IsType<OperationInvalidInput>(
+            DeckExportPaging.Page(bundle, null, cursor + "x", 30_000).Value);
+        OperationInvalidInput badSize = Assert.IsType<OperationInvalidInput>(
+            DeckExportPaging.Page(bundle, null, null, 30_001).Value);
+
+        Assert.Equal("cursor-stale", stale.ReasonCode);
+        Assert.Equal("cursor-stale", newRevision.ReasonCode);
+        Assert.Equal(2, newRevision.Current?.Revision);
+        Assert.Equal(("invalid-cursor", "cursor"), (edited.ReasonCode, edited.Path));
+        Assert.Equal("pageSize", badSize.Path);
     }
 
     /// <summary>
@@ -119,7 +140,7 @@ public sealed class DeckExportPagingTests
 
     /// <summary>
     /// Verifies the first chunk carries the preservation report, a later chunk does not, the chunk names how to read
-    /// the rest, and the last chunk has no next offset.
+    /// the rest, and the last chunk has no next cursor.
     /// </summary>
     [Fact]
     public void Page_PreservationReportComesOnlyWithTheFirstChunk()
@@ -127,31 +148,44 @@ public sealed class DeckExportPagingTests
         DeckExportBundle bundle = Bundle(new string('a', 70_000));
 
         DeckExportBundleView first = Assert.IsType<OperationSuccess<DeckExportBundleView>>(
-            DeckExportPaging.Page(bundle, null, 0).Value).Data;
+            DeckExportPaging.Page(bundle, null, null, 30_000).Value).Data;
         DeckExportBundleView second = Assert.IsType<OperationSuccess<DeckExportBundleView>>(
-            DeckExportPaging.Page(bundle, null, first.Chunk.NextOffset!.Value).Value).Data;
-        DeckExportBundleView last = Assert.IsType<OperationSuccess<DeckExportBundleView>>(
-            DeckExportPaging.Page(bundle, null, 60_000).Value).Data;
+            DeckExportPaging.Page(bundle, null, first.NextCursor, 30_000).Value).Data;
+        DeckExportBundleView last = Success(DeckExportPaging.Page(bundle, null, second.NextCursor, 30_000));
 
         Assert.NotEmpty(first.Preservation);
         Assert.Empty(second.Preservation);
         Assert.True(first.Chunk.Truncated);
-        Assert.Contains("offset", first.Chunk.Narrow, StringComparison.Ordinal);
-        Assert.Null(last.Chunk.NextOffset);
+        Assert.Contains("nextCursor", first.Chunk.Narrow, StringComparison.Ordinal);
+        Assert.NotNull(first.NextCursor);
+        Assert.Null(last.NextCursor);
         Assert.Null(last.Chunk.Truncated);
         Assert.Equal(70_000, first.Artifacts[0].TotalLength);
     }
 
     /// <summary>
+    /// Holds the deck every test bundle belongs to.
+    /// </summary>
+    private static readonly Guid DeckId = Guid.NewGuid();
+
+    /// <summary>
+    /// Unwraps a successful chunk page.
+    /// </summary>
+    private static DeckExportBundleView Success(OperationResult<DeckExportBundleView> result)
+    {
+        return Assert.IsType<OperationSuccess<DeckExportBundleView>>(result.Value).Data;
+    }
+
+    /// <summary>
     /// Builds a bundle with one artifact holding the content and a one-line preservation report.
     /// </summary>
-    private static DeckExportBundle Bundle(string content)
+    private static DeckExportBundle Bundle(string content, Guid? deckId = null, long revision = 1)
     {
         return new DeckExportBundle(
             1,
             "generic-text-v1",
-            Guid.NewGuid(),
-            1,
+            deckId ?? DeckId,
+            revision,
             DateTimeOffset.UnixEpoch,
             "available",
             [new DeckExportArtifact("deck.txt", "text/plain", content, Sha256Of(content), "The deck.")],
@@ -159,24 +193,22 @@ public sealed class DeckExportPagingTests
     }
 
     /// <summary>
-    /// Reads every chunk of the first artifact by following the next offset.
+    /// Reads every chunk of the first artifact by following the next cursor.
     /// </summary>
     private static List<DeckExportChunk> ReadAllChunks(DeckExportBundle bundle)
     {
         List<DeckExportChunk> chunks = [];
-        int offset = 0;
+        string? cursor = null;
         while (true)
         {
-            DeckExportBundleView view = Assert.IsType<OperationSuccess<DeckExportBundleView>>(
-                DeckExportPaging.Page(bundle, null, offset).Value).Data;
+            DeckExportBundleView view = Success(DeckExportPaging.Page(bundle, null, cursor, 30_000));
             chunks.Add(view.Chunk);
-            if (view.Chunk.NextOffset is not int next)
+            if (view.NextCursor is null)
             {
                 return chunks;
             }
 
-            Assert.True(next > offset, "The next offset must advance.");
-            offset = next;
+            cursor = view.NextCursor;
         }
     }
 

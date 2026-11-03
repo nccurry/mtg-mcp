@@ -85,7 +85,7 @@ public sealed class LiveMethodAcceptanceTests
                 {
                     ["formatId"] = "generic-text-v1",
                     ["content"] = importedText,
-                    ["expectedFingerprint"] = preview.GetProperty("fingerprint").GetString(),
+                    ["previewFingerprint"] = preview.GetProperty("previewFingerprint").GetString(),
                     ["options"] = new { deckName = "Obeka Acceptance Import", format = "commander" },
                 },
                 token).ConfigureAwait(false);
@@ -220,7 +220,7 @@ public sealed class LiveMethodAcceptanceTests
                 {
                     ["deckId"] = rulesDeckId,
                     ["expectedRevision"] = rulesRevision,
-                    ["expectedCorpusGeneration"] = (Guid?)null,
+                    ["expectedActiveGeneration"] = (Guid?)null,
                     ["source"] = categoryRules,
                     ["freshnessPolicy"] = "cache-only",
                     ["previewFingerprint"] = categoryPreview.GetProperty("previewFingerprint").GetString(),
@@ -581,6 +581,7 @@ public sealed class LiveMethodAcceptanceTests
                 {
                     ["backupId"] = backupId,
                     ["expectedDatabaseFingerprint"] = changedInventory.GetProperty("currentDatabaseFingerprint").GetString(),
+                    ["confirmation"] = $"restore backup {backupId}",
                 },
                 token).ConfigureAwait(false);
             Guid rollbackBackupId = restored.GetProperty("rollbackBackupId").GetGuid();
@@ -606,7 +607,11 @@ public sealed class LiveMethodAcceptanceTests
                     environment,
                     session,
                     "local_deck_backup_delete",
-                    new Dictionary<string, object?> { ["backupId"] = id },
+                    new Dictionary<string, object?>
+                    {
+                        ["backupId"] = id,
+                        ["confirmation"] = $"delete backup {id}",
+                    },
                     token).ConfigureAwait(false);
             }
 
@@ -618,13 +623,19 @@ public sealed class LiveMethodAcceptanceTests
                 {
                     ["deckId"] = importedDeckId,
                     ["expectedRevision"] = importedRevision,
+                    ["confirmation"] = $"delete deck {importedDeckId}",
                 },
                 token).ConfigureAwait(false);
             _ = await CallSuccessAsync(
                 environment,
                 session,
                 "local_deck_delete",
-                new Dictionary<string, object?> { ["deckId"] = deckId, ["expectedRevision"] = revision },
+                new Dictionary<string, object?>
+                {
+                    ["deckId"] = deckId,
+                    ["expectedRevision"] = revision,
+                    ["confirmation"] = $"delete deck {deckId}",
+                },
                 token).ConfigureAwait(false);
             listed = await CallSuccessAsync(
                 environment,
