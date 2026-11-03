@@ -74,7 +74,14 @@ internal sealed record CardListSourceInfo
     public required string Kind { get; init; }
 
     /// <summary>
-    /// Gets the saved search ID, for a saved search.
+    /// Gets the saved search ID, for a Scryfall saved search.
+    /// </summary>
+    [JsonPropertyName("requestSnapshotId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RequestSnapshotId { get; init; }
+
+    /// <summary>
+    /// Gets the Archidekt snapshot ID, for a saved Archidekt snapshot.
     /// </summary>
     [JsonPropertyName("snapshotId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -111,9 +118,9 @@ internal sealed record CardListSourceInfo
     /// <summary>
     /// Gets the Archidekt deck ID.
     /// </summary>
-    [JsonPropertyName("archidektDeckId")]
+    [JsonPropertyName("remoteDeckId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? ArchidektDeckId { get; init; }
+    public string? RemoteDeckId { get; init; }
 
     /// <summary>
     /// Gets the Archidekt state marker of a live deck, which changes when the deck changes.
@@ -308,7 +315,22 @@ internal sealed class CardListResolver
                 side);
         }
 
-        return result;
+        return result is OperationInvalidInput refused ? SidePath(refused, side) : result;
+    }
+
+    /// <summary>
+    /// Puts the position of the source in front of the argument a lower layer named, or names the source when the
+    /// lower layer named none, so every refusal points at one argument of the request.
+    /// </summary>
+    private static OperationInvalidInput SidePath(OperationInvalidInput refused, string side)
+    {
+        string? path = refused.Path switch
+        {
+            null => side,
+            { } value when value == side || value.StartsWith(side + ".", StringComparison.Ordinal) => value,
+            { } value => side + "." + value,
+        };
+        return path == refused.Path ? refused : new OperationInvalidInput(refused.ReasonCode, refused.Message, path);
     }
 
     /// <summary>
@@ -408,14 +430,12 @@ internal sealed class CardListResolver
                         $"A request can hold at most {MaximumIdsPerRequest} card IDs in all its cards sources.",
                         path + ".ids")
                     : null;
-            case ArchidektDeckSourceInput { ArchidektDeckId: var deckId } when string.IsNullOrWhiteSpace(deckId):
-                return new OperationInvalidInput("invalid-source", "archidektDeckId cannot be blank.", path);
-            case ArchidektSnapshotSourceInput remote
-                when string.IsNullOrWhiteSpace(remote.ArchidektDeckId) || string.IsNullOrWhiteSpace(remote.SnapshotId):
-                return new OperationInvalidInput(
-                    "invalid-source",
-                    "archidektDeckId and snapshotId cannot be blank.",
-                    path);
+            case ArchidektDeckSourceInput { RemoteDeckId: var deckId } when string.IsNullOrWhiteSpace(deckId):
+                return new OperationInvalidInput("invalid-source", "remoteDeckId cannot be blank.", path + ".remoteDeckId");
+            case ArchidektSnapshotSourceInput remote when string.IsNullOrWhiteSpace(remote.RemoteDeckId):
+                return new OperationInvalidInput("invalid-source", "remoteDeckId cannot be blank.", path + ".remoteDeckId");
+            case ArchidektSnapshotSourceInput remote when string.IsNullOrWhiteSpace(remote.SnapshotId):
+                return new OperationInvalidInput("invalid-source", "snapshotId cannot be blank.", path + ".snapshotId");
             case CompareSourceInput compare:
                 return ValidateCompare(compare, path, depth + 1, ref idCount);
             default:
@@ -471,7 +491,7 @@ internal sealed class CardListResolver
     {
         OperationResult<ScryfallSnapshotCards> read = await ScryfallToolExecution.RunAsync(() =>
             scryfall.ReadSnapshotCardsAsync(
-                source.SnapshotId,
+                source.RequestSnapshotId,
                 options.IncludeRaw,
                 options.IncludeFacts,
                 options.Budget?.Remaining ?? ScryfallListQuery.MaximumEntries,
@@ -492,7 +512,7 @@ internal sealed class CardListResolver
         {
             Side = side,
             Kind = "scryfall-snapshot",
-            SnapshotId = source.SnapshotId.ToString("D"),
+            RequestSnapshotId = source.RequestSnapshotId.ToString("D"),
             Checksum = success.Data.Checksum,
             Entries = entries.Count,
             Marker = "snapshot:" + success.Data.Checksum,
@@ -650,7 +670,7 @@ internal sealed class CardListResolver
         if (source.ExpectedRevision is long expected && expected != deck.Data.Revision)
         {
             return new OperationConflict(
-                "deck-revision-conflict",
+                SharedReasonCodes.StaleDeckRevision,
                 $"The deck is at revision {deck.Data.Revision}, not {expected}. Repeat the request with the " +
                 "current revision, or omit expectedRevision.",
                 new ConflictState(Revision: deck.Data.Revision));
@@ -746,7 +766,7 @@ internal sealed class CardListResolver
             return ToolsetOff("archidekt", access.ArchidektOffReason, side);
         }
 
-        OperationResult<RemoteDeckSnapshot> read = await service.GetDeckAsync(source.ArchidektDeckId, cancellationToken)
+        OperationResult<RemoteDeckSnapshot> read = await service.GetDeckAsync(source.RemoteDeckId, cancellationToken)
             .ConfigureAwait(false);
         if (read is not OperationSuccess<RemoteDeckSnapshot> deck)
         {
@@ -757,7 +777,7 @@ internal sealed class CardListResolver
         {
             Side = side,
             Kind = "archidekt-deck",
-            ArchidektDeckId = source.ArchidektDeckId,
+            RemoteDeckId = source.RemoteDeckId,
             StateMarker = deck.Data.RemoteFingerprint,
             Entries = deck.Data.Entries.Count,
             Marker = "archidekt:" + deck.Data.RemoteFingerprint,
@@ -781,7 +801,7 @@ internal sealed class CardListResolver
         }
 
         OperationResult<RemoteNamedSnapshot> read = await service.GetSnapshotAsync(
-            source.ArchidektDeckId,
+            source.RemoteDeckId,
             source.SnapshotId,
             cancellationToken).ConfigureAwait(false);
         if (read is not OperationSuccess<RemoteNamedSnapshot> snapshot)
@@ -793,7 +813,7 @@ internal sealed class CardListResolver
         {
             Side = side,
             Kind = "archidekt-snapshot",
-            ArchidektDeckId = source.ArchidektDeckId,
+            RemoteDeckId = source.RemoteDeckId,
             SnapshotId = source.SnapshotId,
             Entries = snapshot.Data.Deck.Entries.Count,
             Marker = "archidekt-snapshot:" + source.SnapshotId,

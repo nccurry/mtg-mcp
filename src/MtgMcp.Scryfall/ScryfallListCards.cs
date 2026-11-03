@@ -173,8 +173,8 @@ internal sealed class ScryfallListCardOperations
             return new OperationInvalidInput(
                 "snapshot-has-no-cards",
                 $"Snapshot {snapshotId:D} is a {stored.Header.Operation} request, which holds no cards. Use the " +
-                "snapshotId that scryfall_search returned.",
-                "snapshotId");
+                "requestSnapshotId that scryfall_search returned.",
+                "requestSnapshotId");
         }
 
         int limit = Math.Min(maximumCards, ScryfallListQuery.MaximumEntries);
@@ -184,7 +184,7 @@ internal sealed class ScryfallListCardOperations
                 "list-too-large",
                 $"The snapshot has {stored.Members.Count} cards, which is more than the {limit} this request may " +
                 "still read.",
-                "snapshotId");
+                "requestSnapshotId");
         }
 
         List<ScryfallCard> cards = new(stored.Members.Count);

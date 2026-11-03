@@ -44,15 +44,15 @@ internal sealed class ScryfallWriteTools
         UseStructuredContent = true)]
     [Description(
         "Installed Scryfall card data: explicitly streams All Cards, Rulings, Oracle Tags, and Art Tags, validates a " +
-        "complete " +
-        "generation, and atomically activates it.")]
+        "complete generation, and atomically activates it. freshnessPolicy default reuses cached bulk metadata; " +
+        "refresh checks Scryfall again.")]
     internal Task<OperationResult<ScryfallCorpusSyncResult>> SyncCorpusAsync(
-        [Description("Metadata cache policy: default or refresh."), AllowedValues("default", "refresh")]
-        string metadataPolicy = "default",
+        [Description("Bulk metadata cache policy: default or refresh."), AllowedValues("default", "refresh")]
+        string freshnessPolicy = "default",
         [Description("Optional active generation guard checked before synchronization.")] Guid? expectedActiveGeneration = null,
         CancellationToken cancellationToken = default)
     {
-        return ExecuteAsync(() => service.SyncCorpusAsync(metadataPolicy, expectedActiveGeneration, cancellationToken));
+        return ExecuteAsync(() => service.SyncCorpusAsync(freshnessPolicy, expectedActiveGeneration, cancellationToken));
     }
 
     /// <summary>
@@ -68,15 +68,17 @@ internal sealed class ScryfallWriteTools
         UseStructuredContent = true)]
     [Description(
         "Installed Scryfall card data: guardedly swaps the active and previous complete card-data generations without " +
-        "changing deck or request snapshot data.")]
+        "changing deck or request snapshot data. Rolling back again swaps them back. confirmation must be exactly " +
+        "\"rollback card-data \" followed by expectedPreviousGeneration, the generation that becomes active.")]
     internal Task<OperationResult<ScryfallCorpusMutationResult>> RollbackCorpusAsync(
         [Description("Current active card-data generation UUID used as a stale-write guard.")] Guid expectedActiveGeneration,
         [Description("Current previous card-data generation UUID that should become active.")] Guid expectedPreviousGeneration,
-        [Description("Explicit acknowledgement that active evidence will change.")] bool acknowledgeActivationChange,
+        [Description("Exact text \"rollback card-data \" followed by expectedPreviousGeneration.")]
+        string confirmation,
         CancellationToken cancellationToken = default)
     {
         return ExecuteAsync(() => service.RollbackCorpusAsync(expectedActiveGeneration, expectedPreviousGeneration,
-            acknowledgeActivationChange, cancellationToken));
+            confirmation, cancellationToken));
     }
 
     /// <summary>
@@ -91,14 +93,16 @@ internal sealed class ScryfallWriteTools
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Installed Scryfall card data: deletes installed card-data generations only with the current active generation " +
-        "and an explicit data-loss acknowledgement.")]
+        "Installed Scryfall card data: deletes every installed card-data generation, active and previous, only with the " +
+        "current active generation. A new sync reinstalls them. confirmation must be exactly \"delete card-data \" " +
+        "followed by expectedActiveGeneration.")]
     internal Task<OperationResult<ScryfallCorpusMutationResult>> DeleteCorpusAsync(
         [Description("Current active card-data generation UUID used as a stale-write guard.")] Guid expectedActiveGeneration,
-        [Description("Explicit acknowledgement that installed card-data generations will be deleted.")] bool acknowledgeDataLoss,
+        [Description("Exact text \"delete card-data \" followed by expectedActiveGeneration.")]
+        string confirmation,
         CancellationToken cancellationToken = default)
     {
-        return ExecuteAsync(() => service.DeleteCorpusAsync(expectedActiveGeneration, acknowledgeDataLoss, cancellationToken));
+        return ExecuteAsync(() => service.DeleteCorpusAsync(expectedActiveGeneration, confirmation, cancellationToken));
     }
 
     /// <summary>
@@ -114,15 +118,17 @@ internal sealed class ScryfallWriteTools
         UseStructuredContent = true)]
     [Description(
         "Saved Scryfall requests: deletes one local snapshot of a Scryfall request (any request type) only when " +
-        "its expected checksum matches and data loss is acknowledged.")]
+        "its expected checksum matches and confirmation is exact. confirmation must be \"delete request-snapshot \" " +
+        "followed by requestSnapshotId.")]
     internal Task<OperationResult<ScryfallSnapshotDeleteResult>> DeleteSnapshotAsync(
-        [Description("Immutable snapshot UUID to delete.")] Guid snapshotId,
+        [Description("Immutable request snapshot UUID to delete.")] Guid requestSnapshotId,
         [Description("Current snapshot checksum used as a stale-write guard.")] string expectedChecksum,
-        [Description("Explicit acknowledgement that retained evidence will be deleted.")] bool acknowledgeDataLoss,
+        [Description("Exact text \"delete request-snapshot \" followed by requestSnapshotId.")]
+        string confirmation,
         CancellationToken cancellationToken = default)
     {
-        return ExecuteAsync(() => service.DeleteSnapshotAsync(snapshotId, expectedChecksum,
-            acknowledgeDataLoss, cancellationToken));
+        return ExecuteAsync(() => service.DeleteSnapshotAsync(requestSnapshotId, expectedChecksum,
+            confirmation, cancellationToken));
     }
 
     /// <summary>

@@ -306,17 +306,19 @@ internal sealed class ScryfallSnapshotStore
     }
 
     /// <summary>
-    /// Deletes one snapshot only when its checksum and explicit acknowledgement match.
+    /// Deletes one snapshot only when its checksum and confirmation phrase match.
     /// </summary>
     internal async Task<OperationResult<ScryfallSnapshotDeleteResult>> DeleteAsync(
         Guid snapshotId,
         string expectedChecksum,
-        bool acknowledgeDataLoss,
+        string? confirmation,
         CancellationToken cancellationToken)
     {
-        if (!acknowledgeDataLoss)
+        OperationInvalidInput? unconfirmed = ScryfallConfirmation.Require(
+            confirmation, ScryfallConfirmation.Phrase("delete request-snapshot", snapshotId));
+        if (unconfirmed is not null)
         {
-            return new OperationInvalidInput("evidence-loss-not-acknowledged", "Snapshot deletion requires explicit acknowledgement.");
+            return unconfirmed;
         }
 
         await using SqliteConnection connection = await database.OpenWriteAsync(cancellationToken).ConfigureAwait(false);

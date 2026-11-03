@@ -225,7 +225,7 @@ public sealed record ScryfallBulkData(
 /// Identifies the immutable evidence snapshot backing a provider result.
 /// </summary>
 public sealed record ScryfallSnapshotReference(
-    [property: JsonPropertyName("snapshotId")] Guid SnapshotId,
+    [property: JsonPropertyName("requestSnapshotId")] Guid SnapshotId,
     [property: JsonPropertyName("checksum")] string Checksum,
     [property: JsonPropertyName("retrievedAtUtc")] DateTimeOffset RetrievedAtUtc,
     [property: JsonPropertyName("freshness")] string Freshness,
@@ -394,7 +394,7 @@ public sealed record ScryfallCorpusMutationResult(
 /// Summarizes one immutable request snapshot without returning its raw payload.
 /// </summary>
 public sealed record ScryfallSnapshotSummary(
-    [property: JsonPropertyName("snapshotId")] Guid SnapshotId,
+    [property: JsonPropertyName("requestSnapshotId")] Guid SnapshotId,
     [property: JsonPropertyName("operation")] string Operation,
     [property: JsonPropertyName("retrievedAtUtc")] DateTimeOffset RetrievedAtUtc,
     [property: JsonPropertyName("checksum")] string Checksum,
@@ -422,7 +422,7 @@ public sealed record ScryfallSnapshotPage(
 /// Describes a verified snapshot deletion.
 /// </summary>
 public sealed record ScryfallSnapshotDeleteResult(
-    [property: JsonPropertyName("snapshotId")] Guid SnapshotId,
+    [property: JsonPropertyName("requestSnapshotId")] Guid SnapshotId,
     [property: JsonPropertyName("checksum")] string Checksum);
 
 /// <summary>

@@ -402,34 +402,34 @@ public sealed class ScryfallService : IDisposable
 
     /// <inheritdoc cref="ScryfallCardDataLifecycleOperations.SyncAsync"/>
     public Task<OperationResult<ScryfallCorpusSyncResult>> SyncCorpusAsync(
-        string metadataPolicy = "default",
+        string freshnessPolicy = "default",
         Guid? expectedActiveGeneration = null,
         CancellationToken cancellationToken = default)
     {
-        return cardData.SyncAsync(metadataPolicy, expectedActiveGeneration, cancellationToken);
+        return cardData.SyncAsync(freshnessPolicy, expectedActiveGeneration, cancellationToken);
     }
 
     /// <inheritdoc cref="ScryfallCardDataLifecycleOperations.RollbackAsync"/>
     public Task<OperationResult<ScryfallCorpusMutationResult>> RollbackCorpusAsync(
         Guid expectedActiveGeneration,
         Guid expectedPreviousGeneration,
-        bool acknowledgeActivationChange,
+        string? confirmation,
         CancellationToken cancellationToken = default)
     {
         return cardData.RollbackAsync(
             expectedActiveGeneration,
             expectedPreviousGeneration,
-            acknowledgeActivationChange,
+            confirmation,
             cancellationToken);
     }
 
     /// <inheritdoc cref="ScryfallCardDataLifecycleOperations.DeleteAsync"/>
     public Task<OperationResult<ScryfallCorpusMutationResult>> DeleteCorpusAsync(
         Guid expectedActiveGeneration,
-        bool acknowledgeDataLoss,
+        string? confirmation,
         CancellationToken cancellationToken = default)
     {
-        return cardData.DeleteAsync(expectedActiveGeneration, acknowledgeDataLoss, cancellationToken);
+        return cardData.DeleteAsync(expectedActiveGeneration, confirmation, cancellationToken);
     }
 
     /// <inheritdoc cref="ScryfallSnapshotOperations.ListAsync"/>
@@ -465,10 +465,10 @@ public sealed class ScryfallService : IDisposable
     public Task<OperationResult<ScryfallSnapshotDeleteResult>> DeleteSnapshotAsync(
         Guid snapshotId,
         string expectedChecksum,
-        bool acknowledgeDataLoss,
+        string? confirmation,
         CancellationToken cancellationToken = default)
     {
-        return snapshots.DeleteAsync(snapshotId, expectedChecksum, acknowledgeDataLoss, cancellationToken);
+        return snapshots.DeleteAsync(snapshotId, expectedChecksum, confirmation, cancellationToken);
     }
 
     /// <summary>
@@ -510,18 +510,19 @@ internal sealed class ScryfallCardDataLifecycleOperations
 
     /// <summary>Synchronizes the complete fixed card-data set atomically.</summary>
     internal async Task<OperationResult<ScryfallCorpusSyncResult>> SyncAsync(
-        string metadataPolicy, Guid? expectedActiveGeneration, CancellationToken cancellationToken)
+        string freshnessPolicy, Guid? expectedActiveGeneration, CancellationToken cancellationToken)
     {
         if (!cards.AllowLocalWrites)
         {
             return LocalWriteRequired<ScryfallCorpusSyncResult>();
         }
 
-        if (metadataPolicy is not ("default" or "refresh"))
+        if (freshnessPolicy is not ("default" or "refresh"))
         {
             return new OperationInvalidInput(
                 "invalid-freshness-policy",
-                "Corpus sync policy must be default or refresh.");
+                "freshnessPolicy must be default or refresh.",
+                "freshnessPolicy");
         }
 
         const string leaseKey = "corpus-sync";
@@ -544,7 +545,7 @@ internal sealed class ScryfallCardDataLifecycleOperations
             await cards.CardDataStore.RemoveAbandonedStagingGenerationsAsync(cancellationToken)
                 .ConfigureAwait(false);
             return await SyncUnderLeaseAsync(
-                metadataPolicy,
+                freshnessPolicy,
                 expectedActiveGeneration,
                 cancellationToken).ConfigureAwait(false);
         }
@@ -559,33 +560,33 @@ internal sealed class ScryfallCardDataLifecycleOperations
 
     /// <summary>Swaps active and previous complete generations under exact guards.</summary>
     internal Task<OperationResult<ScryfallCorpusMutationResult>> RollbackAsync(
-        Guid expectedActiveGeneration, Guid expectedPreviousGeneration, bool acknowledgeActivationChange,
+        Guid expectedActiveGeneration, Guid expectedPreviousGeneration, string? confirmation,
         CancellationToken cancellationToken)
     {
         return cards.AllowLocalWrites
             ? cards.CardDataStore.RollbackAsync(
                 expectedActiveGeneration,
                 expectedPreviousGeneration,
-                acknowledgeActivationChange,
+                confirmation,
                 cancellationToken)
             : Task.FromResult(LocalWriteRequired<ScryfallCorpusMutationResult>());
     }
 
     /// <summary>Deletes installed card-data generations under an exact active-generation guard.</summary>
     internal Task<OperationResult<ScryfallCorpusMutationResult>> DeleteAsync(
-        Guid expectedActiveGeneration, bool acknowledgeDataLoss, CancellationToken cancellationToken)
+        Guid expectedActiveGeneration, string? confirmation, CancellationToken cancellationToken)
     {
         return cards.AllowLocalWrites
             ? cards.CardDataStore.DeleteAsync(
                 expectedActiveGeneration,
-                acknowledgeDataLoss,
+                confirmation,
                 cancellationToken)
             : Task.FromResult(LocalWriteRequired<ScryfallCorpusMutationResult>());
     }
 
     /// <summary>Performs one complete synchronization while holding the cross-process lease.</summary>
     private async Task<OperationResult<ScryfallCorpusSyncResult>> SyncUnderLeaseAsync(
-        string metadataPolicy,
+        string freshnessPolicy,
         Guid? expectedActiveGeneration,
         CancellationToken cancellationToken)
     {
@@ -605,7 +606,7 @@ internal sealed class ScryfallCardDataLifecycleOperations
         }
 
         OperationResult<ScryfallBulkMetadataResult> metadataResult = await cards.GetBulkMetadataAsync(
-            metadataPolicy == "refresh" ? "refresh" : "default",
+            freshnessPolicy == "refresh" ? "refresh" : "default",
             cancellationToken).ConfigureAwait(false);
         if (metadataResult is not OperationSuccess<ScryfallBulkMetadataResult> metadata)
         {
@@ -762,7 +763,8 @@ internal sealed class ScryfallSnapshotOperations
             return Task.FromResult<OperationResult<ScryfallPage<ScryfallSnapshotSummary>>>(
                 new OperationInvalidInput(
                     "invalid-snapshot-time-range",
-                    "Snapshot retrieval bounds must be in chronological order."));
+                    "retrievedAfterUtc must not be later than retrievedBeforeUtc.",
+                    "retrievedAfterUtc"));
         }
 
         OperationInvalidInput? failure = ValidatePageSize(pageSize, includeRaw: false);
@@ -787,9 +789,9 @@ internal sealed class ScryfallSnapshotOperations
             : Task.FromResult<OperationResult<ScryfallSnapshotPage>>(failure);
     }
 
-    /// <summary>Deletes one immutable snapshot under checksum and acknowledgement guards.</summary>
+    /// <summary>Deletes one immutable snapshot under checksum and confirmation guards.</summary>
     internal Task<OperationResult<ScryfallSnapshotDeleteResult>> DeleteAsync(
-        Guid snapshotId, string expectedChecksum, bool acknowledgeDataLoss,
+        Guid snapshotId, string expectedChecksum, string? confirmation,
         CancellationToken cancellationToken)
     {
         if (!cards.AllowLocalWrites)
@@ -805,13 +807,14 @@ internal sealed class ScryfallSnapshotOperations
             return Task.FromResult<OperationResult<ScryfallSnapshotDeleteResult>>(
                 new OperationInvalidInput(
                     "invalid-snapshot-checksum",
-                    "Expected snapshot checksum cannot be blank."));
+                    "Expected snapshot checksum cannot be blank.",
+                    "expectedChecksum"));
         }
 
         return cards.SnapshotStore.DeleteAsync(
             snapshotId,
             expectedChecksum,
-            acknowledgeDataLoss,
+            confirmation,
             cancellationToken);
     }
 
