@@ -48,7 +48,10 @@ public sealed record ArchidektPushApplyRequest(
 /// <summary>
 /// Describes one exact folder creation without name-based inference.
 /// </summary>
-public sealed record ArchidektFolderCreateRequest(string Name, [property: FolderVisibilityValues] string Visibility, string? ParentFolderId = null);
+public sealed record ArchidektFolderCreateRequest(
+    string Name,
+    [property: FolderVisibilityValues] string Visibility,
+    string? ParentFolderId = null);
 
 /// <summary>
 /// Describes an allowlisted folder metadata update guarded by a fresh tree.

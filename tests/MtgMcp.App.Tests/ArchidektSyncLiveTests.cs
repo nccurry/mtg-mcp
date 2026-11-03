@@ -212,7 +212,7 @@ public sealed class ArchidektSyncLiveTests
         string deckName,
         CancellationToken cancellationToken)
     {
-        RemoteDeckPage page = Success(await service.ListDecksAsync(cancellationToken).ConfigureAwait(false));
+        RemoteDeckList page = Success(await service.ListDecksAsync(cancellationToken).ConfigureAwait(false));
         return page.Items
             .FirstOrDefault(value => string.Equals(value.Name, deckName, StringComparison.Ordinal))?.RemoteId;
     }

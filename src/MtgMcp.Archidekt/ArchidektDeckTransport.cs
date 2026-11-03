@@ -31,7 +31,7 @@ internal sealed class ArchidektDeckTransport
     /// <summary>
     /// Lists every deck the configured account owns.
     /// </summary>
-    internal async Task<RemoteDeckPage> ListAsync(
+    internal async Task<RemoteDeckList> ListAsync(
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
@@ -46,7 +46,7 @@ internal sealed class ArchidektDeckTransport
             budget,
             cancellationToken).ConfigureAwait(false);
         using JsonDocument document = ArchidektSession.ParseJson(response.Json);
-        return ArchidektDeckContractMapper.MapDeckPage(
+        return ArchidektDeckContractMapper.MapDeckList(
             document.RootElement,
             response.Json,
             response.RetrievedAtUtc,

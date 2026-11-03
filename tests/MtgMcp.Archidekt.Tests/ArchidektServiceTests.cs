@@ -21,7 +21,7 @@ public sealed class ArchidektServiceTests
         using ArchidektService service = CreateService(handler);
 
         ArchidektAuthStatus auth = Success(service.GetAuthStatus());
-        RemoteDeckPage page = Success(await service.ListDecksAsync(TestContext.Current.CancellationToken));
+        RemoteDeckList page = Success(await service.ListDecksAsync(TestContext.Current.CancellationToken));
 
         Assert.True(auth.CredentialsConfigured);
         Assert.False(auth.SessionAuthenticated);
@@ -64,7 +64,7 @@ public sealed class ArchidektServiceTests
         handler.Add(HttpMethod.Get, "api/decks/v3/?ownerUsername=user", ArchidektTestPayloads.DeckList);
         using ArchidektService service = CreateService(handler);
 
-        RemoteDeckPage page = Success(await service.ListDecksAsync(TestContext.Current.CancellationToken));
+        RemoteDeckList page = Success(await service.ListDecksAsync(TestContext.Current.CancellationToken));
 
         Assert.Single(page.Items);
         Assert.Equal(4, handler.Requests.Count);
@@ -109,6 +109,41 @@ public sealed class ArchidektServiceTests
     }
 
     /// <summary>
+    /// Verifies a destructive operation refuses an ID that is not numeric before it builds a confirmation phrase, so a
+    /// refusal never echoes the caller text.
+    /// </summary>
+    [Fact]
+    public async Task DestructiveOperations_RefuseANonNumericIdWithoutEchoingIt()
+    {
+        string id = new('x', 5000);
+        CancellationToken token = TestContext.Current.CancellationToken;
+        ArchidektTestHttpHandler handler = new();
+        AddLogin(handler);
+        using ArchidektService service = CreateService(handler);
+        ArchidektDeckDeleteRequest deck = new(id, "f", "delete deck " + id);
+        ArchidektFolderDeleteRequest folder = new(id, "n", "f", "delete folder " + id);
+        ArchidektSnapshotDeleteRequest snapshot = new("42", id, "c", "delete snapshot " + id);
+        ArchidektSnapshotRestoreApplyRequest restore = new("42", id, "c", "c", "r", "p", "restore snapshot " + id);
+        (OperationResult<ArchidektApplyResult> Result, string Path)[] refusals =
+        [
+            (await service.DeleteDeckAsync(deck, token), "remoteDeckId"),
+            (await service.DeleteFolderAsync(folder, token), "folderId"),
+            (await service.DeleteSnapshotAsync(snapshot, token), "snapshotId"),
+            (await service.ApplySnapshotRestoreAsync(restore, token), "snapshotId"),
+        ];
+
+        foreach ((OperationResult<ArchidektApplyResult> result, string path) in refusals)
+        {
+            OperationInvalidInput invalid = Assert.IsType<OperationInvalidInput>(result.Value);
+            Assert.Equal("invalid-id", invalid.ReasonCode);
+            Assert.Equal(path, invalid.Path);
+            Assert.DoesNotContain("xxxx", invalid.Message, StringComparison.Ordinal);
+        }
+
+        Assert.Empty(handler.Requests);
+    }
+
+    /// <summary>
     /// Verifies a 403 response stops immediately with a sanitized availability outcome.
     /// </summary>
     [Theory]
@@ -125,7 +160,7 @@ public sealed class ArchidektServiceTests
             statusCode == 429 ? "5" : null);
         using ArchidektService service = CreateService(handler);
 
-        OperationResult<RemoteDeckPage> result = await service.ListDecksAsync(TestContext.Current.CancellationToken);
+        OperationResult<RemoteDeckList> result = await service.ListDecksAsync(TestContext.Current.CancellationToken);
 
         OperationUnavailable unavailable = Assert.IsType<OperationUnavailable>(result.Value);
         Assert.Equal(reasonCode, unavailable.ReasonCode);
@@ -642,7 +677,7 @@ public sealed class ArchidektServiceTests
         AddLogin(handler);
         using ArchidektService service = CreateService(handler, maximumRequestsPerOperation: 1);
 
-        OperationResult<RemoteDeckPage> result = await service.ListDecksAsync(TestContext.Current.CancellationToken);
+        OperationResult<RemoteDeckList> result = await service.ListDecksAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal("request-limit-exceeded", Assert.IsType<OperationUnsupported>(result.Value).ReasonCode);
         Assert.Single(handler.Requests);
@@ -729,10 +764,9 @@ public sealed class ArchidektServiceTests
         handler.Add(HttpMethod.Get, "api/decks/v3/?ownerUsername=user", collection);
         using ArchidektService service = CreateService(handler);
 
-        RemoteDeckPage page = Success(await service.ListDecksAsync(TestContext.Current.CancellationToken));
+        RemoteDeckList page = Success(await service.ListDecksAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal(["Alpha", "Beta"], page.Items.Select(value => value.Name));
-        Assert.Null(page.NextCursor);
     }
 
     /// <summary>

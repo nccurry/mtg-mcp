@@ -126,9 +126,10 @@ internal sealed class ArchidektDeckOperations
     }
 
     /// <summary>
-    /// Lists every deck the configured account owns.
+    /// Lists every deck the configured account owns. The provider returns every owned deck in one response, so the
+    /// delete check can treat a missing ID as a missing deck.
     /// </summary>
-    internal Task<OperationResult<RemoteDeckPage>> ListAsync(
+    internal Task<OperationResult<RemoteDeckList>> ListAsync(
         CancellationToken cancellationToken)
     {
         return ArchidektOperationResults.ExecuteAsync(
@@ -139,7 +140,7 @@ internal sealed class ArchidektDeckOperations
     /// <summary>
     /// Lists every owned deck under a caller-owned composed-operation budget.
     /// </summary>
-    internal Task<OperationResult<RemoteDeckPage>> ListAsync(
+    internal Task<OperationResult<RemoteDeckList>> ListAsync(
         ArchidektOperationScope operationScope,
         CancellationToken cancellationToken)
     {
@@ -222,7 +223,8 @@ internal sealed class ArchidektDeckOperations
                     request.Confirmation,
                     "delete",
                     "deck",
-                    request.RemoteDeckId);
+                    request.RemoteDeckId,
+                    "remoteDeckId");
                 RemoteDeckSnapshot current = await transport.GetAsync(
                     request.RemoteDeckId,
                     requireAuthentication: true,
@@ -984,7 +986,7 @@ internal sealed class ArchidektDeckOperations
         ArchidektOperationBudget budget,
         CancellationToken cancellationToken)
     {
-        RemoteDeckPage page = await transport.ListAsync(budget, cancellationToken).ConfigureAwait(false);
+        RemoteDeckList page = await transport.ListAsync(budget, cancellationToken).ConfigureAwait(false);
         return page.Items.Any(value => string.Equals(value.RemoteId, deckId, StringComparison.Ordinal));
     }
 

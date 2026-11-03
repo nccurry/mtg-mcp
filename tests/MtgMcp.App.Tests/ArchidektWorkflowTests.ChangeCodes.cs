@@ -104,7 +104,8 @@ public sealed partial class ArchidektWorkflowTests
             local.Revision,
             [.. local.Entries.Select(value => new UpdateDeckEntryChange(value with { Quantity = value.Quantity + 1 }))],
             token));
-        ArchidektSyncDiffView first = Success(await world.Reads.DiffAsync(localDeckId, pageSize: 10, cancellationToken: token));
+        ArchidektSyncDiffView first = Success(
+            await world.Reads.DiffAsync(localDeckId, pageSize: 10, cancellationToken: token));
         string cursor = first.NextCursor!;
 
         ArchidektSyncDiffView second = Success(await world.Reads.DiffAsync(

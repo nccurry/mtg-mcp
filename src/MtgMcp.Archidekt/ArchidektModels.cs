@@ -144,15 +144,14 @@ public sealed record RemoteDeckSnapshot(
 }
 
 /// <summary>
-/// Carries a canonically ordered page of remote deck summaries.
+/// Carries every deck the account owns, as summaries in canonical order.
 /// </summary>
-public sealed record RemoteDeckPage(
+public sealed record RemoteDeckList(
     IReadOnlyList<RemoteDeckSummary> Items,
-    string? NextCursor,
     ArchidektRetrievalEvidence Evidence)
 {
     /// <summary>
-    /// Gets the immutable page items.
+    /// Gets the immutable deck summaries.
     /// </summary>
     public IReadOnlyList<RemoteDeckSummary> Items { get; init; } =
         Array.AsReadOnly(Items.ToArray());

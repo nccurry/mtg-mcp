@@ -87,9 +87,26 @@ internal static class ArchidektOperationResults
 
     /// <summary>
     /// Requires an exact non-case-folded confirmation phrase, and refuses with the phrase to pass when it differs.
+    /// An ID that is not numeric is refused first, so a refusal never echoes arbitrary caller text.
     /// </summary>
-    internal static void RequireConfirmation(string actual, string action, string targetKind, string id)
+    internal static void RequireConfirmation(
+        string actual,
+        string action,
+        string targetKind,
+        string id,
+        string idPath)
     {
+        if (id.Length == 0 || !id.All(char.IsAsciiDigit))
+        {
+            throw new ArchidektProviderException(
+                ArchidektFailureKind.InvalidInput,
+                "invalid-id",
+                "The Archidekt ID must be numeric.")
+            {
+                Path = idPath,
+            };
+        }
+
         if (Confirmation.Check(actual, Confirmation.Phrase(action, targetKind, id)) is { } refused)
         {
             throw new ArchidektProviderException(

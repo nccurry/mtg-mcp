@@ -89,7 +89,7 @@ public sealed class ArchidektRecordedTests
     /// </summary>
     private static void AssertDeckList(JsonElement root, RecordedEntry entry)
     {
-        RemoteDeckPage page = ArchidektDeckContractMapper.MapDeckPage(root, entry.ReadText(), DateTimeOffset.UnixEpoch, entry.Route);
+        RemoteDeckList page = ArchidektDeckContractMapper.MapDeckList(root, entry.ReadText(), DateTimeOffset.UnixEpoch, entry.Route);
 
         JsonElement results = root.GetProperty("results");
         Assert.Equal(results.GetArrayLength(), page.Items.Count);

@@ -42,11 +42,33 @@ public sealed class ArchidektToolContractTests
     /// confirmation argument, before any provider read, for every destructive Archidekt operation.
     /// </summary>
     [Theory]
-    [InlineData("archidekt_deck_delete", """{"remoteDeckId":"42","expectedRemoteFingerprint":"f","confirmation":"delete 42"}""", "delete deck 42")]
-    [InlineData("archidekt_folder_delete", """{"folderId":"9","expectedName":"n","expectedTreeFingerprint":"f","confirmation":"yes"}""", "delete folder 9")]
-    [InlineData("archidekt_snapshot_delete", """{"remoteDeckId":"42","snapshotId":"77","expectedChecksum":"c","confirmation":"delete 77"}""", "delete snapshot 77")]
-    [InlineData("archidekt_snapshot_restore_apply", """{"remoteDeckId":"42","snapshotId":"77","expectedSnapshotChecksum":"c","expectedSnapshotContentFingerprint":"c","expectedRemoteFingerprint":"r","previewFingerprint":"p","confirmation":"restore 77"}""", "restore snapshot 77")]
-    [InlineData("archidekt_pull_apply", """{"remoteDeckId":"42","localDeckId":"6f1c7a0e-52a6-4f5c-b0a4-0f3d5b8f2a11","expectedRevision":1,"expectedRemoteFingerprint":"r","previewFingerprint":"p","discardLocalChanges":true}""", "discard local changes 6f1c7a0e-52a6-4f5c-b0a4-0f3d5b8f2a11")]
+    [InlineData(
+        "archidekt_deck_delete",
+        """{"remoteDeckId":"42","expectedRemoteFingerprint":"f",""" +
+        "\"confirmation\":\"delete 42\"}",
+        "delete deck 42")]
+    [InlineData(
+        "archidekt_folder_delete",
+        """{"folderId":"9","expectedName":"n","expectedTreeFingerprint":"f",""" +
+        "\"confirmation\":\"yes\"}",
+        "delete folder 9")]
+    [InlineData(
+        "archidekt_snapshot_delete",
+        """{"remoteDeckId":"42","snapshotId":"77","expectedChecksum":"c",""" +
+        "\"confirmation\":\"delete 77\"}",
+        "delete snapshot 77")]
+    [InlineData(
+        "archidekt_snapshot_restore_apply",
+        """{"remoteDeckId":"42","snapshotId":"77","expectedSnapshotChecksum":"c",""" +
+        "\"expectedSnapshotContentFingerprint\":\"c\",\"expectedRemoteFingerprint\":\"r\"," +
+        "\"previewFingerprint\":\"p\",\"confirmation\":\"restore 77\"}",
+        "restore snapshot 77")]
+    [InlineData(
+        "archidekt_pull_apply",
+        """{"remoteDeckId":"42","localDeckId":"6f1c7a0e-52a6-4f5c-b0a4-0f3d5b8f2a11",""" +
+        "\"expectedRevision\":1,\"expectedRemoteFingerprint\":\"r\",\"previewFingerprint\":\"p\"," +
+        "\"discardLocalChanges\":true}",
+        "discard local changes 6f1c7a0e-52a6-4f5c-b0a4-0f3d5b8f2a11")]
     public async Task DestructiveOperations_RefuseAWrongConfirmationWithTheExactPhrase(
         string tool,
         string arguments,

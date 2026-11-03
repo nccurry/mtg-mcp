@@ -88,7 +88,8 @@ public sealed class ArchidektDeckReadTests
     }
 
     /// <summary>
-    /// Verifies an unknown response format, including full, which Archidekt does not offer, and an unknown zone are refused with the argument that is wrong.
+    /// Verifies an unknown response format, including full, which Archidekt does not offer, and an unknown zone are
+    /// refused with the argument that is wrong.
     /// </summary>
     [Fact]
     public async Task UnknownFormatOrZone_IsRefusedWithTheArgument()

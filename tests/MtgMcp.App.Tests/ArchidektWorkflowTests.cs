@@ -640,7 +640,8 @@ public sealed partial class ArchidektWorkflowTests
     }
 
     /// <summary>
-    /// Verifies a cursor that is not one the server wrote is refused, and a deck whose unknown fields are huge still fits.
+    /// Verifies a cursor that is not one the server wrote is refused, and a deck whose unknown fields are huge still
+    /// fits.
     /// </summary>
     [Fact]
     public void DeckGet_BadCursorAndHugeExtensions_AreHandled()
@@ -768,7 +769,8 @@ public sealed partial class ArchidektWorkflowTests
         Guid localDeckId = await world.PullAsync();
 
         ArchidektDeckView whole = Success(await world.Reads.GetDeckAsync("42", cancellationToken: token));
-        ArchidektDeckView firstOfTwo = Success(await world.Reads.GetDeckAsync("42", pageSize: 2, cancellationToken: token));
+        ArchidektDeckView firstOfTwo = Success(
+            await world.Reads.GetDeckAsync("42", pageSize: 2, cancellationToken: token));
         ArchidektDeckView secondOfTwo = Success(await world.Reads.GetDeckAsync(
             "42",
             firstOfTwo.NextCursor,
@@ -794,7 +796,9 @@ public sealed partial class ArchidektWorkflowTests
         Assert.Equal(2, firstOfTwo.Entries.Count);
         Assert.Equal(2, secondOfTwo.Entries.Count);
         Assert.Null(secondOfTwo.NextCursor);
-        Assert.Equal(whole.Entries.Select(value => value.CardName), firstOfTwo.Entries.Concat(secondOfTwo.Entries).Select(value => value.CardName));
+        Assert.Equal(
+            whole.Entries.Select(value => value.CardName),
+            firstOfTwo.Entries.Concat(secondOfTwo.Entries).Select(value => value.CardName));
         Assert.Equal("cursor", Assert.IsType<OperationInvalidInput>(otherSize.Value).Path);
         Assert.Empty(preview.Operations);
         Assert.Null(preview.NextCursor);
