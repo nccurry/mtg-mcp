@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Reflection;
+using MtgMcp.App.Archidekt;
 using MtgMcp.App.Decks;
 using MtgMcp.App.Hosting;
 using MtgMcp.App.Scryfall;
@@ -32,6 +33,8 @@ public sealed class ToolAllowedValuesTests
                     "freshnessPolicy" => typeof(FreshnessPolicyValuesAttribute),
                     "formatId" => typeof(InterchangeFormatValuesAttribute),
                     "tagType" => typeof(TagKindValuesAttribute),
+                    "responseFormat" when toolName.StartsWith("archidekt_", StringComparison.Ordinal) =>
+                        typeof(ArchidektResponseFormatValuesAttribute),
                     "responseFormat" => typeof(ResponseFormatValuesAttribute),
                     _ => null,
                 };

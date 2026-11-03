@@ -386,7 +386,8 @@ internal static class ArchidektResultPaging
             NextCursor = slice.More ? PageCursor.Encode(new PageCursorPosition(slice.Next), binding) : null,
             Narrow = slice.More
                 ? $"Differences {offset + 1} to {slice.Next} of {diff.Differences.Count} are shown. Call " +
-                    "archidekt_sync_diff again with cursor set to nextCursor and the same other arguments for the rest."
+                    "archidekt_sync_diff again with cursor set to nextCursor and the same other arguments" +
+                    (format == ArchidektResponseFormat.Concise ? ", including responseFormat \"concise\"." : ".")
                 : null,
         });
     }
