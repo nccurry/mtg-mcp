@@ -43,11 +43,13 @@ page (`nameTruncated`), and the description to 8,000 UTF-8 bytes on the first pa
 `descriptionLength`), so a long description cannot push every page over the limit.
 
 Every paged result follows one cursor rule: pass `nextCursor` as `cursor` with the same other arguments and the same
-`pageSize`-bounded request; `nextCursor` is null on the last page. The cursor is opaque. It holds the position (one
-position for each list, so a result with two lists, such as operations and differences, still has one `nextCursor`)
-and binds what the page depends on: the request, the local deck revision, the preview fingerprint, the Archidekt
-fingerprint, or the export artifact and its checksum. A cursor whose data changed since the first page is refused
-with `cursor-stale` and the current state in `current`; a malformed, edited, or foreign cursor is refused with
+`pageSize`-bounded request; `nextCursor` is null on the last page. The cursor is opaque. It records the position (one
+position for each list, so a result with two lists, such as operations and differences, still has one `nextCursor`;
+a two-list preview shows all operations before any differences) and what the page depends on: the request, the local
+deck revision, the preview fingerprint, the Archidekt fingerprint, or the export artifact and its checksum. The
+cursor is tied to that state. Its checksum detects accidental edits only, and every reader bounds the position
+again, so a forged position is `invalid-cursor`. A cursor whose data changed since the first page is refused
+with `cursor-stale` and the current state in `current`; a malformed, edited, out-of-range, or foreign cursor is refused with
 `invalid-cursor` and `path` `cursor`. A page size outside the tool's range is `invalid-page-size` with `path`
 `pageSize`. The paged previews therefore take no fingerprint argument on later pages. See
 [MCP surface](architecture/mcp-surface.md#paging).
@@ -105,10 +107,10 @@ get smaller pages (a smaller `pageSize`, or fewer `fields` when the page has car
 `concise` (`entryId`, `cardName`, `quantity`, `zone`, and `categoryNames` only). With `include`, concise entries still add
 `cardData`, `card`, and `tags`. `cardNames` (1 to 100 names) returns only the matching entries and lists the names with
 no match in `cardNamesNotFound`. `totalEntries` and `nextCursor` count the matching entries; `entryCount`,
-`cardCount`, and `cardsByZone` always cover the whole deck. The cursor binds `cardNames`
+`cardCount`, and `cardsByZone` always cover the whole deck. The cursor is tied to `cardNames`
 and `responseFormat` along with `include` and `fields`, so a cursor with a changed filter or format is refused.
 
-`zones` and `categoryNames` filter the same way and join the cursor binding (`DeckCardViewCoordinator`):
+`zones` and `categoryNames` filter the same way and are tied into the cursor too (`DeckCardViewCoordinator`):
 
 - `zones` takes zone codes (`commander`, `main`, `sideboard`, `maybeboard`). Any non-empty code is accepted; a code that matches no
   entry is listed in `zonesNotFound`. An empty list or a blank code is refused as `invalid-zones`.

@@ -63,7 +63,7 @@ confirmation, policy, and generation guard. The owner decided on 2026-11-02 to t
 release and not to ship a deprecation release first. The tool names, tool count, annotations, and operation-mode
 visibility do not change.
 
-An old argument name is refused with `invalid-input`, `path` set to that name, and "Property is not accepted here." An
+An old argument name is refused with `invalid-input`, `path` set to that name, and "Property '<name>' is not accepted here." An
 old result field or reason code is never returned. The changelog lists every old name beside its replacement under
 "Breaking", and [MCP surface](architecture/mcp-surface.md) states the new rules. The owner approved this clean break for
 that program only. Changes after it follow the ordinary policy.

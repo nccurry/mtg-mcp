@@ -366,11 +366,11 @@ Results are cut to fit the client; see [Output control](docs/output-control.md).
 result of more than 50,000 characters to a file, so the server aims for 40,000 UTF-8 bytes.
 Every paged tool takes `cursor` and `pageSize` and returns `nextCursor`, which is null on the last page; pass
 `nextCursor` back as `cursor` with the same other arguments. A cursor whose data changed since the first page is
-refused with `cursor-stale`, and a cursor that is malformed or belongs to another request with `invalid-cursor`. Read
+refused with `cursor-stale`, and a cursor that is malformed, out of range, or belongs to another request with `invalid-cursor`. Read
 every page before you decide what a result holds. Each sets `truncated` and `narrow` when it left rows out.
 `local_deck_identity_reconcile_preview`, `local_deck_import_preview`, and `local_deck_category_rules_preview` return
 `previewFingerprint` and, for the identity and category previews, an apply token; both cover the whole preview, so the
-apply tool takes the guards of any page and still applies everything. The cursor binds the preview, so a preview that
+apply tool takes the guards of any page and still applies everything. The cursor is tied to the preview, so a preview that
 changed in between is refused with `cursor-stale` and the current `previewFingerprint`. The first page of the
 import preview also carries the diagnostics, unresolved identities, categories, and provider bindings, each cut to
 fit with its exact count beside it; the saved synchronization snapshots of a native file are counted, not returned.
@@ -415,7 +415,9 @@ is 24 hours. Immutable snapshots do not expire.
 
 `scryfall_cards_get` accepts 150 ordered lookups (pass one to read one card). It uses local card-data
 hits first, deduplicates provider misses, and sends provider batches of at most
-75. Results use stable cursor pagination.
+75. Results use stable cursor pagination: a later page is read from local data with no provider call, a card-data
+sync or a deleted request snapshot between pages gives `cursor-stale`, and later pages must send the same
+`freshnessPolicy` as the first.
 
 The card tools `scryfall_search`, `scryfall_cards_get`, and
 `scryfall_installed_cards_by_tag` take `responseFormat`:
@@ -471,8 +473,8 @@ minutes.
 
 `spellbook_variant_search` and `spellbook_deck_combos_find` page with `pageSize` (1 through 25, default 20) and
 `cursor`, and return `{ source, nextCursor, truncated }` (combos also return `deck`). The cursor ends at the source's
-offset cap of 1,000. A combos page cut to the result size limit has no `nextCursor`; repeat the call with a smaller
-`pageSize`.
+offset cap of 1,000. A combos page cut to the result size limit has no `nextCursor` (Spellbook's offset counts combos,
+not the grouped rows shown); repeat the call with a smaller `pageSize`.
 
 ## Work with card lists and deck rule facts
 
@@ -750,7 +752,7 @@ conflicts) and page their operations and then their differences (`pageSize` up t
 the preview fingerprint cover the whole preview, so the apply tool needs no page. `archidekt_sync_diff`,
 `archidekt_snapshot_restore_preview`, `archidekt_folders_get`, `archidekt_deck_list`, and `archidekt_snapshots_get`
 with `kind` `get` (over the saved deck) page the same way. When `truncated` is true, call again with `nextCursor`
-and the same other arguments. The cursor binds the deck, the preview, or the folder tree it read, so a deck that
+and the same other arguments. The cursor is tied to the deck, the preview, or the folder tree it read, so a deck that
 changed in between is refused with `cursor-stale` instead of paged out of line.
 `archidekt_deck_get` leaves out unknown provider fields over 8,000 bytes and sets
 `extensionsOmitted`; they cannot be read through this tool.
@@ -947,7 +949,8 @@ public API provides no cleanup operation.
 
 `playgroup_playgroup_games_list` pages with `pageSize` (1 through 100, default 10) and `cursor`, and returns
 `{ source, nextCursor, truncated }`. Playgroup reports no total, so `nextCursor` follows every full page: when the game
-count is an exact multiple of `pageSize`, the last page is empty. `playgroup_deck_get` and
+count is an exact multiple of `pageSize`, the last page is empty. A cursor inside a page cut to the result size limit
+is tied to that page, so a changed page is `cursor-stale`. `playgroup_deck_get` and
 `playgroup_deck_elo_history_get` take `playgroupDeckId`, and `playgroup_live_session_create` takes flat arguments.
 
 ## Start a workflow with a prompt
@@ -999,7 +1002,9 @@ A call whose arguments cannot be read returns `kind: "invalid-input"`, reason
 `invalid-arguments`, and a top-level `path` to the rejected value, for example
 `changes[0].entryDraft.quantity`. The message names the expected type in plain words ("The value at
 'changes[3].entry.sortOrder' must be an integer."; "... must be a UUID"). A wrong confirmation phrase on a
-destructive tool (`confirmation-required`, `path` `confirmation`) shows the exact phrase to pass. The phrases are
+destructive tool (`confirmation-required`, `path` `confirmation`) always says `confirmation must be exactly "<phrase>".`
+An Archidekt ID that is not numeric on a destructive tool is `invalid-id`, with the ID argument as `path`. A Commander
+Spellbook or Playgroup `400` is `invalid-input` with the `path` of the argument that carried the rejected value. The phrases are
 `delete deck <deckId>`, `restore backup <backupId>`, and `delete backup <backupId>` (local); `delete deck <remoteDeckId>`,
 `delete folder <folderId>`, `delete snapshot <snapshotId>`, `restore snapshot <snapshotId>`, and
 `discard local changes <localDeckId>` (Archidekt); and `delete card-data <expectedActiveGeneration>`,

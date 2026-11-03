@@ -26,7 +26,7 @@ status log.
 - [Code style](docs/architecture/code-style.md): Where the C# and test rules live.
 - [Adapters](docs/adapters.md): Scryfall, Archidekt, Playgroup, Spellbook, and Moxfield boundaries.
 - [Toolsets](docs/toolsets.md): Tool-group selection, credential gating, operation modes, common profiles, and the workflow prompts.
-- [Output control](docs/output-control.md): Card response formats (`concise`, `standard`, `full`), the 40,000-byte result size limit, and the historical `detailLevel` levels.
+- [Output control](docs/output-control.md): Card response formats (`concise`, `standard`, `full`), the 40,000-byte result size limit, Archidekt response formats and paging, and the historical `detailLevel` levels.
 - [Heuristic models](docs/heuristic-models.md): Constraints for experimental work outside the stable surface.
 - [Versioning](docs/versioning.md): How versions and public changes are handled.
 

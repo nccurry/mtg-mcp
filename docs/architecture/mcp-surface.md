@@ -88,7 +88,7 @@ pass-through names and values. Both are empty today.
   - The preview fingerprint is `previewFingerprint`, in every preview result and every apply argument. The
     `fingerprint` that `card_list_query` and `card_lists_compare` return identifies the analyzed list, not a
     preview, and keeps its name.
-  - `ToolNamingRuleTests` (`ToolNamingRuleTests.SurfaceTargets.cs`) checks each of these names.
+  - `ToolNamingRuleTests` (`ToolNamingRuleTests.Surface.cs`) checks each of these names.
 - Write tools take flat arguments, including every Archidekt write tool and `playgroup_live_session_create`; there
   is no wrapper object, and an error `path` is the bare argument name. An argument stays an object, or a list of
   objects, only where its body is a document. The allowlist is `local_deck_create` (the deck graph, `request`),
@@ -123,9 +123,11 @@ pass-through names and values. Both are empty today.
   `message`. A message is sanitized and never holds a credential or a local secret path.
 - Every invalid-input result names one argument in `path`. A reason that covers several arguments carries the exact
   path of the one at fault, and a lower layer that cannot know the argument name leaves the wrapper of the tool to set
-  it (`SurfaceConsistencyTargetTests.EveryInvalidInputResult_NamesItsPath`,
+  it (`SurfaceConsistencyTests.EveryInvalidInputResult_NamesItsPath`,
   `tests/MtgMcp.App.Tests/InvalidInputPathAuditTests.cs`). A wrong confirmation phrase has `path` `confirmation`. A
-  bad cursor has `path` `cursor`, and a bad page size has `path` `pageSize`.
+  bad cursor has `path` `cursor`, and a bad page size has `path` `pageSize`. A provider `400` from Commander Spellbook
+  (`source-request-rejected`) or a `400` or `422` from Playgroup (`provider-request-rejected`) is `invalid-input` with
+  the path of the tool argument that carried the rejected value (`sourceQuery`, `events`, and so on), not `unavailable`.
 - A tool refuses a change of state with one of three codes, named in `src/MtgMcp.Core/Results/SharedReasonCodes.cs`.
   All three are conflicts that carry `current`, so the caller can read again and retry:
   - `stale-deck-revision`: a tool was given an `expectedRevision` and the local deck has another revision.
@@ -151,8 +153,10 @@ pass-through names and values. Both are empty today.
     (`ArchidektCoordinator.DescribeOtherDiscardValueAsync`).
   - `push-removals-unconfirmed`: a push removes too many entries and `confirmRemovals` is missing or wrong; the message
     names the option and the count.
-  - `confirmation-required`: a tool got a missing or wrong `confirmation`; the message shows the exact phrase, and
-    `path` is `confirmation` (see Confirmation phrases).
+  - `confirmation-required`: a tool got a missing or wrong `confirmation`; the message is always
+    `confirmation must be exactly "<phrase>".`, and `path` is `confirmation` (see Confirmation phrases).
+  - `invalid-id`: an Archidekt destructive operation got an ID that is not numeric. It is checked before the
+    confirmation phrase, so a refusal never echoes arbitrary caller text, and `path` is the ID argument.
   - `entry-zone-contradicts-category`: names each local entry ID and both `patch-entries` fixes (see
     [Deck model](deck-model.md)).
   - `request-limit-exceeded` (an `unsupported` result, since no argument is at fault): names the limit, the predicted
@@ -160,7 +164,7 @@ pass-through names and values. Both are empty today.
     first.
   - `invalid-zones`, `invalid-category-names`, and `invalid-card-names`: bad `local_deck_get` filters; each carries the
     `path` of the bad value.
-  - `invalid-cursor`, `invalid-page-size`, `invalid-page-offset`, and `invalid-page`: see Paging.
+  - `invalid-cursor` and `invalid-page-size`: see Paging.
   - `invalid-deck-change`: a `patch-entries` change, or a `remove-entry` with both or neither of `entryId` and
     `entryIds`, is refused, and nothing is written.
 - `operation-mode-denied` (an `unsupported` result) is returned by a write tool called in a mode that does not
@@ -170,11 +174,11 @@ pass-through names and values. Both are empty today.
 
 One form pages every tool: `cursor` and `pageSize` in, `nextCursor` out. `nextCursor` is null on the last page. No tool
 takes any other paging argument, such as an offset, a limit, a page number, or a fingerprint for a later page, and no
-tool returns any other next-position field. `SurfaceConsistencyTargetTests` (`PagedTools_TakeOnlyCursorAndPageSize`,
+tool returns any other next-position field. `SurfaceConsistencyTests` (`PagedTools_TakeOnlyCursorAndPageSize`,
 `PagedTools_ReturnNextCursorAndNoOtherNextPosition`) fails on any other form, and `ToolPagingTests` and the
 per-family paging tests cover the next page, the last page, and a stale cursor.
 
-| Tool | `pageSize` (default, most) | Cursor binds |
+| Tool | `pageSize` (default, most) | Cursor is tied to |
 | --- | --- | --- |
 | `local_deck_list` | 50, 100 | the deck list (a deck created, edited, or deleted between pages makes it stale) |
 | `local_deck_get` | 25 with `include`, otherwise the whole deck when it fits, 100 | the deck revision and the request |
@@ -191,9 +195,15 @@ per-family paging tests cover the next page, the last page, and a stale cursor.
 
 Rules that hold for every paged tool:
 
-- The cursor is opaque server data, not a provider token. It holds one position, or two for a result of two lists
-  (operations, then differences), and binds what the page depends on. `PageCursor` and `PageCursorBinding`
-  (`src/MtgMcp.App/Hosting/PageCursor.cs`) encode and check it.
+- The cursor is opaque server data, not a provider token. It records a position and what the page depends on, such as
+  the request arguments, the deck revision, or a checksum of the data. A cursor is "tied to" that state: it is accepted
+  only for the same request, and refused as stale when the data changed. One codec in Core writes and reads every
+  cursor (`PageCursor`, `PageCursorBinding`, and `PageCursorPosition` in `src/MtgMcp.Core/Paging/`), and every Scryfall
+  cursor uses it. A position has one of three shapes: `Offset` (one row offset), `TwoOffsets` (one offset into each of
+  two lists), and `ProviderPage` (a provider page number and the rows of it already shown). The checksum inside a
+  cursor detects accidental edits and cuts only, since anyone can compute it. Every reader bounds the position
+  against the data it pages, so a forged cursor can only point inside data the caller may read, and a position outside
+  it is `invalid-cursor`.
 - A cursor is read with the same other arguments that made it. A cursor that is malformed, edited, too long, of another
   version, or issued for another request is refused with `invalid-input`, reason `invalid-cursor`, `path` `cursor`.
   A cursor for this request whose data changed after the first page is refused with the conflict `cursor-stale`;
@@ -201,7 +211,8 @@ Rules that hold for every paged tool:
 - `pageSize` outside the tool's range is `invalid-page-size` with `path` `pageSize`.
 - `pageSize` is a maximum. A page also stops at the result size limit, sets `truncated` and `narrow`, and its
   `nextCursor` continues without skipping a row.
-- A preview pages with one cursor over all its lists, so a later page needs no fingerprint. The apply tool takes no
+- A preview pages with one cursor over all its lists, so a later page needs no fingerprint. A two-list preview shows
+  all of its operations before any of its differences. The apply tool takes no
   page, because the fingerprint covers the whole preview. `local_deck_import_preview` still takes `content` on every
   call, because the server stores no import.
 - `scryfall_card_details` has one `nextCursor` for every section asked for in `include`. A section with no more
@@ -215,13 +226,27 @@ Special cases:
   and the tool descriptions say so. `spellbook_variant_search` and `spellbook_deck_combos_find` return
   `{ source, nextCursor, truncated }` (combos also return `deck`). A search page cut to the result size limit sets
   `truncated` and continues after the last row shown. A combos page cut to the limit sets `truncated` and has no
-  `nextCursor`; repeat the call with a smaller `pageSize`. A bad offset in a cursor is `invalid-page-offset`.
+  `nextCursor`; repeat the call with a smaller `pageSize`. This is an accepted deviation: Spellbook's offset counts
+  combos, not the grouped rows a page shows, so no position can name the next row. A source offset in a cursor past
+  the cap is `invalid-cursor`.
 - **Playgroup.** Playgroup reports no total, so `playgroup_playgroup_games_list` returns `{ source, nextCursor, truncated }`
   with `nextCursor` after every full page. When the game count is an exact multiple of `pageSize`, the last page is
-  empty. A page shorter than `pageSize` has a null `nextCursor`. A page number below 1 in a cursor is `invalid-page`.
+  empty. A page shorter than `pageSize` has a null `nextCursor`. A cursor inside a page that was cut to the result size
+  limit is tied to the checksum of that page, so a page that changed gives `cursor-stale`; a cursor at the start of a
+  provider page is not, because no page was read yet. A bad page position is `invalid-cursor`.
 - **Export chunks.** `local_deck_export_bundle` counts `pageSize` and positions in UTF-16 code units of the artifact
-  text and never splits a surrogate pair. The cursor binds the artifact and its checksum, so a deck edited between
+  text and never splits a surrogate pair. The cursor is tied to the artifact and its checksum, so a deck edited between
   chunks gives `cursor-stale`. The chunks joined in order are the exact file.
+- **Scryfall collection.** `scryfall_cards_get` continues a later page from local data and makes no provider call. If a
+  card-data sync or a deleted request snapshot changed the result between pages, the cursor is `cursor-stale`. Send
+  the same `freshnessPolicy` on every page of one read.
+
+Accepted deviations from the one form (recorded in the surface-consistency plan):
+
+- `spellbook_deck_combos_find` returns no `nextCursor` after a size cut (see Commander Spellbook above).
+- `local_deck_import_create.options` and `local_deck_category_rules_apply.source` stay objects, because each is a
+  document (import options, a rule set).
+- Scryfall list results nest `nextCursor` inside their page object; `scryfall_card_details` puts it at the top level.
 
 ## Preview and apply pairs
 
@@ -257,8 +282,10 @@ state is refused instead of applied.
 ## Confirmation phrases
 
 An operation that destroys or replaces data takes `confirmation`, an exact phrase that names the action and the
-target: `<action> <target kind> <id>`. The phrase binds the target, so a caller cannot confirm the wrong one. A missing
-or wrong phrase is refused with `confirmation-required`, `path` `confirmation`, and a message that shows the phrase.
+target: `<action> <target kind> <id>`. The phrase names the target, so a caller cannot confirm the wrong one. A missing
+or wrong phrase is refused with `confirmation-required`, `path` `confirmation`, and the one message
+`confirmation must be exactly "<phrase>".` A caller's ID is shown up to 64 characters
+(`src/MtgMcp.Core/Results/Confirmation.cs`).
 No tool takes a yes-or-no flag in place of the phrase. `ToolNamingRuleTests.DestructiveOperations_TakeAConfirmationPhrase_AndNoAcknowledgeBooleans`
 holds the list.
 
@@ -323,7 +350,7 @@ See [Output control](../output-control.md).
 - `ToolInputDescriptionTests`: descriptions on nested input fields.
 - `ToolOutputSchemaTests`: the shared output schema.
 - `ToolResultBudgetTests`: the result size limit and paging.
-- `SurfaceConsistencyTargetTests`: the one paging form and a `path` on every invalid-input result.
+- `SurfaceConsistencyTests`: the one paging form and a `path` on every invalid-input result.
 - `ToolAllowedValuesTests`: the `responseFormat` values of each tool.
 - `tests/MtgMcp.Architecture.Tests/RemovedReasonCodeTests.cs`: no removed reason code in `src/`.
 - `tests/MtgMcp.Architecture.Tests/ToolSurfaceNamingTests.cs`: prefixes, name shape, and removed names.

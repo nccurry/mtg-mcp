@@ -21,7 +21,7 @@ client (in Claude Code, /mcp or a new session) before relying on new behavior.
 
 #### Paging: `cursor`, `pageSize`, `nextCursor`
 
-Every paged tool takes `cursor` and `pageSize` and returns `nextCursor`, which is null on the last page. A cursor binds
+Every paged tool takes `cursor` and `pageSize` and returns `nextCursor`, which is null on the last page. A cursor is tied to
 what its page depends on, so one `cursor` replaces the offsets and the fingerprint argument of later pages. These go:
 `offset`, `operationOffset`, `differenceOffset`, `expectedPreviewFingerprint`, `limit`, `page`, `printsCursor`,
 `rulingsCursor`, and every `next*Offset` field. A stale cursor is `cursor-stale`; a malformed cursor is `invalid-cursor`
@@ -46,7 +46,7 @@ with `path` `cursor`.
 | --- | --- | --- |
 | `local_deck_import_preview` result | `fingerprint` | `previewFingerprint` |
 | `local_deck_import_create` argument | `expectedFingerprint` | `previewFingerprint` |
-| The three local previews, the pull, push, and restore previews, and `local_deck_import_preview` | `expectedPreviewFingerprint` on later pages | removed; the cursor binds the preview |
+| The three local previews, the pull, push, and restore previews, and `local_deck_import_preview` | `expectedPreviewFingerprint` on later pages | removed; the cursor is tied to the preview |
 
 `applyToken` stays on the identity and category previews. The `fingerprint` in `card_list_query` and
 `card_lists_compare` results stays: it identifies the analyzed list, not a preview.
@@ -118,21 +118,23 @@ A conflict says what is current in `current`, which can now hold `previewFingerp
 | `pull-preview-changed`, `push-preview-changed` | `stale-deck-revision` when the local revision moved, else `preview-changed` | Pull and push apply. The revision is checked first; a changed Archidekt deck is still `remote-deck-changed`. |
 | `restore-preview-changed`, `import-preview-changed`, `category-preview-mismatch`, `identity-preview-mismatch` | `preview-changed` | The restore, import, category, and identity applies |
 | `source-changed-between-pages`, `deck-changed-between-pages`, `deck-list-changed` | `cursor-stale` | Paged reads of card lists, `local_deck_get`, and `archidekt_deck_list` |
-| `preview-changed` on a later preview page | `cursor-stale` | Paged previews |
+| `preview-changed` returned by a later page of a preview | `cursor-stale` | Paged previews |
 | `invalid-cursor` for a cursor whose card-data checksum no longer matches | `cursor-stale` | Scryfall reads |
 | `category-corpus-conflict` | `stale-scryfall-generation` | `local_deck_category_rules_apply` |
 | `invalid-deck-list-cursor` | `invalid-cursor` | `local_deck_list` |
 | `invalid-offset` | `invalid-cursor` | Paged previews, deck reads, and exports |
-| `invalid-page-options` | `invalid-page-size` (`path` `pageSize`) or `invalid-page-offset` (`path` `cursor`) | Commander Spellbook |
-| `invalid-page-boundary` | `invalid-page` (`path` `cursor`) or `invalid-page-size` (`path` `pageSize`) | `playgroup_playgroup_games_list` |
+| `invalid-page-options` | `invalid-page-size` (`path` `pageSize`) or `invalid-cursor` (`path` `cursor`) | Commander Spellbook |
+| `invalid-page-boundary` | `invalid-cursor` (`path` `cursor`) or `invalid-page-size` (`path` `pageSize`) | `playgroup_playgroup_games_list` |
 | `request-limit-exceeded` as `invalid-input` | `request-limit-exceeded` as `unsupported` | Archidekt, since no argument is at fault |
-| A Commander Spellbook `400` as `invalid-input` | `unavailable`, reason `source-request-rejected` | Commander Spellbook |
-| A Playgroup `400` or `422` as `invalid-input` | `unavailable`, reason `provider-request-rejected` | Playgroup |
 | `data-loss-not-acknowledged`, `activation-change-not-acknowledged`, `evidence-loss-not-acknowledged` | `confirmation-required` | The Scryfall destructive tools |
+| A confirmation refusal with a message of its own per tool | `confirmation-required` with the one message `confirmation must be exactly "<phrase>".` | Every tool that takes `confirmation` |
+| (new) a non-numeric Archidekt ID, so a refusal never echoes arbitrary caller text | `invalid-id` (`path` the ID argument), checked before the phrase | `archidekt_deck_delete`, `archidekt_folder_delete`, `archidekt_snapshot_delete`, `archidekt_snapshot_restore_apply` |
 
 `remote-deck-changed`, `snapshot-changed`, `snapshot-content-changed`, `folder-tree-changed`, and
 `pull-discard-option-mismatch` stay, because each names a specific cause. A remote fingerprint mismatch on pull and push
-apply is `remote-deck-changed`.
+apply is `remote-deck-changed`. A Commander Spellbook `400` (`source-request-rejected`) and a Playgroup `400` or `422`
+(`provider-request-rejected`) stay `invalid-input`, now with the `path` of the tool argument that carried the value (such
+as `sourceQuery` or `events`).
 
 #### `responseFormat`
 
@@ -149,7 +151,7 @@ offers only the values it has: `full` only where raw provider objects exist.
 #### Confirmation phrases
 
 An operation that destroys or replaces data takes `confirmation`, an exact phrase `<action> <target kind> <id>` that
-binds the target. The `acknowledgeActivationChange` and `acknowledgeDataLoss` booleans are gone.
+names the target. The `acknowledgeActivationChange` and `acknowledgeDataLoss` booleans are gone.
 
 | Tool | Phrase | Old |
 | --- | --- | --- |
@@ -166,7 +168,7 @@ binds the target. The `acknowledgeActivationChange` and `acknowledgeDataLoss` bo
 | `scryfall_request_snapshot_delete` | `delete request-snapshot <requestSnapshotId>` | `acknowledgeDataLoss` |
 
 `confirmRemovals` on `archidekt_push_apply` stays a count, because it restates a number the preview showed, not a target.
-A wrong phrase is `confirmation-required` with `path` `confirmation` and the exact phrase in the message.
+A wrong phrase is `confirmation-required` with `path` `confirmation` and the message `confirmation must be exactly "<phrase>".`
 
 #### Policy and generation names
 
@@ -189,10 +191,10 @@ A wrong phrase is `confirmation-required` with `path` `confirmation` and the exa
 
 - **Archidekt reads are guarded between pages.** `archidekt_deck_get`, `archidekt_folders_get`, `archidekt_snapshots_get`
   (kind `get`), `archidekt_sync_diff`, and the pull, push, and restore previews paged by a bare offset, so a deck that
-  changed between pages gave rows out of line. The cursor now binds the remote fingerprint, tree fingerprint, or
+  changed between pages gave rows out of line. The cursor is now tied to the remote fingerprint, tree fingerprint, or
   preview, and a changed source returns `cursor-stale`. `archidekt_deck_list` reads the whole list and pages it, and a
   changed list is `cursor-stale`.
-- `local_deck_list` binds its cursor to the deck list, so a deck created, edited, or deleted between pages gives
+- `local_deck_list` ties its cursor to the deck list, so a deck created, edited, or deleted between pages gives
   `cursor-stale` instead of a shifted page.
 - Every refusal names its argument. An `invalid-input` result always carries a `path`: Scryfall queries, lookups,
   cursors, policies, tag selectors, and confirmations; Spellbook; Playgroup; statistics; local deck store refusals;
@@ -200,7 +202,11 @@ A wrong phrase is `confirmation-required` with `path` `confirmation` and the exa
   value through its tool and fails on a missing path.
 - The raw modes of `scryfall_tags_search` and `scryfall_request_snapshots_get`, and the pages of
   `local_deck_list`, `archidekt_deck_list`, Spellbook, and Playgroup games, are cut to the 40,000-byte result limit. A cut
-  page says `truncated` and its `nextCursor` continues where it stopped.
+  page says `truncated` and its `nextCursor` continues where it stopped. A Spellbook combos page cut to the limit is the
+  one exception (see Output shape).
+- `scryfall_cards_get` continues a later page from local data and makes no provider call. A card-data sync or a deleted
+  request snapshot between pages gives `cursor-stale`, and later pages must send the same `freshnessPolicy` as the
+  first.
 - `local_deck_import_preview` still takes `content` on every call, because the server stores no import. The cursor
   replaces only the offset and the fingerprint.
 - Tool descriptions use the new names. The docs state the one form for each rule in
