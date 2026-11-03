@@ -168,6 +168,7 @@ public sealed class StatisticsDeckResolverTests
                 [new DeckEntryIdsSelectorInput([firstId])],
                 []),
             TestContext.Current.CancellationToken)).Value);
+        Assert.Equal(SharedReasonCodes.StaleDeckRevision, stale.ReasonCode);
         Assert.Equal(new ConflictState(Revision: deck.Revision), stale.Current);
         Assert.IsType<OperationNotFound>((await resolver.ResolvePopulationAsync(
             new DeckStatisticsPopulationInput(
@@ -176,14 +177,14 @@ public sealed class StatisticsDeckResolverTests
                 [new DeckEntryIdsSelectorInput([firstId])],
                 []),
             TestContext.Current.CancellationToken)).Value);
-        Assert.IsType<OperationInvalidInput>((await resolver.ResolvePopulationAsync(
+        Assert.Equal("request.population.populationSelectors", Assert.IsType<OperationInvalidInput>((await resolver.ResolvePopulationAsync(
             new DeckStatisticsPopulationInput(
                 deck.DeckId,
                 deck.Revision,
                 [new DeckEntryIdsSelectorInput([Guid.CreateVersion7()])],
                 []),
-            TestContext.Current.CancellationToken)).Value);
-        Assert.IsType<OperationInvalidInput>((await resolver.ResolvePopulationAsync(
+            TestContext.Current.CancellationToken)).Value).Path);
+        Assert.Equal("request.population.groups[0].selectors", Assert.IsType<OperationInvalidInput>((await resolver.ResolvePopulationAsync(
             new DeckStatisticsPopulationInput(
                 deck.DeckId,
                 deck.Revision,
@@ -191,7 +192,7 @@ public sealed class StatisticsDeckResolverTests
                 [new DeckStatisticsGroupInput(
                     "outside",
                     [new DeckEntryIdsSelectorInput([secondId])])]),
-            TestContext.Current.CancellationToken)).Value);
+            TestContext.Current.CancellationToken)).Value).Path);
         Assert.IsType<OperationInvalidInput>((await resolver.ResolvePopulationAsync(
             new DeckStatisticsPopulationInput(
                 deck.DeckId,
@@ -199,6 +200,28 @@ public sealed class StatisticsDeckResolverTests
                 [new DeckCategoryIdsSelectorInput([categoryId, categoryId])],
                 []),
             TestContext.Current.CancellationToken)).Value);
+    }
+
+    /// <summary>
+    /// Verifies a blank deck ID and a non-positive revision name their own argument paths.
+    /// </summary>
+    [Fact]
+    public async Task ResolvePopulation_BadDeckIdentity_NamesTheArgument()
+    {
+        using TemporaryDirectory temporary = new();
+        using SqliteDeckStore store = new(temporary.Path, "0.9.0-preview.1");
+        StatisticsDeckResolver resolver = new(store);
+        List<Guid> selectors = [Guid.CreateVersion7()];
+
+        OperationInvalidInput deckId = Assert.IsType<OperationInvalidInput>((await resolver.ResolvePopulationAsync(
+            new DeckStatisticsPopulationInput(Guid.Empty, 1, [new DeckEntryIdsSelectorInput(selectors)], []),
+            TestContext.Current.CancellationToken)).Value);
+        OperationInvalidInput revision = Assert.IsType<OperationInvalidInput>((await resolver.ResolveSummaryAsync(
+            new DeckSummarySourceInput(Guid.CreateVersion7(), 0, [new DeckEntryIdsSelectorInput(selectors)], [], []),
+            TestContext.Current.CancellationToken)).Value);
+
+        Assert.Equal("request.population.deckId", deckId.Path);
+        Assert.Equal("request.expectedRevision", revision.Path);
     }
 
     /// <summary>

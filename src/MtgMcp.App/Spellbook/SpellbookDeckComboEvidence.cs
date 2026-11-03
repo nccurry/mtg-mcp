@@ -8,7 +8,9 @@ namespace MtgMcp.App.Spellbook;
 /// </summary>
 internal sealed record SpellbookDeckComboEvidence(
     [property: JsonPropertyName("deck")] SpellbookDeckSelectionEvidence Deck,
-    [property: JsonPropertyName("source")] SpellbookEvidence Source);
+    [property: JsonPropertyName("source")] SpellbookEvidence Source,
+    [property: JsonPropertyName("nextCursor")] string? NextCursor,
+    [property: JsonPropertyName("truncated")] bool Truncated);
 
 /// <summary>
 /// Reports the exact local deck revision and entries used for one source request.

@@ -54,10 +54,20 @@ internal sealed class SpellbookDeckInputResolver
         long expectedRevision,
         CancellationToken cancellationToken)
     {
-        if (deckId == Guid.Empty || expectedRevision <= 0)
+        if (deckId == Guid.Empty)
         {
-            return Invalid<SpellbookResolvedDeck>(
-                "The deck ID and expected revision must identify one local deck revision.");
+            return new OperationInvalidInput(
+                "invalid-spellbook-deck-selection",
+                "The deck ID must identify one local deck.",
+                "deckId");
+        }
+
+        if (expectedRevision <= 0)
+        {
+            return new OperationInvalidInput(
+                "invalid-spellbook-deck-selection",
+                "The expected revision must be a local deck revision.",
+                "expectedRevision");
         }
 
         OperationResult<DeckDocument> loaded = await store.GetAsync(deckId, cancellationToken)
@@ -66,7 +76,7 @@ internal sealed class SpellbookDeckInputResolver
         {
             OperationSuccess<DeckDocument> success when success.Data.Revision != expectedRevision =>
                 new OperationConflict(
-                    "deck-revision-conflict",
+                    SharedReasonCodes.StaleDeckRevision,
                     "The local deck revision changed; load it again before finding Commander Spellbook combos.",
                     new ConflictState(Revision: success.Data.Revision)),
             OperationSuccess<DeckDocument> success => Prepare(success.Data),
@@ -191,6 +201,6 @@ internal sealed class SpellbookDeckInputResolver
     /// </summary>
     private static OperationInvalidInput Invalid<T>(string message)
     {
-        return new OperationInvalidInput("invalid-spellbook-deck-selection", message);
+        return new OperationInvalidInput("invalid-spellbook-deck-selection", message, "deckId");
     }
 }

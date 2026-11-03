@@ -1,3 +1,4 @@
+using System.Globalization;
 using MtgMcp.Core.Decks;
 using MtgMcp.Core.Results;
 using MtgMcp.Decks;
@@ -14,6 +15,11 @@ internal sealed class StatisticsDeckResolver
     /// Stores the local read boundary used for revisioned deck selection.
     /// </summary>
     private readonly SqliteDeckStore store;
+
+    /// <summary>
+    /// Names the path of the population object in the request of a population tool.
+    /// </summary>
+    private const string PopulationPath = "request.population";
 
     /// <summary>
     /// Creates a resolver around one process-local deck store.
@@ -39,18 +45,19 @@ internal sealed class StatisticsDeckResolver
 
         if (input is not DeckStatisticsPopulationInput deckInput)
         {
-            return Invalid<StatisticsPopulation>("The statistics population kind is unsupported.");
+            return Invalid<StatisticsPopulation>("The statistics population kind is unsupported.", PopulationPath + ".kind");
         }
 
         OperationResult<ResolvedDeckSelection> selection = await ResolveDeckSelectionAsync(
             deckInput.DeckId,
             deckInput.ExpectedRevision,
             deckInput.PopulationSelectors,
+            PopulationPath,
             cancellationToken).ConfigureAwait(false);
         return selection switch
         {
             OperationSuccess<ResolvedDeckSelection> success =>
-                ResolveGroups(success.Data, deckInput.Groups),
+                ResolveGroups(success.Data, deckInput.Groups, PopulationPath),
             OperationNotFound value => value,
             OperationNotCached value => value,
             OperationUnsupported value => value,
@@ -72,6 +79,7 @@ internal sealed class StatisticsDeckResolver
             input.DeckId,
             input.ExpectedRevision,
             input.PopulationSelectors,
+            "request",
             cancellationToken).ConfigureAwait(false);
         return selection switch
         {
@@ -93,12 +101,19 @@ internal sealed class StatisticsDeckResolver
         Guid deckId,
         long expectedRevision,
         IReadOnlyList<DeckStatisticsSelectorInput>? selectors,
+        string path,
         CancellationToken cancellationToken)
     {
-        if (deckId == Guid.Empty || expectedRevision <= 0)
+        if (deckId == Guid.Empty)
+        {
+            return Invalid<ResolvedDeckSelection>("The deck ID must identify one local deck.", path + ".deckId");
+        }
+
+        if (expectedRevision <= 0)
         {
             return Invalid<ResolvedDeckSelection>(
-                "The deck ID and expected revision must identify one local deck revision.");
+                "The expected revision must be a local deck revision.",
+                path + ".expectedRevision");
         }
 
         OperationResult<DeckDocument> loaded = await store.GetAsync(deckId, cancellationToken)
@@ -107,10 +122,10 @@ internal sealed class StatisticsDeckResolver
         {
             OperationSuccess<DeckDocument> success when success.Data.Revision != expectedRevision =>
                 new OperationConflict(
-                    "deck-revision-conflict",
+                    SharedReasonCodes.StaleDeckRevision,
                     "The local deck revision changed; load it again before calculating statistics.",
                     new ConflictState(Revision: success.Data.Revision)),
-            OperationSuccess<DeckDocument> success => ResolveSelection(success.Data, selectors),
+            OperationSuccess<DeckDocument> success => ResolveSelection(success.Data, selectors, path),
             OperationNotFound value => value,
             OperationNotCached value => value,
             OperationUnsupported value => value,
@@ -125,17 +140,19 @@ internal sealed class StatisticsDeckResolver
     /// </summary>
     private static OperationResult<ResolvedDeckSelection> ResolveSelection(
         DeckDocument deck,
-        IReadOnlyList<DeckStatisticsSelectorInput>? selectors)
+        IReadOnlyList<DeckStatisticsSelectorInput>? selectors,
+        string path)
     {
         if (!TrySelectEntryIds(deck, selectors, out HashSet<Guid> selectedIds, out string? error))
         {
-            return Invalid<ResolvedDeckSelection>(error!);
+            return Invalid<ResolvedDeckSelection>(error!, path + ".populationSelectors");
         }
 
         if (selectedIds.Count == 0)
         {
             return Invalid<ResolvedDeckSelection>(
-                "The population selectors must select at least one local deck entry.");
+                "The population selectors must select at least one local deck entry.",
+                path + ".populationSelectors");
         }
 
         List<DeckEntry> selected = [];
@@ -154,33 +171,48 @@ internal sealed class StatisticsDeckResolver
     /// </summary>
     private static OperationResult<StatisticsPopulation> ResolveGroups(
         ResolvedDeckSelection selection,
-        IReadOnlyList<DeckStatisticsGroupInput>? inputs)
+        IReadOnlyList<DeckStatisticsGroupInput>? inputs,
+        string path)
     {
         if (inputs is null || inputs.Count > 8)
         {
             return Invalid<StatisticsPopulation>(
-                "Deck statistics groups must contain at most eight named selections.");
+                "Deck statistics groups must contain at most eight named selections.",
+                path + ".groups");
         }
 
         HashSet<Guid> populationIds = selection.Selected
             .Select(value => value.EntryId)
             .ToHashSet();
         Dictionary<string, HashSet<Guid>> groups = new(StringComparer.Ordinal);
-        foreach (DeckStatisticsGroupInput? input in inputs)
+        for (int index = 0; index < inputs.Count; index++)
         {
-            if (input is null ||
-                !IsExactText(input.Name) ||
-                groups.ContainsKey(input.Name) ||
-                !TrySelectEntryIds(selection.Deck, input.Selectors, out HashSet<Guid> ids, out _))
+            DeckStatisticsGroupInput? input = inputs[index];
+            string groupPath = $"{path}.groups[{index.ToString(CultureInfo.InvariantCulture)}]";
+            if (input is null)
+            {
+                return Invalid<StatisticsPopulation>("Deck statistics groups cannot contain null entries.", groupPath);
+            }
+
+            if (!IsExactText(input.Name) || groups.ContainsKey(input.Name))
             {
                 return Invalid<StatisticsPopulation>(
-                    "Deck statistics groups must use unique exact names and valid selector terms.");
+                    "Deck statistics groups must use unique exact names.",
+                    groupPath + ".name");
+            }
+
+            if (!TrySelectEntryIds(selection.Deck, input.Selectors, out HashSet<Guid> ids, out _))
+            {
+                return Invalid<StatisticsPopulation>(
+                    "Deck statistics groups must use valid selector terms.",
+                    groupPath + ".selectors");
             }
 
             if (!ids.IsSubsetOf(populationIds))
             {
                 return Invalid<StatisticsPopulation>(
-                    "Every deck statistics group must select only entries in the chosen population.");
+                    "Every deck statistics group must select only entries in the chosen population.",
+                    groupPath + ".selectors");
             }
 
             groups.Add(input.Name, ids);
@@ -386,9 +418,9 @@ internal sealed class StatisticsDeckResolver
     /// <summary>
     /// Creates one sanitized selector-resolution failure.
     /// </summary>
-    private static OperationInvalidInput Invalid<T>(string message)
+    private static OperationInvalidInput Invalid<T>(string message, string path)
     {
-        return new OperationInvalidInput("invalid-statistics-selection", message);
+        return new OperationInvalidInput("invalid-statistics-selection", message, path);
     }
 
     /// <summary>

@@ -106,6 +106,7 @@ public sealed class HypergeometricTests
             calculator.CalculateHypergeometric(request).Value);
 
         Assert.Equal("invalid-statistics-request", invalid.ReasonCode);
+        Assert.StartsWith("request", invalid.Path, StringComparison.Ordinal);
     }
 
     /// <summary>

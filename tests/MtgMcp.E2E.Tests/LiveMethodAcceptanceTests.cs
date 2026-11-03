@@ -1737,12 +1737,11 @@ public sealed class LiveMethodAcceptanceTests
                 new Dictionary<string, object?>
                 {
                     ["playgroupId"] = PlaygroupId,
-                    ["page"] = 1,
-                    ["limit"] = 100,
+                    ["pageSize"] = 100,
                     ["includeEvents"] = false,
                 },
                 token).ConfigureAwait(false);
-            JsonElement games = ProviderData(gamesEvidence, "listPlaygroupGames");
+            JsonElement games = ProviderData(gamesEvidence.GetProperty("source"), "listPlaygroupGames");
             (int GameId, int DeckId, int LinkedUserId)? fixture = FindPlaygroupFixture(games);
             if (fixture is null)
             {
@@ -1793,7 +1792,7 @@ public sealed class LiveMethodAcceptanceTests
                 environment,
                 session,
                 "playgroup_deck_get",
-                new Dictionary<string, object?> { ["deckId"] = fixture.Value.DeckId, ["includeArchived"] = true },
+                new Dictionary<string, object?> { ["playgroupDeckId"] = fixture.Value.DeckId, ["includeArchived"] = true },
                 token).ConfigureAwait(false);
             JsonElement deck = ProviderData(deckEvidence, "getDeckById");
             Assert.Equal(fixture.Value.DeckId, deck.GetProperty("id").GetInt32());
@@ -1804,7 +1803,7 @@ public sealed class LiveMethodAcceptanceTests
                 "playgroup_deck_elo_history_get",
                 new Dictionary<string, object?>
                 {
-                    ["deckId"] = fixture.Value.DeckId,
+                    ["playgroupDeckId"] = fixture.Value.DeckId,
                     ["playgroupId"] = PlaygroupId,
                     ["includeArchived"] = true,
                 },

@@ -37,17 +37,19 @@ internal enum SpellbookFailureKind
 internal sealed class SpellbookProviderException : Exception
 {
     /// <summary>
-    /// Creates one safe adapter failure with an optional provider cooldown.
+    /// Creates one safe adapter failure with an optional provider cooldown and, for invalid input, the argument path.
     /// </summary>
     internal SpellbookProviderException(
         SpellbookFailureKind kind,
         string reasonCode,
         string message,
         TimeSpan? retryAfter = null,
-        Exception? innerException = null)
+        Exception? innerException = null,
+        string? path = null)
         : base(message, innerException)
     {
         Kind = kind;
+        Path = path;
         ReasonCode = reasonCode;
         RetryAfter = retryAfter;
     }
@@ -66,4 +68,9 @@ internal sealed class SpellbookProviderException : Exception
     /// Gets an optional source-supplied cooldown before local bounding.
     /// </summary>
     internal TimeSpan? RetryAfter { get; }
+
+    /// <summary>
+    /// Gets the tool argument path an invalid-input failure refers to, or null when no argument is at fault.
+    /// </summary>
+    internal string? Path { get; }
 }

@@ -26,8 +26,7 @@ public sealed class PlaygroupToolTests
             [new PlaygroupEventImport("Damage", "0")],
             TestContext.Current.CancellationToken);
         OperationResult<PlaygroupEvidence> session = await tools.CreateLiveSessionAsync(
-            new PlaygroupLiveSessionCreateRequest(),
-            TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(
             "operation-mode-denied",

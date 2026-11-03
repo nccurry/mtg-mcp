@@ -67,6 +67,8 @@ public sealed class PlaygroupContractTests
 
         Assert.Equal("invalid-provider-id", Assert.Throws<PlaygroupProviderException>(
             () => PlaygroupContract.PositiveId(0, "id")).ReasonCode);
+        Assert.Equal("id", Assert.Throws<PlaygroupProviderException>(
+            () => PlaygroupContract.PositiveId(0, "id")).Path);
         Assert.Equal("invalid-provider-input", Assert.Throws<PlaygroupProviderException>(
             () => PlaygroupContract.Required(" ", "name")).ReasonCode);
         Assert.Equal("provider-contract-unsupported", Assert.Throws<PlaygroupProviderException>(
