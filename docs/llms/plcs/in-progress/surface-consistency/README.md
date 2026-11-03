@@ -2,15 +2,15 @@
 
 ## Current Work
 
-- Status: In progress (phases 0 and 1 merged; phase 2 next)
+- Status: In progress (phases 0 to 3 merged at `e547882`; audit pass 1 done, repairs running)
 - Owner: mtg-mcp (owner session)
-- Last updated: 2026-11-02, branch `surface-consistency/integration` from `f542cd4`
+- Last updated: 2026-11-02, branch `surface-consistency/integration` at `e547882`
 - Implementation authorized: Yes (owner, 2026-11-02: "Accept and implement"; D-1 to D-6 accepted as recommended)
 - Selected work and endpoint: phases 0 to 3, merged into `main`, audited, released as `0.15.0`, and installed.
-- State: drafted and reviewed once (independent read-only review, 2026-11-02; findings folded in).
-- Next action: phase 0 (facts) and phase 1 (shared foundation), then phase 2 by tool family.
+- State: all phases merged into integration and `task ci` passed on `e547882`. Audit pass 1 findings are being repaired: the shared foundation first, then the four families.
+- Next action: merge the repairs, update the docs and evidence, run `task ci`, then merge to `main` and release `0.15.0`.
 - Blocker: none.
-- Resume check: this file exists on `docs/surface-consistency-plc` or `main`.
+- Resume check: `git log surface-consistency/integration` contains `e547882`; worktrees under `../mtg-mcp-wt/surface-consistency/`.
 
 ## Problem
 
@@ -270,3 +270,46 @@ accepted D-1 to D-6 rules on 2026-11-02:
   phase 0 found the same meanings.
 - **New defect, fixed in family (a):** a category preview of an empty deck with tag selectors returns
   `invalid-card-lookup`.
+
+## Audit Ledger
+
+Pass 1 (2026-11-02) reviewed `4125d0a..e547882` (186 files). Seven read-only reviewers each applied two specialist
+skills: correctness with security, tests with test quality, simplicity with performance, code quality with dead code,
+structure with visual review, plan alignment with docs sync, and plain language with file hygiene. Before the audit,
+`task ci` passed on `e547882`: 2,456 tests, 77 smoke tests, and every assembly over 90 percent line coverage. Integration
+and E2E tests also passed.
+
+No P0 findings. One P1: the null-path check ran only the budget script, which sends no invalid input, so it passed
+vacuously.
+
+P2 findings:
+
+- **Duplicated code.** Three cursor codecs (App `PageCursor`, `ScryfallCursor`, the identity apply token) and four
+  confirmation checks with two wordings.
+- **Wrong codes and kinds.** Provider 400s on Spellbook and Playgroup were reported as `unavailable`.
+- **Cursors.** The Playgroup cursor had no state binding. It also used a `twoLists` flag and a `Second` position to
+  mean rows already shown.
+- **Messages and paths.** `StatisticsFailurePath` guessed paths from message text.
+- **Layering.** Scryfall stores trimmed result size through a callback. A global serializer modifier renamed
+  `remoteId`.
+- **Structure.** Long lines (about 60), the 424-line `PageCursor.cs`, the overloaded Spellbook paging `Shape`, and a
+  duplicated Spellbook offset cap.
+- **Missing tests.** No per-tool `responseFormat` test, no identity `preview-changed` test, missing Archidekt stale
+  tests, and surface tests that could pass vacuously.
+- **Plan and docs.** Unrecorded deviations: Spellbook combos cut with no `nextCursor`, and `options` and `source` kept
+  as objects. No REQ-009 docs check. Stale test names in `mcp-surface.md`.
+
+The P3 findings cover duplicated helpers and literals, page-bounds and foreign-cursor codes, two-list ordering, the
+deck list read, the confirmation echo length, wording, unreachable codes, and stale plan text.
+
+Accepted deviations, now recorded:
+
+- **`spellbook_deck_combos_find` returns no `nextCursor` after a size cut.** Spellbook's offset counts combos, not the
+  grouped rows a page shows, so no position can name the next row. The caller retries with a smaller `pageSize`, and
+  the description says so.
+- **`local_deck_import_create.options` and `local_deck_category_rules_apply.source` stay objects.** Each is a
+  document (import options, a rule set), as D-3 allows.
+- **Scryfall list results put `nextCursor` under `page`**, as phase 0 recorded; `scryfall_card_details` puts it at the
+  top level.
+- **Cursor checksums detect accidental edits, not deliberate ones.** Every reader bounds positions again, so a forged
+  cursor can only point inside the data the caller may read.
