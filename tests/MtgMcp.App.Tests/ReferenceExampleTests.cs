@@ -5,11 +5,11 @@ using MtgMcp.App.Hosting;
 namespace MtgMcp.App.Tests;
 
 /// <summary>
-/// Binds every request example in the README to the real tool schemas, so the worked examples cannot drift from
+/// Binds every request example in the reference (docs/reference.md) to the real tool schemas, so the worked examples cannot drift from
 /// the tools (DOC-001). An example is a <c>json</c> block that follows a <c>&lt;!-- example: tool_name --&gt;</c>
 /// comment.
 /// </summary>
-public sealed partial class ReadmeExampleTests : IClassFixture<ToolCatalogFixture>
+public sealed partial class ReferenceExampleTests : IClassFixture<ToolCatalogFixture>
 {
     /// <summary>
     /// Holds the argument catalog of one full registration.
@@ -19,7 +19,7 @@ public sealed partial class ReadmeExampleTests : IClassFixture<ToolCatalogFixtur
     /// <summary>
     /// Takes the catalog the fixture built, so the examples bind through the registered tools.
     /// </summary>
-    public ReadmeExampleTests(ToolCatalogFixture fixture)
+    public ReferenceExampleTests(ToolCatalogFixture fixture)
     {
         catalog = fixture.Catalog;
     }
@@ -33,10 +33,10 @@ public sealed partial class ReadmeExampleTests : IClassFixture<ToolCatalogFixtur
     private static partial Regex ExampleBlock();
 
     /// <summary>
-    /// Verifies the README holds the worked examples the plan requires and that each one binds to its tool.
+    /// Verifies the reference holds the worked examples the plan requires and that each one binds to its tool.
     /// </summary>
     [Fact]
-    public void ReadmeExamples_BindToTheRegisteredToolSchemas()
+    public void ReferenceExamples_BindToTheRegisteredToolSchemas()
     {
         (string Tool, string Json)[] examples = ReadExamples();
 
@@ -59,10 +59,10 @@ public sealed partial class ReadmeExampleTests : IClassFixture<ToolCatalogFixtur
     }
 
     /// <summary>
-    /// Verifies the worked examples ask for what the README says they do.
+    /// Verifies the worked examples ask for what the reference says they do.
     /// </summary>
     [Fact]
-    public void ReadmeExamples_AskForTheDocumentedJobs()
+    public void ReferenceExamples_AskForTheDocumentedJobs()
     {
         Dictionary<string, JsonElement> byTool = ReadExamples().ToDictionary(
             example => example.Tool,
@@ -94,7 +94,7 @@ public sealed partial class ReadmeExampleTests : IClassFixture<ToolCatalogFixtur
     /// field, so a passing example proves something.
     /// </summary>
     [Fact]
-    public void ReadmeExampleChecks_RejectMisspelledFields()
+    public void ReferenceExampleChecks_RejectMisspelledFields()
     {
         string topLevel = "{\"deckId\":\"0193e97a-ef95-7700-8000-000000000001\",\"rulez\":\"commander\"}";
         string nested =
@@ -117,14 +117,14 @@ public sealed partial class ReadmeExampleTests : IClassFixture<ToolCatalogFixtur
     }
 
     /// <summary>
-    /// Reads every marked example from the README at the repository root.
+    /// Reads every marked example from the reference under docs.
     /// </summary>
     private static (string Tool, string Json)[] ReadExamples()
     {
-        string readme = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "README.md"));
+        string reference = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "docs", "reference.md"));
         return
         [
-            .. ExampleBlock().Matches(readme)
+            .. ExampleBlock().Matches(reference)
                 .Select(match => (match.Groups["tool"].Value, match.Groups["json"].Value)),
         ];
     }
