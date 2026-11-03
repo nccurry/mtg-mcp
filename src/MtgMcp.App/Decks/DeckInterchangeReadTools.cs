@@ -110,7 +110,9 @@ internal sealed class DeckInterchangeReadTools
         DeckExportOptions? options = null,
         [Description("File name of the artifact whose content to read; default the first artifact.")]
         string? artifact = null,
-        [Description("Opaque nextCursor of the previous chunk, with the same other arguments. Omit for the first chunk.")]
+        [Description(
+            "Opaque nextCursor of the previous chunk, with the same other arguments. Omit for the first " +
+            "chunk.")]
         string? cursor = null,
         [Description(
             "Most UTF-16 code units of the artifact in a chunk, from 1 through 30000; default 30000. A chunk " +

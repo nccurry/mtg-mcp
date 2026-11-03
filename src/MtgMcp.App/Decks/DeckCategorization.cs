@@ -326,7 +326,9 @@ internal sealed class DeckCategorizationReadTools
         string freshnessPolicy = "default",
         [Description("Opaque nextCursor of the previous page, with the same other arguments. Omit for the first page.")]
         string? cursor = null,
-        [Description("Number of decisions per page, from 1 through 100; default 100. A page also stops at the result size limit.")]
+        [Description(
+            "Number of decisions per page, from 1 through 100; default 100. A page also stops at the result size " +
+            "limit.")]
         int pageSize = DeckPreviewPaging.MaximumPageSize,
         CancellationToken cancellationToken = default)
     {

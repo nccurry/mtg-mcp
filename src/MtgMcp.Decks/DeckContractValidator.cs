@@ -204,6 +204,14 @@ internal sealed class DeckInputException : Exception
     }
 
     /// <summary>
+    /// Returns the same failure with an argument path, for a caller that knows which value was rejected.
+    /// </summary>
+    internal DeckInputException At(string path)
+    {
+        return new DeckInputException(Message, ReasonCode, path);
+    }
+
+    /// <summary>
     /// Gets the lowercase reason code projected to the public result union.
     /// </summary>
     internal string ReasonCode { get; }
@@ -226,6 +234,14 @@ internal sealed class DeckEntityNotFoundException : Exception
         : base(message)
     {
         ReasonCode = reasonCode;
+    }
+
+    /// <summary>
+    /// Returns the same failure with an argument path, for a caller that knows which value was rejected.
+    /// </summary>
+    internal DeckInputException At(string path)
+    {
+        return new DeckInputException(Message, ReasonCode, path);
     }
 
     /// <summary>

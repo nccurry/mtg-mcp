@@ -53,6 +53,21 @@ public sealed class DeckExportPagingTests
     }
 
     /// <summary>
+    /// Verifies a page size of N returns N UTF-16 code units of the content and a cursor at offset N.
+    /// </summary>
+    [Fact]
+    public void Page_PageSizeCountsCodeUnits()
+    {
+        DeckExportBundle bundle = Bundle(new string('a', 100));
+
+        DeckExportBundleView first = Success(DeckExportPaging.Page(bundle, null, null, 37));
+        DeckExportBundleView second = Success(DeckExportPaging.Page(bundle, null, first.NextCursor, 37));
+
+        Assert.Equal(37, first.Chunk.Content.Length);
+        Assert.Equal(37, second.Chunk.Offset);
+        Assert.Equal(37, second.Chunk.Content.Length);
+    }
+    /// <summary>
     /// Verifies a cursor is refused after the artifact content or the deck revision changed, as stale with the current
     /// revision, and for another artifact or a changed cursor as an invalid cursor at the cursor path.
     /// </summary>

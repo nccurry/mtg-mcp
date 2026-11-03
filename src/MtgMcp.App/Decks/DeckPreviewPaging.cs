@@ -198,7 +198,8 @@ internal static class DeckPreviewPaging
             cursor,
             preview.PreviewFingerprint,
             preview.DeckId,
-            preview.DeckRevision);
+            preview.DeckRevision,
+            preview.Rows.Count);
         if (start is not OperationSuccess<PageCursorPosition> position)
         {
             return OperationFailure.Forward<PageCursorPosition, DeckIdentityReconciliationPreviewView>(start);
@@ -244,7 +245,12 @@ internal static class DeckPreviewPaging
         }
 
         IReadOnlyList<DeckEntry> entries = preview.Proposal?.Entries ?? [];
-        OperationResult<PageCursorPosition> start = ReadStart(cursor, preview.PreviewFingerprint ?? "none", null, null);
+        OperationResult<PageCursorPosition> start = ReadStart(
+            cursor,
+            preview.PreviewFingerprint ?? "none",
+            null,
+            null,
+            entries.Count);
         if (start is not OperationSuccess<PageCursorPosition> position)
         {
             return OperationFailure.Forward<PageCursorPosition, DeckImportPreviewView>(start);
@@ -352,7 +358,8 @@ internal static class DeckPreviewPaging
             cursor,
             preview.PreviewFingerprint,
             preview.DeckId,
-            preview.DeckRevision);
+            preview.DeckRevision,
+            preview.Decisions.Count);
         if (start is not OperationSuccess<PageCursorPosition> position)
         {
             return OperationFailure.Forward<PageCursorPosition, DeckCategoryRulesPreviewView>(start);
@@ -428,18 +435,22 @@ internal static class DeckPreviewPaging
 
     /// <summary>
     /// Reads the position of a page from its cursor. A cursor of a preview that no longer matches is stale and carries
-    /// the preview fingerprint as it is now.
+    /// the preview fingerprint as it is now; a position past the <paramref name="total"/> rows is invalid.
     /// </summary>
     private static OperationResult<PageCursorPosition> ReadStart(
         string? cursor,
         string previewFingerprint,
         Guid? deckId,
-        long? revision)
+        long? revision,
+        int total)
     {
-        return PageCursor.Decode(
+        OperationResult<PageCursorPosition> start = PageCursor.Decode(
             cursor,
             Bind(previewFingerprint, deckId, revision),
             current: new ConflictState(revision, PreviewFingerprint: previewFingerprint));
+        return start is OperationSuccess<PageCursorPosition> position && position.Data.Offset > total
+            ? PageCursor.Invalid()
+            : start;
     }
 
     /// <summary>

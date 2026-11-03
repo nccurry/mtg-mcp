@@ -13,6 +13,11 @@ namespace MtgMcp.App.Decks;
 internal static class DeckListPaging
 {
     /// <summary>
+    /// Names the tool whose cursors this paging issues, so a cursor from another tool is refused.
+    /// </summary>
+    private const string ToolName = "local_deck_list";
+
+    /// <summary>
     /// Reads the page of decks that the cursor names and returns it with the cursor of the next page.
     /// </summary>
     internal static async Task<OperationResult<DeckPage>> PageAsync(
@@ -21,22 +26,21 @@ internal static class DeckListPaging
         int pageSize,
         CancellationToken cancellationToken)
     {
-        OperationResult<string> fingerprint = await store.GetListFingerprintAsync(cancellationToken)
-            .ConfigureAwait(false);
-        if (fingerprint is not OperationSuccess<string> list)
-        {
-            return OperationFailure.Forward<string, DeckPage>(fingerprint);
-        }
+        int offset = 0;
+        OperationResult<DeckListSlice> read = await store.ListAsync(
+            fingerprint =>
+            {
+                OperationResult<PageCursorPosition> start = PageCursor.Decode(cursor, Bind(fingerprint));
+                if (start is not OperationSuccess<PageCursorPosition> position)
+                {
+                    return OperationFailure.Forward<PageCursorPosition, int>(start);
+                }
 
-        PageCursorBinding binding = PageCursorBinding.ForSource(list.Data);
-        OperationResult<PageCursorPosition> start = PageCursor.Decode(cursor, binding);
-        if (start is not OperationSuccess<PageCursorPosition> position)
-        {
-            return OperationFailure.Forward<PageCursorPosition, DeckPage>(start);
-        }
-
-        OperationResult<DeckListSlice> read = await store.ListAsync(position.Data.Offset, pageSize, cancellationToken)
-            .ConfigureAwait(false);
+                offset = position.Data.Offset;
+                return new OperationSuccess<int>(offset);
+            },
+            pageSize,
+            cancellationToken).ConfigureAwait(false);
         if (read is not OperationSuccess<DeckListSlice> slice)
         {
             return OperationFailure.Forward<DeckListSlice, DeckPage>(read);
@@ -45,9 +49,18 @@ internal static class DeckListPaging
         List<DeckSummary> summaries = [.. slice.Data.Items.Select(ShortDescription)];
         ResultPageSlice kept = ResultPage.Take(summaries, 0, ResultSize.Measure(new DeckPage([], null)));
         string? next = kept.More || slice.Data.HasMore
-            ? PageCursor.Encode(PageCursorPosition.AtOffset(position.Data.Offset + kept.Count), binding)
+            ? PageCursor.Encode(PageCursorPosition.AtOffset(offset + kept.Count), Bind(slice.Data.ListFingerprint))
             : null;
         return new OperationSuccess<DeckPage>(new DeckPage(kept.Rows(summaries), next));
+    }
+
+    /// <summary>
+    /// Binds a cursor to this tool and to the fingerprint of the list it was issued for.
+    /// </summary>
+    private static PageCursorBinding Bind(string listFingerprint)
+    {
+        return PageCursorBinding.ForSource(listFingerprint)
+            .And(PageCursorBinding.ForRequest(RequestHash.Of((ToolName, typeof(string)))));
     }
 
     /// <summary>

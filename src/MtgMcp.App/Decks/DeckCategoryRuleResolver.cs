@@ -41,7 +41,10 @@ internal sealed class DeckCategoryRuleResolver
     {
         if (source is null)
         {
-            return new OperationInvalidInput("invalid-category-rule-source", "A category rule source is required.", "source");
+            return new OperationInvalidInput(
+                "invalid-category-rule-source",
+                "A category rule source is required.",
+                "source");
         }
 
         if (freshnessPolicy is not ("default" or "cache-only" or "refresh"))
