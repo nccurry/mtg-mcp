@@ -28,8 +28,10 @@ lifecycle folders.
 
 Before moving a packet from `planned/` to `in-progress/`, check that:
 
-- The packet README names lifecycle status, owner, decision summary, and active
-  open questions.
+- The packet README follows the shared PLC template: a one- or two-sentence
+  summary under the title, one `## Current Work` block (Status, Owner as an
+  `@handle`, Last updated), the `## Phases` table with a State column,
+  `## Done when`, active `Open question:` lines, and `## Log` last.
 - The SRD states audience, purpose, scope, non-scope, outcomes, testable
   requirements, acceptance criteria, risks, assumptions, and validation
   expectations.
@@ -59,7 +61,7 @@ Agents implementing an in-progress PLC should:
 - Update the packet when implementation reveals a changed requirement,
   different design choice, new risk, or deferred item.
 - Preserve Core, App, adapter, and test boundaries.
-- Add validation evidence before marking a phase complete.
+- Add validation evidence before marking a phase Verified.
 - Move the packet to `completed/` only after validation is done or the closure
   reason is recorded.
 

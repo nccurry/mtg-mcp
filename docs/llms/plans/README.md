@@ -6,13 +6,14 @@ repository.
 Prefer no committed plan for tiny single-area fixes. Use an ordinary plan when
 the work benefits from shared context but does not need a full PLC packet.
 
-Plans should include:
+Plans follow the shared PLC template: a one- or two-sentence summary of the
+problem or opportunity under the title, then `## Current Work`, `## Phases`,
+`## Done when`, `## Open questions`, and `## Log` last. Implementation order
+goes in the Phases table, and validation commands go in each Done when check.
+Before the Log, plans also include:
 
-- Problem or opportunity.
 - Goals and non-goals.
 - Affected projects, public tools and APIs, docs, and tests.
-- Implementation order.
-- Validation commands.
 - Risks, assumptions, and deferred work.
 
 Use ignored `/plans/` for local scratch.

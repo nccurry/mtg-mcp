@@ -1,12 +1,45 @@
-# <Change Name> Implementation Plan
+<!-- Ordinary plan: the shared PLC template as one file, with this
+repository's sections after the shared ones and before the Log. Use it when
+shared context and implementation order matter but a requirements-backed PLC
+would add more ceremony than value. Save it as
+`docs/llms/plans/<feature-slug>.md`, delete sections that do not apply, and
+delete this note. -->
 
-Use an ordinary plan when shared context and implementation order matter but a
-requirements-backed PLC would add more ceremony than value. Delete optional
-prompts that do not apply.
+# <Change Name>
 
-## Summary
+<One or two sentences: the problem, the intended outcome, and the smallest
+useful change.>
 
-State the problem, intended outcome, audience, and smallest useful change.
+## Current Work
+
+- Status: Planned
+- Owner: @<handle>
+- Last updated: <YYYY-MM-DD>, `<branch>` at `<short commit>`
+- Next action: <one concrete step, or None>
+- Blocker: <what is needed and who owns it, or None>
+- Depends on: <plan or packet names, comma-separated, or None>
+- Current state: <one or two lines: what is done, merged, verified or waiting>
+- Resume check: <the first command to run and its expected result>
+
+Where the work lives:
+
+| Checkout | Branch | Owner | State |
+| --- | --- | --- | --- |
+| None | | | |
+
+## Phases
+
+| Phase | Name | Owner | State |
+| --- | --- | --- | --- |
+| P1 | <smallest coherent edit> | @<handle> | Planned |
+
+## Done when
+
+- REQ-001: <observable behavior>. Check: `<task or test>` → <expected result>
+
+## Open questions
+
+- Open question: <question> (blocks <phase or requirement IDs>; waits on @<handle>)
 
 ## Goals And Non-Goals
 
@@ -19,21 +52,12 @@ State the problem, intended outcome, audience, and smallest useful change.
 List affected projects, public APIs, MCP tools/resources/prompts, configuration,
 data formats, docs, generated files, and downstream users.
 
-## Implementation Order
-
-| Step | Change | Tests and validation | Exit criteria |
-| --- | --- | --- | --- |
-| 1 | <Smallest coherent edit> | <Focused checks> | <Objective result> |
-
 ## Risks And Assumptions
 
 | Item | Type | Mitigation or validation |
 | --- | --- | --- |
 | <Item> | Risk/Assumption | <Action> |
 
-## Completion
+## Log
 
-- [ ] Observable behavior and failure paths are tested.
-- [ ] Public behavior and docs are synchronized.
-- [ ] Narrow checks and the appropriate Task gate pass.
-- [ ] Deferred work and residual risks are recorded.
+- <YYYY-MM-DD> Created.

@@ -19,7 +19,8 @@ architecture.
 - [repo-operations.md](repo-operations.md): Task-based command policy.
 - [plans](plans/): durable ordinary implementation plans.
 - [plcs](plcs/): Plan-Led Change packets for larger work.
-- [templates](templates/): reusable ordinary-plan and multi-file PLC templates.
+- [templates](templates/): the ordinary-plan template, in the shared PLC
+  template's shape.
 
 ## Local Scratch
 

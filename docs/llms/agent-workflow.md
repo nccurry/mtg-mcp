@@ -20,7 +20,8 @@ spans several modules or public APIs.
   project boundaries, changes public MCP shape, changes adapter contracts,
   affects persistence formats, or needs phased delivery.
 - Keep ignored `/plans/` for local scratch only.
-- Start durable plans and PLC packets from `docs/llms/templates/`.
+- Start ordinary plans from `docs/llms/templates/IMPLEMENTATION_PLAN.md` and
+  PLC packets from the shared PLC template; both use the same README sections.
 - A drafted PLC is not implementation authority. Production work needs the
   recorded review and owner authorization required by its packet.
 

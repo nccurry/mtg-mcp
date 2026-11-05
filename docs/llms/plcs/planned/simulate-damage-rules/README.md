@@ -302,3 +302,7 @@ Each phase: focused tests, then `task ci`, `task test:integration`, and
 | Requirement | State | Evidence |
 | --- | --- | --- |
 | REQ-001 to REQ-012 | planned | none yet |
+
+## Log
+
+- 2026-11-05 Converted to the shared PLC template (format only).

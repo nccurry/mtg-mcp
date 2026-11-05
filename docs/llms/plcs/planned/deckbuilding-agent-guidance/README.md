@@ -14,6 +14,21 @@
 - Where the work lives: this packet is merged into local `main`; no implementation branch or worktree exists yet.
   Nothing is pushed.
 
+## Phases
+
+| Phase | Work | Exit | State |
+| --- | --- | --- | --- |
+| 0 | Settle OQ-1 and OQ-2. Measure D-5 with and without an index, and the cost of REQ-013 tag counts on a large search. Build the usage report (REQ-016) and run it on `0.14.0` sync sessions to see which sync failures remain after `deck-edit-ergonomics`. | Decisions and measurements recorded here; usage-report tests pass. | Planned |
+| 1 | Tag normalization, tag check and hints, tag search matching (REQ-009, REQ-010). | Unit tests pass; `task lint`. | Planned |
+| 2 | Coverage, tag counts, compact rows (REQ-012 to REQ-014). | Unit and surface tests pass. | Planned |
+| 3 | Token facts (REQ-011). | Fixture tests pass; measured cost within the phase 0 budget. | Planned |
+| 4 | Write the REQ-019 scenarios and run the baselines first. Then build the plugin, skills, tag reference and slug list, prompts, instructions, and tests (REQ-001 to REQ-008, REQ-015, REQ-017, REQ-018). | Skill content, manifest, and validate checks pass; baselines recorded. | Planned |
+| 5 | README, `docs/reference.md`, CHANGELOG, and `docs/toolsets.md`; release workflow sets plugin versions; `task ci`; REQ-019 runs with the plugin; full audit; release; install through the plugin. | REQ-001, REQ-002, and REQ-019 results recorded; release installed. | Planned |
+
+Phases 1 to 3 are independent of each other. Phase 4 writes skill text against the shapes from phases 1 to 3, so
+it starts after them. If phase 0 finds sync failures that `0.14.0` did not fix, they are listed here for the
+owner, not added to scope.
+
 ## Outcome
 
 An agent that installs mtg-mcp gets the server and a set of skills in one step, and by default it follows the
@@ -438,21 +453,6 @@ Tests:
 - The skill content test (REQ-017), the manifest version test, and `claude plugin validate --strict`.
 - Generator and usage-report tests on fixture inputs.
 
-## Phases
-
-| Phase | Work | Exit |
-| --- | --- | --- |
-| 0 | Settle OQ-1 and OQ-2. Measure D-5 with and without an index, and the cost of REQ-013 tag counts on a large search. Build the usage report (REQ-016) and run it on `0.14.0` sync sessions to see which sync failures remain after `deck-edit-ergonomics`. | Decisions and measurements recorded here; usage-report tests pass. |
-| 1 | Tag normalization, tag check and hints, tag search matching (REQ-009, REQ-010). | Unit tests pass; `task lint`. |
-| 2 | Coverage, tag counts, compact rows (REQ-012 to REQ-014). | Unit and surface tests pass. |
-| 3 | Token facts (REQ-011). | Fixture tests pass; measured cost within the phase 0 budget. |
-| 4 | Write the REQ-019 scenarios and run the baselines first. Then build the plugin, skills, tag reference and slug list, prompts, instructions, and tests (REQ-001 to REQ-008, REQ-015, REQ-017, REQ-018). | Skill content, manifest, and validate checks pass; baselines recorded. |
-| 5 | README, `docs/reference.md`, CHANGELOG, and `docs/toolsets.md`; release workflow sets plugin versions; `task ci`; REQ-019 runs with the plugin; full audit; release; install through the plugin. | REQ-001, REQ-002, and REQ-019 results recorded; release installed. |
-
-Phases 1 to 3 are independent of each other. Phase 4 writes skill text against the shapes from phases 1 to 3, so
-it starts after them. If phase 0 finds sync failures that `0.14.0` did not fix, they are listed here for the
-owner, not added to scope.
-
 ## Risks And Open Questions
 
 - **OQ-1, launch command (blocks REQ-002 and D-6).** Two options:
@@ -500,3 +500,7 @@ owner, not added to scope.
 | Baseline usage counts (Sources) | 2026-11-02 | Recounted across 1,016 Claude transcript files (including subagent folders) and 2,722 Codex session files. Method: parse each `tool_use` block for `mcp__mtg-mcp__*` tools, count each call ID once, and match its `tool_result`. The first draft's counts (361 calls) double-counted repeated calls and were replaced. |
 | Tag slugs checked with `scryfall_tags_search` | 2026-11-02 | `sweeper`, `sweeper-one-sided`, `repeatable-token-generator`, `repeatable-creature-tokens`, `card-advantage` exist; `board-wipe` returns no tag; no tag for "creates a flying token". |
 | Independent PLC review | 2026-11-02 | 17 findings, all accepted and fixed in this revision. Plugin layout, duplicate-server rule, plugin tool naming, and `claude plugin validate` checked against the Claude Code docs by the reviewer. |
+
+## Log
+
+- 2026-11-05 Converted to the shared PLC template (format only).
