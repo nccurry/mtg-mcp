@@ -24,7 +24,7 @@ Maintainers and clients interpreting automatic simulation profile selection.
 - src/MtgMcp.Core/DeckCategoryInclusion.cs
 - docs/simulation-profiles.md
 - [Conservative goldfish dependency](../conservative-goldfish-v2/README.md)
-- [Jasmine repair roadmap](../../../plans/jasmine-analysis-repair-roadmap.md)
+- [Jasmine repair roadmap](../../../plans/archived/jasmine-analysis-repair-roadmap.md)
 
 ## User And Maintainer Outcomes
 

@@ -26,7 +26,7 @@ Maintainers and clients of Stats Lab scorecards, comparisons, recommendations, t
 - docs/stats-lab-metrics.md
 - [Card snapshot dependency](../card-snapshot-integrity/README.md)
 - [Land classification dependency](../land-entry-classification/README.md)
-- [Jasmine repair roadmap](../../../plans/jasmine-analysis-repair-roadmap.md)
+- [Jasmine repair roadmap](../../../plans/archived/jasmine-analysis-repair-roadmap.md)
 
 ## User And Maintainer Outcomes
 

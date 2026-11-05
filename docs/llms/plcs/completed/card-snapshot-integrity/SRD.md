@@ -25,7 +25,7 @@ Maintainers of workspace persistence, provider adapters, metadata refresh, and a
 - src/MtgMcp.Archidekt/ArchidektGateway.Mapping.cs
 - src/MtgMcp.Moxfield/MoxfieldGateway.Mapping.cs
 - src/MtgMcp.Scryfall
-- [Jasmine repair roadmap](../../../plans/jasmine-analysis-repair-roadmap.md)
+- [Jasmine repair roadmap](../../../plans/archived/jasmine-analysis-repair-roadmap.md)
 
 ## User And Maintainer Outcomes
 

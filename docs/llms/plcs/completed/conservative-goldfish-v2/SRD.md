@@ -31,7 +31,7 @@ Maintainers of simulation, recommendations, MCP tools, prompts/resources, releas
 - [Land entry prerequisite](../land-entry-classification/README.md)
 - [Profile evidence prerequisite](../simulation-profile-evidence/README.md)
 - [Trust evidence vocabulary](../mcp-trust-evidence/SRD.md#requirements)
-- [Jasmine repair roadmap](../../../plans/jasmine-analysis-repair-roadmap.md)
+- [Jasmine repair roadmap](../../../plans/archived/jasmine-analysis-repair-roadmap.md)
 - Public read-only deck: https://archidekt.com/decks/22958528/jasmine_boreal_of_the_seven_vanilla
 
 ## User And Maintainer Outcomes

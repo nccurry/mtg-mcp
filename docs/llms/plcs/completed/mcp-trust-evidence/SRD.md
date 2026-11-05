@@ -36,7 +36,7 @@ MCP surfaces, and adapter projects own third-party HTTP contracts.
 - [FIXTURES.md](FIXTURES.md)
 - [Conservative Goldfish V2 SRD](../conservative-goldfish-v2/SRD.md)
 - [Conservative Goldfish V2 fixtures](../conservative-goldfish-v2/FIXTURES.md)
-- [Jasmine analysis repair roadmap](../../../plans/jasmine-analysis-repair-roadmap.md)
+- [Jasmine analysis repair roadmap](../../../plans/archived/jasmine-analysis-repair-roadmap.md)
 - `src/MtgMcp.Core/Analysis/EvidenceModels.cs`
 - `src/MtgMcp.Core/Analysis/DeckRoleClassifier.cs`
 - `src/MtgMcp.Core/Analysis/DeckAnalysisService.RoleCounts.cs`

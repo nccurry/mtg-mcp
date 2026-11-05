@@ -23,7 +23,7 @@ Maintainers and MCP clients that consume workspace or deck summary counts.
 - src/MtgMcp.Core/DeckCategoryInclusion.cs
 - src/MtgMcp.App/Tools/Workspaces/WorkspaceTools.cs
 - src/MtgMcp.Core/Analysis/DeckAnalysisModels.cs
-- [Jasmine repair roadmap](../../../plans/jasmine-analysis-repair-roadmap.md)
+- [Jasmine repair roadmap](../../../plans/archived/jasmine-analysis-repair-roadmap.md)
 
 ## User And Maintainer Outcomes
 

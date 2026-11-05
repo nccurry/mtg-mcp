@@ -23,7 +23,7 @@ Maintainers of mana analysis, Stats Lab, and goldfish simulation.
 - src/MtgMcp.Core/Analysis/LandEntryClassifier.cs
 - docs/stats-lab-metrics.md
 - [Conservative goldfish dependency](../conservative-goldfish-v2/README.md)
-- [Jasmine repair roadmap](../../../plans/jasmine-analysis-repair-roadmap.md)
+- [Jasmine repair roadmap](../../../plans/archived/jasmine-analysis-repair-roadmap.md)
 
 ## User And Maintainer Outcomes
 

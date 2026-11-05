@@ -17,9 +17,12 @@ delivery.
 - `in-progress/`: PLC packets actively guiding code changes. Move a packet here
   before the first implementation edit, then keep phase status, scope changes,
   decisions, and validation evidence current.
-- `completed/`: PLC packets that are validated, landed, abandoned with a clear
-  outcome, or superseded. Completed packets are historical context, not a
-  stronger source of truth than current code and tests.
+- `completed/`: PLC packets that are validated and landed. Completed packets
+  are historical context, not a stronger source of truth than current code and
+  tests.
+- `archived/`: PLC packets that were abandoned or superseded, with Status
+  Archived or Superseded and a reason. Packets that were abandoned or
+  superseded before this folder existed stay in `completed/`.
 
 The PLC root is for lifecycle guidance. Active PLC packets belong in the
 lifecycle folders.
@@ -62,8 +65,8 @@ Agents implementing an in-progress PLC should:
   different design choice, new risk, or deferred item.
 - Preserve Core, App, adapter, and test boundaries.
 - Add validation evidence before marking a phase Verified.
-- Move the packet to `completed/` only after validation is done or the closure
-  reason is recorded.
+- Move the packet to `completed/` only after validation is done, or to
+  `archived/` once the reason it was abandoned or superseded is recorded.
 
 The evidence-first rewrite additionally follows
 [`docs/rewrite-guide.md`](../../rewrite-guide.md): legacy code is reference

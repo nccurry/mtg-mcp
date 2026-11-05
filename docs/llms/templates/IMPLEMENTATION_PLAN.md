@@ -2,7 +2,7 @@
 repository's sections after the shared ones and before the Log. Use it when
 shared context and implementation order matter but a requirements-backed PLC
 would add more ceremony than value. Save it as
-`docs/llms/plans/<feature-slug>.md`, delete sections that do not apply, and
+`docs/llms/plans/planned/<feature-slug>.md`, delete sections that do not apply, and
 delete this note. -->
 
 # <Change Name>

@@ -1,16 +1,18 @@
 # Local Scryfall Cohort Analysis Design Seed
 
-## Status
-
-- Lifecycle: Deferred post-cutover design seed
-- Implementation authorized: No
-- Related future capability: `local-scryfall-query-engine`
-- Current runtime: no cohort-analysis tools
-
 This document describes a limited future feature for repeatable questions about
 a defined group of cards in installed Scryfall card data. It is not a PLC, does
 not change the `0.9.0` release, and does not authorize implementation. In this
 document, a “cohort” means that defined group of cards.
+
+## Current Work
+
+- Status: Planned — Deferred post-cutover design seed
+- Owner: @nccurry
+- Last updated: 2026-09-13
+- Implementation authorized: No
+- Related future capability: `local-scryfall-query-engine`
+- Current runtime: no cohort-analysis tools
 
 ## Problem
 
@@ -141,3 +143,7 @@ prioritizes it as a separate post-cutover capability.
 - No popularity/deck-population joins; those remain in the separate popularity
   evidence roadmap.
 - No new Scryfall provider scraping or background synchronization.
+
+## Log
+
+- 2026-11-05 Converted to the shared PLC template (format only).

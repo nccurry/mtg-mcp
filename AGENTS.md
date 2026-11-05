@@ -167,7 +167,8 @@ task ci                 # what CI runs, including coverage gates and smoke tests
 - Put durable ordinary plans under `docs/llms/plans/`. Put work that spans
   several modules, changes public tools or APIs, changes provider contracts or
   storage, or needs phases in a PLC under `docs/llms/plcs/`.
-- Keep PLCs in `planned/`, `in-progress/`, or `completed/` by lifecycle. A
+- Keep PLCs and ordinary plans in `planned/`, `in-progress/`, `completed/`,
+  or `archived/` by lifecycle. A
   planned PLC is not permission to implement; follow
   `docs/llms/plcs/README.md` for review and owner authorization.
 - Use the ignored `/plans/` folder for local scratch only.

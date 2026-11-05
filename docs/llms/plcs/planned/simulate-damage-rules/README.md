@@ -1,22 +1,5 @@
 # Simulate Damage Rules Plan
 
-## Current Work
-
-- Status: Planned (draft for owner review)
-- Owner: mtg-mcp
-- Last updated: 2026-11-01, drafted on `main` at `c4fa0f1`; one independent
-  review pass, findings fixed
-- Implementation authorized: No. The owner must accept the product-rule report
-  and answer the open questions first.
-- Selected work and endpoint: none yet. When authorized, phases 1 to 3, merged
-  into `main` and shipped in the next release.
-- Next action and blocker: owner review of [Product rule report](#product-rule-report)
-  and [Open questions](#open-questions).
-- Resume check: this packet is in `planned/`; no implementation worktree for
-  `simulate-damage-rules` exists.
-
-## Outcome And Requirements
-
 Agents tuning a Wilson, Refined Grizzly voltron deck asked for "the chance of 21
 commander damage by turn N" (reported in the `deck-edit-ergonomics` planning
 session, 2026-11-01). They had to work it out by hand: `stats_simulate` has
@@ -24,9 +7,30 @@ rules for draws, plays, casts, mana, and counts, and nothing for the commander,
 counters, attachments, or damage. This packet adds caller-stated rules for
 those, so one request can sample that question.
 
-The answer is an estimate of unopposed damage from one attacker: no blockers,
-removal, or opponent actions. It is not a kill turn against real opponents or a
-win rate.
+## Current Work
+
+- Status: Planned (draft for owner review)
+- Owner: mtg-mcp (@nccurry)
+- Last updated: 2026-11-01, drafted on `main` at `c4fa0f1`; one independent
+  review pass, findings fixed
+- Implementation authorized: No. The owner must accept the product-rule report
+  and answer the open questions first.
+- Selected work and endpoint: none yet. When authorized, phases 1 to 3, merged
+  into `main` and shipped in the next release.
+- Next action: owner review of [Product rule report](#product-rule-report)
+  and [Open questions](#open-questions).
+- Resume check: this packet is in `planned/`; no implementation worktree for
+  `simulate-damage-rules` exists.
+
+## Phases
+
+| Phase | Name | Owner | State |
+| --- | --- | --- | --- |
+| [Phase 1](#steps-and-verification) | engine | | Planned |
+| [Phase 2](#steps-and-verification) | App | | Planned |
+| [Phase 3](#steps-and-verification) | docs and release | | Planned |
+
+## Done when
 
 | ID | Required behavior | Acceptance criteria |
 | --- | --- | --- |
@@ -48,6 +52,12 @@ Should (owner decides, see [Open questions](#open-questions)):
 - REQ-012: `attach` takes an optional `powerPerInPlay` (`groups`, `power`) that
   adds `power` for each other card in play in the listed groups, for cards such
   as Ancestral Mask. Opponents' permanents are not counted.
+
+## Outcome And Requirements
+
+The answer is an estimate of unopposed damage from one attacker: no blockers,
+removal, or opponent actions. It is not a kill turn against real opponents or a
+win rate.
 
 Non-goals:
 

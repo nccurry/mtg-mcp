@@ -133,7 +133,7 @@ card data alone does not justify running arbitrary searches locally.
 Build repeatable card-data queries for explicit local groups of cards:
 subtype/tag frequency, feature distributions, Spirit-versus-Bird comparisons,
 Pirate tag counts, and overlap between groups. The design seed is [local
-Scryfall group analysis](llms/plans/local-scryfall-cohort-analysis.md).
+Scryfall group analysis](llms/plans/planned/local-scryfall-cohort-analysis.md).
 
 This remains work for after `0.9.0` and must depend on the local query-engine
 limits. Callers define colors versus color identity, exact subtype

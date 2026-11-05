@@ -6,6 +6,10 @@ repository.
 Prefer no committed plan for tiny single-area fixes. Use an ordinary plan when
 the work benefits from shared context but does not need a full PLC packet.
 
+Keep each plan in the lifecycle folder that matches its status: `planned/`,
+`in-progress/`, `completed/` (finished or historical records), or `archived/`
+(retired, abandoned, or superseded).
+
 Plans follow the shared PLC template: a one- or two-sentence summary of the
 problem or opportunity under the title, then `## Current Work`, `## Phases`,
 `## Done when`, `## Open questions`, and `## Log` last. Implementation order
