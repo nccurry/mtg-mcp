@@ -6,30 +6,31 @@ requirement or design text is reworded.
 
 ## Current Work
 
-- Status: In progress
+Historical record as of `5e65587`; the code is the current truth.
+
+- Status: Complete
 - Owner: @nccurry
-- Last updated: 2026-11-05, `plc-template-move` from `main` at `18c40c8`
-- Next action: owner review of the branch and the open questions below
+- Last updated: 2026-11-05, `plc-template-followup` at `5e65587`
+- Next action: None
 - Blocker: None
 - Depends on: None
-- Current state: both phases and the owner's decisions of 2026-11-05 are
-  implemented on `plc-template-move`, not pushed; the format check prints
-  only the open questions below.
-- Resume check: `python3 <plc-planning skill>/scripts/format_check.py docs/llms/plcs --people nccurry=nccurry --strict`
-  prints only the lines named in the open questions.
+- Current state: every active packet and plan is in the shared template; the
+  strict format check of `docs/llms/plcs` and `docs/llms/plans` prints nothing.
+- Resume check: `python3 <plc-planning skill>/scripts/format_check.py docs/llms/plcs docs/llms/plans --people nccurry=nccurry --strict`
+  prints nothing.
 
 Where the work lives:
 
 | Checkout | Branch | Owner | State |
 | --- | --- | --- | --- |
-| `../mtg-mcp-wt/plc-template/convert` | `plc-template-move` | @nccurry | waiting — owner review |
+| None | | | |
 
 ## Phases
 
 | Phase | Name | Owner | State |
 | --- | --- | --- | --- |
-| P1 | Template and planning guides | | Implemented — `plc-template-move`, not merged |
-| P2 | Active packets in the shared template | | Implemented — `plc-template-move`, not merged |
+| P1 | Template and planning guides | | Verified — a filled copy of the ordinary-plan template passes the format check with `--strict` @ 75fedb9 |
+| P2 | Active packets in the shared template | | Verified — the strict format check of `docs/llms/plcs` and `docs/llms/plans` prints nothing @ 5e65587 |
 
 - P1: `docs/llms/templates/IMPLEMENTATION_PLAN.md` takes the shared sections,
   with Goals And Non-Goals, Affected Areas, Risks And Assumptions, and the
@@ -60,19 +61,11 @@ Where the work lives:
   shared template. Check: a copy of the template with its placeholders filled
   passes the format check with `--strict`.
 
-## Open questions
-
-- Open question: `planned/deckbuilding-agent-guidance` has no summary under
-  its title. The first paragraph of `## Outcome` ends in a colon that leads
-  into a numbered list, so moving it alone would split one sentence. Write one
-  or two sentences, or move the paragraph with its list? (blocks REQ-001;
-  waits on @nccurry)
-- Open question: `plans/planned/local-scryfall-cohort-analysis.md` has no
-  requirements to put under `## Done when`; its "Required Future PLC Gates"
-  are gates for a later PLC. Leave it without `## Done when` while it is a
-  design seed? (blocks nothing; waits on @nccurry)
-
 ## Log
 
 - 2026-11-05 Created.
 - 2026-11-05 Decision: owner answered the conversion cases; applied, two questions left open.
+- 2026-11-05 Merged to `main` at `75fedb9`.
+- 2026-11-05 Decision: owner had a summary written for `deckbuilding-agent-guidance` from its Outcome section.
+- 2026-11-05 Decision: the design seed `plans/planned/local-scryfall-cohort-analysis.md` stays without `## Done when` until it has requirements.
+- 2026-11-05 Complete; moved to `completed/`.
