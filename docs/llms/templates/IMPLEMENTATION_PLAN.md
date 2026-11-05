@@ -58,6 +58,13 @@ data formats, docs, generated files, and downstream users.
 | --- | --- | --- |
 | <Item> | Risk/Assumption | <Action> |
 
+## Completion
+
+- [ ] Observable behavior and failure paths are tested.
+- [ ] Public behavior and docs are synchronized.
+- [ ] Narrow checks and the appropriate Task gate pass.
+- [ ] Deferred work and residual risks are recorded.
+
 ## Log
 
 - <YYYY-MM-DD> Created.
