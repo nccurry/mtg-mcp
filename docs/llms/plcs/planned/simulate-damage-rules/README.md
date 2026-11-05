@@ -11,8 +11,9 @@ those, so one request can sample that question.
 
 - Status: Planned (draft for owner review)
 - Owner: mtg-mcp (@nccurry)
-- Last updated: 2026-11-01, drafted on `main` at `c4fa0f1`; one independent
-  review pass, findings fixed
+- Last updated: 2026-11-05, drafted on `main` at `c4fa0f1` (2026-11-01; one
+  independent review pass, findings fixed); checked against `main` at `d532ae5`
+  (`0.15.0`) and corrected; line references are approximate
 - Implementation authorized: No. The owner must accept the product-rule report
   and answer the open questions first.
 - Selected work and endpoint: none yet. When authorized, phases 1 to 3, merged
@@ -35,15 +36,15 @@ those, so one request can sample that question.
 | ID | Required behavior | Acceptance criteria |
 | --- | --- | --- |
 | REQ-001 | A group can take `zone: "commander"`, which selects commander-zone entries by `entry-ids` only. Those cards start each game in the command zone: rules take them from there as from hand; they are never shuffled, drawn, bottomed, or counted as seen. Omitting `zone` (or `"main"`) keeps today's behavior, including the `entry-not-in-main-zone` refusal. Commander entries count toward the 150-entry and 500-card limits and the samples x turns x cards work limit. | Tests: a commander card is cast on the first turn the mana allows, from any opening hand; it never appears in `hands`, `drawn`, or `bottomed`; `category-ids` with `zone: "commander"` is refused; a main group naming a commander entry is still refused; an empty main zone is still refused; limit tests count commander cards. |
-| REQ-002 | Checks and settings that read the hand or library refuse a commander group, each with reason `commander-group-not-allowed` and the path: `count-between`, `drawn-at-least`, `bottom.preferGroups`, and a `can-cast` `inHand` naming a commander entry. A rule that moves a commander card must state `addsMana` (no default), because a default of 1 would quietly add mana for a creature. | One refusal test for each; a commander `cast-if-able` without `addsMana` is refused. |
-| REQ-003 | A new `eachTurn` rule `attach` casts a card of its group for `cost` (0 to 99) generic mana and attaches it to the one card of its `target` group, adding `power` (0 to 99) while both are in play. It fires only while the target's card is in play. `pick` is `random` or `listed-order`; `target-first` is refused. The attached card counts as in play for `on-battlefield-at-least`. | Fixed-order tests: an aura in hand before the target is in play is not cast; after the target enters it is cast and adds its power; `maxPerTurn` and `cost` limit it as `cast-if-able` does; `target-first` is refused. |
+| REQ-002 | Checks and settings that read the hand or library refuse a commander group, each with reason `commander-group-not-allowed` and the path: `count-between`, `drawn-at-least`, `bottom.preferGroups`, and a `can-cast` `inHand` naming a commander entry. A rule that moves a commander card must state `addsMana` (no default), because a default of 1 would quietly add mana for a creature. `addsMana` and its default of 1 sit on the shared `SimulationManaRuleInput`, so the refusal is a per-zone check in the mapper, not a new default. | One refusal test for each; a commander `cast-if-able` or `play` without `addsMana` is refused. |
+| REQ-003 | A new `eachTurn` rule `attach` casts a card of its group for `cost` (0 to 99) generic mana and attaches it to the one card of its `target` group, adding `power` (0 to 99) while both are in play. It fires only while the target's card is in play. `pick` is `random` or `listed-order`; `target-first`, an existing `SimulationPick` value documented as for play rules only, is refused for `attach` in the planner and mapper, and the shared `pick` description is reworded so `attach` does not advertise it. The attached card counts as in play for `on-battlefield-at-least`. | Fixed-order tests: an aura in hand before the target is in play is not cast; after the target enters it is cast and adds its power; `maxPerTurn` and `cost` limit it as `cast-if-able` does; `target-first` is refused. |
 | REQ-004 | A new top-level list `triggers` (at most 20) holds `add-counters` triggers, apart from `eachTurn` because they do not run in its listed order. Each puts `amount` (1 to 99) +1/+1 counters on the one card of its `target` group while a card of its `source` group is in play. `on` is required: `turn-start` fires once at the start of each turn, before the draw, using what was in play then; `target-enters` fires once each time the target's card enters play, if a source card is already in play. Triggers of one kind fire in listed order. | Tests reproduce Noble Heritage: Wilson entering after the Background gets 2 at once; Wilson entering before it gets none until the next turn start; each later turn adds 2. |
 | REQ-005 | A new rule `attack` makes the one card of its group deal damage equal to its power when it is in play and may attack: `attacksFrom: "same-turn"` (haste) or `"next-turn"`. Power is the caller's `power` (0 to 99) plus counters plus attachment bonuses. It fires once a turn at its place in `eachTurn`, so rules listed after it act after combat. A second `attack` rule for the same group is refused (`duplicate-attack`). | Fixed-order tests: no damage the turn it enters with `next-turn`; damage that turn with `same-turn`; counters and attachments before the rule count, those after it do not; a duplicate is refused. |
 | REQ-006 | A new check `damage-at-least` passes when the card of its `group` has dealt at least `amount` damage (1 to 999) by `byTurn`. Commander damage is this check on a commander group. | The two worked fixtures below give exactly the listed totals; both pass `amount: 21, byTurn: 6` and fail `byTurn: 5`. |
 | REQ-007 | `target`, `source`, and the `attack` group each hold exactly one card (one entry, quantity 1); anything else is refused with `target-not-one-card` naming the group. | Refusal tests for two entries and for quantity 2. |
-| REQ-008 | Returned sample games add an `attacks` list to each turn record: rule index, entry ID, power, and damage (power times strikes; 1 strike unless REQ-011 is accepted). For requests without `attack` rules the list is empty and every other field is unchanged. | Result tests; the output schema baseline is updated. |
+| REQ-008 | Returned sample games add an `attacks` list to each turn record: rule index, entry ID, power, and damage (power times strikes; 1 strike unless REQ-011 is accepted). For requests without `attack` rules the list is empty and every other field is unchanged. | Result tests; the output schema baseline and the worked result in `docs/reference.md` are updated. `SimulationTurnRecord` is a positional record (`Turn`, `Drawn`, `Moved`, `ManaAvailable`, `ManaSpent`), so adding `attacks` changes every constructor call. |
 | REQ-009 | Existing requests keep their results: the same hits and the same returned games apart from the empty `attacks` lists. New rules use random values only through `pick`, as existing rules do; `RandomVersion` stays `splitmix64-v1`. The fingerprint also hashes the commander-zone entries, each group's zone, and the new rules and triggers. | A replay test of existing fixtures compares hits and games (not fingerprints); a test shows a main group and a commander group with the same IDs give different fingerprints. |
-| REQ-010 | The description lists the new fixed engine rules (command zone, trigger timing, one-card targets, unopposed attacks), rewrites rule 1 ("Groups pick main-zone entries") and the `skipped` wording for commander groups, and stays within 4,096 characters. When a request has an `attack` rule, the result `limits` include "Unopposed damage: no blockers, removal, life totals, or opponent actions are modeled." README gains the Wilson example as a checked `<!-- example: stats_simulate -->` block. CHANGELOG lists the new kinds, fields, and output list, and says fingerprints change if `ModelVersion` is bumped. | Description length test; `limits` test with and without `attack`; README example test; budget test that the work estimate counts the new rules and triggers; doc review. |
+| REQ-010 | The description lists the new fixed engine rules (command zone, trigger timing, one-card targets, unopposed attacks), rewrites rule 1 ("Groups pick main-zone entries") and the `skipped` wording for commander groups, and stays within 4,096 characters. When a request has an `attack` rule, the result `limits` include "Unopposed damage: no blockers, removal, life totals, or opponent actions are modeled." `docs/reference.md` gains the Wilson example as a checked `<!-- example: stats_simulate -->` block, and its `stats_simulate` section lists the new fixed rules (the README no longer carries examples). CHANGELOG lists the new kinds, fields, and output list under Unreleased, and says fingerprints change if `ModelVersion` is bumped. | Description length test; `limits` test with and without `attack`; `ReferenceExampleTests` on the new example; budget test that the work estimate counts the new rules and triggers; doc review. |
 
 Should (owner decides, see [Open questions](#open-questions)):
 
@@ -68,7 +69,7 @@ Non-goals:
   commander tax, or moving equipment between creatures.
 - Several attackers or total damage from a creature deck; targets and attackers
   are one card each in this version.
-- A `voltron` or `commander-damage` preset. The README example replaces it.
+- A `voltron` or `commander-damage` preset. The `docs/reference.md` example replaces it.
 - Colored costs for rules that spend mana. `cast-if-able` and `attach` spend
   generic mana, as today; `can-cast` remains the color check.
 
@@ -109,7 +110,8 @@ approve.
 
 ## Current System
 
-Inspected at `c4fa0f1` (read-only):
+Inspected at `c4fa0f1` and re-checked at `d532ae5` on 2026-11-05 (read-only). The engine, input unions, line
+references, and versions below still hold; the `0.15.0` surface change touched other tools:
 
 - Input kinds are a closed JSON union in
   `src/MtgMcp.App/Statistics/StatisticsSimulateInputs.cs`: rules `play`,
@@ -125,16 +127,19 @@ Inspected at `c4fa0f1` (read-only):
   which puts every card into the library (`:199-203`); a turn is draw, rules in
   order, then leaf checks (`:281-303`). State is per group (`inPlayByGroup`,
   `seenByGroup`) and mana producers; nothing is kept per card.
-- `pick: random` draws one random value even when one card qualifies
-  (`OnCurveRandom.cs:90-103`).
+- `pick: random` draws one random value even when one card qualifies: the
+  decision point is `SimulationTrial.Choose` (`:402-415`), which calls
+  `OnCurveRandom.NextIndex` (`OnCurveRandom.cs:90-103`).
 - The coordinator reads only the main zone
   (`StatisticsSimulateCoordinator.cs:87-107`); an `entry-ids` group naming
   another zone is refused with `entry-not-in-main-zone`
   (`SimulationRequestMapper.cs:220-250`). Local decks use zone `commander`.
 - `SimulationEngine.ModelVersion` is `simulation-v1` and `RandomVersion`
   `splitmix64-v1`; both enter the fingerprint (`SimulationFingerprint.cs:21-22`).
-- The live tool description is about 3,900 of 4,096 characters, about 1,300 of
-  them the full example (`StatisticsSimulateTools.cs:28-43,69-96`).
+- The live tool description is within about 10 characters of the 4,096 limit (a
+  literal-string estimate; the length test is the authority), about 1,100 of
+  them the full example (`StatisticsSimulateTools.cs:28-43,69-96`), so any new
+  rule text needs the example moved first.
 - Card facts for the example (installed data, 2026-11-01): Wilson, Refined
   Grizzly `{1}{G}` 2/2 reach, vigilance, trample, ward 2; Noble Heritage `{1}{W}`
   Background: commander creatures you own have "When this creature enters and
@@ -148,8 +153,10 @@ Inspected at `c4fa0f1` (read-only):
 
 Input bases: `SimulationRuleInput` becomes an empty union base;
 `SimulationCardRuleInput` takes its `group`, `pick`, and `maxPerTurn`, and
-`play`, `cast-if-able`, `draw-cards`, and `attach` derive from it. A schema test
-holds the three existing kinds' JSON schemas unchanged.
+`draw-cards` and `attach` derive from it. `SimulationManaRuleInput`, which holds
+`addsMana`, `manaFrom`, and `manaFromByEntry` for `play` and `cast-if-able`,
+moves under `SimulationCardRuleInput`. A schema test holds the three existing
+kinds' JSON schemas unchanged.
 
 | Kind | Input record (App) | Engine record (Simulation) | Evaluator case |
 | --- | --- | --- | --- |
@@ -182,7 +189,7 @@ any Background. The engine never reads card text, legality, or installed data.
 
 ### Documented example request
 
-This goes into README as a checked example; IDs are placeholders.
+This goes into `docs/reference.md` as a checked example; IDs are placeholders.
 
 ```json
 {
@@ -258,12 +265,17 @@ are exact tests in `tests/MtgMcp.Simulation.Tests/SimulationRuleTests.cs`.
 1. Phase 1, engine (REQ-001 to REQ-007 and REQ-009 engine parts):
    `SimulationModels`, `SimulationPlan`, `SimulationPlanner` (validation,
    refusals, one-card targets, work estimate), `SimulationTrial`,
-   `SimulationFingerprint`; fixed-order fixtures, validation and budget tests,
-   replay test of existing fixtures.
+   `SimulationFingerprint`; fixed-order fixtures in `SimulationRuleTests.cs`,
+   refusals in `SimulationValidationTests.cs`, limits in
+   `SimulationBudgetTests.cs`, replay test of existing fixtures. The trial's
+   hot loop gains per-card state, so run `task benchmark:simulation` before and
+   after and keep the on-curve baseline within `docs/performance-ratchet.md`.
 2. Phase 2, App (REQ-001, REQ-002, REQ-008, REQ-010): input bases and records,
    `SimulationRequestMapper` and the coordinator read the commander zone for
-   commander groups, result `attacks` and `limits`, description, README example,
-   CHANGELOG.
+   commander groups (`DeckSourceInput` already takes a `zones` list, so this is
+   a small change at `StatisticsSimulateCoordinator.cs:87-107`), result
+   `attacks` and `limits`, description, `docs/reference.md` example and worked
+   result, CHANGELOG under Unreleased.
 3. Phase 3, docs and release: `north-star.md`, `potential-features.md`,
    `design-goals.md` wording; full audit; merge, release, install.
 
@@ -272,10 +284,16 @@ Each phase: focused tests, then `task ci`, `task test:integration`, and
 
 ## Risks
 
-- Agents may read the rate as a real kill turn. The description, README, and
+- Agents may read the rate as a real kill turn. The description, `docs/reference.md`, and
   result `limits` say the damage is unopposed.
-- The description budget is tight. Phase 2 moves the full example to README and
-  keeps the minimal one, freeing about 1,300 characters.
+- The description budget is very tight (within about 10 characters today). Phase 2
+  moves the full example to `docs/reference.md` and keeps the minimal one,
+  freeing about 1,100 characters, and the new fixed-rule text (command zone,
+  trigger timing, one-card targets, unopposed attacks) plus the reworded rule 1
+  must fit in that. If it does not, trim existing prose; the 4,096 limit is not
+  raised.
+- The trial hot loop changes, so a performance regression is possible. Phase 1
+  compares `task benchmark:simulation` before and after.
 - One-card targets fit voltron only. Lifting that later needs a fixed or
   caller-stated choice of which creature an aura goes on.
 
@@ -301,13 +319,24 @@ Each phase: focused tests, then `task ci`, `task test:integration`, and
    `listed-order` to avoid a random value), or fix it for commander groups?
    Recommended: keep it required, so all card rules share one shape.
 8. Release: additive input kinds and output fields fit a minor release under
-   `docs/versioning.md`. Ship in the next release with other planned work.
+   `docs/versioning.md`. Ship in the next release with other planned work; the
+   next minor after `0.15.0` is `0.16.0`, and `deckbuilding-agent-guidance`
+   also targets it. The two touch different descriptions (this packet only
+   `stats_simulate`), so they do not collide; whether that packet's game-math
+   skill should mention these rules once they ship is its own decision.
+9. Domain check: Commander players ask for a voltron clock as "turns to 21
+   commander damage" given stated power, haste, and bonuses. That is
+   arithmetic, and sampling is needed only because draws vary, so the sampled
+   estimate here is the right tool for the question as the owner stated it.
+   Should a later packet add an exact calculator for the case where every card
+   is already in hand? Recommended: no, until agents ask for it.
 
 ## Evidence And Completion
 
 | Date | Check | Result |
 | --- | --- | --- |
 | 2026-11-01 | Independent review of the draft | 12 findings and 3 missing questions; all fixed in this revision (REQ-009 random claim, input bases, command-zone data path, fingerprint, trigger placement, refusals, output compatibility, bounds, fixture order, north-star line 45, attack enum, damage field). |
+| 2026-11-05 | Currency check against `main` at `d532ae5` (`0.15.0`) | Read-only review of every cited path, line range, version, and limit. Confirmed: the input and engine unions and their line references, `ModelVersion` `simulation-v1`, `RandomVersion` `splitmix64-v1`, the main-zone-only coordinator and `entry-not-in-main-zone`, north-star lines 45 and 61-62, and `potential-features.md` line 90. Corrected: the example and worked result live in `docs/reference.md`, not the README; the description has within about 10 characters of the limit, and the full example is about 1,100 characters, not 1,300; `SimulationManaRuleInput` sits between the rule base and `play` and `cast-if-able`; `target-first` is an existing pick value; the random draw happens in `SimulationTrial.Choose`. Added: a benchmark check, the validation and budget test files, and the `0.16.0` target. |
 
 | Requirement | State | Evidence |
 | --- | --- | --- |
@@ -316,3 +345,5 @@ Each phase: focused tests, then `task ci`, `task test:integration`, and
 ## Log
 
 - 2026-11-05 Converted to the shared PLC template (format only).
+- 2026-11-05 Brought current with `main` at `d532ae5` (`0.15.0`): moved the example and worked result to `docs/reference.md`, corrected the description-length figures, named the existing `SimulationManaRuleInput` and `target-first` mechanisms, and added the benchmark check. No requirement was added or dropped; acceptance wording changed in REQ-003, REQ-008, and Steps 1 and 2.
+- 2026-11-05 Added open question 9 from the Commander voltron-clock check, and a note that this packet and `deckbuilding-agent-guidance` land one after the other.
