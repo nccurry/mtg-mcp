@@ -1,5 +1,10 @@
 # Deckbuilding Agent Guidance Plan
 
+One Claude Code plugin installs the mtg-mcp server and a set of deckbuilding
+skills, and tool results steer agents toward the search process that finds the
+best evidence. The server still returns facts; skills describe a process and do
+not rank cards.
+
 ## Current Work
 
 - Status: Planned. Drafted from observed agent usage, revised after one independent review, and its evidence
@@ -504,3 +509,4 @@ Tests:
 ## Log
 
 - 2026-11-05 Converted to the shared PLC template (format only).
+- 2026-11-05 Decision: owner asked for a summary under the title, written from `## Outcome`; the Outcome section stays as it was.
