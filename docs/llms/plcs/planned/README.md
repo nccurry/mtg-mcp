@@ -30,6 +30,11 @@ was completed and released as 0.12.0 on 2026-10-29.
 a Claude Code plugin with deckbuilding skills, plus search results that guide
 agents to oracle tags and whole-result reads.
 
+## Tool Surface
+
+[mcp-guidance-audit](mcp-guidance-audit/README.md) is planned: check every tool against current MCP and
+vendor tool-design guidance and fix the findings. It awaits owner review and is not authorized.
+
 ## Simulation
 
 [simulate-damage-rules](simulate-damage-rules/README.md) plans caller-stated

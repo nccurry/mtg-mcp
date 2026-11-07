@@ -11,14 +11,14 @@ those, so one request can sample that question.
 
 - Status: Planned (draft for owner review)
 - Owner: mtg-mcp (@nccurry)
-- Last updated: 2026-11-05, drafted on `main` at `c4fa0f1` (2026-11-01; one
+- Last updated: 2026-11-07, drafted on `main` at `c4fa0f1` (2026-11-01; one
   independent review pass, findings fixed); checked against `main` at `d532ae5`
   (`0.15.0`) and corrected; line references are approximate
 - Implementation authorized: No. The owner must accept the product-rule report
   and answer the open questions first.
 - Selected work and endpoint: none yet. When authorized, phases 1 to 3, merged
   into `main` and shipped in the next release.
-- Next action: owner answers open questions 2 to 9 (question 1 was accepted on 2026-11-07; see
+- Next action: owner answers open questions 2 and 4 to 10 (questions 1 and 3 were decided on 2026-11-07; see
   Log) and then decides whether to authorize implementation.
 - Resume check: this packet is in `planned/`; no implementation worktree for
   `simulate-damage-rules` exists.
@@ -42,17 +42,12 @@ those, so one request can sample that question.
 | REQ-005 | A new rule `attack` makes the one card of its group deal damage equal to its power when it is in play and may attack: `attacksFrom: "same-turn"` (haste) or `"next-turn"`. Power is the caller's `power` (0 to 99) plus counters plus attachment bonuses. It fires once a turn at its place in `eachTurn`, so rules listed after it act after combat. A second `attack` rule for the same group is refused (`duplicate-attack`). | Fixed-order tests: no damage the turn it enters with `next-turn`; damage that turn with `same-turn`; counters and attachments before the rule count, those after it do not; a duplicate is refused. |
 | REQ-006 | A new check `damage-at-least` passes when the card of its `group` has dealt at least `amount` damage (1 to 999) by `byTurn`. Commander damage is this check on a commander group. | The two worked fixtures below give exactly the listed totals; both pass `amount: 21, byTurn: 6` and fail `byTurn: 5`. |
 | REQ-007 | `target`, `source`, and the `attack` group each hold exactly one card (one entry, quantity 1); anything else is refused with `target-not-one-card` naming the group. | Refusal tests for two entries and for quantity 2. |
-| REQ-008 | Returned sample games add an `attacks` list to each turn record: rule index, entry ID, power, and damage (power times strikes; 1 strike unless REQ-011 is accepted). For requests without `attack` rules the list is empty and every other field is unchanged. | Result tests; the output schema baseline and the worked result in `docs/reference.md` are updated. `SimulationTurnRecord` is a positional record (`Turn`, `Drawn`, `Moved`, `ManaAvailable`, `ManaSpent`), so adding `attacks` changes every constructor call. |
+| REQ-008 | Returned sample games add an `attacks` list to each turn record: rule index, entry ID, power, and damage (power times strikes; 1 strike unless `doubleStrike` applies, REQ-011). For requests without `attack` rules the list is empty and every other field is unchanged. | Result tests; the output schema baseline and the worked result in `docs/reference.md` are updated. `SimulationTurnRecord` is a positional record (`Turn`, `Drawn`, `Moved`, `ManaAvailable`, `ManaSpent`), so adding `attacks` changes every constructor call. |
 | REQ-009 | Existing requests keep their results: the same hits and the same returned games apart from the empty `attacks` lists. New rules use random values only through `pick`, as existing rules do; `RandomVersion` stays `splitmix64-v1`. The fingerprint also hashes the commander-zone entries, each group's zone, and the new rules and triggers. | A replay test of existing fixtures compares hits and games (not fingerprints); a test shows a main group and a commander group with the same IDs give different fingerprints. |
 | REQ-010 | The description lists the new fixed engine rules (command zone, trigger timing, one-card targets, unopposed attacks), rewrites rule 1 ("Groups pick main-zone entries") and the `skipped` wording for commander groups, and stays within 4,096 characters. When a request has an `attack` rule, the result `limits` include "Unopposed damage: no blockers, removal, life totals, or opponent actions are modeled." `docs/reference.md` gains the Wilson example as a checked `<!-- example: stats_simulate -->` block, and its `stats_simulate` section lists the new fixed rules (the README no longer carries examples). CHANGELOG lists the new kinds, fields, and output list under Unreleased, and says fingerprints change if `ModelVersion` is bumped. | Description length test; `limits` test with and without `attack`; `ReferenceExampleTests` on the new example; budget test that the work estimate counts the new rules and triggers; doc review. |
-
-Should (owner decides, see [Open questions](#open-questions)):
-
-- REQ-011: `attach` takes an optional `doubleStrike: true`, which makes the
-  target deal its damage twice in each attack.
-- REQ-012: `attach` takes an optional `powerPerInPlay` (`groups`, `power`) that
-  adds `power` for each other card in play in the listed groups, for cards such
-  as Ancestral Mask. Opponents' permanents are not counted.
+| REQ-011 | `attach` and `attack` take an optional `doubleStrike: true`. The card that attacks deals its damage twice in that attack, and `attacks` records 2 strikes. On `attach` it applies to the target while the card is attached. | Fixed-order tests: a power-4 attacker with double strike deals 8 in one attack; an attached double strike applies from the turn it attaches; without it damage is unchanged. |
+| REQ-012 | `attach` and `attack` take an optional `powerPerInPlay` (`groups`, `power`) that adds `power` for each other card in play in the listed groups when the attack happens, for cards such as Ancestral Mask. The card that carries the modifier (the attached card for `attach`, the attacker for `attack`) is not counted, and opponents' permanents are not counted. | Fixed-order tests: with 3 other cards of the group in play and `power: 2` the attacker gains 6; the count follows cards entering play; an empty group adds 0. |
+| REQ-013 | Modifiers are general. A named field with one fixed meaning (`power`, `doubleStrike`, `powerPerInPlay`) is accepted on every rule where it makes sense, which today is `attach` and `attack`. A new modifier is one input field, one engine field, one evaluator case, and a fixture, and never a formula or expression language. | Schema test: each modifier is accepted on `attach` and `attack` and refused with a `path` elsewhere; no new parser or expression type is added. |
 
 ## Outcome And Requirements
 
@@ -65,8 +60,9 @@ Non-goals:
 - Reading power, counters, or bonuses from card text or installed card data.
   `MtgMcp.Simulation` stays free of Scryfall; the caller reads facts with
   `scryfall_cards_get` and states them.
-- Opponents, blockers, removal, life totals, poison, lifelink, extra combats,
-  commander tax, or moving equipment between creatures.
+- Opponents, blockers, removal, life totals, poison, lifelink, commander tax, or
+  moving equipment between creatures. Extra combats are pending question 10.
+  Expressions or formulas for power are never added (REQ-013).
 - Several attackers or total damage from a creature deck; targets and attackers
   are one card each in this version.
 - A `voltron` or `commander-damage` preset. The `docs/reference.md` example replaces it.
@@ -105,8 +101,8 @@ approve.
   allowed; opponents and combat decisions are not". If the owner reads combat
   damage as strategic or full-game simulation, this packet stops here.
 - **Not a rules engine.** `docs/design-goals.md` bans a generic rules engine or
-  expression language. `powerPerInPlay` (REQ-012) is a fixed formula with no
-  expressions; it is optional so the owner can drop it.
+  expression language. `powerPerInPlay` (REQ-012) and the other modifiers
+  (REQ-013) are fixed named fields with no expressions.
 
 ## Current System
 
@@ -161,9 +157,9 @@ kinds' JSON schemas unchanged.
 | Kind | Input record (App) | Engine record (Simulation) | Evaluator case |
 | --- | --- | --- | --- |
 | group `zone` | `SimulationGroupInput.Zone` (`main`, `commander`) | `SimulationRequest.CommandZone` (a separate `SimulationDeckEntry` list) and `SimulationGroup.CommandZone` | The trial fills a `commandZone` list at game start, never in the library; `Choose` looks there for commander groups. |
-| `attach` | `SimulationAttachInput : SimulationCardRuleInput` (`cost`, `target`, `power`) | `SimulationAttach(Group, Pick, MaxPerTurn, Cost, Target, Power)` | `SimulationRuleKind.Attach`: skip unless the target card is in play; spend cost; move to play; add `power` to the target's bonus. |
+| `attach` | `SimulationAttachInput : SimulationCardRuleInput` (`cost`, `target`, `power`, `doubleStrike`, `powerPerInPlay`) | `SimulationAttach(Group, Pick, MaxPerTurn, Cost, Target, Power, DoubleStrike, PowerPerInPlay)` | `SimulationRuleKind.Attach`: skip unless the target card is in play; spend cost; move to play; add `power` to the target's bonus; `doubleStrike` sets the target's strikes to 2; `powerPerInPlay` adds its power per listed-group card in play, not counting the attached card itself. |
 | `add-counters` | `SimulationAddCountersInput` in the new `triggers` list (`target`, `source`, `amount`, `on`) | `SimulationAddCounters(Target, Source, Amount, SimulationTriggerOn)` in `SimulationRequest.Triggers` | `turn-start`: a pass before the draw. `target-enters`: run when a rule moves the target's card to play. |
-| `attack` | `SimulationAttackInput : SimulationRuleInput` (`group`, `power`, `attacksFrom`) | `SimulationAttack(Group, Power, SimulationAttackFrom)` | `SimulationRuleKind.Attack`: if the card is in play and may attack, add its damage and record the attack. |
+| `attack` | `SimulationAttackInput : SimulationRuleInput` (`group`, `power`, `attacksFrom`, `doubleStrike`, `powerPerInPlay`) | `SimulationAttack(Group, Power, SimulationAttackFrom, DoubleStrike, PowerPerInPlay)` | `SimulationRuleKind.Attack`: if the card is in play and may attack, add its damage (power times 1 or 2 strikes) and record the attack; `powerPerInPlay` adds its power per listed-group card in play, not counting the attacker. |
 | `damage-at-least` | `SimulationDamageAtLeastInput : SimulationCheckInput` (`group`, `amount`, `byTurn`) | `SimulationDamageAtLeast(Group, Amount, ByTurn)` | `SimulationLeafKind.DamageAtLeast`: the group card's damage is at least `amount`. |
 
 `SimulationAttackFrom` (`SameTurn`, `NextTurn`) is its own enum so mana timing
@@ -177,6 +173,8 @@ group: counters, attachment bonus, damage, and the turn it entered.
 3. `eachTurn` rules in listed order. When `play`, `cast-if-able`, or `attach`
    moves a target's card to play, its `target-enters` triggers fire at once.
    `attack` deals damage at its place in the list.
+   `doubleStrike` and `powerPerInPlay` are read when the attack happens, so cards attached later in the list do not
+   count for that turn's attack.
 4. Leaf checks (unchanged), now including `damage-at-least`.
 
 ### What stays caller-stated
@@ -230,7 +228,7 @@ This goes into `docs/reference.md` as a checked example; IDs are placeholders.
 ```
 
 Here `auras` is Rancor (cost 1, +2) and `equipment` is Shadowspear (cast 1 plus
-equip 2, +1). Ancestral Mask needs REQ-012. Casting Heritage before Wilson is
+equip 2, +1). Ancestral Mask is fixture 4 (REQ-012). Casting Heritage before Wilson is
 the caller's choice of rule order. The commander groups use `listed-order`,
 which uses no random value.
 
@@ -260,9 +258,19 @@ Fixture 2, the Wilson rule listed before the Heritage rule: turn 2 Wilson (no
 Both pass `damage-at-least 21` with `byTurn: 6` and fail with `byTurn: 5`. They
 are exact tests in `tests/MtgMcp.Simulation.Tests/SimulationRuleTests.cs`.
 
+Fixture 3 (REQ-011), `doubleStrike`: `KeepDeckOrder`, on the play, no mulligan. Wilson (power 2) is cast on turn 2 with
+an `attack` rule `attacksFrom: "same-turn"` and `doubleStrike: true`. Each attack deals 2 x 2 = 4: totals 4, 8, 12 on
+turns 2, 3, 4. `damage-at-least 12 byTurn 4` passes and `byTurn 3` fails.
+
+Fixture 4 (REQ-012), `powerPerInPlay`: same setup without double strike, `same-turn` attacks. Rancor (`attach`, cost
+0, `power` 2) is listed before an Ancestral Mask rule (`attach`, cost 0, `power` 0, `powerPerInPlay` of group
+`enchantments`, `power` 2). Both cards are in `enchantments`. Wilson enters on turn 2 (power 2, damage 2). On turn 3
+both attach: Rancor adds 2, and the Mask counts the other enchantment in play (Rancor, not the Mask itself) for +2, so
+the attack is 6 (total 8). Turn 4 attacks for 6 (total 14). `damage-at-least 14 byTurn 4` passes and `byTurn 3` fails.
+
 ## Steps And Verification
 
-1. Phase 1, engine (REQ-001 to REQ-007 and REQ-009 engine parts):
+1. Phase 1, engine (REQ-001 to REQ-007, REQ-009 engine parts, and REQ-011 to REQ-013 with fixtures 3 and 4):
    `SimulationModels`, `SimulationPlan`, `SimulationPlanner` (validation,
    refusals, one-card targets, work estimate), `SimulationTrial`,
    `SimulationFingerprint`; fixed-order fixtures in `SimulationRuleTests.cs`,
@@ -270,7 +278,7 @@ are exact tests in `tests/MtgMcp.Simulation.Tests/SimulationRuleTests.cs`.
    `SimulationBudgetTests.cs`, replay test of existing fixtures. The trial's
    hot loop gains per-card state, so run `task benchmark:simulation` before and
    after and keep the on-curve baseline within `docs/performance-ratchet.md`.
-2. Phase 2, App (REQ-001, REQ-002, REQ-008, REQ-010): input bases and records,
+2. Phase 2, App (REQ-001, REQ-002, REQ-008, REQ-010, REQ-011 to REQ-013 input mapping and schema test): input bases and records,
    `SimulationRequestMapper` and the coordinator read the commander zone for
    commander groups (`DeckSourceInput` already takes a `zones` list, so this is
    a small change at `StatisticsSimulateCoordinator.cs:87-107`), result
@@ -284,6 +292,8 @@ Each phase: focused tests, then `task ci`, `task test:integration`, and
 
 ## Risks
 
+- The description gains text for `doubleStrike` and `powerPerInPlay` on two rules, so REQ-010 checks that the new
+  field text fits within 4,096 characters together with the other new rule text.
 - Agents may read the rate as a real kill turn. The description, `docs/reference.md`, and
   result `limits` say the damage is unopposed.
 - The description budget is very tight (within about 10 characters today). Phase 2
@@ -305,9 +315,8 @@ Each phase: focused tests, then `task ci`, `task test:integration`, and
    but the fixed engine rules change and every fingerprint changes with the
    bump. Recommended: bump, so a result names the rule set that produced it;
    `RandomVersion` stays.
-3. Include REQ-011 (`doubleStrike`) and REQ-012 (`powerPerInPlay`)? Both are
-   common in voltron decks. Recommended: REQ-011 yes (one boolean), REQ-012 only
-   if the owner wants Ancestral Mask now.
+3. Decided 2026-11-07: the owner included `doubleStrike` and `powerPerInPlay` and asked that modifiers be general, so
+   REQ-011 to REQ-013 are Must. Which further obvious rules to add is question 10.
 4. Equipment: keep one `cost` (cast plus equip), or add `equipCost` so an
    equipment can be cast before the creature arrives? Recommended: one `cost`.
 5. Should `attach` and the commander casts check colored costs? Recommended:
@@ -330,6 +339,13 @@ Each phase: focused tests, then `task ci`, `task test:integration`, and
    estimate here is the right tool for the question as the owner stated it.
    Should a later packet add an exact calculator for the case where every card
    is already in hand? Recommended: no, until agents ask for it.
+10. Which further obvious rules should be modifiers now (REQ-013 sets the pattern)? Candidates, each one field:
+    `grantsHaste` on `attach` (equipment such as Lightning Greaves lets its target attack the turn it enters, the
+    same as `attacksFrom: "same-turn"`); extra combat steps (`extraCombats`, which repeats `attack` in a turn);
+    counter doubling on `add-counters` (Hardened Scales or Doubling Season style, a stated `counterBonus`); an
+    `on: "attack"` counter trigger; and a stated power multiplier ("double its power"). Recommended: add
+    `grantsHaste` and `extraCombats`, and leave the others until a deck needs them. This sits inside the owner's
+    request to support as many obvious rules as possible, so the answer picks the list, not the direction.
 
 ## Evidence And Completion
 
@@ -340,7 +356,7 @@ Each phase: focused tests, then `task ci`, `task test:integration`, and
 
 | Requirement | State | Evidence |
 | --- | --- | --- |
-| REQ-001 to REQ-012 | planned | none yet |
+| REQ-001 to REQ-013 | planned | none yet |
 
 ## Log
 
@@ -348,3 +364,4 @@ Each phase: focused tests, then `task ci`, `task test:integration`, and
 - 2026-11-05 Brought current with `main` at `d532ae5` (`0.15.0`): moved the example and worked result to `docs/reference.md`, corrected the description-length figures, named the existing `SimulationManaRuleInput` and `target-first` mechanisms, and added the benchmark check. No requirement was added or dropped; acceptance wording changed in REQ-003, REQ-008, and Steps 1 and 2.
 - 2026-11-05 Added open question 9 from the Commander voltron-clock check, and a note that this packet and `deckbuilding-agent-guidance` land one after the other.
 - 2026-11-07 Decision: open question 1 answered by the owner. Unopposed combat damage is accepted under the reworded north-star passages, which phase 3 rewrites. Implementation is still not authorized, and questions 2 to 9 remain open.
+- 2026-11-07 Decision: owner answered question 3 and asked that modifiers be general. `doubleStrike` and `powerPerInPlay` are now Must (REQ-011, REQ-012) and REQ-013 states the general modifier pattern. The list of further rules is question 10.

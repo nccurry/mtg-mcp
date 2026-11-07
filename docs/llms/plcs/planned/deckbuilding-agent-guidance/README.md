@@ -11,12 +11,12 @@ not rank cards.
   recounted across every local transcript on 2026-11-02; brought current with `main` and re-checked against
   Anthropic, OpenAI, and MCP guidance and Commander deckbuilding practice on 2026-11-05; not reviewed by the owner yet.
 - Owner: mtg-mcp (owner session) (@nccurry)
-- Last updated: 2026-11-05, checked against `main` at `d532ae5` (`0.15.0`, the `surface-consistency` clean break).
+- Last updated: 2026-11-07, checked against `main` at `d532ae5` (`0.15.0`, the `surface-consistency` clean break).
   The usage evidence below was measured on `0.14.0` and earlier.
 - Implementation authorized: No. Approval of this packet is not permission to start; the owner must say so.
 - Selected work and endpoint: phases 0 to 5, merged into `main`, released, and installed through the new plugin.
-- Next action: owner review of decisions D-1 to D-7, the skill authoring rules S-1 to S-16, and open questions
-  OQ-1 to OQ-5 and OQ-7. The owner answered OQ-6 and OQ-8 on 2026-11-07 (see Log).
+- Next action: owner review of decisions D-1 to D-9 and the skill authoring rules S-1 to S-16. No open questions
+  remain; the owner answered the earlier ones on 2026-11-07 (see Log).
 - Blocker: none.
 - Where the work lives: this packet is merged into local `main`; no implementation branch or worktree exists yet.
   Nothing is pushed.
@@ -25,7 +25,7 @@ not rank cards.
 
 | Phase | Work | Exit | State |
 | --- | --- | --- | --- |
-| 0 | Settle OQ-1 and OQ-2, and try `claude plugin eval` on one scenario (OQ-4). Measure D-5 with and without an index, and the cost of REQ-013 tag counts on a large search. Build the usage report (REQ-016) and run it on sync sessions from `0.15.0` onward to see which sync failures remain; the 9 failures in Sources used `0.14.0` argument shapes that `0.15.0` no longer accepts. | Decisions and measurements recorded here; usage-report tests pass. | Planned |
+| 0 | Test the plugin launch on a clean machine and profile (D-8), try `claude plugin eval` on one scenario, and explore a Codex plugin from the same skill folders (D-9). Measure D-5 with and without an index, and the cost of REQ-013 tag counts on a large search. Build the usage report (REQ-016) and run it on sync sessions from `0.15.0` onward to see which sync failures remain; the 9 failures in Sources used `0.14.0` argument shapes that `0.15.0` no longer accepts. | Decisions and measurements recorded here; usage-report tests pass. | Planned |
 | 1 | Tag normalization, tag check and hints, tag search matching (REQ-009, REQ-010). | Unit tests pass; `task lint`. | Planned |
 | 2 | Unread-card note, tag counts, compact rows (REQ-012 to REQ-014). | Unit and surface tests pass. | Planned |
 | 3 | Token facts (REQ-011). | Fixture tests pass; measured cost within the phase 0 budget. | Planned |
@@ -59,7 +59,7 @@ Must-have unless marked Should.
   pinned version, with no path specific to one machine and no secrets.
   - Acceptance: the installed plugin starts the server and `scryfall_search` answers; the Archidekt toolset turns
     on when the credential file or environment variables from the README are present.
-  - Validation: phase 0 settles the launch command (OQ-1); phase 5 extends the release workflow, which today only
+  - Validation: phase 0 tests the launch command (D-8); phase 5 extends the release workflow, which today only
     stamps `server.json` from the release tag after the NuGet push (`release.yml`), so that it also stamps the
     plugin and `.mcp.json` versions and its version check covers the plugin files; phase 5 records the install
     check. The order is NuGet publish, then the stamped plugin files merge, so a pinned version is on NuGet before
@@ -90,7 +90,7 @@ Must-have unless marked Should.
     tag), counts, ordering, the card floor, the date stamp, and the size limit.
 - **REQ-005 Skill examples stay valid.** A test reads every `otag:` slug in the skills, prompts, and references
   and fails when one is not in the committed `oracle-tag-slugs.txt`.
-  - Acceptance: changing an example to `otag:board-wipe` fails the test, naming the slug and the file.
+  - Acceptance: changing an example to `otag:token-generator` fails the test, naming the slug and the file.
 - **REQ-006 Deck-review skill.** A skill for "review my deck against my plan". Sections:
   1. Read the deck with card data.
   2. Count cards by tag and type for each role the user names.
@@ -147,10 +147,14 @@ Must-have unless marked Should.
   - For a slug not in installed data, the response names the slug, the installed tag date, and up to five
     installed tags whose slug, label, or alias matches it after D-2 normalization.
   - The query still runs. The hint is attached to every outcome: a `warnings` entry on success, and the same text
-    in the failure details when Scryfall answers "not found" or "invalid query". The exact failure field is set in
-    phase 0 (OQ-2).
+    in the failure details when Scryfall answers not-found. Checked live on 2026-11-07: an unknown tag alone returns
+    Scryfall's 404 (`scryfall-not-found`), and an unknown tag inside an `or` group is dropped with no warning, so
+    both outcomes need the hint.
   - Acceptance:
-    - `otag:board-wipe id<=wu f:commander` names `sweeper` whether the search succeeds or returns not-found.
+    - `otag:token-generator id<=wu f:commander` names `repeatable-token-generator` whether the search succeeds (in an
+      `or` group) or returns not-found.
+    - `otag:board-wipe` gets no hint: after D-2 normalization it matches the alias `boardwipe` of `sweeper`, and
+      Scryfall accepts it.
     - `otag:sweeper` gets no hint.
     - With no card data installed there is no hint, and `limits` says the check was skipped.
     - Parser fixtures cover each form above.
@@ -245,7 +249,7 @@ Must-have unless marked Should.
   - Claude Code now ships `claude plugin eval` (experimental), which runs eval cases kept in the plugin's `evals/`
     folder and can grade whether a skill was used (`tool_used: Skill`), plus a skill-creator benchmark that
     compares a skill with no skill. Phase 0 tries them on one scenario; if they work, the scenarios use that
-    format and the plan's own `evals/` folder keeps only what the tool cannot express (OQ-4).
+    format and the plan's own `evals/` folder keeps only what the tool cannot express.
   - Runs cost model calls, so they are not part of `task ci`. They run once before release in phase
     5, and again after any skill text change.
   - Acceptance: every scenario passes on Sonnet and Opus with the plugin. Haiku failures are recorded, and fixed
@@ -292,8 +296,8 @@ used shapes that are now refused, so the counts show agent behavior, not today's
 | `scryfall_search` calls | 32 (30 distinct queries) |
 | Searches matching rules text (`o:`) | 22 of 32; 4 of them regular expressions |
 | Searches using `otag:` | 3 of 32, in 3 sessions |
-| Guessed slugs that are not tags | 2 of the 3 tag searches guessed: `board-wipe` (the tag is `sweeper`) and `token-generator` (the tag is `repeatable-token-generator`) |
-| Result of those guesses | Both searches succeeded (623 and 746 cards) with an empty `warnings` list: the wrong tags failed silently inside `or` groups |
+| Guessed slugs that are not tags | 1 of the 3 tag searches: `token-generator` (the tag is `repeatable-token-generator`). The other guess, `board-wipe`, is accepted by Scryfall as an alias of `sweeper` (checked live 2026-11-07), so that search was valid |
+| Result of those guesses | Both searches succeeded (623 and 746 cards) with an empty `warnings` list. `board-wipe` was a valid alias; the `token-generator` search lost its unknown tag silently inside an `or` group, which is how Scryfall treats one (checked live 2026-11-07) |
 | `scryfall_tags_search` calls | 2, both in one session on 2026-11-02, before its one search with real slugs |
 | `scryfall_installed_cards_by_tag` calls | 0 |
 | First search pages that left cards unread | 11 of the 16 whose counts could be read; 705 cards unread in total |
@@ -320,7 +324,9 @@ Concrete failures:
 - An agent asked for "flying token makers" in white-blue wrote the regular expression
   `o:/create .* (token|tokens) with flying/`, read 55 of 161 results, and ranked from the most popular. No tag
   marks "creates a flying token", so the exact query needs the token facts in REQ-011.
-- `scryfall_tags_search` with `board-wipe` returns nothing, though `sweeper` has the alias `boardwipe`. The
+- `scryfall_tags_search` with `board-wipe` returns nothing, though `sweeper` has the alias `boardwipe` and Scryfall's own
+  search accepts `otag:board-wipe` (952 cards, the same as `otag:sweeper`; checked live 2026-11-07). The installed-data
+  tag search matches less than Scryfall does, so an agent could not confirm a tag Scryfall accepts. The
   `sweeper-one-sided` tag the user wanted ("2-3 one-sided board wipes") was never found.
 - Agents wrote text matches such as `o:goad` and `o:landfall` where tags exist.
 
@@ -382,8 +388,8 @@ Needs this plan leaves out, each a separate packet if the owner wants it:
 - Public deck search on Archidekt, Moxfield, or EDHREC. It is useful, but it is a new provider contract and
   belongs in its own PLC.
 - Reading the user's card collection.
-- A plugin for clients other than Claude Code. The skill files use the shared `SKILL.md` format so other clients
-  can load them by hand; packaging for them is deferred (OQ-3).
+- A built plugin for clients other than Claude Code. The skill files use the shared `SKILL.md` format so other clients
+  can load them by hand; exploring a Codex plugin is in scope (D-9), shipping one is not.
 - Automatic data downloads. Token facts and tag checks use installed card data only, as today.
 - Changing the Core result size limit.
 
@@ -428,7 +434,7 @@ Where the two differ, the stricter rule applies, so one skill folder works in bo
 | S-4 | Reference files are linked directly from `SKILL.md`, never from another reference file. A reference file over 100 lines starts with a table of contents. The tag reference also gives search patterns in `SKILL.md`, because it is long. | Anthropic | Tested |
 | S-5 | One skill per job. Each fact lives in one place: `SKILL.md` or a reference file, not both. The skill folder holds only files the skill uses, with no README or CHANGELOG (the one-job rule is OpenAI's; the no-README rule is this project's own). | OpenAI, project | Review |
 | S-6 | Add only what the model does not already know. Skip explaining Magic rules or what a Scryfall search is; explain this server's tools, fields, tag names, and limits. | Anthropic | Review |
-| S-7 | Skill text names a tool by its bare registered name, as `scryfall_search`. Every mtg-mcp tool name already starts with its source (`scryfall_`, `local_deck_`, `stats_`), so it is unique across servers, and clients expose it differently: Claude Code as `mcp__plugin_mtg-mcp_mtg-mcp__scryfall_search` (plugin) or `mcp__mtg-mcp__scryfall_search` (hand-registered), and the Claude API docs recommend `ServerName:tool_name`. Claude Code's tool search matches on the tool name, so the bare name resolves in both setups. REQ-019 confirms this on real runs (OQ-5). | Anthropic, Claude Code | Tested |
+| S-7 | Skill text names a tool by its bare registered name, as `scryfall_search`. Every mtg-mcp tool name already starts with its source (`scryfall_`, `local_deck_`, `stats_`), so it is unique across servers, and clients expose it differently: Claude Code as `mcp__plugin_mtg-mcp_mtg-mcp__scryfall_search` (plugin) or `mcp__mtg-mcp__scryfall_search` (hand-registered), and the Claude API docs recommend `ServerName:tool_name`. Claude Code's tool search matches on the tool name, so the bare name resolves in both setups. REQ-019 confirms this on real runs in both setups, and the skills switch to a working form if it does not. | Anthropic, Claude Code | Tested |
 | S-8 | Paths use forward slashes. No dates or "new in" notes in skill text; the only date is the tag reference's data stamp. | Anthropic | Tested |
 | S-9 | Freedom matches risk. Archidekt sync is low freedom: an exact order with a copyable checklist, and the preview, check, apply pattern. Card search is medium: a default query shape with a fallback. Deck review is high: steps to follow, with the judgment left to the agent. | Anthropic | Review |
 | S-10 | One default per step, with at most one fallback, never a menu of options. For example: "Look up tag slugs with `scryfall_tags_search`; match rules text only when no tag fits." | Anthropic | Review |
@@ -462,9 +468,9 @@ must stay green. The `docs/reference.md` line about concise fields (the `concise
 Examples:
 
 ```text
-> scryfall_search  query: "otag:board-wipe id<=wu f:commander"
+> scryfall_search  query: "otag:token-generator id<=wu f:commander"
 not-found: Scryfall found no cards.
-  otag:board-wipe is not in installed tag data from 2026-11-01. Closest: sweeper, sweeper-one-sided.
+  otag:token-generator is not in installed tag data from 2026-11-01. Closest: repeatable-token-generator.
 
 > scryfall_search  query: "otag:sweeper-one-sided id<=wu f:commander"  pageSize: 25
 page.totalCount: 40, returnedCount: 25
@@ -505,11 +511,13 @@ in `limits`.
   record. Phase 0 measures `card_list_query` over a 500-card saved search with and without an index table filled
   at sync, and picks the simpler option that stays within the current query time.
 - **D-6, one server entry.** Claude Code treats a plugin server as a duplicate of a hand-registered one only when
-  the command matches. If OQ-1 picks the same `mtg-mcp` command users register today, duplicates collapse;
+  the command matches. If the D-8 launch test picks the same `mtg-mcp` command users register today, duplicates collapse;
   otherwise the README tells users to remove their hand-made entry. Either way the README says which.
 - **D-7, credentials stay where they are.** The server already reads Archidekt and Playgroup credentials from
   environment variables or from `~/.mtg-mcp/archidekt.json` and `~/.mtg-mcp/playgroup.json`. The plugin passes
   no credentials and adds no `userConfig`; the README and the Archidekt-sync skill point to the files.
+- **D-8, install is the two plugin commands and nothing else (owner decision, 2026-11-07).** The user adds the marketplace and installs the plugin. There is no separate `dotnet tool install`, no flag, no first-run prompt, and no version to type, and the plugin's `.mcp.json` launches the server itself. Phase 0 tests `dnx Nccurry.MtgMcp@<version> --yes` on a clean machine and profile and records exactly what the user must already have (today the README requires a .NET SDK 10 or newer; the tool is self-contained, so no .NET 11 runtime). If the test finds any extra step, phase 0 reports the shortest alternative, such as a launcher that runs the self-contained release archive, and the owner decides before phase 4 builds on it. Rejected: documenting a two-step install.
+- **D-9, explore a Codex plugin in phase 0 (owner decision, 2026-11-07).** Phase 0 reads the Codex plugin and skill packaging docs, tries the same skill folders in Codex (`.agents/skills` and the MCP dependencies in `agents/openai.yaml`), and records what a Codex plugin needs beyond the Claude Code one. Building it is a decision after that record; no phase here ships it.
 - **The unread-card note and tag counts use the saved search.** Every `scryfall_search` already saves its full result as a
   request snapshot with members. The unread count comes from the snapshot header. Tag counts read each member's Oracle ID
   and join to installed tag assignments, capped as REQ-013 says; phase 0 measures the cost alongside D-5.
@@ -558,40 +566,7 @@ Tests:
 
 ## Risks And Open Questions
 
-- **OQ-1, launch command (blocks REQ-002 and D-6).** Two options:
-  - Run the NuGet tool package with `dnx Nccurry.MtgMcp@<version>`, which may need `--yes` to skip a first-run
-    prompt.
-  - Require `dotnet tool install` first and run `mtg-mcp`, which matches what users register today.
-  - The earlier draft said either option needs a .NET 11 runtime. The shipped tool is RID-specific and published
-    self-contained (`src/Directory.Build.props`, `Taskfile.yml`), and the README says users need a .NET SDK 10 or
-    newer to install it, which also provides `dnx` (Microsoft documents `dnx <Package>@<version> --yes` for MCP
-    servers). Claude Code's docs do not cover `dnx`. Phase 0 runs both options on a clean machine and profile and
-    records what a user without the repository must install, including whether the package needs a runtime beyond
-    the SDK.
-- **OQ-2, Scryfall's unknown-tag behavior (sets the REQ-009 failure field).** Partly answered by the sources: an
-  unknown tag inside an `or` group gives a normal result with an empty `warnings` list, so the success path needs
-  the hint most. A search that matches nothing returns Scryfall's 404, which the server reports as
-  `scryfall-not-found`. What Scryfall returns for an unknown tag on its own (404, 400, or a warning) is unverified.
-  Phase 0 records it from one live query.
-- **OQ-3, other clients.** OpenAI's guidance says plugins carry skills and MCP configuration to Codex and
-  ChatGPT, and that Codex finds repository skills in `.agents/skills`. The skill text follows the shared rules
-  (S-1 to S-16), so a Codex plugin can reuse the same folders. Building that plugin is deferred until the Claude
-  Code plugin is in use. One difference: Codex declares MCP tool dependencies in `agents/openai.yaml`.
-- **OQ-4, automated evaluation.** The first draft said evaluations are run by hand. `claude plugin eval` (marked
-  experimental) now runs eval cases with a skill-use grader, and could run on every skill change, at the cost of
-  model calls on each run. Phase 0 tries it on one scenario. Running it in CI stays deferred unless the owner
-  wants it.
-- **OQ-5, tool name in skill text.** S-7 now uses the bare registered name. Phase 4 checks through the REQ-019
-  runs that agents resolve it in both a plugin install (`mcp__plugin_mtg-mcp_mtg-mcp__<tool>`) and a hand-
-  registered server (`mcp__mtg-mcp__<tool>`). If they do not, the skills switch to a form that does, and the
-  REQ-017 check is updated to match.
-- **OQ-7, tool-surface self-check against current MCP guidance (waits on @nccurry).** The 2026-11-05 guidance
-  re-read found checks the server could run on itself, none of them part of this plan: all four annotation hints
-  set explicitly on every tool; every success and error path conforming to its `outputSchema`; validation and
-  not-found failures returned as tool errors with a next step; the lifetime of preview and snapshot IDs stated in
-  the `*_preview` descriptions; descriptions that put the words a tool search matches first; large results
-  staying under Claude Code's 25,000-token cap (or raising it per tool with `anthropic/maxResultSizeChars`);
-  and a deterministic tool order. Recommended: a separate small audit packet, not scope here.
+- No open questions remain. The owner's answers on 2026-11-07 turned the earlier ones into decisions D-8 and D-9, phase 0 and phase 4 steps, and the separate `mcp-guidance-audit` packet (see Log).
 - Risk: skill text drifts from the tool surface. REQ-005 and REQ-017 fail on drift.
 - Risk: a skill that tests well in the content checks still does not change behavior. REQ-019 compares against
   a baseline, and the usage report (REQ-016) checks real sessions after release.
@@ -602,7 +577,7 @@ Tests:
   example arguments against the live input schemas.
 - Risk: Claude Code's tool search defers MCP tool definitions, so 86 tools do not cost context there, but clients
   without tool search load every tool, and OpenAI advises fewer than 20 tools up front. Toolsets are the lever; the
-  README documents a small recommended toolset (see OQ-7 for related checks).
+  README documents a small recommended toolset (the MCP guidance audit is its own packet).
 - Risk: installed tags lag Scryfall's live tags. The hint says "not in installed tag data from <date>".
 - Risk: `all_parts` is incomplete for some cards. REQ-011 reports only what Scryfall links and says so.
 
@@ -625,6 +600,7 @@ Tests:
 | Currency check against `main` at `d532ae5` (`0.15.0`) | 2026-11-05 | Every code path, count, limit, and field name in this packet was checked against the code by a read-only review. Confirmed: 86, 73, and 59 tools by mode; `ServerInstructions.MaximumLength` 2,000 (current text about 1,670); `ScryfallListQuery.MaximumEntries` 20,000; `raw_json` holds `all_parts`; `provider_updated_at_utc`; no tag-slug check in `scryfall_search`; tag search is a substring match. Corrected here: `snapshotId` to `requestSnapshotId`, `archidektDeckId` to `remoteDeckId`, `rows` page size to top-level `pageSize`, the .NET 11 runtime claim, the release-version source, `card_list_query` field ownership, the prompt count (three, not two), and REQ-007 conflict codes. |
 | Skill and MCP guidance re-read | 2026-11-05 | Primary pages from Anthropic (skill best practices, Claude Code skills, plugins, MCP, and the tool-writing post), OpenAI (Codex skills, Apps SDK metadata, function calling), and the MCP specification (revision 2026-07-28). S-6 and S-8 to S-14 confirmed unchanged; S-1, S-2, S-3, and S-15 confirmed with added notes (angle brackets, listing budget, compaction, trigger set); S-4 and S-5 relabeled; S-7 changed to bare tool names; S-16 proposed; OQ-4 revised for `claude plugin eval`; OQ-7 added. Claude Code docs do not cover `dnx`, so OQ-1 stays open. |
 | Commander practice check | 2026-11-05 | Eight web searches over community guides and tools, summarized in Domain check. Karsten color-source figures and the Game Changers list size were not verified against primary sources, so the plan states neither. |
+| Live Scryfall tag behavior | 2026-11-07 | Read-only searches through `scryfall_search` and `scryfall_tags_search`: `otag:board-wipe`, `function:board-wipe`, and `otag:sweeper` each return 952 cards, so Scryfall accepts `board-wipe` as an alias; `otag:token-generator` and `otag:zzznotatag` alone return not-found; `otag:zzznotatag or otag:sweeper-one-sided` returns 240 cards (the second tag only) with empty `warnings`; `scryfall_tags_search` for `board-wipe` returns 0 tags. |
 
 ## Log
 
@@ -633,5 +609,8 @@ Tests:
 - 2026-11-05 Brought current with `main` at `d532ae5` (`0.15.0`): corrected renamed fields and arguments, the launch-runtime claim, the release-version source, and the prompt rules; REQ-012's field is now `unreadCards`.
 - 2026-11-05 Added the Domain check section and widened the deck-review (REQ-006) and game-math (REQ-008) skills to the tools that already cover the jobs it lists.
 - 2026-11-05 Updated the Skill Authoring Rules from a re-read of current Anthropic and OpenAI guidance (S-4, S-5, S-7 corrected; S-1, S-2, S-3, S-15 annotated; S-16 proposed); added OQ-6, OQ-7, and OQ-8 for the owner. Items that add scope are marked "proposed" in the text and listed in OQ-8 until the owner accepts them.
-- 2026-11-07 Decision: OQ-6 answered by the owner. REQ-012 stays Must; REQ-013 is Should until phase 0 measures its cost. Phase 2 no longer waits on an open question.
-- 2026-11-07 Decision: OQ-8 accepted by the owner. The "proposed" markers are removed from REQ-006 step 5, the REQ-006 role-count rule, REQ-008's added questions, the REQ-017 example-schema check, and S-16. The release-workflow extension, the `llms.txt` and `.codex/` updates, and the README recommended-toolset note are in scope.
+- 2026-11-07 Decision: OQ-6 (are REQ-012 and REQ-013 still Must) answered by the owner. REQ-012 stays Must; REQ-013 is Should until phase 0 measures its cost. Phase 2 no longer waits on an open question.
+- 2026-11-07 Decision: OQ-8 (agent-proposed refinements) accepted by the owner. The "proposed" markers are removed from REQ-006 step 5, the REQ-006 role-count rule, REQ-008's added questions, the REQ-017 example-schema check, and S-16. The release-workflow extension, the `llms.txt` and `.codex/` updates, and the README recommended-toolset note are in scope.
+- 2026-11-07 Decision: owner answered OQ-1 (launch command). The install must be the two plugin commands and nothing else, recorded as D-8; the launch mechanism is tested in phase 0 against that bar.
+- 2026-11-07 Discovery (OQ-2, unknown-tag behavior): live Scryfall accepts `otag:board-wipe` as an alias of `sweeper`, returns not-found for an unknown tag alone, and silently drops an unknown tag inside an `or` group. REQ-009's failure field and acceptance examples now use `token-generator`; `board-wipe` is no longer treated as a wrong slug.
+- 2026-11-07 Decision: owner said OQ-4 and OQ-5 were not questions. `claude plugin eval` (phase 0) and the tool-name check (REQ-019, S-7) are steps, not open questions. OQ-3 (other clients) became D-9 (explore a Codex plugin in phase 0); OQ-7 (tool-surface self-check) became the separate `mcp-guidance-audit` packet.
