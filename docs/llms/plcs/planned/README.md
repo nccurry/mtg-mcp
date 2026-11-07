@@ -30,6 +30,11 @@ was completed and released as 0.12.0 on 2026-10-29.
 a Claude Code plugin with deckbuilding skills, plus search results that guide
 agents to oracle tags and whole-result reads.
 
+[deck-analysis-ergonomics](deck-analysis-ergonomics/README.md) is planned:
+point deck questions to `card_list_query` and `card_lists_compare`, add
+"fits within" and OR filters, trim concise Archidekt deck reads, and shrink the
+card-list input schemas. It awaits owner review and is not authorized.
+
 ## Tool Surface
 
 [mcp-guidance-audit](mcp-guidance-audit/README.md) is planned: check every tool against current MCP and
