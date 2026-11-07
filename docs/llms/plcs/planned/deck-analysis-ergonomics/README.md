@@ -11,19 +11,13 @@ card-list input schemas.
 
 - Status: Planned (draft for owner review)
 - Owner: mtg-mcp (@nccurry)
-- Last updated: 2026-11-07, drafted on `docs/plc-deck-analysis-ergonomics` from `main` at `ece3ba9`
+- Last updated: 2026-11-07, packet merged into `main` at `8e45bfb`; code facts read at `ece3ba9`
 - Implementation authorized: No. The owner must accept the packet and answer the open questions first.
 - Next action: owner review of the [open questions](#open-questions) and the decisions in [SADD.md](SADD.md).
 - Blocker: None
 - Depends on: None. Shares files with [deckbuilding-agent-guidance](../deckbuilding-agent-guidance/README.md); see the open question on order.
 - Current state: requirements and design drafted from one observed session and a read of the code; nothing built.
-- Resume check: `git log --oneline main..docs/plc-deck-analysis-ergonomics` shows the packet commit, not yet merged into `main`.
-
-Where the work lives:
-
-| Checkout | Branch | Owner | State |
-| --- | --- | --- | --- |
-| `../mtg-mcp-wt/deck-analysis-ergonomics/docs` | `docs/plc-deck-analysis-ergonomics` | @nccurry | waiting: packet draft, not merged |
+- Resume check: this packet is in `planned/` on `main`; no implementation worktree for `deck-analysis-ergonomics` exists.
 
 ## Phases
 
