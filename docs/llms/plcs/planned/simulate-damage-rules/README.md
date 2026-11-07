@@ -18,8 +18,8 @@ those, so one request can sample that question.
   and answer the open questions first.
 - Selected work and endpoint: none yet. When authorized, phases 1 to 3, merged
   into `main` and shipped in the next release.
-- Next action: owner review of [Product rule report](#product-rule-report)
-  and [Open questions](#open-questions).
+- Next action: owner answers open questions 2 to 9 (question 1 was accepted on 2026-11-07; see
+  Log) and then decides whether to authorize implementation.
 - Resume check: this packet is in `planned/`; no implementation worktree for
   `simulate-damage-rules` exists.
 
@@ -299,8 +299,8 @@ Each phase: focused tests, then `task ci`, `task test:integration`, and
 
 ## Open Questions
 
-1. Does the owner accept unopposed combat damage under the north-star wording
-   in [Product rule report](#product-rule-report)? Recommended: yes, with the rewrite.
+1. Decided 2026-11-07: the owner accepted unopposed combat damage under the north-star wording
+   in [Product rule report](#product-rule-report), with the phase 3 rewrite. Implementation is still not authorized.
 2. Bump `ModelVersion` to `simulation-v2`? Old requests give the same numbers,
    but the fixed engine rules change and every fingerprint changes with the
    bump. Recommended: bump, so a result names the rule set that produced it;
@@ -347,3 +347,4 @@ Each phase: focused tests, then `task ci`, `task test:integration`, and
 - 2026-11-05 Converted to the shared PLC template (format only).
 - 2026-11-05 Brought current with `main` at `d532ae5` (`0.15.0`): moved the example and worked result to `docs/reference.md`, corrected the description-length figures, named the existing `SimulationManaRuleInput` and `target-first` mechanisms, and added the benchmark check. No requirement was added or dropped; acceptance wording changed in REQ-003, REQ-008, and Steps 1 and 2.
 - 2026-11-05 Added open question 9 from the Commander voltron-clock check, and a note that this packet and `deckbuilding-agent-guidance` land one after the other.
+- 2026-11-07 Decision: open question 1 answered by the owner. Unopposed combat damage is accepted under the reworded north-star passages, which phase 3 rewrites. Implementation is still not authorized, and questions 2 to 9 remain open.

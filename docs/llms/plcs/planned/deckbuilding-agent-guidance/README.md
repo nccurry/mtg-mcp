@@ -16,8 +16,7 @@ not rank cards.
 - Implementation authorized: No. Approval of this packet is not permission to start; the owner must say so.
 - Selected work and endpoint: phases 0 to 5, merged into `main`, released, and installed through the new plugin.
 - Next action: owner review of decisions D-1 to D-7, the skill authoring rules S-1 to S-16, and open questions
-  OQ-1 to OQ-8. OQ-6 asks whether REQ-012 and REQ-013 stay Must, because `0.15.0` already covers much of them
-  (recommended: REQ-012 Must, REQ-013 Should); OQ-8 lists the refinements an agent proposed on 2026-11-05.
+  OQ-1 to OQ-5 and OQ-7. The owner answered OQ-6 and OQ-8 on 2026-11-07 (see Log).
 - Blocker: none.
 - Where the work lives: this packet is merged into local `main`; no implementation branch or worktree exists yet.
   Nothing is pushed.
@@ -33,7 +32,7 @@ not rank cards.
 | 4 | Write the REQ-019 scenarios and run the baselines first. Then build the plugin, skills, tag reference and slug list, prompts, instructions, and tests (REQ-001 to REQ-008, REQ-015, REQ-017, REQ-018). | Skill content, manifest, and validate checks pass; baselines recorded. | Planned |
 | 5 | README, `docs/reference.md`, CHANGELOG, `docs/toolsets.md`, `llms.txt`, and `.codex/` playbooks (`AGENTS.md` requires them to match); release workflow sets plugin versions; `task ci`; REQ-019 runs with the plugin; full audit; release; install through the plugin. | REQ-001, REQ-002, and REQ-019 results recorded; release installed. | Planned |
 
-Phases 1 to 3 are independent of each other, except that phase 2 waits for the owner's answer to OQ-6. Phase 4 writes skill text against the shapes from phases 1 to 3, so
+Phases 1 to 3 are independent of each other. Phase 4 writes skill text against the shapes from phases 1 to 3, so
 it starts after them. If phase 0 finds sync failures that `0.15.0` did not fix, they are listed here for the
 owner, not added to scope. The next release that carries this work is `0.16.0` (additive; see
 [versioning](../../../../versioning.md)).
@@ -97,11 +96,11 @@ Must-have unless marked Should.
   2. Count cards by tag and type for each role the user names.
   3. Compare against the counts the user wants.
   4. Use `stats_hypergeometric` or `stats_simulate` for "how often do I have X by turn N".
-  5. (Proposed, OQ-8) Report the rule facts the user's plan depends on: `local_deck_validate` with rules `commander` (legality,
+  5. Report the rule facts the user's plan depends on: `local_deck_validate` with rules `commander` (legality,
      color identity, deck size), `local_deck_duplicates_preview`, and `spellbook_deck_bracket_facts_get` for the
      bracket conversation, each as a fact with its source, never as a verdict.
   - It reports numbers and gaps and leaves the judgment to the agent and user.
-  - (Proposed, OQ-8) Role counts say which tag or caller rule produced each count, because guides disagree on what counts as
+  - Role counts say which tag or caller rule produced each count, because guides disagree on what counts as
     "ramp" or "removal"; the skill never states a target count of its own.
   - Acceptance: the skill content test finds each section and only registered tool names.
 - **REQ-007 Archidekt-sync skill.** A skill for the pull, edit, push loop, which took 32 percent of all calls in
@@ -119,7 +118,7 @@ Must-have unless marked Should.
   - Acceptance: the skill content test finds each section, and every tool, input field, and option value it names
     exists in that tool's input schema.
 - **REQ-008 Draw and game math skill.** A skill that maps common questions to `stats_*` tools with example inputs:
-  "odds of N of X by turn T" (`stats_hypergeometric`, `stats_turn_table`), and, proposed in OQ-8: "how many of a type do I need"
+  "odds of N of X by turn T" (`stats_hypergeometric`, `stats_turn_table`), and "how many of a type do I need"
   (`stats_minimum_count`), "how many lands and which colors" (`stats_mana_availability`, `stats_castability`),
   "keep or mulligan odds" (`stats_mulligan`), "odds of assembling a package or combo" (`stats_package_assembly`),
   "on-curve odds", and "sample games with a rule" (`stats_simulate`). These are the questions Commander players
@@ -179,14 +178,14 @@ Must-have unless marked Should.
     already carry `tagCoverage`, which means something else (how complete the installed tag data is).
   - The note counts what the request snapshot holds; it does not claim anything about Scryfall's live result
     beyond the snapshot (Scryfall `AGENTS.md`: coverage labels must describe what was actually joined).
-- **REQ-013 (Should pending OQ-6) Tag counts on search.** When card data is installed, the first page of
+- **REQ-013 (Should) Tag counts on search.** When card data is installed, the first page of
   `scryfall_search` includes `tagCounts`, the 15 oracle tags most common across the result, with card counts.
   - It counts at most the first 20,000 members (`ScryfallListQuery.MaximumEntries`) and reports the cap in
     `limits` when reached.
   - Acceptance: the counts match a `card_list_query` grouped by `tags` over the same saved search.
   - `card_list_query` already groups a saved search by `tags`, so this adds convenience (one fewer call on the
-    first page, and the tags appear where the agent is already reading), not a new capability. OQ-6 asks the owner
-    whether it stays a Must requirement.
+    first page, and the tags appear where the agent is already reading), not a new capability. The owner made it Should on
+    2026-11-07.
   - The counts come from installed tag assignments joined to the snapshot's Oracle IDs. The field says so in
     `limits`; it does not claim to be Scryfall's own query result.
 - **REQ-014 (Should) Compact whole-result listing.** `card_list_query` top-level `pageSize`, when `rows` is
@@ -226,7 +225,7 @@ Must-have unless marked Should.
   - the listed sections are present;
   - every tool name is registered, and every named input field and option value is in that tool's input schema;
   - every tag slug is in the committed slug list;
-  - (Proposed, OQ-8) every example tool call's arguments validate against the live input schema of that tool, so a renamed
+  - every example tool call's arguments validate against the live input schema of that tool, so a renamed
     argument fails the test (`0.15.0` renamed `snapshotId` to `requestSnapshotId` for `scryfall-snapshot` sources
     and `archidektDeckId` to `remoteDeckId`; a names-only check would not catch a stale example);
   - the mechanical authoring rules in "Skill Authoring Rules" (S-1 to S-4, S-7, S-8).
@@ -438,7 +437,7 @@ Where the two differ, the stricter rule applies, so one skill folder works in bo
 | S-13 | Instructions, not scripts. These skills call MCP tools, and no step needs a bundled script. | OpenAI | Review |
 | S-14 | Every skill can be loaded by the model: none sets `disable-model-invocation`. Writes are already guarded by operation mode and Claude Code's approval of destructive tools. | Claude Code | Review |
 | S-15 | Write evaluations before the skill text, measure a baseline without the skill, and test on every model the skill will run on (REQ-019). The trigger set holds direct, indirect, and negative requests, and negative-request precision comes before recall. | Anthropic, OpenAI | REQ-019 |
-| S-16 (proposed, OQ-8) | Pre-approving tools with `allowed-tools` is limited to read-only tools, and a skill never pre-approves an apply or delete tool. Operation mode and the destructive-tool `confirmation` stay the write boundary. | Claude Code | Review |
+| S-16 | Pre-approving tools with `allowed-tools` is limited to read-only tools, and a skill never pre-approves an apply or delete tool. Operation mode and the destructive-tool `confirmation` stay the write boundary. | Claude Code | Review |
 
 ## Public Surface Changes
 
@@ -586,20 +585,6 @@ Tests:
   runs that agents resolve it in both a plugin install (`mcp__plugin_mtg-mcp_mtg-mcp__<tool>`) and a hand-
   registered server (`mcp__mtg-mcp__<tool>`). If they do not, the skills switch to a form that does, and the
   REQ-017 check is updated to match.
-- **OQ-6, are REQ-012 and REQ-013 still Must? (blocks phase 2; waits on @nccurry)** `card_list_query` already
-  reads a whole saved search and groups it by `tags`, and `scryfall_installed_cards_by_tag` already reads cards
-  by tag. The skills can teach that path with no server change, so the unread-card note and tag counts are
-  conveniences. The case for keeping them: 11 of 16 first pages left cards unread, `card_list_query` over a
-  snapshot was never called, and advice in descriptions was not enough. Recommended: keep REQ-012 as Must (it
-  is cheap and uses data the response already has) and make REQ-013 Should until phase 0 measures its cost.
-- **OQ-8, refinements an agent proposed on 2026-11-05 (waits on @nccurry).** Each is marked "proposed" where it
-  appears and stays out of the Must list until accepted: REQ-006 step 5 (rule facts from `local_deck_validate`,
-  `local_deck_duplicates_preview`, and `spellbook_deck_bracket_facts_get`) and its role-count provenance rule;
-  REQ-008's extra questions (`stats_minimum_count`, `stats_castability`, `stats_mana_availability`,
-  `stats_mulligan`, `stats_package_assembly`); the REQ-017 check that example arguments validate against live input
-  schemas; rule S-16; the release-workflow extension for plugin versions; the plugin and skill additions to
-  `llms.txt` and `.codex/`; and a README note on a small recommended toolset. Recommended: accept all; each is
-  small and the schema check would have caught the `0.15.0` renames.
 - **OQ-7, tool-surface self-check against current MCP guidance (waits on @nccurry).** The 2026-11-05 guidance
   re-read found checks the server could run on itself, none of them part of this plan: all four annotation hints
   set explicitly on every tool; every success and error path conforming to its `outputSchema`; validation and
@@ -648,3 +633,5 @@ Tests:
 - 2026-11-05 Brought current with `main` at `d532ae5` (`0.15.0`): corrected renamed fields and arguments, the launch-runtime claim, the release-version source, and the prompt rules; REQ-012's field is now `unreadCards`.
 - 2026-11-05 Added the Domain check section and widened the deck-review (REQ-006) and game-math (REQ-008) skills to the tools that already cover the jobs it lists.
 - 2026-11-05 Updated the Skill Authoring Rules from a re-read of current Anthropic and OpenAI guidance (S-4, S-5, S-7 corrected; S-1, S-2, S-3, S-15 annotated; S-16 proposed); added OQ-6, OQ-7, and OQ-8 for the owner. Items that add scope are marked "proposed" in the text and listed in OQ-8 until the owner accepts them.
+- 2026-11-07 Decision: OQ-6 answered by the owner. REQ-012 stays Must; REQ-013 is Should until phase 0 measures its cost. Phase 2 no longer waits on an open question.
+- 2026-11-07 Decision: OQ-8 accepted by the owner. The "proposed" markers are removed from REQ-006 step 5, the REQ-006 role-count rule, REQ-008's added questions, the REQ-017 example-schema check, and S-16. The release-workflow extension, the `llms.txt` and `.codex/` updates, and the README recommended-toolset note are in scope.
