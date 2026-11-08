@@ -24,7 +24,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Mise tools
-        uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
         with:
           version: "2026.9.1"
 
@@ -38,7 +38,7 @@ jobs:
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           languages: csharp
           build-mode: none
@@ -50,7 +50,7 @@ jobs:
         run: task surface:report
 
       - name: Analyze with CodeQL
-        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
 
       - name: Generate coverage report
         run: task coverage:report
